@@ -13,6 +13,8 @@ export { SquashStretch } from './components/SquashStretch'
 export { ParticleEmitter } from './components/ParticleEmitter'
 export { MovingPlatform } from './components/MovingPlatform'
 export { Checkpoint } from './components/Checkpoint'
+export { Tilemap } from './components/Tilemap'
+export type { TiledObject, TiledLayer } from './components/Tilemap'
 
 // Hooks
 export { useGame } from './hooks/useGame'
