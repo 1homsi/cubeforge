@@ -3,8 +3,13 @@ export class GameLoop {
   private lastTime = 0
   private running = false
   private paused = false
+  private hitPauseTimer = 0
 
   constructor(private readonly onTick: (dt: number) => void) {}
+
+  hitPause(duration: number): void {
+    this.hitPauseTimer = duration
+  }
 
   start(): void {
     if (this.running) return
@@ -47,7 +52,11 @@ export class GameLoop {
     // Cap delta at 100ms to prevent spiral of death after tab switch
     const dt = Math.min((time - this.lastTime) / 1000, 0.1)
     this.lastTime = time
-    this.onTick(dt)
+    if (this.hitPauseTimer > 0) {
+      this.hitPauseTimer -= dt
+    } else {
+      this.onTick(dt)
+    }
     this.rafId = requestAnimationFrame(this.frame)
   }
 }

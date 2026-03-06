@@ -15,6 +15,8 @@ export { MovingPlatform } from './components/MovingPlatform'
 export { Checkpoint } from './components/Checkpoint'
 export { Tilemap } from './components/Tilemap'
 export { ParallaxLayer } from './components/ParallaxLayer'
+export { ScreenFlash } from './components/ScreenFlash'
+export type { ScreenFlashHandle } from './components/ScreenFlash'
 export type { TiledObject, TiledLayer } from './components/Tilemap'
 
 // Hooks

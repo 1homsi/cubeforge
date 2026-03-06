@@ -57,6 +57,60 @@ export class DebugSystem implements System {
       ctx.fillText(String(id), t.x + c.offsetX - c.width / 2 + lw, t.y + c.offsetY - c.height / 2 - lw * 2)
     }
 
+    // Camera bounds visualization (drawn in same world-space context)
+    if (camId !== undefined) {
+      const camFull = world.getComponent<{
+        type: 'Camera2D'; x: number; y: number; zoom: number
+        bounds?: { x: number; y: number; width: number; height: number }
+      }>(camId, 'Camera2D')!
+      if (camFull.bounds) {
+        const b = camFull.bounds
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)'
+        ctx.lineWidth = 1 / zoom
+        ctx.setLineDash([8 / zoom, 4 / zoom])
+        ctx.strokeRect(b.x, b.y, b.width, b.height)
+        ctx.setLineDash([])
+      }
+    }
+
+    ctx.restore()
+
+    // Physics grid visualization (128px spatial broadphase grid)
+    const GRID_SIZE = 128
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)'
+    ctx.lineWidth = 1
+    ctx.setLineDash([])
+
+    // Compute visible world-space range
+    const offsetX = camX - canvas.width / (2 * zoom)
+    const offsetY = camY - canvas.height / (2 * zoom)
+    const visibleW = canvas.width / zoom
+    const visibleH = canvas.height / zoom
+
+    const startCol = Math.floor(offsetX / GRID_SIZE)
+    const endCol = Math.ceil((offsetX + visibleW) / GRID_SIZE)
+    const startRow = Math.floor(offsetY / GRID_SIZE)
+    const endRow = Math.ceil((offsetY + visibleH) / GRID_SIZE)
+
+    ctx.translate(canvas.width / 2 - camX * zoom, canvas.height / 2 - camY * zoom)
+    ctx.scale(zoom, zoom)
+
+    for (let col = startCol; col <= endCol; col++) {
+      const wx = col * GRID_SIZE
+      ctx.beginPath()
+      ctx.moveTo(wx, startRow * GRID_SIZE)
+      ctx.lineTo(wx, endRow * GRID_SIZE)
+      ctx.stroke()
+    }
+    for (let row = startRow; row <= endRow; row++) {
+      const wy = row * GRID_SIZE
+      ctx.beginPath()
+      ctx.moveTo(startCol * GRID_SIZE, wy)
+      ctx.lineTo(endCol * GRID_SIZE, wy)
+      ctx.stroke()
+    }
+
     ctx.restore()
 
     // Screen-space HUD
