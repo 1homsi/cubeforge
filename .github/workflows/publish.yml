@@ -31,6 +31,15 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Debug auth
+        run: |
+          echo "=== global npmrc ==="
+          cat ~/.npmrc || echo "none"
+          echo "=== local npmrc ==="
+          cat packages/react/.npmrc || echo "none"
+          echo "=== npm whoami ==="
+          npm whoami || echo "not logged in"
+
       - name: Publish cubeforge
         run: cd packages/react && npm publish --access public
 
