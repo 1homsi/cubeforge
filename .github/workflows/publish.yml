@@ -5,6 +5,10 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -12,6 +16,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: bun install
@@ -22,10 +31,8 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Publish
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          bun publish --cwd packages/react --access public
-          bun publish --cwd packages/create-cubeforge-game --access public
+      - name: Publish cubeforge
+        run: npm publish packages/react --access public --provenance
+
+      - name: Publish create-cubeforge-game
+        run: npm publish packages/create-cubeforge-game --access public --provenance
