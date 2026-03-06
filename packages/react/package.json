@@ -1,11 +1,19 @@
 {
   "name": "@cubeforge/react",
-  "version": "0.1.0",
-  "private": true,
-  "main": "./src/index.ts",
+  "version": "1.0.0-beta.1",
+  "description": "React components and hooks for building 2D browser games with Cubeforge",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "build": "tsc"
   },
   "peerDependencies": {
     "react": "^18.0.0",
@@ -16,5 +24,11 @@
     "@cubeforge/input": "workspace:*",
     "@cubeforge/renderer": "workspace:*",
     "@cubeforge/physics": "workspace:*"
+  },
+  "keywords": ["game-engine", "react", "2d", "browser-game", "cubeforge"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
   }
 }

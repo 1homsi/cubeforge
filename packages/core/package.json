@@ -1,10 +1,24 @@
 {
   "name": "@cubeforge/core",
-  "version": "0.1.0",
-  "private": true,
-  "main": "./src/index.ts",
+  "version": "1.0.0-beta.1",
+  "description": "ECS, game loop, events, assets, and tween — core runtime for Cubeforge",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "build": "tsc"
+  },
+  "keywords": ["game-engine", "ecs", "cubeforge"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
   }
 }
