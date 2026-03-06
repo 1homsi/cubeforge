@@ -5,7 +5,10 @@ import type { Camera2DComponent } from './components/camera2d'
 import type { AnimationStateComponent } from './components/animationState'
 import type { SquashStretchComponent } from './components/squashStretch'
 import type { ParticlePoolComponent } from './components/particle'
+import type { ParallaxLayerComponent } from './components/parallaxLayer'
 import { Canvas2DRenderer } from './canvas2d'
+
+const imageCache = new Map<string, HTMLImageElement>()
 
 interface BoxColliderShape {
   type: 'BoxCollider'
@@ -153,6 +156,60 @@ export class RenderSystem implements System {
 
     // Clear
     this.renderer.clear(background)
+
+    // --- Parallax layer pre-pass (drawn in screen space before world sprites) ---
+    const parallaxEntities = world.query('ParallaxLayer')
+    parallaxEntities.sort((a, b) => {
+      const za = world.getComponent<ParallaxLayerComponent>(a, 'ParallaxLayer')!.zIndex
+      const zb = world.getComponent<ParallaxLayerComponent>(b, 'ParallaxLayer')!.zIndex
+      return za - zb
+    })
+    for (const id of parallaxEntities) {
+      const layer = world.getComponent<ParallaxLayerComponent>(id, 'ParallaxLayer')!
+
+      // Load / retrieve image from cache
+      let img = imageCache.get(layer.src)
+      if (!img) {
+        img = new Image()
+        img.src = layer.src
+        img.onload = () => {
+          layer.imageWidth = img!.naturalWidth
+          layer.imageHeight = img!.naturalHeight
+        }
+        imageCache.set(layer.src, img)
+      }
+      if (!img.complete || img.naturalWidth === 0) continue
+
+      // Keep imageWidth/imageHeight in sync
+      if (layer.imageWidth === 0) layer.imageWidth = img.naturalWidth
+      if (layer.imageHeight === 0) layer.imageHeight = img.naturalHeight
+
+      const imgW = layer.imageWidth
+      const imgH = layer.imageHeight
+
+      // Parallax draw position
+      const drawX = layer.offsetX - camX * layer.speedX
+      const drawY = layer.offsetY - camY * layer.speedY
+
+      ctx.save()
+      if (layer.repeatX || layer.repeatY) {
+        // Tile using pattern
+        const pattern = ctx.createPattern(img, layer.repeatX && layer.repeatY ? 'repeat' : layer.repeatX ? 'repeat-x' : 'repeat-y')
+        if (pattern) {
+          // Offset the pattern to match parallax position
+          const offsetX = ((drawX % imgW) + imgW) % imgW
+          const offsetY = ((drawY % imgH) + imgH) % imgH
+          const matrix = new DOMMatrix()
+          matrix.translateSelf(offsetX, offsetY)
+          pattern.setTransform(matrix)
+          ctx.fillStyle = pattern
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+      } else {
+        ctx.drawImage(img, drawX, drawY, imgW, imgH)
+      }
+      ctx.restore()
+    }
 
     // Apply camera transform: translate so camX,camY is at screen center, plus shake offset
     ctx.save()
