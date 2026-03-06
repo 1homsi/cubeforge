@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./bin",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["bun-types", "node"]
+  },
+  "include": ["bin"],
+  "exclude": ["node_modules", "dist", "templates"]
+}

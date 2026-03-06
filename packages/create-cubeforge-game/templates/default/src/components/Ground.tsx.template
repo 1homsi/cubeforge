@@ -1,0 +1,12 @@
+import { Entity, Transform, Sprite, RigidBody, BoxCollider } from '@cubeforge/react'
+interface GroundProps { x: number; y: number; width: number; height: number }
+export function Ground({ x, y, width, height }: GroundProps) {
+  return (
+    <Entity tags={['ground']}>
+      <Transform x={x} y={y} />
+      <Sprite width={width} height={height} color="#37474f" />
+      <RigidBody isStatic />
+      <BoxCollider width={width} height={height} />
+    </Entity>
+  )
+}

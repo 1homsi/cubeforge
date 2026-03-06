@@ -1,0 +1,17 @@
+{
+  "name": "create-cubeforge-game",
+  "version": "0.0.1",
+  "description": "Scaffold a new Cubeforge game project",
+  "bin": {
+    "create-cubeforge-game": "./bin/index.js"
+  },
+  "scripts": {
+    "build": "bun build ./bin/index.ts --outfile ./bin/index.js --target node"
+  },
+  "publishConfig": {
+    "bin": { "create-cubeforge-game": "./bin/index.js" }
+  },
+  "files": ["bin/index.js", "templates"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/1homsi/cubeforge" }
+}

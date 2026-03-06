@@ -1,0 +1,17 @@
+import { useState } from 'react'
+import { Game, World, Camera2D } from '@cubeforge/react'
+import { Player } from './components/Player'
+import { Ground } from './components/Ground'
+
+export function App() {
+  const [gameKey] = useState(0)
+  return (
+    <Game key={gameKey} width={800} height={500} gravity={980}>
+      <World background="#87ceeb">
+        <Camera2D followEntity="player" smoothing={0.85} />
+        <Player x={100} y={300} />
+        <Ground x={400} y={480} width={800} height={40} />
+      </World>
+    </Game>
+  )
+}

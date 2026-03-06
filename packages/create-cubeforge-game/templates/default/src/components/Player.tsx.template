@@ -1,0 +1,22 @@
+import { Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from '@cubeforge/react'
+import { usePlatformerController } from '@cubeforge/react'
+import { useEntity } from '@cubeforge/react'
+
+function PlayerInner() {
+  const id = useEntity()
+  usePlatformerController(id, { speed: 220, jumpForce: -520, maxJumps: 2 })
+  return null
+}
+
+interface PlayerProps { x: number; y: number }
+export function Player({ x, y }: PlayerProps) {
+  return (
+    <Entity id="player" tags={['player']}>
+      <Transform x={x} y={y} />
+      <Sprite width={32} height={48} color="#4fc3f7" />
+      <RigidBody />
+      <BoxCollider width={32} height={48} />
+      <PlayerInner />
+    </Entity>
+  )
+}
