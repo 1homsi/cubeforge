@@ -9,7 +9,11 @@ export class ScriptSystem implements System {
     const entities = world.query('Script')
     for (const id of entities) {
       const script = world.getComponent<ScriptComponent>(id, 'Script')!
-      script.update(id, world, this.input, dt)
+      try {
+        script.update(id, world, this.input, dt)
+      } catch (err) {
+        console.error(`[Cubeforge] Script update error on entity ${id}:`, err)
+      }
     }
   }
 }

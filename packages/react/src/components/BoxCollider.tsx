@@ -24,9 +24,19 @@ export function BoxCollider({
 
   useEffect(() => {
     engine.ecs.addComponent(entityId, createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer }))
-    return () => engine.ecs.removeComponent(entityId, 'BoxCollider')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+
+    // Defer check so sibling components have had a chance to add their components
+    const checkId = setTimeout(() => {
+      if (engine.ecs.hasEntity(entityId) && !engine.ecs.hasComponent(entityId, 'Transform')) {
+        console.warn(`[Cubeforge] BoxCollider on entity ${entityId} has no Transform. Physics requires Transform.`)
+      }
+    }, 0)
+
+    return () => {
+      clearTimeout(checkId)
+      engine.ecs.removeComponent(entityId, 'BoxCollider')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }

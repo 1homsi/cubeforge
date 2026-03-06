@@ -16,11 +16,16 @@ export function Script({ init, update }: ScriptProps) {
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    if (init) init(entityId, engine.ecs)
+    if (init) {
+      try {
+        init(entityId, engine.ecs)
+      } catch (err) {
+        console.error(`[Cubeforge] Script init error on entity ${entityId}:`, err)
+      }
+    }
     engine.ecs.addComponent(entityId, createScript(update as ScriptUpdateFn))
     return () => engine.ecs.removeComponent(entityId, 'Script')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
 }

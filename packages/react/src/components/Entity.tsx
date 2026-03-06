@@ -18,7 +18,12 @@ export function Entity({ id, tags = [], children }: EntityProps) {
   useEffect(() => {
     const eid = engine.ecs.createEntity()
 
-    if (id) engine.entityIds.set(id, eid)
+    if (id) {
+      if (engine.entityIds.has(id)) {
+        console.warn(`[Cubeforge] Duplicate entity ID "${id}". Entity IDs must be unique — the previous entity with this ID will be replaced.`)
+      }
+      engine.entityIds.set(id, eid)
+    }
     if (tags.length > 0) engine.ecs.addComponent(eid, createTag(...tags))
 
     setEntityId(eid)
