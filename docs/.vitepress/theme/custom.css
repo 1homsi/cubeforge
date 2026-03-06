@@ -1,4 +1,21 @@
+/* ─── Light mode ─────────────────────────────────────────────── */
 :root {
+  --vp-c-brand-1: #0288d1;
+  --vp-c-brand-2: #0277bd;
+  --vp-c-brand-3: #01579b;
+  --vp-c-brand-soft: rgba(2, 136, 209, 0.12);
+
+  --vp-code-bg: rgba(2, 136, 209, 0.08);
+  --vp-code-color: #0277bd;
+
+  --vp-custom-block-tip-border: #0288d1;
+  --vp-custom-block-tip-bg: rgba(2, 136, 209, 0.08);
+  --vp-custom-block-tip-text: #1a1a2e;
+  --vp-custom-block-tip-code-bg: rgba(2, 136, 209, 0.08);
+}
+
+/* ─── Dark mode ──────────────────────────────────────────────── */
+.dark {
   --vp-c-brand-1: #4fc3f7;
   --vp-c-brand-2: #29b6f6;
   --vp-c-brand-3: #0288d1;
@@ -38,38 +55,41 @@
   --vp-custom-block-tip-code-bg: rgba(79, 195, 247, 0.08);
 }
 
-html {
-  color-scheme: dark;
-}
-
+/* ─── Shared ─────────────────────────────────────────────────── */
 body {
   font-family: "Courier New", Courier, monospace !important;
 }
 
-/* Nav */
-.VPNav {
+/* ─── Dark nav / sidebar ─────────────────────────────────────── */
+.dark .VPNav {
   border-bottom: 1px solid #1e2535 !important;
   background: #0d0f1a !important;
 }
 
-.VPSidebar {
+.dark .VPSidebar {
   border-right: 1px solid #1e2535 !important;
   background: #0d0f1a !important;
 }
 
-/* Hero */
-.VPHero .name {
+/* ─── Hero ───────────────────────────────────────────────────── */
+.dark .VPHero .name {
   background: linear-gradient(120deg, #4fc3f7, #ffd54f) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
 }
 
-.VPHero .tagline {
+.dark .VPHero .tagline {
   color: #90a4ae !important;
 }
 
-/* Buttons */
-.VPButton.brand {
+.VPHero .name {
+  background: linear-gradient(120deg, #0288d1, #f57f17) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* ─── Buttons — dark ─────────────────────────────────────────── */
+.dark .VPButton.brand {
   background: #4fc3f7 !important;
   color: #0d0f1a !important;
   border-color: #4fc3f7 !important;
@@ -77,84 +97,87 @@ body {
   letter-spacing: 1px;
 }
 
-.VPButton.brand:hover {
+.dark .VPButton.brand:hover {
   background: #29b6f6 !important;
   border-color: #29b6f6 !important;
   color: #0d0f1a !important;
 }
 
-.VPButton.alt {
+.dark .VPButton.alt {
   background: transparent !important;
   border-color: #1e2535 !important;
   color: #e0e0e0 !important;
 }
 
-.VPButton.alt:hover {
+.dark .VPButton.alt:hover {
   border-color: #4fc3f7 !important;
   color: #4fc3f7 !important;
 }
 
-/* Feature cards */
-.VPFeature {
+/* ─── Feature cards — dark ───────────────────────────────────── */
+.dark .VPFeature {
   background: #12151f !important;
   border: 1px solid #1e2535 !important;
   transition: border-color 0.15s !important;
 }
 
-.VPFeature:hover {
+.dark .VPFeature:hover {
   border-color: #4fc3f7 !important;
 }
 
-.VPFeature .title {
+.dark .VPFeature .title {
   color: #e0e0e0 !important;
 }
 
-.VPFeature .details {
+.dark .VPFeature .details {
   color: #90a4ae !important;
 }
 
-/* Code blocks */
-.vp-code-group .tabs {
+/* ─── Code blocks — dark ─────────────────────────────────────── */
+.dark .vp-code-group .tabs {
   background: #12151f !important;
   border-bottom: 1px solid #1e2535 !important;
 }
 
-div[class*='language-'] {
+.dark div[class*='language-'] {
   background: #12151f !important;
   border: 1px solid #1e2535 !important;
 }
 
-div[class*='language-'] code {
+.dark div[class*='language-'] code {
   color: #e0e0e0 !important;
 }
 
-/* Inline code */
-.vp-doc :not(pre) > code {
+/* ─── Inline code — dark ─────────────────────────────────────── */
+.dark .vp-doc :not(pre) > code {
   background: rgba(79, 195, 247, 0.08) !important;
   color: #4fc3f7 !important;
   border: 1px solid rgba(79, 195, 247, 0.15) !important;
 }
 
-/* Tables */
-.vp-doc table { border-collapse: collapse; width: 100%; }
-.vp-doc th { background: #12151f; border: 1px solid #1e2535; color: #e0e0e0; }
-.vp-doc td { border: 1px solid #1e2535; color: #e0e0e0; }
-.vp-doc tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+/* ─── Tables — dark ──────────────────────────────────────────── */
+.dark .vp-doc table { border-collapse: collapse; width: 100%; }
+.dark .vp-doc th { background: #12151f; border: 1px solid #1e2535; color: #e0e0e0; }
+.dark .vp-doc td { border: 1px solid #1e2535; color: #e0e0e0; }
+.dark .vp-doc tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
 
-/* Links */
-.vp-doc a { color: #4fc3f7; text-decoration: none; }
-.vp-doc a:hover { color: #ffd54f; }
+/* ─── Links — dark ───────────────────────────────────────────── */
+.dark .vp-doc a { color: #4fc3f7; text-decoration: none; }
+.dark .vp-doc a:hover { color: #ffd54f; }
 
-/* Sidebar links */
-.VPSidebarItem .text { color: #90a4ae !important; }
-.VPSidebarItem.is-active .text { color: #4fc3f7 !important; }
-.VPSidebarItem:hover .text { color: #e0e0e0 !important; }
+/* ─── Sidebar links — dark ───────────────────────────────────── */
+.dark .VPSidebarItem .text { color: #90a4ae !important; }
+.dark .VPSidebarItem.is-active .text { color: #4fc3f7 !important; }
+.dark .VPSidebarItem:hover .text { color: #e0e0e0 !important; }
 
-/* Nav links */
-.VPNavBarMenuLink { color: #90a4ae !important; }
-.VPNavBarMenuLink:hover { color: #4fc3f7 !important; }
-.VPNavBarMenuLink.active { color: #4fc3f7 !important; }
+/* ─── Nav links — dark ───────────────────────────────────────── */
+.dark .VPNavBarMenuLink { color: #90a4ae !important; }
+.dark .VPNavBarMenuLink:hover { color: #4fc3f7 !important; }
+.dark .VPNavBarMenuLink.active { color: #4fc3f7 !important; }
 
-/* Content headings */
-.vp-doc h1, .vp-doc h2, .vp-doc h3, .vp-doc h4 { color: #e0e0e0 !important; }
-.vp-doc h2 { border-top: 1px solid #1e2535 !important; }
+/* ─── Headings — dark ────────────────────────────────────────── */
+.dark .vp-doc h1,
+.dark .vp-doc h2,
+.dark .vp-doc h3,
+.dark .vp-doc h4 { color: #e0e0e0 !important; }
+.dark .vp-doc h2 { border-top: 1px solid #1e2535 !important; }
