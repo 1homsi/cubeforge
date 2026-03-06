@@ -11,7 +11,7 @@ function useInput(): InputManager
 ## Example
 
 ```tsx
-import { useInput } from '@cubeforge/react'
+import { useInput } from 'cubeforge'
 import { useEffect } from 'react'
 
 function PauseOnEscape({ onPause }: { onPause: () => void }) {

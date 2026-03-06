@@ -11,7 +11,7 @@ function useEntity(): EntityId
 ## Example
 
 ```tsx
-import { useEntity, usePlatformerController } from '@cubeforge/react'
+import { useEntity, usePlatformerController } from 'cubeforge'
 
 function PlayerController() {
   const id = useEntity()   // numeric ECS entity ID

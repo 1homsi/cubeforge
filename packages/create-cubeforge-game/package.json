@@ -6,12 +6,20 @@
     "create-cubeforge-game": "./bin/index.js"
   },
   "scripts": {
-    "build": "bun build ./bin/index.ts --outfile ./bin/index.js --target node"
+    "build": "bun build ./bin/index.ts --outfile bin/index.js --target node"
   },
   "publishConfig": {
-    "bin": { "create-cubeforge-game": "./bin/index.js" }
+    "bin": {
+      "create-cubeforge-game": "./bin/index.js"
+    }
   },
-  "files": ["bin/index.js", "templates"],
+  "files": [
+    "bin/index.js",
+    "templates"
+  ],
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/1homsi/cubeforge" }
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
+  }
 }

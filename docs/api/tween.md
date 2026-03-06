@@ -25,10 +25,10 @@ function tween(
 
 ## Easing functions
 
-Import from `@cubeforge/react`:
+Import from `cubeforge`:
 
 ```ts
-import { Ease } from '@cubeforge/react'
+import { Ease } from 'cubeforge'
 ```
 
 | Easing | Effect |
@@ -42,7 +42,7 @@ import { Ease } from '@cubeforge/react'
 ## Example
 
 ```tsx
-import { tween, Ease } from '@cubeforge/react'
+import { tween, Ease } from 'cubeforge'
 
 function Door() {
   const tweenRef = useRef<ReturnType<typeof tween> | null>(null)

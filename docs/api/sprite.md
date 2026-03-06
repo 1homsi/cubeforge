@@ -55,7 +55,7 @@ Renders the entity as a coloured rectangle, a plain image, or a frame from a spr
 ### Atlas (named frames)
 
 ```tsx
-import { createAtlas } from '@cubeforge/react'
+import { createAtlas } from 'cubeforge'
 
 const atlas = createAtlas(['idle', 'run-1', 'run-2', 'run-3', 'jump'], 5)
 

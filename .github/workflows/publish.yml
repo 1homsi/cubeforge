@@ -19,30 +19,13 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Build packages (dependency order)
-        run: |
-          bun run --cwd packages/core build
-          bun run --cwd packages/input build
-          bun run --cwd packages/renderer build
-          bun run --cwd packages/physics build
-          bun run --cwd packages/react build
+      - name: Build
+        run: bun run build
 
-      - name: Publish packages
+      - name: Publish
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          bun publish --cwd packages/core     --access public
-          bun publish --cwd packages/input    --access public
-          bun publish --cwd packages/renderer --access public
-          bun publish --cwd packages/physics  --access public
-          bun publish --cwd packages/react    --access public
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION=$(node -p "require('./packages/react/package.json').version")
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --notes "Release v${VERSION} — see [CHANGELOG](https://github.com/1homsi/cubeforge/commits/main) for details."
+          bun publish --cwd packages/react --access public
+          bun publish --cwd packages/create-cubeforge-game --access public

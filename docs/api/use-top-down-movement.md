@@ -30,7 +30,7 @@ function useTopDownMovement(
 ## Example
 
 ```tsx
-import { Entity, Transform, Sprite, RigidBody, BoxCollider, useEntity, useTopDownMovement } from '@cubeforge/react'
+import { Entity, Transform, Sprite, RigidBody, BoxCollider, useEntity, useTopDownMovement } from 'cubeforge'
 
 function PlayerController() {
   const id = useEntity()

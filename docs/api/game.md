@@ -45,8 +45,8 @@ The engine runs systems in this order each frame:
 
 ```tsx
 import { useRef } from 'react'
-import { Game, World } from '@cubeforge/react'
-import type { GameControls } from '@cubeforge/react'
+import { Game, World } from 'cubeforge'
+import type { GameControls } from 'cubeforge'
 
 function App() {
   const controls = useRef<GameControls | null>(null)

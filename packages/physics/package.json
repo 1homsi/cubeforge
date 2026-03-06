@@ -17,14 +17,22 @@
       }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@cubeforge/core": "workspace:*"
   },
-  "keywords": ["game-engine", "physics", "aabb", "cubeforge"],
+  "keywords": [
+    "game-engine",
+    "physics",
+    "aabb",
+    "cubeforge"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/1homsi/cubeforge"
-  }
+  },
+  "private": true
 }

@@ -17,14 +17,21 @@
       }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@cubeforge/core": "workspace:*"
   },
-  "keywords": ["game-engine", "input", "cubeforge"],
+  "keywords": [
+    "game-engine",
+    "input",
+    "cubeforge"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/1homsi/cubeforge"
-  }
+  },
+  "private": true
 }

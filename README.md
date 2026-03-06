@@ -45,23 +45,23 @@ Prefer adding Cubeforge to an existing React project?
 
 ```bash
 # bun
-bun add @cubeforge/react react react-dom
+bun add cubeforge react react-dom
 
 # npm
-npm install @cubeforge/react react react-dom
+npm install cubeforge react react-dom
 
 # yarn
-yarn add @cubeforge/react react react-dom
+yarn add cubeforge react react-dom
 
 # pnpm
-pnpm add @cubeforge/react react react-dom
+pnpm add cubeforge react react-dom
 ```
 
 ## Example
 
 ```tsx
-import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from '@cubeforge/react'
-import type { ECSWorld, EntityId, RigidBodyComponent, InputManager } from '@cubeforge/react'
+import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from 'cubeforge'
+import type { ECSWorld, EntityId, RigidBodyComponent, InputManager } from 'cubeforge'
 
 function update(id: EntityId, world: ECSWorld, input: InputManager) {
   const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -444,7 +444,7 @@ Two-pass AABB (X then Y) with fixed 60hz timestep and spatial broadphase grid.
 ## Tween
 
 ```tsx
-import { tween, Ease } from '@cubeforge/react'
+import { tween, Ease } from 'cubeforge'
 
 const handle = tween(0, 100, 0.5, Ease.easeOutQuad, (v) => {
   sprite.width = v
@@ -497,7 +497,7 @@ Scale modes: `'none'` (default), `'contain'` (fit parent), `'pixel'` (pixel-art)
 | `@cubeforge/input` | Keyboard and mouse |
 | `@cubeforge/renderer` | Canvas2D renderer, camera, sprites, particles |
 | `@cubeforge/physics` | AABB collision, rigid bodies, fixed timestep |
-| `@cubeforge/react` | Components and hooks — the main API |
+| `cubeforge` | Components and hooks — the main API |
 
 ---
 

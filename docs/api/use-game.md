@@ -25,8 +25,8 @@ function useGame(): EngineState
 ## Example
 
 ```tsx
-import { useGame } from '@cubeforge/react'
-import type { TransformComponent } from '@cubeforge/react'
+import { useGame } from 'cubeforge'
+import type { TransformComponent } from 'cubeforge'
 
 function LevelManager() {
   const { ecs, events, assets } = useGame()

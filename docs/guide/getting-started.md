@@ -47,19 +47,19 @@ Adding Cubeforge to an existing React project:
 ::: code-group
 
 ```bash [bun]
-bun add @cubeforge/react react react-dom
+bun add cubeforge react react-dom
 ```
 
 ```bash [npm]
-npm install @cubeforge/react react react-dom
+npm install cubeforge react react-dom
 ```
 
 ```bash [yarn]
-yarn add @cubeforge/react react react-dom
+yarn add cubeforge react react-dom
 ```
 
 ```bash [pnpm]
-pnpm add @cubeforge/react react react-dom
+pnpm add cubeforge react react-dom
 ```
 
 :::
@@ -73,8 +73,8 @@ import {
   Game, World, Entity,
   Transform, Sprite, RigidBody, BoxCollider,
   Script, Camera2D,
-} from '@cubeforge/react'
-import type { EntityId, ECSWorld, InputManager, RigidBodyComponent } from '@cubeforge/react'
+} from 'cubeforge'
+import type { EntityId, ECSWorld, InputManager, RigidBodyComponent } from 'cubeforge'
 
 function playerUpdate(id: EntityId, world: ECSWorld, input: InputManager) {
   const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
@@ -120,7 +120,7 @@ import {
   Game, World, Entity,
   Transform, Sprite, RigidBody, BoxCollider,
   Camera2D, useEntity, usePlatformerController,
-} from '@cubeforge/react'
+} from 'cubeforge'
 
 function Player() {
   const id = useEntity()

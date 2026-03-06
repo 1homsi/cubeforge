@@ -110,7 +110,7 @@ All visual tile sprites share a single `zIndex`. Default is `0`. Use a negative 
 ## Full example
 
 ```tsx
-import { Game, World, Camera2D, Tilemap } from '@cubeforge/react'
+import { Game, World, Camera2D, Tilemap } from 'cubeforge'
 
 function Level() {
   const [playerPos, setPlayerPos] = useState({ x: 100, y: 200 })

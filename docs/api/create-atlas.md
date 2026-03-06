@@ -19,7 +19,7 @@ A plain object mapping frame name strings to zero-based frame index numbers.
 ## Example
 
 ```tsx
-import { createAtlas, Sprite, Animation } from '@cubeforge/react'
+import { createAtlas, Sprite, Animation } from 'cubeforge'
 
 // 8 frames per row, names in row-major order
 const playerAtlas = createAtlas([

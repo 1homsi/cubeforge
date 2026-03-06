@@ -11,7 +11,7 @@ function useEvent<T>(event: string, handler: (data: T) => void): void
 ## Example
 
 ```tsx
-import { useEvent } from '@cubeforge/react'
+import { useEvent } from 'cubeforge'
 
 function ScoreTracker({ onScore }: { onScore: (n: number) => void }) {
   useEvent<{ amount: number }>('coin-collected', ({ amount }) => {

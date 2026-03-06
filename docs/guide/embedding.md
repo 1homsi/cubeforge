@@ -5,7 +5,7 @@ Cubeforge is designed to be dropped into any existing React application. The `<G
 ## Basic embedding
 
 ```tsx
-import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider } from '@cubeforge/react'
+import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider } from 'cubeforge'
 
 export function GameSection() {
   return (
@@ -59,7 +59,7 @@ Use `onReady` to receive engine controls when the game is initialised:
 
 ```tsx
 import { useState, useRef } from 'react'
-import type { GameControls } from '@cubeforge/react'
+import type { GameControls } from 'cubeforge'
 
 function GamePage() {
   const [paused, setPaused] = useState(false)
@@ -108,7 +108,7 @@ function GamePage() {
 
 ```tsx
 import { useRef } from 'react'
-import { Game, World, ScreenFlash, type ScreenFlashHandle } from '@cubeforge/react'
+import { Game, World, ScreenFlash, type ScreenFlashHandle } from 'cubeforge'
 
 function MyGame() {
   const flashRef = useRef<ScreenFlashHandle>(null)
@@ -139,7 +139,7 @@ Use `onReady` to store the engine and subscribe to events from React:
 
 ```tsx
 import { useEffect, useState } from 'react'
-import type { EngineState } from '@cubeforge/react'
+import type { EngineState } from 'cubeforge'
 
 function GameWithHUD() {
   const [score, setScore] = useState(0)

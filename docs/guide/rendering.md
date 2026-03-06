@@ -96,7 +96,7 @@ const frames = isOnGround
 For cleaner code, use `createAtlas` to map frame names to indices:
 
 ```tsx
-import { createAtlas } from '@cubeforge/react'
+import { createAtlas } from 'cubeforge'
 
 const playerAtlas = createAtlas([
   'idle', 'run-1', 'run-2', 'run-3', 'jump', 'fall',
