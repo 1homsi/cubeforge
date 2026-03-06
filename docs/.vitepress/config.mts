@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'Cubeforge',
   description: 'React-first 2D browser game engine',
+  appearance: 'dark',
   base: '/cubeforge/',
   themeConfig: {
     logo: '/logo.svg',
