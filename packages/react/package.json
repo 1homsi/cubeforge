@@ -5,7 +5,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "build": "bun build src/index.ts --outfile dist/index.js --target browser --format esm --external react --external react-dom --external react/jsx-runtime && tsc --emitDeclarationOnly --noEmit false"
   },
   "publishConfig": {
     "main": "./dist/index.js",
@@ -21,6 +21,12 @@
   "peerDependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
+  },
+  "dependencies": {
+    "@cubeforge/core": "workspace:*",
+    "@cubeforge/input": "workspace:*",
+    "@cubeforge/renderer": "workspace:*",
+    "@cubeforge/physics": "workspace:*"
   },
   "keywords": ["game-engine", "react", "2d", "browser-game", "cubeforge"],
   "license": "MIT",
