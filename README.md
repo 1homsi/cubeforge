@@ -1,8 +1,8 @@
 # Cubeforge
 
-**A React-first game engine for the browser.**
+**Build browser games with React.**
 
-Build games the same way you build interfaces — with components, hooks, and composition. No imperative setup, no boilerplate. Just React.
+A React-first 2D game engine for the web. Write games the same way you write interfaces — with components, hooks, and composition. No imperative setup, no boilerplate, no Three.js, no Phaser. Just React.
 
 ```tsx
 <Game width={900} height={560}>
@@ -22,10 +22,26 @@ Build games the same way you build interfaces — with components, hooks, and co
 Most browser game engines are imperative. You create objects, call methods, manage loops manually. Cubeforge flips that: your game is a React component tree. Mount a component → entity exists. Unmount it → entity is gone. The engine handles the rest.
 
 - **Declarative** — describe your world, don't script it
-- **Composable** — `<Player />` is just React components under the hood
+- **Composable** — `<Player />` is just a React component wrapping engine primitives
 - **Zero runtime dependencies** — no Three.js, no physics library, no framework lock-in
-- **Hand-rolled everything** — ECS, renderer, physics, input — all from scratch
-- **TypeScript-first** — every API is fully typed
+- **Hand-rolled everything** — ECS, renderer, physics, input — all from scratch, all small
+- **TypeScript-first** — every API is fully typed and documented
+- **Embeddable** — drop a game into any existing React app with one component
+
+---
+
+## Examples
+
+All runnable examples live in the [cubeforge-examples](https://github.com/1homsi/cubeforge-examples) repo.
+
+| Example | Description | Status |
+|---|---|---|
+| [platformer](https://github.com/1homsi/cubeforge-examples/tree/main/platformer) | Scrolling platformer with double jump, stomp, coins, lives | Live |
+| mario-clone | Mario-style level with question blocks, powerups, and pipes | Planned |
+| breakout | Classic brick breaker with paddle, ball physics, and levels | Planned |
+| flappy-bird | Tap-to-flap game with scrolling pipes and high score | Planned |
+| shooter | Side-scrolling shoot-em-up with waves and bullet patterns | Planned |
+| top-down | Top-down adventure movement with obstacles and triggers | Planned |
 
 ---
 
@@ -110,7 +126,6 @@ Sets world-level config. All game entities go inside here.
 ```tsx
 <World
   background="#1a1a2e"  // canvas background color
-  gravity={1200}        // override gravity (optional)
 />
 ```
 
@@ -171,7 +186,6 @@ Axis-aligned bounding box for collision.
   offsetX={0}
   offsetY={0}
   isTrigger={false}   // triggers fire events but don't block movement
-  layer="default"
 />
 ```
 
@@ -275,10 +289,11 @@ function Level() {
 The physics system runs two passes per frame — X then Y — which gives accurate platformer collision response with no corner sticking.
 
 - Gravity is applied first
-- X movement is integrated and resolved
-- Y movement is integrated and resolved
+- X movement is integrated and resolved against static bodies
+- Y movement is integrated and resolved against static bodies
 - `onGround` is set on `RigidBody` when an entity lands on a surface
-- Triggers fire `collision` events via `EventBus` without blocking movement
+- Dynamic-vs-dynamic separation is handled in a separate pass
+- Triggers fire `trigger` events via `EventBus` without blocking movement
 
 ---
 
@@ -342,58 +357,95 @@ engine.events.on('player-died', ({ score }) => { ... })
 
 ---
 
-## Asset Loading
-
-```tsx
-const { assets } = useGame()
-
-// Preload images
-await assets.preloadImages(['/player.png', '/tileset.png'])
-
-// Then use in Sprite
-<Sprite src="/player.png" width={32} height={48} />
-
-// Audio
-await assets.loadAudio('/jump.wav')
-assets.playAudio('/jump.wav', 0.8)
-```
-
----
-
 ## Architecture
 
 ```
 React component tree
        ↓
    <Game> creates:
-     ECSWorld   — entity/component storage
-     GameLoop   — requestAnimationFrame driver
-     InputManager — keyboard + mouse events
+     ECSWorld      — entity/component storage
+     GameLoop      — requestAnimationFrame driver
+     InputManager  — keyboard + mouse events
      PhysicsSystem — AABB collision, gravity
      RenderSystem  — Canvas2D draw loop
-     EventBus   — pub/sub for game events
-     AssetManager — image + audio cache
+     EventBus      — pub/sub for game events
+     AssetManager  — image + audio cache
        ↓
   Entity components mount → register in ECS
        ↓
-  Game loop: ecs.update(dt) → ScriptSystem → PhysicsSystem → RenderSystem
-       ↓
-  input.flush() — clears single-frame state
+  Frame: ScriptSystem → PhysicsSystem → RenderSystem → input.flush()
 ```
 
 The React tree is the **scene description**. Once entities are mounted, the ECS and game loop take over — React does not re-render every frame.
 
 ---
 
-## Monorepo
+## Roadmap
+
+Cubeforge is actively developed toward a v1 release. The goal is a React developer can install it and ship a playable game in under 30 minutes.
+
+### Phase 1 — Core Stability (current)
+- Lock primitive API (`Game`, `World`, `Entity`, `Transform`, `Sprite`, `RigidBody`, `BoxCollider`, `Script`, `Camera2D`)
+- Finalize component prop contracts
+- Runtime warnings for common mistakes
+- Strict TypeScript exports
+
+### Phase 2 — Rendering
+- Sprite sheet support (`frameWidth`, `frameHeight`, `frame`, `columns`)
+- `<Animation>` component for frame-based animations
+- Sprite anchors / origins
+- Camera bounds, zoom, dead zone
+
+### Phase 3 — Level Building
+- `<Tilemap>` with Tiled JSON import
+- Collision layer auto-generation
+- Object layer spawning
+
+### Phase 4 — Game Feel
+- `<SquashStretch>` component
+- Camera shake API
+- Particle system
+- Tween utility
+
+### Phase 5 — Audio & Assets
+- Asset preload pipeline
+- Loading screen support
+- Audio playback (play, stop, loop, volume)
+
+### Phase 6 — Developer Experience
+- `<Game debug>` overlay (FPS, entity count, colliders)
+- Collider visualization
+- Error boundaries around scripts
+- Engine inspection hook
+
+### Phase 7 — Gameplay Helpers
+- `usePlatformerController`, `useTopDownMovement` hooks
+- Built-in: `<MovingPlatform>`, `<Checkpoint>`, `<Collectible>`
+- One-way platforms, ladders, hazards
+
+### Phase 8 — Embedding
+- Responsive canvas (fit-contain, pixel-perfect)
+- `pause()` / `resume()` / `reset()` API
+- Host app event bridge (score, level complete, game over)
+
+### Phase 9 — Performance
+- Fixed timestep physics
+- Broadphase collision (spatial buckets)
+- ECS query caching
+
+### Phase 10 — Docs & Publish
+- Full docs site
+- npm publish with versioning + changelog
+- More polished examples
+
+---
+
+## Local Development
 
 ```bash
 bun install           # install all workspace deps
-bun run dev           # start the demo example
 bun run typecheck     # type-check all packages
 ```
-
-Built with [Bun](https://bun.sh) workspaces.
 
 ---
 
