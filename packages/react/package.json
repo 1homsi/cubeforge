@@ -22,12 +22,6 @@
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   },
-  "dependencies": {
-    "@cubeforge/core": "workspace:*",
-    "@cubeforge/input": "workspace:*",
-    "@cubeforge/renderer": "workspace:*",
-    "@cubeforge/physics": "workspace:*"
-  },
   "keywords": ["game-engine", "react", "2d", "browser-game", "cubeforge"],
   "license": "MIT",
   "repository": {
