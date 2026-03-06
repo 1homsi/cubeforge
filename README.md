@@ -16,7 +16,17 @@
 ## Install
 
 ```bash
+# bun
 bun add @cubeforge/react react react-dom
+
+# npm
+npm install @cubeforge/react react react-dom
+
+# yarn
+yarn add @cubeforge/react react react-dom
+
+# pnpm
+pnpm add @cubeforge/react react react-dom
 ```
 
 ## Quick start
