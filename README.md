@@ -2,15 +2,16 @@
 
 **Build browser games with React.**
 
-A React-first 2D game engine for the web. Write games the same way you write interfaces — with components, hooks, and composition. No imperative setup, no boilerplate, no Three.js, no Phaser. Just React.
+A React-first 2D game engine for the web. Write games the same way you write interfaces — with components, hooks, and composition. No imperative setup, no boilerplate, no Three.js. Just React.
 
 ```tsx
-<Game width={900} height={560}>
+<Game width={900} height={560} gravity={980} debug>
   <World background="#12131f">
-    <Camera2D followEntity="player" smoothing={0.87} />
+    <Camera2D followEntity="player" smoothing={0.87} bounds={{ x: 0, y: 0, width: 3000, height: 900 }} />
     <Player x={100} y={420} />
     <Enemy x={380} y={420} patrolLeft={250} patrolRight={550} />
-    <Platform x={450} y={500} width={900} height={32} />
+    <MovingPlatform x1={200} y1={350} x2={450} y2={350} duration={2.5} />
+    <Checkpoint x={800} y={450} onActivate={() => setSave(800)} />
   </World>
 </Game>
 ```
@@ -21,40 +22,38 @@ A React-first 2D game engine for the web. Write games the same way you write int
 
 Most browser game engines are imperative. You create objects, call methods, manage loops manually. Cubeforge flips that: your game is a React component tree. Mount a component → entity exists. Unmount it → entity is gone. The engine handles the rest.
 
-- **Declarative** — describe your world, don't script it
-- **Composable** — `<Player />` is just a React component wrapping engine primitives
-- **Zero runtime dependencies** — no Three.js, no physics library, no framework lock-in
-- **Hand-rolled everything** — ECS, renderer, physics, input — all from scratch, all small
-- **TypeScript-first** — every API is fully typed and documented
-- **Embeddable** — drop a game into any existing React app with one component
+- **Declarative** — describe your world, not your frame loop
+- **Composable** — `<Player />`, `<Enemy />`, `<MovingPlatform />` are just React components
+- **Zero runtime dependencies** — ECS, physics, renderer, input all hand-rolled
+- **TypeScript-first** — every API is fully typed with TSDoc comments
+- **Embeddable** — drop a game into any React app with one component
+- **Debug-ready** — `<Game debug>` shows collider wireframes, FPS, entity counts
 
 ---
 
 ## Examples
 
-All runnable examples live in the [cubeforge-examples](https://github.com/1homsi/cubeforge-examples) repo.
+All runnable examples live in [cubeforge-examples](https://github.com/1homsi/cubeforge-examples).
 
-| Example | Description | Status |
-|---|---|---|
-| [platformer](https://github.com/1homsi/cubeforge-examples/tree/main/platformer) | Scrolling platformer with double jump, stomp, coins, lives | Live |
-| mario-clone | Mario-style level with question blocks, powerups, and pipes | Planned |
-| breakout | Classic brick breaker with paddle, ball physics, and levels | Planned |
-| flappy-bird | Tap-to-flap game with scrolling pipes and high score | Planned |
-| shooter | Side-scrolling shoot-em-up with waves and bullet patterns | Planned |
-| top-down | Top-down adventure movement with obstacles and triggers | Planned |
+| Example | Description |
+|---|---|
+| [platformer](https://github.com/1homsi/cubeforge-examples/tree/main/platformer) | Scrolling platformer — double jump, stomp, coins, lives, HUD |
+| [mario-clone](https://github.com/1homsi/cubeforge-examples/tree/main/mario-clone) | Mario-style level — question blocks, mushroom powerup, goombas, goal flag |
+| [breakout](https://github.com/1homsi/cubeforge-examples/tree/main/breakout) | Classic brick breaker — paddle, bouncing ball, multi-row bricks |
+| [flappy-bird](https://github.com/1homsi/cubeforge-examples/tree/main/flappy-bird) | Tap-to-flap — scrolling pipes, high score |
+| [shooter](https://github.com/1homsi/cubeforge-examples/tree/main/shooter) | Side-scrolling shoot-em-up — waves, enemy patterns, stars |
+| [top-down](https://github.com/1homsi/cubeforge-examples/tree/main/top-down) | Top-down dungeon — 4-directional movement, sword combat, keys, exit |
 
 ---
 
 ## Packages
 
-Cubeforge is a monorepo. Each system is its own package so you can use only what you need.
-
 | Package | Description |
 |---|---|
-| `@cubeforge/core` | ECS world, game loop, event bus, asset manager, math (Vec2, Rect) |
-| `@cubeforge/input` | Keyboard and mouse input with `isDown`, `isPressed`, `isReleased` |
-| `@cubeforge/renderer` | Canvas2D renderer, camera system, sprite rendering |
-| `@cubeforge/physics` | AABB collision detection, rigid bodies, triggers |
+| `@cubeforge/core` | ECS world, game loop, event bus, asset manager, tween utility, math |
+| `@cubeforge/input` | Keyboard and mouse — `isDown`, `isPressed`, `isReleased` |
+| `@cubeforge/renderer` | Canvas2D renderer, camera, sprite sheets, animation, particles, squash-stretch |
+| `@cubeforge/physics` | AABB collision, rigid bodies, triggers, fixed timestep, spatial broadphase |
 | `@cubeforge/react` | React components and hooks — the main developer-facing API |
 
 ---
@@ -66,20 +65,23 @@ bun add @cubeforge/react react react-dom
 ```
 
 ```tsx
-import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from '@cubeforge/react'
-import type { ECSWorld, EntityId, TransformComponent, RigidBodyComponent } from '@cubeforge/react'
+import {
+  Game, World, Entity, Transform, Sprite,
+  RigidBody, BoxCollider, Script, Camera2D
+} from '@cubeforge/react'
+import type { ECSWorld, EntityId, RigidBodyComponent } from '@cubeforge/react'
 import type { InputManager } from '@cubeforge/react'
 
 function update(id: EntityId, world: ECSWorld, input: InputManager) {
   const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
   if (input.isDown('ArrowLeft'))  rb.vx = -200
-  if (input.isDown('ArrowRight')) rb.vx = 200
+  if (input.isDown('ArrowRight')) rb.vx =  200
   if (input.isPressed('Space') && rb.onGround) rb.vy = -500
 }
 
 export default function MyGame() {
   return (
-    <Game width={800} height={500}>
+    <Game width={800} height={500} gravity={980}>
       <World background="#1a1a2e">
         <Camera2D followEntity="player" smoothing={0.85} />
 
@@ -105,79 +107,107 @@ export default function MyGame() {
 
 ---
 
-## React API
+## Components
 
-### Components
+### `<Game>`
 
-#### `<Game>`
-The root component. Creates the canvas, the engine, and all subsystems.
+Root component. Creates the canvas, engine, and all subsystems.
 
 ```tsx
 <Game
-  width={900}       // canvas width in px
-  height={560}      // canvas height in px
-  gravity={980}     // pixels/s² downward
+  width={900}           // canvas width in px
+  height={560}          // canvas height in px
+  gravity={980}         // pixels/s² downward
+  debug                 // show collider wireframes + FPS overlay
+  scale="contain"       // 'none' | 'contain' | 'pixel'
+  onReady={(controls) => {
+    controls.pause()    // pause the game loop
+    controls.resume()   // resume
+    controls.reset()    // clear + restart
+  }}
 />
 ```
 
-#### `<World>`
-Sets world-level config. All game entities go inside here.
+### `<World>`
+
+Sets world-level config. All game entities go inside.
 
 ```tsx
-<World
-  background="#1a1a2e"  // canvas background color
-/>
+<World background="#1a1a2e" gravity={1200} />
 ```
 
-#### `<Entity>`
+### `<Entity>`
+
 Creates an ECS entity. Children attach components to it.
 
 ```tsx
-<Entity
-  id="player"               // optional string ID for cross-entity lookup
-  tags={['player', 'hero']} // optional tags for querying
-/>
+<Entity id="player" tags={['player', 'hero']}>
+  {/* components */}
+</Entity>
 ```
 
-#### `<Transform>`
-Position, rotation, and scale. Required for rendering and physics.
+### `<Transform>`
+
+Position, rotation, scale. Required for physics and rendering.
 
 ```tsx
 <Transform x={100} y={300} rotation={0} scaleX={1} scaleY={1} />
 ```
 
-#### `<Sprite>`
-Renders the entity — color rect or image.
+### `<Sprite>`
+
+Renders the entity — color rect, image, or sprite sheet frame.
 
 ```tsx
 <Sprite
   width={32}
   height={48}
-  color="#4fc3f7"      // fallback color
-  src="/player.png"   // optional image
+  color="#4fc3f7"         // fallback color
+  src="/player.png"       // optional image
+  frameIndex={2}          // sprite sheet frame (0-based)
+  frameWidth={32}         // frame size on the sheet
+  frameHeight={48}
+  frameColumns={8}        // columns in the sheet
+  anchorX={0.5}           // 0=left, 0.5=center, 1=right
+  anchorY={0.5}           // 0=top, 0.5=center, 1=bottom
   zIndex={10}
   flipX={false}
   visible={true}
 />
 ```
 
-#### `<RigidBody>`
-Makes an entity participate in physics simulation.
+### `<Animation>`
+
+Drives frame-based sprite sheet animations.
+
+```tsx
+<Animation
+  frames={[0, 1, 2, 3]}   // frame indices to cycle
+  fps={12}                  // frames per second
+  loop={true}
+  playing={true}
+/>
+```
+
+### `<RigidBody>`
+
+Makes an entity participate in physics.
 
 ```tsx
 <RigidBody
-  isStatic={false}    // true = immovable (platforms, walls)
+  isStatic={false}     // true = immovable (platforms, walls)
+  gravityScale={1}     // 0 for top-down games
   mass={1}
-  gravityScale={1}
   friction={0.85}
   bounce={0}
 />
 ```
 
-When `onGround` is `true`, the entity is resting on a solid surface. Read it in a `<Script>` to gate jumps.
+`rb.onGround` is `true` when the entity rests on a solid surface.
 
-#### `<BoxCollider>`
-Axis-aligned bounding box for collision.
+### `<BoxCollider>`
+
+Axis-aligned bounding box.
 
 ```tsx
 <BoxCollider
@@ -185,151 +215,245 @@ Axis-aligned bounding box for collision.
   height={48}
   offsetX={0}
   offsetY={0}
-  isTrigger={false}   // triggers fire events but don't block movement
+  isTrigger={false}    // trigger: fires event, doesn't block movement
 />
 ```
 
-#### `<Script>`
-Per-entity update logic. Called every frame.
+### `<Script>`
+
+Per-entity logic. Called every frame.
 
 ```tsx
 <Script
-  init={(entityId, world) => {
-    // runs once on mount — attach extra data here
+  init={(id, world) => {
+    // runs once on mount — use to attach custom data
+    world.addComponent(id, { type: 'MyData', value: 42 })
   }}
-  update={(entityId, world, input, dt) => {
+  update={(id, world, input, dt) => {
     // runs every frame
   }}
 />
 ```
 
-#### `<Camera2D>`
-Positions and moves the viewport.
+### `<Camera2D>`
+
+Smooth-follow camera with bounds and dead zone.
 
 ```tsx
 <Camera2D
-  followEntity="player"  // string ID of entity to track
+  followEntity="player"
+  smoothing={0.87}
   zoom={1}
-  smoothing={0.87}       // 0 = instant, higher = smoother follow
-  background="#1a1a2e"
+  bounds={{ x: 0, y: 0, width: 3000, height: 900 }}
+  deadZone={{ w: 80, h: 40 }}
+  background="#12131f"
 />
 ```
 
+### `<Animation>`
+
+Frame-based sprite animation driven per entity.
+
+```tsx
+<Animation frames={[0, 1, 2, 3]} fps={12} loop playing />
+```
+
+### `<SquashStretch>`
+
+Adds squash-and-stretch visual feel based on velocity (visual only — does not modify physics).
+
+```tsx
+<SquashStretch intensity={0.2} recovery={8} />
+```
+
+### `<ParticleEmitter>`
+
+Lightweight particle effect attached to an entity.
+
+```tsx
+<ParticleEmitter
+  active={true}
+  rate={20}              // particles per second
+  speed={80}
+  spread={Math.PI}       // angle spread in radians
+  angle={-Math.PI / 2}   // emit direction (upward)
+  particleLife={0.8}
+  particleSize={4}
+  color="#ff6b35"
+  gravity={200}
+  maxParticles={100}
+/>
+```
+
+### `<MovingPlatform>`
+
+A static platform that oscillates between two points.
+
+```tsx
+<MovingPlatform
+  x1={200} y1={350}
+  x2={450} y2={350}
+  width={120}
+  duration={2.5}
+  color="#37474f"
+/>
+```
+
+### `<Checkpoint>`
+
+A trigger zone that fires `onActivate` when the player enters it.
+
+```tsx
+<Checkpoint
+  x={800} y={450}
+  width={24} height={48}
+  onActivate={() => setSavePoint(800)}
+/>
+```
+
+### `<Tilemap>`
+
+Loads a [Tiled](https://www.mapeditor.org/) JSON map, renders tiles, and auto-generates collision entities from collision layers.
+
+```tsx
+<Tilemap
+  src="/levels/level1.json"
+  zIndex={1}
+  layerFilter={(layer) => layer.visible}
+  onSpawnObject={(obj, layer) => {
+    if (obj.type === 'player') return <Player x={obj.x} y={obj.y} />
+    if (obj.type === 'enemy')  return <Enemy  x={obj.x} y={obj.y} />
+    return null
+  }}
+/>
+```
+
+Supported features:
+- Tile layers: renders tiles using sprite sheet frames from the tileset image
+- Layers named `"collision"` or with property `collision: true` auto-generate static `BoxCollider` entities
+- Object layers: passes each object to `onSpawnObject` for React-based spawning
+- Multiple tilesets
+
 ---
 
-### Hooks
+## Hooks
 
-#### `useGame()`
-Access the full engine state — ECS world, input, events, assets, renderer.
+### `useGame()`
+
+Full engine access — ECS, input, events, assets, renderer.
 
 ```tsx
 const engine = useGame()
-engine.ecs.query('Transform', 'RigidBody') // query all physics entities
-engine.events.on('collision', handler)
+engine.ecs.query('Transform', 'RigidBody')
+engine.events.on('collision', ({ a, b }) => { ... })
 engine.assets.loadImage('/tileset.png')
+engine.loop.pause()
 ```
 
-#### `useEntity()`
+### `useEntity()`
+
 Get the numeric ECS entity ID for the current `<Entity>`.
 
 ```tsx
 const entityId = useEntity()
 ```
 
-#### `useInput()`
-Direct access to the `InputManager` outside of a `<Script>`.
+### `useInput()`
+
+Direct `InputManager` access outside of `<Script>`.
 
 ```tsx
 const input = useInput()
 if (input.isDown('ArrowRight')) { ... }
+if (input.mouse.isPressed(0)) { ... }
 ```
 
-#### `useEvent(event, handler)`
-Subscribe to an engine event and auto-cleanup on unmount.
+### `useEvent(event, handler)`
+
+Subscribe to an engine event with auto-cleanup on unmount.
 
 ```tsx
 useEvent('collision', ({ a, b }) => {
-  console.log('entities collided:', a, b)
+  console.log('collision:', a, b)
 })
 ```
 
----
+### `usePlatformerController(entityId, opts?)`
 
-## Composing High-Level Components
-
-The real power of Cubeforge is that `<Player>`, `<Enemy>`, `<Platform>` are just regular React components:
+Attaches full platformer controls (WASD/arrows + jump) to an entity. Handles coyote time, jump buffer, and sprite flip automatically.
 
 ```tsx
-function Platform({ x, y, width }: PlatformProps) {
-  return (
-    <Entity tags={['solid']}>
-      <Transform x={x} y={y} />
-      <Sprite width={width} height={20} color="#455a64" />
-      <RigidBody isStatic />
-      <BoxCollider width={width} height={20} />
-    </Entity>
-  )
-}
-
-function Level() {
-  return (
-    <>
-      <Platform x={400} y={500} width={800} />
-      <Platform x={200} y={380} width={160} />
-      <Platform x={600} y={300} width={160} />
-    </>
-  )
-}
+const id = useEntity()
+usePlatformerController(id, {
+  speed: 220,
+  jumpForce: -520,
+  maxJumps: 2,       // double jump
+  coyoteTime: 0.08,
+  jumpBuffer: 0.08,
+})
 ```
 
----
+### `useTopDownMovement(entityId, opts?)`
 
-## Physics
+Attaches 4-directional top-down movement to an entity. Set `gravityScale={0}` on the entity's `<RigidBody>`.
 
-The physics system runs two passes per frame — X then Y — which gives accurate platformer collision response with no corner sticking.
-
-- Gravity is applied first
-- X movement is integrated and resolved against static bodies
-- Y movement is integrated and resolved against static bodies
-- `onGround` is set on `RigidBody` when an entity lands on a surface
-- Dynamic-vs-dynamic separation is handled in a separate pass
-- Triggers fire `trigger` events via `EventBus` without blocking movement
+```tsx
+const id = useEntity()
+useTopDownMovement(id, { speed: 180, normalizeDiagonal: true })
+```
 
 ---
 
 ## Input
 
 ```tsx
-input.isDown('ArrowLeft')    // true every frame the key is held
-input.isPressed('Space')     // true only on the frame the key was pressed
-input.isReleased('Escape')   // true only on the frame the key was released
+input.isDown('ArrowLeft')     // held every frame
+input.isPressed('Space')      // true only on the frame pressed
+input.isReleased('Escape')    // true only on the frame released
 
-input.mouse.x                // cursor X relative to canvas
-input.mouse.isDown(0)        // left mouse button held
-input.mouse.isPressed(2)     // right mouse button just clicked
+input.mouse.x                 // cursor X relative to canvas
+input.mouse.isDown(0)         // left button held
+input.mouse.isPressed(0)      // left button just clicked
 ```
 
-Keys can be checked by `e.code` (`'Space'`, `'ArrowLeft'`, `'KeyA'`) or `e.key` (`'a'`, `'Enter'`).
+Keys work by `e.code` (`'Space'`, `'KeyA'`) or `e.key` (`'a'`, `' '`).
+
+---
+
+## Physics
+
+Two-pass AABB (X then Y) with fixed 60hz timestep and spatial broadphase grid.
+
+- Gravity applied per frame scaled by `gravityScale`
+- X: integrate → resolve static collisions
+- Y: integrate → resolve static collisions → set `onGround`
+- Dynamic vs dynamic: simple equal push-apart
+- Triggers: fire `trigger` event on `EventBus` without blocking movement
+- Fixed timestep: physics always runs at 60 steps/sec regardless of render FPS
+- Broadphase: 128px cell spatial grid for dynamic-vs-static (no O(n×m) checks)
 
 ---
 
 ## ECS
 
-The engine uses a simple map-based Entity Component System. You don't need to use it directly most of the time, but it's fully accessible via `useGame()`.
+Map-based Entity Component System. Direct access via `useGame()`.
 
 ```tsx
 const { ecs, entityIds } = useGame()
 
-// Query all entities with both Transform and RigidBody
-const physicsEntities = ecs.query('Transform', 'RigidBody')
+// Query entities with multiple component types
+const movers = ecs.query('Transform', 'RigidBody')
+
+// Per-frame query cache — same query within a frame is free
+const renderables = ecs.query('Transform', 'Sprite')
 
 // Get a component
-const rb = ecs.getComponent<RigidBodyComponent>(entityId, 'RigidBody')
+const rb = ecs.getComponent<RigidBodyComponent>(id, 'RigidBody')
 
-// Get entity by string ID
+// Named entity lookup
 const playerId = entityIds.get('player')
 
-// Create/destroy entities at runtime
+// Runtime entity management
 const id = ecs.createEntity()
 ecs.addComponent(id, { type: 'Transform', x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 })
 ecs.destroyEntity(id)
@@ -338,8 +462,6 @@ ecs.destroyEntity(id)
 ---
 
 ## Events
-
-The event bus is accessible on `engine.events` or via `useEvent`.
 
 Built-in events:
 
@@ -353,6 +475,113 @@ Custom events:
 ```tsx
 engine.events.emit('player-died', { score: 1200 })
 engine.events.on('player-died', ({ score }) => { ... })
+engine.events.once('player-died', handler)
+```
+
+---
+
+## Tween
+
+A tiny tween utility included in `@cubeforge/core`.
+
+```tsx
+import { tween, Ease } from '@cubeforge/react'
+
+const handle = tween(0, 100, 0.5, Ease.easeOutQuad, (v) => {
+  sprite.width = v
+}, () => {
+  console.log('done')
+})
+
+// In a Script update:
+handle.update(dt)
+handle.stop()        // cancel
+handle.isComplete    // boolean
+```
+
+Available easing functions: `Ease.linear`, `easeInQuad`, `easeOutQuad`, `easeInOutQuad`, `easeOutBack`.
+
+---
+
+## Assets
+
+```tsx
+const { assets } = useGame()
+
+// Images
+await assets.preloadImages(['/player.png', '/tileset.png'])
+<Sprite src="/player.png" width={32} height={48} />
+
+// Audio
+await assets.loadAudio('/jump.wav')
+assets.playAudio('/jump.wav', 0.8)
+assets.playLoopAudio('/bgm.mp3', 0.5)  // returns source node
+assets.stopAudio('/bgm.mp3')
+assets.stopAll()
+assets.preloadAudio(['/jump.wav', '/hit.wav'])
+```
+
+---
+
+## Debug Mode
+
+```tsx
+<Game debug>
+```
+
+When `debug` is true:
+- **Green wireframes** on all solid `BoxCollider` entities
+- **Yellow wireframes** on trigger colliders
+- **FPS** counter (rolling 0.5s average)
+- **Entity count**, physics count, renderable count
+
+---
+
+## Embedding in React Apps
+
+```tsx
+// Pause/resume via onReady callback
+function ProductPage() {
+  const [controls, setControls] = useState<GameControls | null>(null)
+
+  return (
+    <div>
+      <Game
+        width={800} height={500}
+        scale="contain"      // CSS-scales to fit parent
+        onReady={setControls}
+      >
+        <World background="#12131f">
+          {/* ... */}
+        </World>
+      </Game>
+      <button onClick={() => controls?.pause()}>Pause</button>
+      <button onClick={() => controls?.resume()}>Resume</button>
+    </div>
+  )
+}
+```
+
+Scale modes:
+- `'none'` — fixed pixel size (default)
+- `'contain'` — CSS-scales to fit parent while preserving aspect ratio
+- `'pixel'` — `image-rendering: pixelated` for pixel-art games
+
+---
+
+## Camera Shake
+
+Trigger camera shake via the engine events:
+
+```tsx
+// From a Script:
+update={(id, world, _input, _dt) => {
+  const { events } = engine
+  events.emit('camera:shake', { intensity: 8, duration: 0.3 })
+}}
+
+// Or store the engine reference and call directly:
+const { renderer } = useGame()
 ```
 
 ---
@@ -360,91 +589,67 @@ engine.events.on('player-died', ({ score }) => { ... })
 ## Architecture
 
 ```
-React component tree
-       ↓
-   <Game> creates:
-     ECSWorld      — entity/component storage
-     GameLoop      — requestAnimationFrame driver
-     InputManager  — keyboard + mouse events
-     PhysicsSystem — AABB collision, gravity
-     RenderSystem  — Canvas2D draw loop
-     EventBus      — pub/sub for game events
-     AssetManager  — image + audio cache
-       ↓
+React component tree (scene description)
+         ↓ mount
+    <Game> creates:
+      ECSWorld       — entity/component storage + per-frame query cache
+      GameLoop       — requestAnimationFrame driver with pause/resume
+      InputManager   — keyboard + mouse events
+      PhysicsSystem  — fixed-timestep AABB + spatial broadphase
+      RenderSystem   — Canvas2D draw: sprites, animations, particles, squash-stretch
+      DebugSystem    — (debug=true) collider wireframes + FPS overlay
+      EventBus       — pub/sub for game events
+      AssetManager   — image + audio cache
+         ↓
   Entity components mount → register in ECS
-       ↓
-  Frame: ScriptSystem → PhysicsSystem → RenderSystem → input.flush()
+         ↓
+  Frame pipeline:
+    ScriptSystem  — user scripts (try/catch per script)
+    PhysicsSystem — fixed 60hz steps with accumulator
+    RenderSystem  — variable FPS canvas draw
+    DebugSystem   — (if debug=true)
+    input.flush() — clear single-frame input state
 ```
 
-The React tree is the **scene description**. Once entities are mounted, the ECS and game loop take over — React does not re-render every frame.
+The React tree is the **scene description**. Once entities are mounted, ECS and the game loop own the frame — React does not re-render every frame.
 
 ---
 
-## Roadmap
+## Runtime Warnings
 
-Cubeforge is actively developed toward a v1 release. The goal is a React developer can install it and ship a playable game in under 30 minutes.
+Cubeforge emits dev-friendly warnings for common mistakes:
 
-### Phase 1 — Core Stability (current)
-- Lock primitive API (`Game`, `World`, `Entity`, `Transform`, `Sprite`, `RigidBody`, `BoxCollider`, `Script`, `Camera2D`)
-- Finalize component prop contracts
-- Runtime warnings for common mistakes
-- Strict TypeScript exports
-
-### Phase 2 — Rendering
-- Sprite sheet support (`frameWidth`, `frameHeight`, `frame`, `columns`)
-- `<Animation>` component for frame-based animations
-- Sprite anchors / origins
-- Camera bounds, zoom, dead zone
-
-### Phase 3 — Level Building
-- `<Tilemap>` with Tiled JSON import
-- Collision layer auto-generation
-- Object layer spawning
-
-### Phase 4 — Game Feel
-- `<SquashStretch>` component
-- Camera shake API
-- Particle system
-- Tween utility
-
-### Phase 5 — Audio & Assets
-- Asset preload pipeline
-- Loading screen support
-- Audio playback (play, stop, loop, volume)
-
-### Phase 6 — Developer Experience
-- `<Game debug>` overlay (FPS, entity count, colliders)
-- Collider visualization
-- Error boundaries around scripts
-- Engine inspection hook
-
-### Phase 7 — Gameplay Helpers
-- `usePlatformerController`, `useTopDownMovement` hooks
-- Built-in: `<MovingPlatform>`, `<Checkpoint>`, `<Collectible>`
-- One-way platforms, ladders, hazards
-
-### Phase 8 — Embedding
-- Responsive canvas (fit-contain, pixel-perfect)
-- `pause()` / `resume()` / `reset()` API
-- Host app event bridge (score, level complete, game over)
-
-### Phase 9 — Performance
-- Fixed timestep physics
-- Broadphase collision (spatial buckets)
-- ECS query caching
-
-### Phase 10 — Docs & Publish
-- Full docs site
-- npm publish with versioning + changelog
-- More polished examples
+- `Duplicate entity ID "player"` — two entities with same string ID
+- `BoxCollider on entity N has no Transform` — physics requires Transform
+- `Script init error on entity N: ...` — init threw, logged with entity ID
+- `Script update error on entity N: ...` — update threw without crashing the loop
+- `Failed to load image: /path.png` — asset load failure
+- `Invalid Game dimensions: 0×560` — zero/negative canvas size
 
 ---
 
 ## Local Development
 
 ```bash
-bun install           # install all workspace deps
-bun run typecheck     # type-check all packages
+git clone https://github.com/1homsi/cubeforge
+cd cubeforge
+bun install
+bun run typecheck   # type-check all packages
+bun test            # run test suite
+```
+
+---
+
+## Monorepo Structure
+
+```
+cubeforge/
+  packages/
+    core/       @cubeforge/core     — ECS, loop, events, assets, tween
+    input/      @cubeforge/input    — keyboard, mouse
+    renderer/   @cubeforge/renderer — Canvas2D, sprites, camera, particles
+    physics/    @cubeforge/physics  — AABB, RigidBody, broadphase
+    react/      @cubeforge/react    — components, hooks, context
 ```
 
 ---
