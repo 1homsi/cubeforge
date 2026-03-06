@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect } from 'bun:test'
 import { ECSWorld } from '@cubeforge/core'
 import { createTransform } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'

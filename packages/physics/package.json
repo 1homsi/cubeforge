@@ -2,19 +2,22 @@
   "name": "@cubeforge/physics",
   "version": "0.0.1",
   "description": "AABB physics with fixed timestep and spatial broadphase for Cubeforge",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "files": ["dist"],
+  "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      }
+    }
+  },
+  "files": ["dist"],
   "dependencies": {
     "@cubeforge/core": "workspace:*"
   },

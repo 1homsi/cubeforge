@@ -2,19 +2,22 @@
   "name": "@cubeforge/react",
   "version": "0.0.1",
   "description": "React components and hooks for building 2D browser games with Cubeforge",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "files": ["dist"],
+  "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      }
+    }
+  },
+  "files": ["dist"],
   "peerDependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
