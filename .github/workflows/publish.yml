@@ -38,3 +38,12 @@ jobs:
           bun publish --cwd packages/renderer --access public
           bun publish --cwd packages/physics  --access public
           bun publish --cwd packages/react    --access public
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./packages/react/package.json').version")
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes "Release v${VERSION} — see [CHANGELOG](https://github.com/1homsi/cubeforge/commits/main) for details."
