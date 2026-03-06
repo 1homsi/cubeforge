@@ -1,9 +1,13 @@
 import { useEffect, useContext } from 'react'
 import type { ParticlePoolComponent } from '@cubeforge/renderer'
 import { EngineContext, EntityContext } from '../context'
+import { PARTICLE_PRESETS } from './particlePresets'
+import type { ParticlePreset } from './particlePresets'
 
 interface ParticleEmitterProps {
   active?: boolean
+  /** Named preset — values can be overridden by explicit props */
+  preset?: ParticlePreset
   /** Particles per second, default 20 */
   rate?: number
   /** Initial particle speed (pixels/s), default 80 */
@@ -26,16 +30,28 @@ interface ParticleEmitterProps {
 
 export function ParticleEmitter({
   active = true,
-  rate = 20,
-  speed = 80,
-  spread = Math.PI,
-  angle = -Math.PI / 2,
-  particleLife = 0.8,
-  particleSize = 4,
-  color = '#ffffff',
-  gravity = 200,
-  maxParticles = 100,
+  preset,
+  rate,
+  speed,
+  spread,
+  angle,
+  particleLife,
+  particleSize,
+  color,
+  gravity,
+  maxParticles,
 }: ParticleEmitterProps) {
+  const presetConfig = preset ? PARTICLE_PRESETS[preset] : {}
+
+  const resolvedRate = rate ?? presetConfig.rate ?? 20
+  const resolvedSpeed = speed ?? presetConfig.speed ?? 80
+  const resolvedSpread = spread ?? presetConfig.spread ?? Math.PI
+  const resolvedAngle = angle ?? presetConfig.angle ?? -Math.PI / 2
+  const resolvedParticleLife = particleLife ?? presetConfig.particleLife ?? 0.8
+  const resolvedParticleSize = particleSize ?? presetConfig.particleSize ?? 4
+  const resolvedColor = color ?? presetConfig.color ?? '#ffffff'
+  const resolvedGravity = gravity ?? presetConfig.gravity ?? 200
+  const resolvedMaxParticles = maxParticles ?? presetConfig.maxParticles ?? 100
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
@@ -43,17 +59,17 @@ export function ParticleEmitter({
     engine.ecs.addComponent(entityId, {
       type: 'ParticlePool' as const,
       particles: [],
-      maxParticles,
+      maxParticles: resolvedMaxParticles,
       active,
-      rate,
+      rate: resolvedRate,
       timer: 0,
-      speed,
-      spread,
-      angle,
-      particleLife,
-      particleSize,
-      color,
-      gravity,
+      speed: resolvedSpeed,
+      spread: resolvedSpread,
+      angle: resolvedAngle,
+      particleLife: resolvedParticleLife,
+      particleSize: resolvedParticleSize,
+      color: resolvedColor,
+      gravity: resolvedGravity,
     } as ParticlePoolComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParticlePool')

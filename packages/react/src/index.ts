@@ -27,6 +27,10 @@ export { useEvents, useEvent } from './hooks/useEvents'
 export { usePlatformerController } from './hooks/usePlatformerController'
 export { useTopDownMovement } from './hooks/useTopDownMovement'
 
+// Atlas
+export type { SpriteAtlas } from './components/spriteAtlas'
+export { createAtlas } from './components/spriteAtlas'
+
 // Types
 export type { EngineState } from './context'
 export type { GameControls } from './components/Game'
@@ -44,3 +48,4 @@ export type { ParticlePoolComponent, Particle } from '@cubeforge/renderer'
 export type { ParallaxLayerComponent } from '@cubeforge/renderer'
 export type { TweenHandle } from '@cubeforge/core'
 export { Ease, tween } from '@cubeforge/core'
+export type { ParticlePreset } from './components/particlePresets'

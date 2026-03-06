@@ -1,6 +1,7 @@
 import { useEffect, useContext } from 'react'
 import { createSprite, type SpriteComponent } from '@cubeforge/renderer'
 import { EngineContext, EntityContext } from '../context'
+import type { SpriteAtlas } from './spriteAtlas'
 
 interface SpriteProps {
   width: number
@@ -18,6 +19,8 @@ interface SpriteProps {
   frameWidth?: number
   frameHeight?: number
   frameColumns?: number
+  atlas?: SpriteAtlas
+  frame?: string
 }
 
 export function Sprite({
@@ -36,7 +39,10 @@ export function Sprite({
   frameWidth,
   frameHeight,
   frameColumns,
+  atlas,
+  frame,
 }: SpriteProps) {
+  const resolvedFrameIndex = (atlas && frame != null) ? (atlas[frame] ?? 0) : frameIndex
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
@@ -53,7 +59,7 @@ export function Sprite({
       flipX,
       anchorX,
       anchorY,
-      frameIndex,
+      frameIndex: resolvedFrameIndex,
       frameWidth,
       frameHeight,
       frameColumns,
@@ -79,8 +85,8 @@ export function Sprite({
     comp.visible = visible
     comp.flipX = flipX
     comp.zIndex = zIndex
-    comp.frameIndex = frameIndex
-  }, [color, visible, flipX, zIndex, frameIndex, engine, entityId])
+    comp.frameIndex = resolvedFrameIndex
+  }, [color, visible, flipX, zIndex, resolvedFrameIndex, engine, entityId])
 
   return null
 }
