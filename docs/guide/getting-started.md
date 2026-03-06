@@ -1,8 +1,48 @@
 # Getting Started
 
-## Install
+## CLI (recommended)
 
-Cubeforge requires React 18+. Install the main package:
+The fastest way to start is with the scaffolding CLI. It generates a full Vite + React project with a working game:
+
+::: code-group
+
+```bash [bun]
+bunx create-cubeforge-game my-game
+```
+
+```bash [npm]
+npx create-cubeforge-game my-game
+```
+
+```bash [yarn]
+yarn create cubeforge-game my-game
+```
+
+```bash [pnpm]
+pnpm create cubeforge-game my-game
+```
+
+:::
+
+Then run your game:
+
+::: code-group
+
+```bash [bun]
+cd my-game && bun install && bun run dev
+```
+
+```bash [npm]
+cd my-game && npm install && npm run dev
+```
+
+:::
+
+Open `http://localhost:5173` and you'll have a playable game with a player, a platform, and keyboard controls ready to modify.
+
+## Manual install
+
+Adding Cubeforge to an existing React project:
 
 ::: code-group
 
@@ -87,7 +127,7 @@ function Player() {
   usePlatformerController(id, {
     speed: 220,
     jumpForce: -520,
-    maxJumps: 2,       // double jump
+    maxJumps: 2,
     coyoteTime: 0.08,
     jumpBuffer: 0.08,
   })
@@ -122,15 +162,15 @@ export default function MyGame() {
 
 ## How it works
 
-**`<Game>`** creates the canvas and initialises all engine subsystems — ECS world, physics, renderer, input, and the game loop. It accepts `width`, `height`, `gravity`, and `debug` props.
+**`<Game>`** creates the canvas and initialises all engine subsystems — ECS world, physics, renderer, input, and the game loop.
 
-**`<World>`** sets world-level config like background colour and gravity override. All entities live inside it.
+**`<World>`** sets world-level config like background colour. All entities live inside it.
 
-**`<Entity>`** creates an ECS entity. An optional `id` lets other components reference it (e.g. for camera follow). `tags` are used for querying and grouping entities.
+**`<Entity>`** creates an ECS entity. An optional `id` lets other components reference it (e.g. camera follow). `tags` are used for querying and grouping.
 
-**`<Transform>`**, **`<Sprite>`**, **`<RigidBody>`**, **`<BoxCollider>`** are ECS components — each one registers data on the entity in a `useEffect`. When the entity unmounts, the components are automatically cleaned up.
+**`<Transform>`**, **`<Sprite>`**, **`<RigidBody>`**, **`<BoxCollider>`** are ECS components — each registers data on the entity via `useEffect`. When the entity unmounts, components are cleaned up automatically.
 
-**`<Script>`** runs an `update` function every frame. The function receives `(entityId, world, input, dt)` — the entity's id, the ECS world for querying other entities, the input manager, and the delta time in seconds.
+**`<Script>`** runs an `update` function every frame with `(entityId, world, input, dt)`.
 
 **`<Camera2D>`** follows an entity by its string `id`, with configurable smoothing, zoom, bounds, and dead zone.
 
@@ -141,5 +181,3 @@ Add `debug` to `<Game>` to overlay collider wireframes, FPS, and entity count:
 ```tsx
 <Game width={800} height={500} debug>
 ```
-
-This is useful during development to verify collider sizes and positions without needing external tools.

@@ -13,7 +13,35 @@
 </Game>
 ```
 
-## Install
+## Quick start
+
+The fastest way to get started is the CLI — it scaffolds a full Vite + React project with a working game in seconds:
+
+```bash
+# bun
+bunx create-cubeforge-game my-game
+
+# npm
+npx create-cubeforge-game my-game
+
+# yarn
+yarn create cubeforge-game my-game
+
+# pnpm
+pnpm create cubeforge-game my-game
+```
+
+Then:
+
+```bash
+cd my-game
+bun install
+bun run dev
+```
+
+## Manual install
+
+Prefer adding Cubeforge to an existing React project?
 
 ```bash
 # bun
@@ -29,7 +57,7 @@ yarn add @cubeforge/react react react-dom
 pnpm add @cubeforge/react react react-dom
 ```
 
-## Quick start
+## Example
 
 ```tsx
 import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from '@cubeforge/react'
