@@ -1,9 +1,9 @@
 name: Publish to npm
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -30,9 +30,6 @@ jobs:
 
       - name: Build
         run: bun run build
-
-      - name: Clear GitHub token from npmrc so OIDC takes over
-        run: echo "registry=https://registry.npmjs.org/" > $NPM_CONFIG_USERCONFIG
 
       - name: Publish cubeforge
         run: cd packages/react && npm publish --access public
