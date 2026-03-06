@@ -1,0 +1,258 @@
+import { describe, it, expect, beforeEach } from 'bun:test'
+import { ECSWorld } from '../ecs/world'
+import type { System } from '../ecs/world'
+
+describe('ECSWorld', () => {
+  let world: ECSWorld
+
+  beforeEach(() => {
+    world = new ECSWorld()
+  })
+
+  describe('createEntity', () => {
+    it('returns incrementing IDs starting at 0', () => {
+      const id0 = world.createEntity()
+      const id1 = world.createEntity()
+      const id2 = world.createEntity()
+      expect(id0).toBe(0)
+      expect(id1).toBe(1)
+      expect(id2).toBe(2)
+    })
+  })
+
+  describe('hasEntity', () => {
+    it('returns true for a created entity', () => {
+      const id = world.createEntity()
+      expect(world.hasEntity(id)).toBe(true)
+    })
+
+    it('returns false for an ID that was never created', () => {
+      expect(world.hasEntity(999)).toBe(false)
+    })
+
+    it('returns false after entity is destroyed', () => {
+      const id = world.createEntity()
+      world.destroyEntity(id)
+      expect(world.hasEntity(id)).toBe(false)
+    })
+  })
+
+  describe('destroyEntity', () => {
+    it('removes entity and its components', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Foo' })
+      world.destroyEntity(id)
+      expect(world.hasEntity(id)).toBe(false)
+      expect(world.getComponent(id, 'Foo')).toBeUndefined()
+    })
+
+    it('decrements entityCount', () => {
+      const id = world.createEntity()
+      expect(world.entityCount).toBe(1)
+      world.destroyEntity(id)
+      expect(world.entityCount).toBe(0)
+    })
+  })
+
+  describe('addComponent / getComponent', () => {
+    it('stores and retrieves a component', () => {
+      const id = world.createEntity()
+      const comp = { type: 'Health', value: 100 }
+      world.addComponent(id, comp)
+      expect(world.getComponent(id, 'Health')).toBe(comp)
+    })
+
+    it('returns undefined for a component that was never added', () => {
+      const id = world.createEntity()
+      expect(world.getComponent(id, 'Missing')).toBeUndefined()
+    })
+
+    it('returns undefined when entity does not exist', () => {
+      expect(world.getComponent(999, 'Health')).toBeUndefined()
+    })
+
+    it('overwrites an existing component of the same type', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Pos', x: 1 })
+      world.addComponent(id, { type: 'Pos', x: 2 })
+      const comp = world.getComponent<{ type: 'Pos'; x: number }>(id, 'Pos')
+      expect(comp?.x).toBe(2)
+    })
+  })
+
+  describe('removeComponent', () => {
+    it('removes a specific component', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Vel' })
+      world.removeComponent(id, 'Vel')
+      expect(world.getComponent(id, 'Vel')).toBeUndefined()
+    })
+
+    it('does not remove other components', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'A' })
+      world.addComponent(id, { type: 'B' })
+      world.removeComponent(id, 'A')
+      expect(world.getComponent(id, 'B')).toBeDefined()
+    })
+  })
+
+  describe('hasComponent', () => {
+    it('returns true when component exists', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'X' })
+      expect(world.hasComponent(id, 'X')).toBe(true)
+    })
+
+    it('returns false when component does not exist', () => {
+      const id = world.createEntity()
+      expect(world.hasComponent(id, 'X')).toBe(false)
+    })
+
+    it('returns false after component is removed', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'X' })
+      world.removeComponent(id, 'X')
+      expect(world.hasComponent(id, 'X')).toBe(false)
+    })
+
+    it('returns false for non-existent entity', () => {
+      expect(world.hasComponent(999, 'X')).toBe(false)
+    })
+  })
+
+  describe('query', () => {
+    it('returns only entities with ALL specified component types', () => {
+      const a = world.createEntity()
+      const b = world.createEntity()
+      const c = world.createEntity()
+      world.addComponent(a, { type: 'Pos' })
+      world.addComponent(a, { type: 'Vel' })
+      world.addComponent(b, { type: 'Pos' })
+      // c has neither
+      const result = world.query('Pos', 'Vel')
+      expect(result).toContain(a)
+      expect(result).not.toContain(b)
+      expect(result).not.toContain(c)
+    })
+
+    it('returns empty array when no entities match', () => {
+      world.createEntity()
+      const result = world.query('NonExistent')
+      expect(result).toEqual([])
+    })
+
+    it('returns all entities when querying with no types', () => {
+      const a = world.createEntity()
+      const b = world.createEntity()
+      const result = world.query()
+      expect(result).toContain(a)
+      expect(result).toContain(b)
+    })
+
+    it('is cached: same query returns same array reference before update', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Tag' })
+      const first = world.query('Tag')
+      const second = world.query('Tag')
+      expect(first).toBe(second)
+    })
+
+    it('cache is cleared on update() so new components appear in next query', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Tag' })
+      // First query caches result
+      expect(world.query('Tag')).toContain(id)
+      // Add second entity after cache is set
+      const id2 = world.createEntity()
+      world.addComponent(id2, { type: 'Tag' })
+      // Call update to clear cache (no systems, so harmless)
+      world.update(0)
+      const result = world.query('Tag')
+      expect(result).toContain(id)
+      expect(result).toContain(id2)
+    })
+  })
+
+  describe('queryOne', () => {
+    it('returns the first matching entity', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Unique' })
+      expect(world.queryOne('Unique')).toBe(id)
+    })
+
+    it('returns undefined when no entity matches', () => {
+      world.createEntity()
+      expect(world.queryOne('Ghost')).toBeUndefined()
+    })
+  })
+
+  describe('entityCount', () => {
+    it('tracks entity count correctly', () => {
+      expect(world.entityCount).toBe(0)
+      world.createEntity()
+      expect(world.entityCount).toBe(1)
+      world.createEntity()
+      expect(world.entityCount).toBe(2)
+      const id = world.createEntity()
+      world.destroyEntity(id)
+      expect(world.entityCount).toBe(2)
+    })
+  })
+
+  describe('clear', () => {
+    it('resets entities, components, and ID counter', () => {
+      world.createEntity()
+      world.createEntity()
+      world.clear()
+      expect(world.entityCount).toBe(0)
+      // After clear, nextId resets so createEntity returns 0 again
+      const newId = world.createEntity()
+      expect(newId).toBe(0)
+    })
+  })
+
+  describe('update / systems', () => {
+    it('calls all systems in order each update', () => {
+      const callOrder: string[] = []
+
+      const sysA: System = {
+        update(_w, _dt) { callOrder.push('A') },
+      }
+      const sysB: System = {
+        update(_w, _dt) { callOrder.push('B') },
+      }
+      const sysC: System = {
+        update(_w, _dt) { callOrder.push('C') },
+      }
+
+      world.addSystem(sysA)
+      world.addSystem(sysB)
+      world.addSystem(sysC)
+      world.update(1 / 60)
+
+      expect(callOrder).toEqual(['A', 'B', 'C'])
+    })
+
+    it('passes the correct dt to each system', () => {
+      const received: number[] = []
+      const sys: System = {
+        update(_w, dt) { received.push(dt) },
+      }
+      world.addSystem(sys)
+      world.update(0.016)
+      expect(received[0]).toBeCloseTo(0.016, 5)
+    })
+
+    it('does not call removed system', () => {
+      let called = false
+      const sys: System = {
+        update() { called = true },
+      }
+      world.addSystem(sys)
+      world.removeSystem(sys)
+      world.update(0)
+      expect(called).toBe(false)
+    })
+  })
+})
