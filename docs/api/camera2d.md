@@ -1,0 +1,70 @@
+# Camera2D
+
+Defines the camera view. Follows an entity, applies zoom and smoothing, constrains to world bounds, and sets the background colour. There should be at most one `<Camera2D>` in the world at a time.
+
+## Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `followEntity` | string | — | String ID of the entity to follow. Must match an `<Entity id="...">` |
+| `zoom` | number | `1` | Camera zoom level. `2` makes everything appear twice as large. |
+| `smoothing` | number | `0` | Lerp factor per frame (0 = instant snap, higher values = smoother follow). Values around 0.85–0.95 work well. |
+| `background` | string | `'#1a1a2e'` | Canvas clear colour drawn each frame before rendering |
+| `bounds` | `{ x, y, width, height }` | — | World bounds. Camera clamps so it never shows outside this rectangle. |
+| `deadZone` | `{ w, h }` | — | The entity must leave this region around the camera centre to trigger movement |
+
+## Example
+
+```tsx
+<Camera2D
+  followEntity="player"
+  zoom={1}
+  smoothing={0.9}
+  background="#0d1b2a"
+  bounds={{ x: 0, y: 0, width: 3200, height: 900 }}
+  deadZone={{ w: 80, h: 40 }}
+/>
+```
+
+## Smooth follow
+
+`smoothing` is applied as a lerp factor per frame. A value of `0.9` means the camera moves 10% of the remaining distance per frame toward the target:
+
+```
+cameraX = lerp(cameraX, targetX, 1 - smoothing)
+```
+
+- `smoothing={0}` — instant snap, no lag
+- `smoothing={0.85}` — smooth, slight lag
+- `smoothing={0.95}` — very smooth, noticeable lag on fast movement
+
+## World bounds
+
+Set `bounds` to prevent the camera from scrolling beyond the level edges:
+
+```tsx
+<Camera2D
+  followEntity="player"
+  smoothing={0.9}
+  bounds={{ x: 0, y: 0, width: 6400, height: 480 }}
+/>
+```
+
+The camera clamps its viewport so no area outside the bounds rectangle is visible. Leave `bounds` unset for an unbounded, infinite-feeling world.
+
+## Dead zone
+
+The dead zone is a rectangle centred on the current camera position. The camera only moves if the followed entity exits this rectangle. Use it to prevent jitter on small movements:
+
+```tsx
+<Camera2D
+  followEntity="player"
+  deadZone={{ w: 60, h: 30 }}
+/>
+```
+
+## Notes
+
+- `<Camera2D>` creates its own internal entity in the ECS world. You do not wrap it in `<Entity>`.
+- Prop changes (smoothing, zoom, bounds, background, followEntity) are synced every render.
+- With `<Game debug>`, the debug overlay renders in screen space (on top of the camera transform).
