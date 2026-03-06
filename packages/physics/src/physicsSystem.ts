@@ -40,6 +40,28 @@ function getOverlap(a: AABB, b: AABB): Overlap | null {
   }
 }
 
+/**
+ * For a sloped collider, computes the surface Y at the given world X.
+ * Returns null if worldX is outside the collider's horizontal extent.
+ * slope is in degrees; positive = surface rises left→right.
+ */
+function getSlopeSurfaceY(
+  st: TransformComponent,
+  sc: BoxColliderComponent,
+  worldX: number,
+): number | null {
+  const hw = sc.width / 2
+  const hh = sc.height / 2
+  const cx = st.x + sc.offsetX
+  const cy = st.y + sc.offsetY
+  const left = cx - hw
+  const right = cx + hw
+  if (worldX < left || worldX > right) return null
+  const dx = worldX - left
+  const angleRad = sc.slope * (Math.PI / 180)
+  return (cy - hh) + dx * Math.tan(angleRad)
+}
+
 export class PhysicsSystem implements System {
   private accumulator = 0
   private readonly FIXED_DT = 1 / 60
@@ -100,10 +122,11 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // Phase 1: gravity + reset onGround
+    // Phase 1: gravity + reset ground flags
     for (const id of dynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       rb.onGround = false
+      rb.isNearGround = false
       rb.vy += this.gravity * rb.gravityScale * dt
     }
 
@@ -128,6 +151,8 @@ export class PhysicsSystem implements System {
             const st = world.getComponent<TransformComponent>(sid, 'Transform')!
             const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
             if (sc.isTrigger) continue
+            // Skip slope colliders in X-pass — handled in Y-pass
+            if (sc.slope !== 0) continue
 
             const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
             if (!ov) continue
@@ -164,6 +189,22 @@ export class PhysicsSystem implements System {
             const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
             if (sc.isTrigger) continue
 
+            if (sc.slope !== 0) {
+              // Slope collision: check AABB overlap first, then resolve along slope surface
+              const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
+              if (!ov) continue
+              const entityBottom = transform.y + col.offsetY + col.height / 2
+              const entityCenterX = transform.x + col.offsetX
+              const surfaceY = getSlopeSurfaceY(st, sc, entityCenterX)
+              if (surfaceY !== null && entityBottom > surfaceY) {
+                transform.y -= (entityBottom - surfaceY)
+                rb.onGround = true
+                if (rb.friction < 1) rb.vx *= rb.friction
+                rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
+              }
+              continue
+            }
+
             const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
             if (!ov) continue
 
@@ -182,7 +223,7 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // Phase 6: dynamic vs dynamic (simple separation, no velocity exchange)
+    // Phase 6: dynamic vs dynamic (separation + velocity transfer for stacking)
     for (let i = 0; i < dynamics.length; i++) {
       for (let j = i + 1; j < dynamics.length; j++) {
         const ia = dynamics[i]
@@ -196,9 +237,30 @@ export class PhysicsSystem implements System {
         if (!ov) continue
 
         if (ca.isTrigger || cb.isTrigger) {
-          // Fire trigger event
           this.events?.emit('trigger', { a: ia, b: ib })
           continue
+        }
+
+        const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
+        const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
+
+        if (Math.abs(ov.y) <= Math.abs(ov.x)) {
+          // Vertical collision — body stacking: transfer weight from upper to lower body
+          if (ov.y > 0) {
+            // A is below B: B landed on A
+            if (rbb.vy > 0) {
+              rba.vy += rbb.vy * 0.3
+              rbb.vy = 0
+            }
+            rbb.onGround = true
+          } else {
+            // A is above B: A landed on B
+            if (rba.vy > 0) {
+              rbb.vy += rba.vy * 0.3
+              rba.vy = 0
+            }
+            rba.onGround = true
+          }
         }
 
         // Push apart equally
@@ -208,6 +270,42 @@ export class PhysicsSystem implements System {
         tb.y -= ov.y / 2
 
         this.events?.emit('collision', { a: ia, b: ib })
+      }
+    }
+
+    // Phase 7: near-ground detection (2px downward probe)
+    for (const id of dynamics) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (rb.onGround) {
+        rb.isNearGround = true
+        continue
+      }
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+      // Probe AABB shifted 2px downward
+      const probeAABB: AABB = {
+        cx: transform.x + col.offsetX,
+        cy: transform.y + col.offsetY + 2,
+        hw: col.width / 2,
+        hh: col.height / 2,
+      }
+      const candidateCells = this.getCells(probeAABB.cx, probeAABB.cy, probeAABB.hw, probeAABB.hh)
+      const checked = new Set<EntityId>()
+      outer: for (const cell of candidateCells) {
+        const bucket = staticGrid.get(cell)
+        if (!bucket) continue
+        for (const sid of bucket) {
+          if (checked.has(sid)) continue
+          checked.add(sid)
+          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+          if (sc.isTrigger) continue
+          const ov = getOverlap(probeAABB, getAABB(st, sc))
+          if (ov && Math.abs(ov.y) <= Math.abs(ov.x) && ov.y < 0) {
+            rb.isNearGround = true
+            break outer
+          }
+        }
       }
     }
   }

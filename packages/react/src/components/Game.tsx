@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem } from '@cubeforge/core'
+import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin } from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
 import { Canvas2DRenderer, RenderSystem } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
@@ -28,6 +28,8 @@ interface GameProps {
   scale?: 'none' | 'contain' | 'pixel'
   /** Called once the engine is ready — receives pause/resume/reset controls */
   onReady?: (controls: GameControls) => void
+  /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
+  plugins?: Plugin[]
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
@@ -40,6 +42,7 @@ export function Game({
   debug = false,
   scale = 'none',
   onReady,
+  plugins,
   style,
   className,
   children,
@@ -61,7 +64,7 @@ export function Game({
     const renderSystem = new RenderSystem(renderer, entityIds)
     const debugSystem  = debug ? new DebugSystem(renderer) : null
 
-    // System order: scripts → physics → render → (debug)
+    // System order: scripts → physics → render → (debug) → plugins
     ecs.addSystem(new ScriptSystem(input))
     ecs.addSystem(physics)
     ecs.addSystem(renderSystem)
@@ -82,6 +85,17 @@ export function Game({
 
     const state: EngineState = { ecs, input, renderer, physics, events, assets, loop, canvas, entityIds }
     setEngine(state)
+
+    // Register plugin systems and call their onInit hooks
+    if (plugins) {
+      for (const plugin of plugins) {
+        for (const system of plugin.systems) {
+          ecs.addSystem(system)
+        }
+        plugin.onInit?.(state)
+      }
+    }
+
     loop.start()
 
     // Expose controls via onReady callback

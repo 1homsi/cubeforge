@@ -23,6 +23,7 @@ These properties are set by the physics system each frame and can be read inside
 | `rb.vx` | number | Current horizontal velocity |
 | `rb.vy` | number | Current vertical velocity |
 | `rb.onGround` | boolean | `true` if the entity collided with a solid surface from below this frame |
+| `rb.isNearGround` | boolean | `true` if the entity is within ~2 px of solid ground even if not strictly touching. Useful for implementing coyote time. |
 
 ## Example
 
@@ -57,8 +58,21 @@ Modify `vx` and `vy` directly inside a Script update:
 }} />
 ```
 
+## Coyote time with isNearGround
+
+```tsx
+<Script update={(id, world) => {
+  const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+  // Allow jumping for a couple of frames after walking off a ledge
+  if (rb.isNearGround && input.isPressed('Space')) {
+    rb.vy = -520
+  }
+}} />
+```
+
 ## Notes
 
 - `onGround` is reset to `false` every frame by the physics system and only set back to `true` if a downward collision is resolved in that frame.
+- `isNearGround` is also `true` whenever `onGround` is true, so you can replace most `onGround` checks with `isNearGround` for more forgiving feel.
 - Static bodies must also have a `BoxCollider` to participate in collision detection.
 - The physics system runs at a fixed 60 Hz timestep. `vx` and `vy` are in pixels per second.

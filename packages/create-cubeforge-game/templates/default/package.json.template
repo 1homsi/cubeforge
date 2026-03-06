@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@cubeforge/react": "latest",
+    "cubeforge": "latest",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   },

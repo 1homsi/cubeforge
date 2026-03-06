@@ -1,6 +1,4 @@
-import { Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from '@cubeforge/react'
-import { usePlatformerController } from '@cubeforge/react'
-import { useEntity } from '@cubeforge/react'
+import { Entity, Transform, Sprite, RigidBody, BoxCollider, Script, usePlatformerController, useEntity } from 'cubeforge'
 
 function PlayerInner() {
   const id = useEntity()

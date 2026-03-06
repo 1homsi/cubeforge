@@ -11,6 +11,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'API', link: '/api/game' },
       { text: 'Examples', link: 'https://1homsi.github.io/cubeforge-examples/' },
+      { text: 'Playground', link: 'https://1homsi.github.io/cubeforge-playground/' },
       { text: 'GitHub', link: 'https://github.com/1homsi/cubeforge' },
     ],
     sidebar: {
@@ -77,6 +78,7 @@ export default defineConfig({
           items: [
             { text: 'tween', link: '/api/tween' },
             { text: 'createAtlas', link: '/api/create-atlas' },
+            { text: 'definePlugin', link: '/api/define-plugin' },
           ],
         },
       ],

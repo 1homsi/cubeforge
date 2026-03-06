@@ -11,6 +11,11 @@ export interface BoxColliderComponent extends Component {
   isTrigger: boolean
   /** Collision layer tag — used to filter which entities collide */
   layer: string
+  /**
+   * Slope angle in degrees. 0 = flat box. Positive = surface rises left→right.
+   * The sloped surface is the top face; collision pushes entities up along the slope.
+   */
+  slope: number
 }
 
 export function createBoxCollider(
@@ -26,6 +31,7 @@ export function createBoxCollider(
     offsetY: 0,
     isTrigger: false,
     layer: 'default',
+    slope: 0,
     ...opts,
   }
 }

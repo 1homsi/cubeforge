@@ -12,6 +12,7 @@ Root component. Creates the canvas element, initialises the ECS world, physics s
 | `debug` | boolean | `false` | Show collider wireframes, FPS counter, and entity count overlay |
 | `scale` | `'none' \| 'contain' \| 'pixel'` | `'none'` | Canvas scaling strategy |
 | `onReady` | `(controls: GameControls) => void` | — | Called once when the engine is ready |
+| `plugins` | `Plugin[]` | — | Custom plugins to register after core systems |
 | `style` | CSSProperties | — | CSS styles applied to the canvas element |
 | `className` | string | — | CSS class applied to the canvas element |
 | `children` | ReactNode | — | World and other components |
@@ -32,6 +33,27 @@ The `onReady` callback receives a `GameControls` object:
 | `resume()` | Restarts the game loop |
 | `reset()` | Clears all entities and restarts the loop |
 
+## Plugin system
+
+Plugins extend the engine with custom systems and initialization logic without touching engine source code.
+
+```tsx
+import { definePlugin } from 'cubeforge'
+
+const PathfindingPlugin = definePlugin({
+  name: 'pathfinding',
+  systems: [new PathfindingSystem()],
+  onInit(engine) {
+    // engine is the full EngineState
+    console.log('Pathfinding ready', engine.ecs.entityCount)
+  },
+})
+
+<Game plugins={[PathfindingPlugin]}>
+```
+
+Plugin systems run **after** the built-in systems (Script → Physics → Render → Debug → Plugins).
+
 ## System order
 
 The engine runs systems in this order each frame:
@@ -40,6 +62,7 @@ The engine runs systems in this order each frame:
 2. Physics system (AABB collision at fixed 60 Hz)
 3. Render system (Canvas 2D draw, sorted by zIndex)
 4. Debug system (if `debug` is enabled)
+5. Plugin systems (in array order)
 
 ## Example
 

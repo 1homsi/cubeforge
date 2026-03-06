@@ -1,4 +1,4 @@
-import { Entity, Transform, Sprite, RigidBody, BoxCollider } from '@cubeforge/react'
+import { Entity, Transform, Sprite, RigidBody, BoxCollider } from 'cubeforge'
 interface GroundProps { x: number; y: number; width: number; height: number }
 export function Ground({ x, y, width, height }: GroundProps) {
   return (

@@ -14,17 +14,29 @@ export class ECSWorld {
   private components = new Map<EntityId, Map<string, Component>>()
   private systems: System[] = []
   private queryCache = new Map<string, EntityId[]>()
+  // Component types modified since last update() — drives selective cache invalidation
+  private dirtyTypes = new Set<string>()
+  // Set when entity count changes (createEntity/destroyEntity) — forces full cache clear
+  private dirtyAll = false
 
   createEntity(): EntityId {
     const id = this.nextId++
     this.entities.add(id)
     this.components.set(id, new Map())
+    this.dirtyAll = true
     return id
   }
 
   destroyEntity(id: EntityId): void {
+    const comps = this.components.get(id)
+    if (comps) {
+      for (const type of comps.keys()) {
+        this.dirtyTypes.add(type)
+      }
+    }
     this.entities.delete(id)
     this.components.delete(id)
+    this.dirtyAll = true
   }
 
   hasEntity(id: EntityId): boolean {
@@ -33,10 +45,12 @@ export class ECSWorld {
 
   addComponent<T extends Component>(id: EntityId, component: T): void {
     this.components.get(id)?.set(component.type, component)
+    this.dirtyTypes.add(component.type)
   }
 
   removeComponent(id: EntityId, type: string): void {
     this.components.get(id)?.delete(type)
+    this.dirtyTypes.add(type)
   }
 
   getComponent<T extends Component>(id: EntityId, type: string): T | undefined {
@@ -87,7 +101,26 @@ export class ECSWorld {
   }
 
   update(dt: number): void {
-    this.queryCache.clear()
+    // Selective cache invalidation: only invalidate entries whose component types changed.
+    // On frames where nothing changed (static scenes), the cache is never cleared.
+    if (this.dirtyAll) {
+      this.queryCache.clear()
+    } else if (this.dirtyTypes.size > 0) {
+      for (const key of this.queryCache.keys()) {
+        // Empty key = query() with no types — always invalidate when any type is dirty
+        if (key === '') {
+          this.queryCache.delete(key)
+          continue
+        }
+        const keyTypes = key.split('\x00')
+        if (keyTypes.some(t => this.dirtyTypes.has(t))) {
+          this.queryCache.delete(key)
+        }
+      }
+    }
+    this.dirtyAll = false
+    this.dirtyTypes.clear()
+
     for (const system of this.systems) {
       system.update(this, dt)
     }
@@ -96,6 +129,9 @@ export class ECSWorld {
   clear(): void {
     this.entities.clear()
     this.components.clear()
+    this.queryCache.clear()
+    this.dirtyTypes.clear()
+    this.dirtyAll = false
     this.nextId = 0
   }
 

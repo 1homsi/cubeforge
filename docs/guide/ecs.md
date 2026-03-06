@@ -110,4 +110,6 @@ for (const eid of enemies) {
 
 `world.query()` builds its result set by iterating all entities and checking component maps. On large worlds (hundreds of entities), this can be slow. The cache ensures each unique set of component types is computed at most once per frame.
 
-The cache is cleared automatically at the start of `world.update(dt)`. You don't need to manage it manually.
+The cache uses **selective invalidation** — only entries whose component types were modified in the current frame are cleared. On frames where no entities change (static platforms, walls, decorations), the cache is never touched and all queries return instantly. This makes large static scenes essentially free to query.
+
+You don't need to manage the cache manually. It updates automatically when you call `world.addComponent`, `world.removeComponent`, or `world.destroyEntity`.

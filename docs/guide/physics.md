@@ -57,6 +57,37 @@ Static bodies participate in collision detection but are never moved by the phys
 
 `onGround` resets to `false` every frame and is set back to `true` by the physics system if a downward collision was resolved.
 
+## Coyote time with isNearGround
+
+`rb.isNearGround` is `true` whenever the entity is within ~2 px of solid ground — even if `onGround` is `false` (e.g. the first frame after walking off a ledge). Use it to implement forgiving coyote-time jumps without manual frame-counting:
+
+```tsx
+<Script update={(id, world, input) => {
+  const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+  if (input.isPressed('Space') && rb.isNearGround) {
+    rb.vy = -520
+  }
+}} />
+```
+
+## Slopes
+
+Add a `slope` prop to `<BoxCollider>` to create a ramp. The value is the surface angle in degrees; positive = rises left to right:
+
+```tsx
+<Entity tags={['ramp']}>
+  <Transform x={300} y={400} />
+  <Sprite width={200} height={40} color="#795548" />
+  <RigidBody isStatic />
+  <BoxCollider width={200} height={40} slope={30} />
+</Entity>
+```
+
+Slope colliders:
+- Are skipped during the X-pass so entities can smoothly walk up/down them
+- Push the riding entity up to the surface line in the Y-pass
+- Set `onGround = true` on the riding entity, applying normal friction
+
 ## Top-down movement
 
 For top-down games, disable gravity per-entity with `gravityScale={0}`:

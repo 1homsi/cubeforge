@@ -12,6 +12,7 @@ Adds an axis-aligned bounding box (AABB) collider to an entity. The physics syst
 | `offsetY` | number | `0` | Vertical offset from the entity's transform position |
 | `isTrigger` | boolean | `false` | If true, fires a trigger event on overlap but does not block movement |
 | `layer` | string | `'default'` | Collision layer name |
+| `slope` | number | `0` | Slope angle in degrees. `0` = flat box. Positive = surface rises left→right. The sloped top face is used for collision; entities riding it are pushed up along the slope. |
 
 ## Example
 
@@ -46,6 +47,20 @@ useEvent<{ a: number; b: number }>('trigger', ({ a, b }) => {
 ## Debug visualisation
 
 With `<Game debug>`, all BoxCollider shapes are rendered as wireframe outlines over the canvas. Solid colliders appear in one colour, triggers in another. This is the easiest way to verify collider sizes and positions.
+
+## Slopes
+
+```tsx
+// A ramp that rises 30° from left to right
+<Entity tags={['ramp']}>
+  <Transform x={300} y={400} />
+  <Sprite width={200} height={40} color="#795548" />
+  <RigidBody isStatic />
+  <BoxCollider width={200} height={40} slope={30} />
+</Entity>
+```
+
+Slope colliders are skipped in the X-pass; only the Y-pass pushes entities up the slope surface. This allows smooth left-to-right traversal. The bounding box (AABB) is still used for the broadphase check before slope math runs.
 
 ## Notes
 

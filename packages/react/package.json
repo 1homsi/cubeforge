@@ -1,6 +1,6 @@
 {
   "name": "cubeforge",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "React-first 2D browser game engine",
   "main": "./src/index.ts",
   "scripts": {
@@ -17,7 +17,9 @@
       }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "peerDependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
@@ -25,10 +27,16 @@
   "dependencies": {
     "@cubeforge/core": "workspace:*",
     "@cubeforge/input": "workspace:*",
-    "@cubeforge/renderer": "workspace:*",
-    "@cubeforge/physics": "workspace:*"
+    "@cubeforge/physics": "workspace:*",
+    "@cubeforge/renderer": "workspace:*"
   },
-  "keywords": ["game-engine", "react", "2d", "browser-game", "cubeforge"],
+  "keywords": [
+    "game-engine",
+    "react",
+    "2d",
+    "browser-game",
+    "cubeforge"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
