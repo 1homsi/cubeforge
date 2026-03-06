@@ -32,7 +32,7 @@ jobs:
         run: bun run build
 
       - name: Publish cubeforge
-        run: npm publish packages/react --access public --provenance
+        run: cd packages/react && npm publish --access public --provenance
 
       - name: Publish create-cubeforge-game
-        run: npm publish packages/create-cubeforge-game --access public --provenance
+        run: cd packages/create-cubeforge-game && npm publish --access public --provenance
