@@ -77,10 +77,40 @@ Most browser game engines are imperative. You create objects, call methods, mana
 
 - **Declarative** — describe your world, not your frame loop
 - **Composable** — `<Player />`, `<Enemy />`, `<MovingPlatform />` are just React components
-- **Zero runtime dependencies** — ECS, physics, renderer, input all hand-rolled
+- **Lightweight runtime** — no heavy engine dependencies; ECS, physics, renderer, and input are all purpose-built and small
 - **TypeScript-first** — every API is fully typed
 - **Embeddable** — drop a game into any React app with one component
 - **Debug-ready** — `<Game debug>` shows collider wireframes, FPS, entity counts
+
+---
+
+## What can I build?
+
+Cubeforge is a good fit for:
+
+- **Platformers** — scrolling levels, jump mechanics, enemies, coins
+- **Top-down games** — dungeon crawlers, twin-stick shooters, RPG overworlds
+- **Arcade games** — breakout, flappy bird, shoot-em-ups, endless runners
+- **Roguelikes** — procedural rooms, turn-based or real-time combat
+- **Mini-games in web apps** — embed a playable game directly in a marketing page, onboarding flow, or dashboard
+- **Interactive experiences** — educational games, gamified UI, interactive demos
+- **Game jams** — fast to set up, familiar if you already know React
+
+---
+
+## Why Cubeforge?
+
+**vs Phaser**
+
+Phaser uses an imperative API — you call `this.physics.add.sprite()`, manage scene lifecycles, and wire everything up manually. Cubeforge uses React components. Your game tree is JSX, state is React state, and everything composes the same way your UI does.
+
+**vs Three.js**
+
+Three.js is a 3D rendering library. It doesn't include physics, input, game loops, or an entity system. Cubeforge is a complete 2D game runtime — you get all of that out of the box.
+
+**vs Unity WebGL**
+
+Unity exports require a separate build pipeline and ship a large runtime. Cubeforge is a npm package — add it to any existing React app, ship it as part of your normal build, and it loads instantly.
 
 ---
 
