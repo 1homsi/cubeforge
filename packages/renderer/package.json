@@ -1,6 +1,6 @@
 {
   "name": "@cubeforge/renderer",
-  "version": "1.0.0-beta.1",
+  "version": "0.0.1",
   "description": "Canvas2D renderer with sprites, camera, animation, and particles for Cubeforge",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@cubeforge/input",
-  "version": "1.0.0-beta.1",
+  "version": "0.0.1",
   "description": "Keyboard and mouse input manager for Cubeforge",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

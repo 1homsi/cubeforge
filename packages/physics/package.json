@@ -1,6 +1,6 @@
 {
   "name": "@cubeforge/physics",
-  "version": "1.0.0-beta.1",
+  "version": "0.0.1",
   "description": "AABB physics with fixed timestep and spatial broadphase for Cubeforge",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

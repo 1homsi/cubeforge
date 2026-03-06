@@ -4,11 +4,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'npm dist-tag (e.g. beta, latest)'
-        required: false
-        default: 'beta'
 
 jobs:
   publish:
@@ -37,9 +32,8 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          TAG=${{ github.event.inputs.tag || 'beta' }}
-          bun publish --cwd packages/core    --access public --tag $TAG
-          bun publish --cwd packages/input   --access public --tag $TAG
-          bun publish --cwd packages/renderer --access public --tag $TAG
-          bun publish --cwd packages/physics  --access public --tag $TAG
-          bun publish --cwd packages/react    --access public --tag $TAG
+          bun publish --cwd packages/core     --access public
+          bun publish --cwd packages/input    --access public
+          bun publish --cwd packages/renderer --access public
+          bun publish --cwd packages/physics  --access public
+          bun publish --cwd packages/react    --access public
