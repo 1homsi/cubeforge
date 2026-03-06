@@ -87,7 +87,7 @@ export default defineConfig({
     search: { provider: 'local' },
     footer: {
       message: 'MIT License',
-      copyright: 'Copyright © 2025 Mohamad Homsi',
+      copyright: 'Copyright © 2025 1homsi',
     },
   },
 })

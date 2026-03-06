@@ -487,4 +487,4 @@ bun test
 
 ## License
 
-MIT — [Mohamad Homsi](https://github.com/1homsi)
+MIT — [1homsi](https://github.com/1homsi)
