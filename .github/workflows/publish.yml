@@ -33,8 +33,14 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Strip workspace deps from cubeforge before publish
-        run: cd packages/react && npm pkg delete dependencies
+      - name: Prepare cubeforge package.json for publish
+        run: |
+          cd packages/react
+          npm pkg delete dependencies
+          npm pkg set main="./dist/index.js"
+          npm pkg set types="./dist/index.d.ts"
+          npm pkg set 'exports["."].import'="./dist/index.js"
+          npm pkg set 'exports["."].types'="./dist/index.d.ts"
 
       - name: Publish cubeforge
         run: cd packages/react && npm publish --access public
