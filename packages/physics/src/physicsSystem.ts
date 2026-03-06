@@ -41,6 +41,9 @@ function getOverlap(a: AABB, b: AABB): Overlap | null {
 }
 
 export class PhysicsSystem implements System {
+  private accumulator = 0
+  private readonly FIXED_DT = 1 / 60
+
   constructor(
     private gravity: number,
     private readonly events?: EventBus,
@@ -49,6 +52,31 @@ export class PhysicsSystem implements System {
   setGravity(g: number): void { this.gravity = g }
 
   update(world: ECSWorld, dt: number): void {
+    this.accumulator += dt
+    // Cap accumulator to prevent spiral of death
+    if (this.accumulator > 5 * this.FIXED_DT) {
+      this.accumulator = 5 * this.FIXED_DT
+    }
+    while (this.accumulator >= this.FIXED_DT) {
+      this.step(world, this.FIXED_DT)
+      this.accumulator -= this.FIXED_DT
+    }
+  }
+
+  private getCells(cx: number, cy: number, hw: number, hh: number): string[] {
+    const CELL = 128
+    const x0 = Math.floor((cx - hw) / CELL)
+    const x1 = Math.floor((cx + hw) / CELL)
+    const y0 = Math.floor((cy - hh) / CELL)
+    const y1 = Math.floor((cy + hh) / CELL)
+    const cells: string[] = []
+    for (let x = x0; x <= x1; x++)
+      for (let y = y0; y <= y1; y++)
+        cells.push(`${x},${y}`)
+    return cells
+  }
+
+  private step(world: ECSWorld, dt: number): void {
     const all = world.query('Transform', 'RigidBody', 'BoxCollider')
     const dynamics: EntityId[] = []
     const statics: EntityId[] = []
@@ -59,6 +87,19 @@ export class PhysicsSystem implements System {
       else dynamics.push(id)
     }
 
+    // Build spatial grid for static entities
+    const staticGrid = new Map<string, EntityId[]>()
+    for (const sid of statics) {
+      const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+      const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+      const aabb = getAABB(st, sc)
+      for (const cell of this.getCells(aabb.cx, aabb.cy, aabb.hw, aabb.hh)) {
+        let bucket = staticGrid.get(cell)
+        if (!bucket) { bucket = []; staticGrid.set(cell, bucket) }
+        bucket.push(sid)
+      }
+    }
+
     // Phase 1: gravity + reset onGround
     for (const id of dynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -66,7 +107,7 @@ export class PhysicsSystem implements System {
       rb.vy += this.gravity * rb.gravityScale * dt
     }
 
-    // Phase 2 & 3: move X then resolve X
+    // Phase 2 & 3: move X then resolve X (broadphase via grid)
     for (const id of dynamics) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -75,24 +116,33 @@ export class PhysicsSystem implements System {
       transform.x += rb.vx * dt
 
       if (!col.isTrigger) {
-        for (const sid of statics) {
-          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
-          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
-          if (sc.isTrigger) continue
+        const dynAABB = getAABB(transform, col)
+        const candidateCells = this.getCells(dynAABB.cx, dynAABB.cy, dynAABB.hw, dynAABB.hh)
+        const checked = new Set<EntityId>()
+        for (const cell of candidateCells) {
+          const bucket = staticGrid.get(cell)
+          if (!bucket) continue
+          for (const sid of bucket) {
+            if (checked.has(sid)) continue
+            checked.add(sid)
+            const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+            const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+            if (sc.isTrigger) continue
 
-          const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
-          if (!ov) continue
+            const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
+            if (!ov) continue
 
-          // Only correct on X axis if X overlap is smaller
-          if (Math.abs(ov.x) < Math.abs(ov.y)) {
-            transform.x += ov.x
-            rb.vx = rb.bounce > 0 ? -rb.vx * rb.bounce : 0
+            // Only correct on X axis if X overlap is smaller
+            if (Math.abs(ov.x) < Math.abs(ov.y)) {
+              transform.x += ov.x
+              rb.vx = rb.bounce > 0 ? -rb.vx * rb.bounce : 0
+            }
           }
         }
       }
     }
 
-    // Phase 4 & 5: move Y then resolve Y
+    // Phase 4 & 5: move Y then resolve Y (broadphase via grid)
     for (const id of dynamics) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -101,23 +151,32 @@ export class PhysicsSystem implements System {
       transform.y += rb.vy * dt
 
       if (!col.isTrigger) {
-        for (const sid of statics) {
-          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
-          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
-          if (sc.isTrigger) continue
+        const dynAABB = getAABB(transform, col)
+        const candidateCells = this.getCells(dynAABB.cx, dynAABB.cy, dynAABB.hw, dynAABB.hh)
+        const checked = new Set<EntityId>()
+        for (const cell of candidateCells) {
+          const bucket = staticGrid.get(cell)
+          if (!bucket) continue
+          for (const sid of bucket) {
+            if (checked.has(sid)) continue
+            checked.add(sid)
+            const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+            const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+            if (sc.isTrigger) continue
 
-          const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
-          if (!ov) continue
+            const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
+            if (!ov) continue
 
-          // Only correct on Y axis if Y overlap is smaller-or-equal
-          if (Math.abs(ov.y) <= Math.abs(ov.x)) {
-            transform.y += ov.y
-            if (ov.y < 0) {
-              // Pushed upward = landed on top of platform
-              rb.onGround = true
-              if (rb.friction < 1) rb.vx *= rb.friction
+            // Only correct on Y axis if Y overlap is smaller-or-equal
+            if (Math.abs(ov.y) <= Math.abs(ov.x)) {
+              transform.y += ov.y
+              if (ov.y < 0) {
+                // Pushed upward = landed on top of platform
+                rb.onGround = true
+                if (rb.friction < 1) rb.vx *= rb.friction
+              }
+              rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
             }
-            rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
           }
         }
       }

@@ -2,12 +2,14 @@ export class GameLoop {
   private rafId = 0
   private lastTime = 0
   private running = false
+  private paused = false
 
   constructor(private readonly onTick: (dt: number) => void) {}
 
   start(): void {
     if (this.running) return
     this.running = true
+    this.paused = false
     this.lastTime = performance.now()
     this.rafId = requestAnimationFrame(this.frame)
   }
@@ -17,8 +19,27 @@ export class GameLoop {
     cancelAnimationFrame(this.rafId)
   }
 
+  pause(): void {
+    if (!this.running) return
+    this.running = false
+    this.paused = true
+    cancelAnimationFrame(this.rafId)
+  }
+
+  resume(): void {
+    if (!this.paused) return
+    this.paused = false
+    this.running = true
+    this.lastTime = performance.now()
+    this.rafId = requestAnimationFrame(this.frame)
+  }
+
   get isRunning(): boolean {
     return this.running
+  }
+
+  get isPaused(): boolean {
+    return this.paused
   }
 
   private frame = (time: number): void => {

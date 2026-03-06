@@ -9,6 +9,8 @@ interface Camera2DProps {
   /** Lerp smoothing factor (0 = instant snap, 0.85 = smooth) */
   smoothing?: number
   background?: string
+  bounds?: { x: number; y: number; width: number; height: number }
+  deadZone?: { w: number; h: number }
 }
 
 export function Camera2D({
@@ -16,6 +18,8 @@ export function Camera2D({
   zoom = 1,
   smoothing = 0,
   background = '#1a1a2e',
+  bounds,
+  deadZone,
 }: Camera2DProps) {
   const engine = useContext(EngineContext)!
 
@@ -26,6 +30,8 @@ export function Camera2D({
       zoom,
       smoothing,
       background,
+      bounds,
+      deadZone,
     }))
 
     return () => engine.ecs.destroyEntity(entityId)
@@ -41,7 +47,9 @@ export function Camera2D({
     cam.zoom = zoom
     cam.smoothing = smoothing
     cam.background = background
-  }, [followEntity, zoom, smoothing, background, engine])
+    cam.bounds = bounds
+    cam.deadZone = deadZone
+  }, [followEntity, zoom, smoothing, background, bounds, deadZone, engine])
 
   return null
 }

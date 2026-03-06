@@ -13,6 +13,7 @@ export class ECSWorld {
   private entities = new Set<EntityId>()
   private components = new Map<EntityId, Map<string, Component>>()
   private systems: System[] = []
+  private queryCache = new Map<string, EntityId[]>()
 
   createEntity(): EntityId {
     const id = this.nextId++
@@ -48,6 +49,9 @@ export class ECSWorld {
 
   // Returns all entities that have ALL of the given component types
   query(...types: string[]): EntityId[] {
+    const key = types.slice().sort().join('\x00')
+    const cached = this.queryCache.get(key)
+    if (cached) return cached
     const result: EntityId[] = []
     for (const id of this.entities) {
       const comps = this.components.get(id)!
@@ -57,6 +61,7 @@ export class ECSWorld {
       }
       if (match) result.push(id)
     }
+    this.queryCache.set(key, result)
     return result
   }
 
@@ -82,6 +87,7 @@ export class ECSWorld {
   }
 
   update(dt: number): void {
+    this.queryCache.clear()
     for (const system of this.systems) {
       system.update(this, dt)
     }

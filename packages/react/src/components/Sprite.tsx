@@ -12,6 +12,12 @@ interface SpriteProps {
   zIndex?: number
   visible?: boolean
   flipX?: boolean
+  anchorX?: number
+  anchorY?: number
+  frameIndex?: number
+  frameWidth?: number
+  frameHeight?: number
+  frameColumns?: number
 }
 
 export function Sprite({
@@ -24,12 +30,34 @@ export function Sprite({
   zIndex = 0,
   visible = true,
   flipX = false,
+  anchorX = 0.5,
+  anchorY = 0.5,
+  frameIndex = 0,
+  frameWidth,
+  frameHeight,
+  frameColumns,
 }: SpriteProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    const comp = createSprite({ width, height, color, src, offsetX, offsetY, zIndex, visible, flipX })
+    const comp = createSprite({
+      width,
+      height,
+      color,
+      src,
+      offsetX,
+      offsetY,
+      zIndex,
+      visible,
+      flipX,
+      anchorX,
+      anchorY,
+      frameIndex,
+      frameWidth,
+      frameHeight,
+      frameColumns,
+    })
     engine.ecs.addComponent(entityId, comp)
 
     if (src) {
@@ -51,7 +79,8 @@ export function Sprite({
     comp.visible = visible
     comp.flipX = flipX
     comp.zIndex = zIndex
-  }, [color, visible, flipX, zIndex, engine, entityId])
+    comp.frameIndex = frameIndex
+  }, [color, visible, flipX, zIndex, frameIndex, engine, entityId])
 
   return null
 }

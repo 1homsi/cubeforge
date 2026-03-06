@@ -1,4 +1,7 @@
 export * from './canvas2d'
 export * from './components/sprite'
 export * from './components/camera2d'
+export * from './components/animationState'
+export * from './components/squashStretch'
+export * from './components/particle'
 export * from './renderSystem'
