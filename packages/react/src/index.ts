@@ -8,15 +8,22 @@ export { RigidBody } from './components/RigidBody'
 export { BoxCollider } from './components/BoxCollider'
 export { Script } from './components/Script'
 export { Camera2D } from './components/Camera2D'
+export { MovingPlatform } from './components/MovingPlatform'
+export { Checkpoint } from './components/Checkpoint'
 
 // Hooks
 export { useGame } from './hooks/useGame'
 export { useEntity } from './hooks/useEntity'
 export { useInput } from './hooks/useInput'
 export { useEvents, useEvent } from './hooks/useEvents'
+export { usePlatformerController } from './hooks/usePlatformerController'
+export { useTopDownMovement } from './hooks/useTopDownMovement'
 
-// Re-export engine types developers commonly need
+// Types
 export type { EngineState } from './context'
+export type { GameControls } from './components/Game'
+export type { PlatformerControllerOptions } from './hooks/usePlatformerController'
+export type { TopDownMovementOptions } from './hooks/useTopDownMovement'
 export type { EntityId, ECSWorld, ScriptUpdateFn } from '@cubeforge/core'
 export type { InputManager } from '@cubeforge/input'
 export type { TransformComponent } from '@cubeforge/core'

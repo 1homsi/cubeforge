@@ -4,12 +4,30 @@ import { InputManager } from '@cubeforge/input'
 import { Canvas2DRenderer, RenderSystem } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
+import { DebugSystem } from '../systems/debugSystem'
+
+export interface GameControls {
+  pause(): void
+  resume(): void
+  reset(): void
+}
 
 interface GameProps {
   width?: number
   height?: number
-  /** Pixels per second squared downward (default 980 ≈ earth gravity at 100px/m) */
+  /** Pixels per second squared downward (default 980) */
   gravity?: number
+  /** Enable debug overlay: collider wireframes, FPS, entity count */
+  debug?: boolean
+  /**
+   * Canvas scaling strategy (default 'none'):
+   * - 'none'    — fixed pixel size, no scaling
+   * - 'contain' — CSS scale to fit parent while preserving aspect ratio
+   * - 'pixel'   — nearest-neighbor pixel-art scaling via CSS
+   */
+  scale?: 'none' | 'contain' | 'pixel'
+  /** Called once the engine is ready — receives pause/resume/reset controls */
+  onReady?: (controls: GameControls) => void
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
@@ -19,11 +37,15 @@ export function Game({
   width = 800,
   height = 600,
   gravity = 980,
+  debug = false,
+  scale = 'none',
+  onReady,
   style,
   className,
   children,
 }: GameProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const canvasRef  = useRef<HTMLCanvasElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<EngineState | null>(null)
 
   useEffect(() => {
@@ -36,14 +58,22 @@ export function Game({
     const physics = new PhysicsSystem(gravity, events)
     const entityIds = new Map<string, number>()
 
-    // System order: scripts first, then physics, then render
+    const renderSystem = new RenderSystem(renderer, entityIds)
+    const debugSystem  = debug ? new DebugSystem(renderer) : null
+
+    // System order: scripts → physics → render → (debug)
     ecs.addSystem(new ScriptSystem(input))
     ecs.addSystem(physics)
-    ecs.addSystem(new RenderSystem(renderer, entityIds))
+    ecs.addSystem(renderSystem)
+    if (debugSystem) ecs.addSystem(debugSystem)
 
     input.attach(canvas)
-    // Prevent canvas from stealing focus issues
     canvas.setAttribute('tabindex', '0')
+
+    // Validate dimensions
+    if (width <= 0 || height <= 0) {
+      console.warn(`[Cubeforge] Invalid Game dimensions: ${width}x${height}. Width and height must be positive.`)
+    }
 
     const loop = new GameLoop((dt) => {
       ecs.update(dt)
@@ -54,28 +84,71 @@ export function Game({
     setEngine(state)
     loop.start()
 
+    // Expose controls via onReady callback
+    onReady?.({
+      pause:  () => loop.pause(),
+      resume: () => loop.resume(),
+      reset:  () => {
+        ecs.clear()
+        loop.stop()
+        loop.start()
+      },
+    })
+
+    // Handle contain scaling
+    let resizeObserver: ResizeObserver | null = null
+    if (scale === 'contain' && wrapperRef.current) {
+      const wrapper = wrapperRef.current
+      const updateScale = () => {
+        const parentW = wrapper.parentElement?.clientWidth  ?? width
+        const parentH = wrapper.parentElement?.clientHeight ?? height
+        const scaleX = parentW / width
+        const scaleY = parentH / height
+        const s = Math.min(scaleX, scaleY)
+        canvas.style.transform = `scale(${s})`
+        canvas.style.transformOrigin = 'top left'
+      }
+      updateScale()
+      resizeObserver = new ResizeObserver(updateScale)
+      if (wrapper.parentElement) resizeObserver.observe(wrapper.parentElement)
+    }
+
     return () => {
       loop.stop()
       input.detach()
       ecs.clear()
+      resizeObserver?.disconnect()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Update gravity when prop changes
+  // Sync gravity changes
   useEffect(() => {
     engine?.physics.setGravity(gravity)
   }, [gravity, engine])
 
+  const canvasStyle: CSSProperties = {
+    display: 'block',
+    outline: 'none',
+    imageRendering: scale === 'pixel' ? 'pixelated' : undefined,
+    ...style,
+  }
+
+  const wrapperStyle: CSSProperties = scale === 'contain'
+    ? { position: 'relative', width, height, overflow: 'visible' }
+    : {}
+
   return (
     <EngineContext.Provider value={engine}>
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        style={{ display: 'block', outline: 'none', ...style }}
-        className={className}
-      />
+      <div ref={wrapperRef} style={wrapperStyle}>
+        <canvas
+          ref={canvasRef}
+          width={width}
+          height={height}
+          style={canvasStyle}
+          className={className}
+        />
+      </div>
       {engine && children}
     </EngineContext.Provider>
   )
