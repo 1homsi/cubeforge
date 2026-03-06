@@ -1,0 +1,20 @@
+{
+  "name": "@cubeforge/react",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "dependencies": {
+    "@cubeforge/core": "workspace:*",
+    "@cubeforge/input": "workspace:*",
+    "@cubeforge/renderer": "workspace:*",
+    "@cubeforge/physics": "workspace:*"
+  }
+}
