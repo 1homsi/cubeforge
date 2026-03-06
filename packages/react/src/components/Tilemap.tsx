@@ -228,28 +228,60 @@ export function Tilemap({
           const collision = isCollisionLayer(layer, collisionLayer)
           const trigger = !collision && isTriggerLayer(layer, triggerLayerName)
 
-          for (let i = 0; i < layer.data.length; i++) {
-            const gid = layer.data[i]
-            if (gid === 0) continue
+          if (collision || trigger) {
+            // Merge adjacent filled tiles in each row into single wide colliders
+            for (let row = 0; row < mapData.height; row++) {
+              let col = 0
+              while (col < mapData.width) {
+                const i = row * mapData.width + col
+                const gid = layer.data[i]
+                if (gid === 0) { col++; continue }
 
-            const col = i % mapData.width
-            const row = Math.floor(i / mapData.width)
-            // Tile center position
-            const x = col * tilewidth + tilewidth / 2
-            const y = row * tileheight + tileheight / 2
+                // Start of a run — extend right while tiles are filled
+                let runLength = 1
+                while (
+                  col + runLength < mapData.width &&
+                  layer.data[row * mapData.width + col + runLength] !== 0
+                ) {
+                  runLength++
+                }
 
-            const eid = engine.ecs.createEntity()
-            createdEntities.push(eid)
-            engine.ecs.addComponent(eid, createTransform(x, y))
+                const runWidth = runLength * tilewidth
+                const x = col * tilewidth + runWidth / 2
+                const y = row * tileheight + tileheight / 2
 
-            if (collision) {
-              // Invisible solid collider
-              engine.ecs.addComponent(eid, createRigidBody({ isStatic: true }))
-              engine.ecs.addComponent(eid, createBoxCollider(tilewidth, tileheight))
-            } else if (trigger) {
-              // Invisible trigger collider — no sprite, no rigid body blocking movement
-              engine.ecs.addComponent(eid, createBoxCollider(tilewidth, tileheight, { isTrigger: true }))
-            } else {
+                const eid = engine.ecs.createEntity()
+                createdEntities.push(eid)
+                engine.ecs.addComponent(eid, createTransform(x, y))
+
+                if (collision) {
+                  // Invisible solid collider spanning the entire run
+                  engine.ecs.addComponent(eid, createRigidBody({ isStatic: true }))
+                  engine.ecs.addComponent(eid, createBoxCollider(runWidth, tileheight))
+                } else {
+                  // Invisible trigger collider spanning the entire run
+                  engine.ecs.addComponent(eid, createBoxCollider(runWidth, tileheight, { isTrigger: true }))
+                }
+
+                col += runLength
+              }
+            }
+          } else {
+            // Visual tiles — render per tile with sprites
+            for (let i = 0; i < layer.data.length; i++) {
+              const gid = layer.data[i]
+              if (gid === 0) continue
+
+              const col = i % mapData.width
+              const row = Math.floor(i / mapData.width)
+              // Tile center position
+              const x = col * tilewidth + tilewidth / 2
+              const y = row * tileheight + tileheight / 2
+
+              const eid = engine.ecs.createEntity()
+              createdEntities.push(eid)
+              engine.ecs.addComponent(eid, createTransform(x, y))
+
               // Visual tile — load image and set frame
               const frame = getTileFrame(gid)
               const sprite = createSprite({ width: tilewidth, height: tileheight, color: '#888', zIndex })
