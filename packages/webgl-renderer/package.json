@@ -1,0 +1,39 @@
+{
+  "name": "@cubeforge/webgl-renderer",
+  "version": "0.0.6",
+  "description": "WebGL2 instanced renderer for Cubeforge — drop-in replacement for the Canvas2D render system",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@cubeforge/core": "workspace:*"
+  },
+  "keywords": [
+    "game-engine",
+    "webgl",
+    "webgl2",
+    "renderer",
+    "cubeforge"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
+  },
+  "private": true
+}

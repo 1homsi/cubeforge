@@ -8,7 +8,8 @@ import type { GameLoop } from '@cubeforge/core'
 export interface EngineState {
   ecs: ECSWorld
   input: InputManager
-  renderer: Canvas2DRenderer
+  /** Canvas2D renderer. Undefined when a custom WebGL renderer is used via the `renderer` Game prop. */
+  renderer?: Canvas2DRenderer
   physics: PhysicsSystem
   events: EventBus
   assets: AssetManager

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin } from '@cubeforge/core'
+import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin, type System, type EntityId } from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
 import { Canvas2DRenderer, RenderSystem } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
@@ -37,6 +37,14 @@ interface GameProps {
   seed?: number
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
+  /**
+   * Custom render system constructor. Must implement the System interface and accept
+   * `(canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>)`.
+   *
+   * Defaults to the built-in Canvas2D RenderSystem.
+   * Example: `import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'`
+   */
+  renderer?: new (canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>) => System
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
@@ -53,6 +61,7 @@ export function Game({
   seed = 0,
   onReady,
   plugins,
+  renderer: CustomRenderer,
   style,
   className,
   children,
@@ -67,14 +76,21 @@ export function Game({
     const ecs = new ECSWorld()
     if (deterministic) ecs.setDeterministicSeed(seed)
     const input = new InputManager()
-    const renderer = new Canvas2DRenderer(canvas)
     const events = new EventBus()
     const assets = new AssetManager()
     const physics = new PhysicsSystem(gravity, events)
     const entityIds = new Map<string, number>()
 
-    const renderSystem = new RenderSystem(renderer, entityIds)
-    const debugSystem  = debug ? new DebugSystem(renderer) : null
+    // Build render system: custom WebGL renderer or default Canvas2D
+    let canvas2d: Canvas2DRenderer | undefined
+    let renderSystem: System
+    if (CustomRenderer) {
+      renderSystem = new CustomRenderer(canvas, entityIds)
+    } else {
+      canvas2d = new Canvas2DRenderer(canvas)
+      renderSystem = new RenderSystem(canvas2d, entityIds)
+    }
+    const debugSystem = debug && canvas2d ? new DebugSystem(canvas2d) : null
 
     // System order: scripts → physics → render → (debug) → plugins
     ecs.addSystem(new ScriptSystem(input))
@@ -101,7 +117,7 @@ export function Game({
       }
     })
 
-    const state: EngineState = { ecs, input, renderer, physics, events, assets, loop, canvas, entityIds }
+    const state: EngineState = { ecs, input, renderer: canvas2d, physics, events, assets, loop, canvas, entityIds }
     setEngine(state)
 
     // Register plugin systems and call their onInit hooks
