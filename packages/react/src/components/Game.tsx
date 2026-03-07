@@ -35,6 +35,13 @@ interface GameProps {
   deterministic?: boolean
   /** Seed for the deterministic RNG (default 0). Only used when deterministic=true. */
   seed?: number
+  /**
+   * When true, the game loop starts immediately and sprites swap from color → image as
+   * they load in the background. When false (default) the loop is held until every
+   * sprite that is part of the initial scene has finished loading, so the first frame
+   * shown is fully rendered with real assets.
+   */
+  asyncAssets?: boolean
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
   /**
@@ -59,6 +66,7 @@ export function Game({
   scale = 'none',
   deterministic = false,
   seed = 0,
+  asyncAssets = false,
   onReady,
   plugins,
   renderer: CustomRenderer,
@@ -69,6 +77,7 @@ export function Game({
   const canvasRef  = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<EngineState | null>(null)
+  const [assetsReady, setAssetsReady] = useState(asyncAssets)
   const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
 
   useEffect(() => {
@@ -132,7 +141,8 @@ export function Game({
       }
     }
 
-    loop.start()
+    // Loop is started by the assets-ready effect below once images are loaded.
+    // When asyncAssets=true that effect starts it immediately.
 
     // Expose controls via onReady callback
     onReady?.({
@@ -172,6 +182,31 @@ export function Game({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Start loop once initial scene sprites are loaded.
+  // Because React runs child effects before parent effects, all Sprite useEffects
+  // (which call engine.assets.loadImage) have already fired before this runs —
+  // so waitForImages() covers every sprite in the initial scene.
+  useEffect(() => {
+    if (!engine) return
+    let cancelled = false
+
+    if (asyncAssets) {
+      engine.loop.start()
+      setAssetsReady(true)
+      return
+    }
+
+    engine.assets.waitForImages().then(() => {
+      if (!cancelled) {
+        engine.loop.start()
+        setAssetsReady(true)
+      }
+    })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine])
+
   // Sync gravity changes
   useEffect(() => {
     engine?.physics.setGravity(gravity)
@@ -184,9 +219,11 @@ export function Game({
     ...style,
   }
 
-  const wrapperStyle: CSSProperties = scale === 'contain'
-    ? { position: 'relative', width, height, overflow: 'visible' }
-    : {}
+  const wrapperStyle: CSSProperties = {
+    position: 'relative',
+    display: 'inline-block',
+    ...(scale === 'contain' ? { width, height, overflow: 'visible' } : {}),
+  }
 
   return (
     <EngineContext.Provider value={engine}>
@@ -198,6 +235,38 @@ export function Game({
           style={canvasStyle}
           className={className}
         />
+        {!assetsReady && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            background: '#0a0a0f',
+            pointerEvents: 'none',
+          }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: '#4fc3f7',
+                  animation: 'cubeforge-loading-dot 1.2s ease-in-out infinite',
+                  animationDelay: `${i * 0.2}s`,
+                }} />
+              ))}
+            </div>
+            <span style={{
+              fontFamily: 'monospace', fontSize: 11,
+              letterSpacing: 3, color: '#37474f',
+            }}>
+              LOADING
+            </span>
+            <style>{`
+              @keyframes cubeforge-loading-dot {
+                0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+                40%           { transform: scale(1);   opacity: 1;   }
+              }
+            `}</style>
+          </div>
+        )}
       </div>
       {engine && children}
       {engine && devtools && (

@@ -1,5 +1,6 @@
 export class AssetManager {
   private images = new Map<string, HTMLImageElement>()
+  private imagePromises = new Map<string, Promise<HTMLImageElement>>()
   private audio = new Map<string, AudioBuffer>()
   private audioCtx: AudioContext | null = null
   private activeSources = new Map<string, Set<AudioBufferSourceNode>>()
@@ -12,20 +13,29 @@ export class AssetManager {
   }
 
   async loadImage(src: string): Promise<HTMLImageElement> {
-    if (this.images.has(src)) return this.images.get(src)!
-    const img = new Image()
-    img.src = src
-    try {
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve()
-        img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
-      })
-    } catch (err) {
-      console.warn(`[Cubeforge] Failed to load image: ${src}`)
-      throw err
-    }
-    this.images.set(src, img)
-    return img
+    if (this.imagePromises.has(src)) return this.imagePromises.get(src)!
+    const promise = (async () => {
+      const img = new Image()
+      img.src = src
+      try {
+        await new Promise<void>((resolve, reject) => {
+          img.onload  = () => resolve()
+          img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
+        })
+      } catch (err) {
+        console.warn(`[Cubeforge] Failed to load image: ${src}`)
+        throw err
+      }
+      this.images.set(src, img)
+      return img
+    })()
+    this.imagePromises.set(src, promise)
+    return promise
+  }
+
+  /** Resolves once every image that has been requested via loadImage() is settled. */
+  async waitForImages(): Promise<void> {
+    await Promise.allSettled([...this.imagePromises.values()])
   }
 
   getImage(src: string): HTMLImageElement | undefined {
