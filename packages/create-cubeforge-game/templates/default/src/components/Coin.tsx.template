@@ -1,0 +1,26 @@
+import { useRef } from 'react'
+import { Entity, Transform, Sprite, BoxCollider, useTriggerEnter, useEntity } from 'cubeforge'
+
+interface CoinCollectorProps { onCollect: () => void }
+function CoinCollector({ onCollect }: CoinCollectorProps) {
+  const collected = useRef(false)
+  useTriggerEnter(() => {
+    if (collected.current) return
+    collected.current = true
+    onCollect()
+  }, { tag: 'player' })
+  return null
+}
+
+interface CoinProps { x: number; y: number; onCollect: () => void }
+export function Coin({ x, y, onCollect }: CoinProps) {
+  const id = useRef(`coin-${x}-${y}`)
+  return (
+    <Entity id={id.current} tags={['coin']}>
+      <Transform x={x} y={y} />
+      <Sprite width={16} height={16} color="#ffd600" />
+      <BoxCollider width={16} height={16} isTrigger />
+      <CoinCollector onCollect={onCollect} />
+    </Entity>
+  )
+}

@@ -1,7 +1,9 @@
-import { Entity, Transform, Sprite, RigidBody, BoxCollider, Script, usePlatformerController, useEntity } from 'cubeforge'
+import { Entity, Transform, Sprite, RigidBody, BoxCollider, useEntity, usePlatformerController } from 'cubeforge'
 
-function PlayerInner() {
+function PlayerController() {
   const id = useEntity()
+  // usePlatformerController handles keyboard input (arrow keys + WASD + Space)
+  // For custom bindings use createInputMap({ jump: 'Space', left: 'KeyA', ... })
   usePlatformerController(id, { speed: 220, jumpForce: -520, maxJumps: 2 })
   return null
 }
@@ -14,7 +16,7 @@ export function Player({ x, y }: PlayerProps) {
       <Sprite width={32} height={48} color="#4fc3f7" />
       <RigidBody />
       <BoxCollider width={32} height={48} />
-      <PlayerInner />
+      <PlayerController />
     </Entity>
   )
 }

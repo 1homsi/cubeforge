@@ -1,17 +1,77 @@
 import { useState } from 'react'
-import { Game, World, Camera2D } from 'cubeforge'
+import { Game, World, Camera2D, useSnapshot } from 'cubeforge'
 import { Player } from './components/Player'
 import { Ground } from './components/Ground'
+import { Coin } from './components/Coin'
+
+const COINS = [
+  { x: 200, y: 420 },
+  { x: 320, y: 420 },
+  { x: 440, y: 310 },
+  { x: 560, y: 310 },
+]
+
+function HUD({ score, total }: { score: number; total: number }) {
+  const { save, restore } = useSnapshot()
+  const [saved, setSaved] = useState<ReturnType<typeof save> | null>(null)
+
+  return (
+    <div style={{ position: 'absolute', top: 8, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', padding: '0 12px', color: '#fff', fontFamily: 'monospace', fontSize: 14 }}>
+      <span>Coins: {score} / {total}</span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setSaved(save())} style={btnStyle}>Save</button>
+        <button onClick={() => saved && restore(saved)} disabled={!saved} style={btnStyle}>Load</button>
+      </div>
+    </div>
+  )
+}
+
+const btnStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.15)',
+  border: '1px solid rgba(255,255,255,0.3)',
+  color: '#fff',
+  padding: '2px 10px',
+  borderRadius: 4,
+  cursor: 'pointer',
+  fontFamily: 'monospace',
+  fontSize: 13,
+}
 
 export function App() {
-  const [gameKey] = useState(0)
+  const [score, setScore] = useState(0)
+  const [collected, setCollected] = useState<Set<string>>(new Set())
+
+  function collect(key: string) {
+    if (collected.has(key)) return
+    setCollected(prev => new Set([...prev, key]))
+    setScore(s => s + 1)
+  }
+
   return (
-    <Game key={gameKey} width={800} height={500} gravity={980}>
-      <World background="#87ceeb">
-        <Camera2D followEntity="player" smoothing={0.85} />
-        <Player x={100} y={300} />
-        <Ground x={400} y={480} width={800} height={40} />
-      </World>
-    </Game>
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <Game width={800} height={500} gravity={980}>
+        <HUD score={score} total={COINS.length} />
+        <World background="#1a1d27">
+          <Camera2D followEntity="player" smoothing={0.85} />
+
+          <Player x={100} y={300} />
+
+          {/* Main ground */}
+          <Ground x={400} y={480} width={800} height={40} />
+
+          {/* One-way ledge — jump up through it */}
+          <Ground x={400} y={340} width={260} height={16} oneWay />
+
+          {COINS.map(c => (
+            <Coin
+              key={`${c.x}-${c.y}`}
+              x={c.x}
+              y={c.y}
+              onCollect={() => collect(`${c.x}-${c.y}`)}
+            />
+          ))}
+        </World>
+      </Game>
+    </div>
   )
 }
