@@ -1,6 +1,7 @@
 export * from './math/vec2'
 export * from './math/rect'
 export * from './ecs/world'
+export * from './ecs/worldQueries'
 export * from './loop/gameLoop'
 export * from './events/eventBus'
 export * from './assets/assetManager'
