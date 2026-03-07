@@ -11,6 +11,11 @@ interface BoxColliderProps {
   layer?: string
   /** Which layers this collider interacts with. '*' = all (default). */
   mask?: string | string[]
+  /**
+   * One-way platform: only blocks entities falling onto the top surface.
+   * Entities below pass through freely (useful for jump-through ledges).
+   */
+  oneWay?: boolean
 }
 
 export function BoxCollider({
@@ -21,12 +26,13 @@ export function BoxCollider({
   isTrigger = false,
   layer = 'default',
   mask = '*',
+  oneWay = false,
 }: BoxColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask }))
+    engine.ecs.addComponent(entityId, createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask, oneWay }))
 
     // Defer check so sibling components have had a chance to add their components
     const checkId = setTimeout(() => {

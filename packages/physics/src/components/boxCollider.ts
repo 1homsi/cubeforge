@@ -23,6 +23,11 @@ export interface BoxColliderComponent extends Component {
    * The sloped surface is the top face; collision pushes entities up along the slope.
    */
   slope: number
+  /**
+   * One-way platform: only blocks dynamic entities that are falling onto the
+   * top surface. Entities below the platform pass through freely.
+   */
+  oneWay: boolean
 }
 
 export function createBoxCollider(
@@ -40,6 +45,7 @@ export function createBoxCollider(
     layer: 'default',
     mask: '*',
     slope: 0,
+    oneWay: false,
     ...opts,
   }
 }

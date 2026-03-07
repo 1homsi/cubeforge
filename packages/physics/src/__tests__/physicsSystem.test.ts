@@ -205,6 +205,47 @@ describe('PhysicsSystem', () => {
     })
   })
 
+  describe('one-way platforms', () => {
+    it('blocks dynamic entity falling onto the top of a one-way platform', () => {
+      const { world } = createTestWorld(980)
+      // One-way platform: static, 200x20, centered at y=200
+      const plat = world.createEntity()
+      world.addComponent(plat, createTransform(0, 200))
+      world.addComponent(plat, createRigidBody({ isStatic: true }))
+      world.addComponent(plat, createBoxCollider(400, 20, { oneWay: true }))
+
+      // Dynamic entity starts above the platform (y=100) and falls
+      const id = addDynamic(world, 0, 100, 20, 20)
+
+      runSteps(world, 120)
+
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      expect(rb.onGround).toBe(true)
+      expect(rb.vy).toBe(0)
+    })
+
+    it('allows dynamic entity to pass through a one-way platform from below', () => {
+      const { world } = createTestWorld(0) // no gravity
+      // One-way platform at y=0
+      const plat = world.createEntity()
+      world.addComponent(plat, createTransform(0, 0))
+      world.addComponent(plat, createRigidBody({ isStatic: true }))
+      world.addComponent(plat, createBoxCollider(200, 20, { oneWay: true }))
+
+      // Dynamic entity starts below the platform and moves upward
+      const id = addDynamic(world, 0, 100, 20, 20)
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      rb.vy = -400  // moving upward
+
+      runSteps(world, 10)
+
+      // Entity should have passed through — still moving up (negative vy or at least moved up)
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      expect(t.y).toBeLessThan(100) // has moved upward
+      expect(rb.onGround).toBe(false) // not blocked
+    })
+  })
+
   describe('gravityScale', () => {
     it('entity with gravityScale=0 is not affected by gravity', () => {
       const { world } = createTestWorld(980)

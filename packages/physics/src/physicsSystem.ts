@@ -250,6 +250,16 @@ export class PhysicsSystem implements System {
             if (!ov) continue
 
             if (Math.abs(ov.y) <= Math.abs(ov.x)) {
+              // One-way platform: only block entities that were above the surface
+              // (falling down onto it). Entities below pass through freely.
+              if (sc.oneWay) {
+                if (ov.y >= 0) continue // resolution would push entity down — skip
+                // Was entity's bottom above the platform's top BEFORE this Y step?
+                const platformTop = st.y + sc.offsetY - sc.height / 2
+                const prevEntityBottom = (transform.y - rb.vy * dt) + col.offsetY + col.height / 2
+                if (prevEntityBottom > platformTop) continue // was below — skip
+              }
+
               transform.y += ov.y
               if (ov.y < 0) {
                 rb.onGround = true
