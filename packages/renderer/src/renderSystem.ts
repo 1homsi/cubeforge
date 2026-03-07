@@ -83,22 +83,24 @@ export class RenderSystem implements System {
         if (targetId !== undefined) {
           const targetTransform = world.getComponent<TransformComponent>(targetId, 'Transform')
           if (targetTransform) {
+            const tx = targetTransform.x + (cam.followOffsetX ?? 0)
+            const ty = targetTransform.y + (cam.followOffsetY ?? 0)
             if (cam.deadZone) {
               // Only move camera if target is outside dead zone
               const halfW = cam.deadZone.w / 2
               const halfH = cam.deadZone.h / 2
-              const dx = targetTransform.x - cam.x
-              const dy = targetTransform.y - cam.y
-              if (dx > halfW) cam.x = targetTransform.x - halfW
-              else if (dx < -halfW) cam.x = targetTransform.x + halfW
-              if (dy > halfH) cam.y = targetTransform.y - halfH
-              else if (dy < -halfH) cam.y = targetTransform.y + halfH
+              const dx = tx - cam.x
+              const dy = ty - cam.y
+              if (dx > halfW) cam.x = tx - halfW
+              else if (dx < -halfW) cam.x = tx + halfW
+              if (dy > halfH) cam.y = ty - halfH
+              else if (dy < -halfH) cam.y = ty + halfH
             } else if (cam.smoothing > 0) {
-              cam.x += (targetTransform.x - cam.x) * (1 - cam.smoothing)
-              cam.y += (targetTransform.y - cam.y) * (1 - cam.smoothing)
+              cam.x += (tx - cam.x) * (1 - cam.smoothing)
+              cam.y += (ty - cam.y) * (1 - cam.smoothing)
             } else {
-              cam.x = targetTransform.x
-              cam.y = targetTransform.y
+              cam.x = tx
+              cam.y = ty
             }
           }
         }

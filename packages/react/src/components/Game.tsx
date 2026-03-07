@@ -83,12 +83,14 @@ export function Game({
 
     // Build render system: custom WebGL renderer or default Canvas2D
     let canvas2d: Canvas2DRenderer | undefined
+    let builtinRenderSystem: RenderSystem | undefined
     let renderSystem: System
     if (CustomRenderer) {
       renderSystem = new CustomRenderer(canvas, entityIds)
     } else {
       canvas2d = new Canvas2DRenderer(canvas)
-      renderSystem = new RenderSystem(canvas2d, entityIds)
+      builtinRenderSystem = new RenderSystem(canvas2d, entityIds)
+      renderSystem = builtinRenderSystem
     }
     const debugSystem = debug && canvas2d ? new DebugSystem(canvas2d) : null
 
@@ -117,7 +119,7 @@ export function Game({
       }
     })
 
-    const state: EngineState = { ecs, input, renderer: canvas2d, physics, events, assets, loop, canvas, entityIds }
+    const state: EngineState = { ecs, input, renderer: canvas2d, renderSystem: builtinRenderSystem, physics, events, assets, loop, canvas, entityIds }
     setEngine(state)
 
     // Register plugin systems and call their onInit hooks

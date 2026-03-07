@@ -16,6 +16,9 @@ export interface Camera2DComponent extends Component {
   bounds?: { x: number; y: number; width: number; height: number }
   /** Dead zone — camera only starts moving when target moves outside this box (world pixels) */
   deadZone?: { w: number; h: number }
+  /** World-space offset applied to the follow target position (e.g. look-ahead). */
+  followOffsetX: number
+  followOffsetY: number
   /** Current shake magnitude (pixels) */
   shakeIntensity: number
   /** Total shake duration */
@@ -32,6 +35,8 @@ export function createCamera2D(opts?: Partial<Camera2DComponent>): Camera2DCompo
     zoom: 1,
     smoothing: 0,
     background: '#1a1a2e',
+    followOffsetX: 0,
+    followOffsetY: 0,
     shakeIntensity: 0,
     shakeDuration: 0,
     shakeTimer: 0,

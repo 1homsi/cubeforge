@@ -11,6 +11,9 @@ interface Camera2DProps {
   background?: string
   bounds?: { x: number; y: number; width: number; height: number }
   deadZone?: { w: number; h: number }
+  /** World-space offset applied to the follow target (look-ahead, vertical bias, etc.) */
+  followOffsetX?: number
+  followOffsetY?: number
 }
 
 export function Camera2D({
@@ -20,6 +23,8 @@ export function Camera2D({
   background = '#1a1a2e',
   bounds,
   deadZone,
+  followOffsetX = 0,
+  followOffsetY = 0,
 }: Camera2DProps) {
   const engine = useContext(EngineContext)!
 
@@ -32,6 +37,8 @@ export function Camera2D({
       background,
       bounds,
       deadZone,
+      followOffsetX,
+      followOffsetY,
     }))
 
     return () => engine.ecs.destroyEntity(entityId)
@@ -49,7 +56,9 @@ export function Camera2D({
     cam.background = background
     cam.bounds = bounds
     cam.deadZone = deadZone
-  }, [followEntity, zoom, smoothing, background, bounds, deadZone, engine])
+    cam.followOffsetX = followOffsetX
+    cam.followOffsetY = followOffsetY
+  }, [followEntity, zoom, smoothing, background, bounds, deadZone, followOffsetX, followOffsetY, engine])
 
   return null
 }

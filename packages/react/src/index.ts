@@ -21,6 +21,8 @@ export type { TiledObject, TiledLayer } from './components/Tilemap'
 
 // Hooks
 export { useGame } from './hooks/useGame'
+export { useCamera } from './hooks/useCamera'
+export type { CameraControls } from './hooks/useCamera'
 export { useEntity } from './hooks/useEntity'
 export { useInput } from './hooks/useInput'
 export { useInputMap } from './hooks/useInputMap'

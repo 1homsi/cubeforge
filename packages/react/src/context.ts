@@ -1,7 +1,7 @@
 import { createContext } from 'react'
 import type { ECSWorld, EventBus, AssetManager, EntityId } from '@cubeforge/core'
 import type { InputManager } from '@cubeforge/input'
-import type { Canvas2DRenderer } from '@cubeforge/renderer'
+import type { Canvas2DRenderer, RenderSystem } from '@cubeforge/renderer'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import type { GameLoop } from '@cubeforge/core'
 
@@ -10,6 +10,8 @@ export interface EngineState {
   input: InputManager
   /** Canvas2D renderer. Undefined when a custom WebGL renderer is used via the `renderer` Game prop. */
   renderer?: Canvas2DRenderer
+  /** The active render system. Undefined when a custom renderer is used. */
+  renderSystem?: RenderSystem
   physics: PhysicsSystem
   events: EventBus
   assets: AssetManager
