@@ -33,6 +33,20 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Stamp version from release tag onto both packages
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          node -e "
+            const fs = require('fs');
+            ['packages/react/package.json', 'packages/create-cubeforge-game/package.json'].forEach(p => {
+              const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+              pkg.version = '${VERSION}';
+              fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+            });
+            console.log('Stamped version ${VERSION} onto both packages');
+          "
+
       - name: Prepare cubeforge package.json for publish
         run: |
           node -e "
