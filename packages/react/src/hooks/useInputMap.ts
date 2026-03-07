@@ -29,6 +29,11 @@ export interface BoundInputMap {
 export function useInputMap(bindings: ActionBindings): BoundInputMap {
   const input = useInput()
 
+  // Use JSON.stringify as the memo key so that: (a) inline literal objects
+  // that are referentially new each render don't cause unnecessary work, and
+  // (b) state-driven bindings (e.g. from usePersistedBindings) do re-normalize
+  // when the actual content changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const normalized = useMemo(() => {
     const out: Record<string, string[]> = {}
     for (const [action, keys] of Object.entries(bindings)) {
@@ -36,7 +41,7 @@ export function useInputMap(bindings: ActionBindings): BoundInputMap {
     }
     return out
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // bindings is a literal — stable across renders
+  }, [JSON.stringify(bindings)])
 
   return useMemo(() => ({
     isActionDown: (action: string) =>

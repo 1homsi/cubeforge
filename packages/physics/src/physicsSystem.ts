@@ -155,6 +155,15 @@ export class PhysicsSystem implements System {
         this.activeCollisionPairs.delete(key)
       }
     }
+    // Circle pairs must be pruned here unconditionally — the circle phase below
+    // is skipped entirely when allCircles.length === 0, which would leave stale
+    // pairs stuck forever with no exit event.
+    for (const [key, [a, b]] of this.activeCirclePairs) {
+      if (!world.hasEntity(a) || !world.hasEntity(b)) {
+        this.events?.emit('circleExit', { a, b })
+        this.activeCirclePairs.delete(key)
+      }
+    }
 
     // Compute platform carry deltas (how much each static moved since last step)
     const staticDelta = new Map<EntityId, { dx: number; dy: number }>()
@@ -490,6 +499,12 @@ export class PhysicsSystem implements System {
         }
       }
       this.activeCirclePairs = currentCirclePairs
+    } else if (this.activeCirclePairs.size > 0) {
+      // No circle entities remain — emit exits for all still-active pairs and clear.
+      for (const [, [a, b]] of this.activeCirclePairs) {
+        this.events?.emit('circleExit', { a, b })
+      }
+      this.activeCirclePairs = new Map()
     }
   }
 }

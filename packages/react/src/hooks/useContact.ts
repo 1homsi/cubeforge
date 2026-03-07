@@ -39,10 +39,13 @@ function useContactEvent(
         if (!tagComp?.tags.includes(opts.tag)) return
       }
 
-      // Layer filter
+      // Layer filter — check BoxCollider first, fall back to CircleCollider so
+      // that circle-circle contacts are not incorrectly dropped by the filter.
       if (opts?.layer) {
-        const col = engine.ecs.getComponent<{ type: 'BoxCollider'; layer: string }>(other, 'BoxCollider')
-        if (col?.layer !== opts.layer) return
+        const box    = engine.ecs.getComponent<{ type: 'BoxCollider';    layer: string }>(other, 'BoxCollider')
+        const circle = engine.ecs.getComponent<{ type: 'CircleCollider'; layer: string }>(other, 'CircleCollider')
+        const layer  = box?.layer ?? circle?.layer
+        if (layer !== opts.layer) return
       }
 
       handler(other)
