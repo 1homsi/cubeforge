@@ -67,7 +67,12 @@ export function Sprite({
     engine.ecs.addComponent(entityId, comp)
 
     if (src) {
-      engine.assets.loadImage(src).then((img: HTMLImageElement) => {
+      // Apply Vite base URL so assets resolve correctly when deployed to a subdirectory.
+      // Cast through unknown because the engine tsconfig doesn't include vite/client types.
+      const viteEnv = (import.meta as unknown as { env?: { BASE_URL?: string } }).env
+      const base = (viteEnv?.BASE_URL ?? '/').replace(/\/$/, '')
+      const resolvedSrc = base && src.startsWith('/') ? base + src : src
+      engine.assets.loadImage(resolvedSrc).then((img: HTMLImageElement) => {
         const c = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
         if (c) c.image = img
       }).catch(console.error)
