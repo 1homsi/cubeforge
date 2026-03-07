@@ -34,6 +34,7 @@ export { createAtlas } from './components/spriteAtlas'
 // Types
 export type { EngineState } from './context'
 export type { GameControls } from './components/Game'
+export type { DevToolsHandle } from './components/DevTools'
 export type { PlatformerControllerOptions } from './hooks/usePlatformerController'
 export type { TopDownMovementOptions } from './hooks/useTopDownMovement'
 export type { EntityId, ECSWorld, ScriptUpdateFn, Plugin, WorldSnapshot } from '@cubeforge/core'

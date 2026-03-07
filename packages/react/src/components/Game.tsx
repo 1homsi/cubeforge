@@ -5,6 +5,7 @@ import { Canvas2DRenderer, RenderSystem } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { DebugSystem } from '../systems/debugSystem'
+import { DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from './DevTools'
 
 export interface GameControls {
   pause(): void
@@ -28,6 +29,8 @@ interface GameProps {
   scale?: 'none' | 'contain' | 'pixel'
   /** Called once the engine is ready — receives pause/resume/reset controls */
   onReady?: (controls: GameControls) => void
+  /** Enable time-travel debugging overlay (frame scrubber + entity inspector). */
+  devtools?: boolean
   /** Run the simulation in deterministic mode using a seeded RNG. */
   deterministic?: boolean
   /** Seed for the deterministic RNG (default 0). Only used when deterministic=true. */
@@ -44,6 +47,7 @@ export function Game({
   height = 600,
   gravity = 980,
   debug = false,
+  devtools = false,
   scale = 'none',
   deterministic = false,
   seed = 0,
@@ -56,6 +60,7 @@ export function Game({
   const canvasRef  = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<EngineState | null>(null)
+  const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -88,6 +93,12 @@ export function Game({
     const loop = new GameLoop((dt) => {
       ecs.update(dt)
       input.flush()
+      if (devtools) {
+        const handle = devtoolsHandle.current
+        handle.buffer.push(ecs.getSnapshot())
+        if (handle.buffer.length > MAX_DEVTOOLS_FRAMES) handle.buffer.shift()
+        handle.onFrame?.()
+      }
     })
 
     const state: EngineState = { ecs, input, renderer, physics, events, assets, loop, canvas, entityIds }
@@ -171,6 +182,13 @@ export function Game({
         />
       </div>
       {engine && children}
+      {engine && devtools && (
+        <DevToolsOverlay
+          handle={devtoolsHandle.current}
+          loop={engine.loop}
+          ecs={engine.ecs}
+        />
+      )}
     </EngineContext.Provider>
   )
 }
