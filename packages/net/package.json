@@ -4,7 +4,7 @@
   "description": "Multiplayer helpers for Cubeforge",
   "main": "./src/index.ts",
   "scripts": {
-    "build": "bun build src/index.ts --outfile dist/index.js --target browser --format esm && tsc --emitDeclarationOnly --noEmit false",
+    "build": "bun build src/index.ts --outfile dist/index.js --target browser --format esm --external react && tsc --emitDeclarationOnly --noEmit false",
     "typecheck": "tsc --noEmit"
   },
   "publishConfig": { "main": "./dist/index.js", "types": "./dist/index.d.ts" },
