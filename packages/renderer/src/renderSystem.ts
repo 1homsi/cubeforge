@@ -219,12 +219,31 @@ export class RenderSystem implements System {
     )
     ctx.scale(zoom, zoom)
 
-    // Collect renderable entities, sort by zIndex
+    // Collect renderable entities.
+    // Sort by: (1) zIndex ascending, (2) texture source key within the same zIndex.
+    // Grouping same-texture sprites together minimises Canvas2D image-source state
+    // changes (draw-call batching) while preserving the correct draw order.
     const renderables = world.query('Transform', 'Sprite')
+
+    // Helper: derive a stable texture key for a sprite so we can batch by source.
+    const textureKey = (id: EntityId): string => {
+      const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
+      if (sprite.image && sprite.image.src) return sprite.image.src
+      if (sprite.src) return sprite.src
+      return `__color__:${sprite.color}`
+    }
+
     renderables.sort((a, b) => {
-      const za = world.getComponent<SpriteComponent>(a, 'Sprite')!.zIndex
-      const zb = world.getComponent<SpriteComponent>(b, 'Sprite')!.zIndex
-      return za - zb
+      const sa = world.getComponent<SpriteComponent>(a, 'Sprite')!
+      const sb = world.getComponent<SpriteComponent>(b, 'Sprite')!
+      const zDiff = sa.zIndex - sb.zIndex
+      if (zDiff !== 0) return zDiff
+      // Same zIndex — group by texture to batch draw calls
+      const ka = textureKey(a)
+      const kb = textureKey(b)
+      if (ka < kb) return -1
+      if (ka > kb) return 1
+      return 0
     })
 
     for (const id of renderables) {
