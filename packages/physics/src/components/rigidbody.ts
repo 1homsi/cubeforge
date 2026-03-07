@@ -19,6 +19,10 @@ export interface RigidBodyComponent extends Component {
   bounce: number
   /** Horizontal friction multiplier applied when on ground (0–1) */
   friction: number
+  /** Lock horizontal velocity — entity cannot move along X (useful for fixed-column runners) */
+  lockX: boolean
+  /** Lock vertical velocity — entity cannot move along Y */
+  lockY: boolean
 }
 
 export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyComponent {
@@ -33,6 +37,8 @@ export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyCo
     isNearGround: false,
     bounce: 0,
     friction: 0.85,
+    lockX: false,
+    lockY: false,
     ...opts,
   }
 }

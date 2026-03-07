@@ -3,6 +3,7 @@ import type { TransformComponent } from '@cubeforge/core'
 import type { EventBus } from '@cubeforge/core'
 import type { RigidBodyComponent } from './components/rigidbody'
 import type { BoxColliderComponent } from './components/boxCollider'
+import type { CircleColliderComponent } from './components/circleCollider'
 
 interface AABB {
   cx: number
@@ -93,6 +94,7 @@ export class PhysicsSystem implements System {
   // Active contact sets — updated each physics step.
   private activeTriggerPairs    = new Map<string, [EntityId, EntityId]>()
   private activeCollisionPairs  = new Map<string, [EntityId, EntityId]>()
+  private activeCirclePairs     = new Map<string, [EntityId, EntityId]>()
 
   // Previous-frame positions of static entities — used to compute platform carry delta.
   private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
@@ -180,12 +182,14 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // Phase 1: gravity + reset ground flags
+    // Phase 1: gravity + reset ground flags + axis locks
     for (const id of dynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       rb.onGround = false
       rb.isNearGround = false
-      rb.vy += this.gravity * rb.gravityScale * dt
+      if (!rb.lockY) rb.vy += this.gravity * rb.gravityScale * dt
+      if (rb.lockX) rb.vx = 0
+      if (rb.lockY) rb.vy = 0
     }
 
     // Phase 2 & 3: move X then resolve X
@@ -423,5 +427,69 @@ export class PhysicsSystem implements System {
       }
     }
     this.activeTriggerPairs = currentTriggerPairs
+
+    // Phase 9: CircleCollider contacts (circle-circle and circle-AABB overlap)
+    // Physics resolution is manual (scripts handle response); this phase only emits events.
+    const allCircles = world.query('Transform', 'CircleCollider')
+    if (allCircles.length > 0) {
+      const currentCirclePairs = new Map<string, [EntityId, EntityId]>()
+
+      // Circle-circle
+      for (let i = 0; i < allCircles.length; i++) {
+        for (let j = i + 1; j < allCircles.length; j++) {
+          const ia = allCircles[i]
+          const ib = allCircles[j]
+          const ca = world.getComponent<CircleColliderComponent>(ia, 'CircleCollider')!
+          const cb = world.getComponent<CircleColliderComponent>(ib, 'CircleCollider')!
+          if (!maskAllows(ca.mask, cb.layer) || !maskAllows(cb.mask, ca.layer)) continue
+          const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
+          const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
+          const dx = (ta.x + ca.offsetX) - (tb.x + cb.offsetX)
+          const dy = (ta.y + ca.offsetY) - (tb.y + cb.offsetY)
+          if (dx * dx + dy * dy < (ca.radius + cb.radius) ** 2) {
+            currentCirclePairs.set(pairKey(ia, ib), [ia, ib])
+          }
+        }
+      }
+
+      // Circle-AABB (circle triggers overlapping with BoxCollider entities, and vice versa)
+      const allBoxes = world.query('Transform', 'BoxCollider')
+      for (const cid of allCircles) {
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cx = ct.x + cc.offsetX
+        const cy = ct.y + cc.offsetY
+        for (const bid of allBoxes) {
+          if (bid === cid) continue
+          const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+          if (!maskAllows(cc.mask, bc.layer) || !maskAllows(bc.mask, cc.layer)) continue
+          const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+          const bx = bt.x + bc.offsetX
+          const by = bt.y + bc.offsetY
+          // Nearest point on box to circle center
+          const nearX = Math.max(bx - bc.width / 2, Math.min(cx, bx + bc.width / 2))
+          const nearY = Math.max(by - bc.height / 2, Math.min(cy, by + bc.height / 2))
+          const dx = cx - nearX
+          const dy = cy - nearY
+          if (dx * dx + dy * dy < cc.radius * cc.radius) {
+            currentCirclePairs.set(pairKey(cid, bid), [cid, bid])
+          }
+        }
+      }
+
+      // Emit circleEnter / circle / circleExit
+      for (const [key, [a, b]] of currentCirclePairs) {
+        if (!this.activeCirclePairs.has(key)) {
+          this.events?.emit('circleEnter', { a, b })
+        }
+        this.events?.emit('circle', { a, b })
+      }
+      for (const [key, [a, b]] of this.activeCirclePairs) {
+        if (!currentCirclePairs.has(key)) {
+          this.events?.emit('circleExit', { a, b })
+        }
+      }
+      this.activeCirclePairs = currentCirclePairs
+    }
   }
 }

@@ -94,3 +94,26 @@ export function useCollisionEnter(handler: (other: EntityId) => void, opts?: Con
 export function useCollisionExit(handler: (other: EntityId) => void, opts?: ContactOpts): void {
   useContactEvent('collisionExit', handler, opts)
 }
+
+/**
+ * Fires once when another entity's CircleCollider first overlaps this entity's CircleCollider.
+ * Also fires when a CircleCollider overlaps a BoxCollider.
+ * Must be used inside an `<Entity>`.
+ *
+ * @example
+ * function Asteroid() {
+ *   useCircleEnter((other) => onHit(other), { tag: 'bullet' })
+ *   return null
+ * }
+ */
+export function useCircleEnter(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+  useContactEvent('circleEnter', handler, opts)
+}
+
+/**
+ * Fires once when two CircleCollider entities stop overlapping.
+ * Must be used inside an `<Entity>`.
+ */
+export function useCircleExit(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+  useContactEvent('circleExit', handler, opts)
+}

@@ -10,6 +10,10 @@ interface RigidBodyProps {
   friction?: number
   vx?: number
   vy?: number
+  /** Prevent any horizontal movement — velocity.x is zeroed every frame */
+  lockX?: boolean
+  /** Prevent any vertical movement — velocity.y is zeroed every frame (disables gravity) */
+  lockY?: boolean
 }
 
 export function RigidBody({
@@ -20,12 +24,14 @@ export function RigidBody({
   friction = 0.85,
   vx = 0,
   vy = 0,
+  lockX = false,
+  lockY = false,
 }: RigidBodyProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createRigidBody({ mass, gravityScale, isStatic, bounce, friction, vx, vy }))
+    engine.ecs.addComponent(entityId, createRigidBody({ mass, gravityScale, isStatic, bounce, friction, vx, vy, lockX, lockY }))
     return () => engine.ecs.removeComponent(entityId, 'RigidBody')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

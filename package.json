@@ -2,14 +2,13 @@
   "name": "cubeforge",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "packages/create-cubeforge-game", "examples/*"],
   "scripts": {
+    "dev": "bun run --cwd examples/demo dev",
+    "dev:platformer": "bun run --cwd examples/platformer dev",
     "build": "bun run --filter './packages/*' build",
     "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun test",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",

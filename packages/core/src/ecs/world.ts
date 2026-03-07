@@ -175,6 +175,30 @@ export class ECSWorld {
     return undefined
   }
 
+  /**
+   * Returns the first entity that has a Tag component containing the given tag string.
+   * O(n) over entities with the Tag component — use sparingly in hot paths.
+   */
+  findByTag(tag: string): EntityId | undefined {
+    for (const id of this.query('Tag')) {
+      const t = this.getComponent<{ type: 'Tag'; tags: string[] }>(id, 'Tag')
+      if (t?.tags.includes(tag)) return id
+    }
+    return undefined
+  }
+
+  /**
+   * Returns all entities that have a Tag component containing the given tag string.
+   */
+  findAllByTag(tag: string): EntityId[] {
+    const result: EntityId[] = []
+    for (const id of this.query('Tag')) {
+      const t = this.getComponent<{ type: 'Tag'; tags: string[] }>(id, 'Tag')
+      if (t?.tags.includes(tag)) result.push(id)
+    }
+    return result
+  }
+
   // ── Deterministic RNG ───────────────────────────────────────────────────────
 
   /** Enable deterministic mode with a fixed seed. All internal randomness uses this RNG. */
