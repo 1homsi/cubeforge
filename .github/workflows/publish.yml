@@ -32,7 +32,7 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Stamp version from release tag onto both packages
+      - name: Stamp version and apply publishConfig
         run: |
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
@@ -41,9 +41,21 @@ jobs:
             ['packages/react/package.json', 'packages/create-cubeforge-game/package.json'].forEach(p => {
               const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
               pkg.version = '${VERSION}';
+              // Apply publishConfig fields to root (npm publish does not do this automatically)
+              if (pkg.publishConfig) {
+                Object.assign(pkg, pkg.publishConfig);
+                delete pkg.publishConfig;
+              }
+              // Remove workspace devDependencies (not needed in published package)
+              if (pkg.devDependencies) {
+                Object.keys(pkg.devDependencies).forEach(k => {
+                  if (pkg.devDependencies[k].startsWith('workspace:')) delete pkg.devDependencies[k];
+                });
+                if (!Object.keys(pkg.devDependencies).length) delete pkg.devDependencies;
+              }
               fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
             });
-            console.log('Stamped version ${VERSION}');
+            console.log('Stamped version ${VERSION} and applied publishConfig');
           "
 
       - name: Upgrade npm
