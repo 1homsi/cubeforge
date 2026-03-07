@@ -28,6 +28,10 @@ interface GameProps {
   scale?: 'none' | 'contain' | 'pixel'
   /** Called once the engine is ready — receives pause/resume/reset controls */
   onReady?: (controls: GameControls) => void
+  /** Run the simulation in deterministic mode using a seeded RNG. */
+  deterministic?: boolean
+  /** Seed for the deterministic RNG (default 0). Only used when deterministic=true. */
+  seed?: number
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
   style?: CSSProperties
@@ -41,6 +45,8 @@ export function Game({
   gravity = 980,
   debug = false,
   scale = 'none',
+  deterministic = false,
+  seed = 0,
   onReady,
   plugins,
   style,
@@ -54,6 +60,7 @@ export function Game({
   useEffect(() => {
     const canvas = canvasRef.current!
     const ecs = new ECSWorld()
+    if (deterministic) ecs.setDeterministicSeed(seed)
     const input = new InputManager()
     const renderer = new Canvas2DRenderer(canvas)
     const events = new EventBus()

@@ -117,8 +117,8 @@ export class RenderSystem implements System {
         cam.shakeTimer -= dt
         if (cam.shakeTimer < 0) cam.shakeTimer = 0
         const progress = cam.shakeDuration > 0 ? cam.shakeTimer / cam.shakeDuration : 0
-        shakeX = (Math.random() * 2 - 1) * cam.shakeIntensity * progress
-        shakeY = (Math.random() * 2 - 1) * cam.shakeIntensity * progress
+        shakeX = (world.rng() * 2 - 1) * cam.shakeIntensity * progress
+        shakeY = (world.rng() * 2 - 1) * cam.shakeIntensity * progress
       }
 
       camX = cam.x
@@ -290,8 +290,8 @@ export class RenderSystem implements System {
         const spawnCount = Math.floor(pool.timer * pool.rate)
         pool.timer -= spawnCount / pool.rate
         for (let i = 0; i < spawnCount && pool.particles.length < pool.maxParticles; i++) {
-          const angle = pool.angle + (Math.random() - 0.5) * pool.spread
-          const speed = pool.speed * (0.5 + Math.random() * 0.5)
+          const angle = pool.angle + (world.rng() - 0.5) * pool.spread
+          const speed = pool.speed * (0.5 + world.rng() * 0.5)
           pool.particles.push({
             x: t.x,
             y: t.y,

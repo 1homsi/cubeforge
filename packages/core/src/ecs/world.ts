@@ -8,6 +8,12 @@ export interface System {
   update(world: ECSWorld, dt: number): void
 }
 
+export interface WorldSnapshot {
+  nextId: number
+  rngState: number
+  entities: Array<{ id: EntityId; components: Component[] }>
+}
+
 // ── Archetype ─────────────────────────────────────────────────────────────────
 // An archetype is a unique set of component types. All entities with exactly
 // the same set of component types live in the same archetype.
@@ -21,10 +27,6 @@ interface Archetype {
   entities: EntityId[]
 }
 
-function archetypeKey(types: Iterable<string>): string {
-  return [...types].sort().join('\x00')
-}
-
 // ── ECSWorld ──────────────────────────────────────────────────────────────────
 
 export class ECSWorld {
@@ -32,6 +34,10 @@ export class ECSWorld {
 
   // Secondary index: O(1) single-entity component lookup
   private componentIndex = new Map<EntityId, Map<string, Component>>()
+
+  // Seeded RNG (LCG) for deterministic mode
+  private _rngState = 0
+  private _deterministic = false
 
   // Primary storage: archetypes keyed by sorted type string
   private archetypes = new Map<string, Archetype>()
@@ -169,6 +175,54 @@ export class ECSWorld {
     return undefined
   }
 
+  // ── Deterministic RNG ───────────────────────────────────────────────────────
+
+  /** Enable deterministic mode with a fixed seed. All internal randomness uses this RNG. */
+  setDeterministicSeed(seed: number): void {
+    this._rngState = seed >>> 0
+    this._deterministic = true
+  }
+
+  /** Returns a pseudo-random number in [0, 1). Uses seeded LCG in deterministic mode,
+   *  Math.random() otherwise. */
+  rng(): number {
+    if (!this._deterministic) return Math.random()
+    // 32-bit LCG: Numerical Recipes constants
+    this._rngState = (Math.imul(this._rngState, 1664525) + 1013904223) >>> 0
+    return this._rngState / 0x100000000
+  }
+
+  // ── Snapshot / Restore ──────────────────────────────────────────────────────
+
+  /** Capture a full serialisable snapshot of all entity/component data + RNG state. */
+  getSnapshot(): WorldSnapshot {
+    const entities: WorldSnapshot['entities'] = []
+    for (const [id, comps] of this.componentIndex) {
+      const components: Component[] = []
+      for (const comp of comps.values()) {
+        components.push(JSON.parse(JSON.stringify(comp)) as Component)
+      }
+      entities.push({ id, components })
+    }
+    return { nextId: this.nextId, rngState: this._rngState, entities }
+  }
+
+  /** Restore world state from a previously captured snapshot. */
+  restoreSnapshot(snapshot: WorldSnapshot): void {
+    this.clear()
+    this.nextId   = snapshot.nextId
+    this._rngState = snapshot.rngState
+    for (const { id, components } of snapshot.entities) {
+      const compMap = new Map<string, Component>()
+      for (const comp of components) compMap.set(comp.type, comp)
+      this.componentIndex.set(id, compMap)
+      const arch = this.getOrCreateArchetype(compMap.keys())
+      arch.entities.push(id)
+      this.entityArchetype.set(id, arch.key)
+    }
+    this.dirtyAll = true
+  }
+
   addSystem(system: System): void {
     this.systems.push(system)
   }
@@ -207,6 +261,8 @@ export class ECSWorld {
     this.dirtyTypes.clear()
     this.dirtyAll = false
     this.nextId = 0
+    this._rngState = 0
+    this._deterministic = false
   }
 
   get entityCount(): number {
