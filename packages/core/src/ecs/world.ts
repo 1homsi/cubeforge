@@ -8,85 +8,163 @@ export interface System {
   update(world: ECSWorld, dt: number): void
 }
 
+// ── Archetype ─────────────────────────────────────────────────────────────────
+// An archetype is a unique set of component types. All entities with exactly
+// the same set of component types live in the same archetype.
+
+interface Archetype {
+  // Sorted, \x00-joined component type string — also serves as the map key
+  readonly key: string
+  // The component types in this archetype (sorted)
+  readonly types: ReadonlySet<string>
+  // Entities in this archetype (insertion order)
+  entities: EntityId[]
+}
+
+function archetypeKey(types: Iterable<string>): string {
+  return [...types].sort().join('\x00')
+}
+
+// ── ECSWorld ──────────────────────────────────────────────────────────────────
+
 export class ECSWorld {
   private nextId = 0
-  private entities = new Set<EntityId>()
-  private components = new Map<EntityId, Map<string, Component>>()
+
+  // Secondary index: O(1) single-entity component lookup
+  private componentIndex = new Map<EntityId, Map<string, Component>>()
+
+  // Primary storage: archetypes keyed by sorted type string
+  private archetypes = new Map<string, Archetype>()
+
+  // Which archetype each entity lives in
+  private entityArchetype = new Map<EntityId, string>()
+
   private systems: System[] = []
+
+  // Query cache: query key → matching EntityId[]
+  // Invalidated selectively when archetypes are added or entities move.
   private queryCache = new Map<string, EntityId[]>()
-  // Component types modified since last update() — drives selective cache invalidation
+
+  // Component types touched since last update() — used for selective cache invalidation
   private dirtyTypes = new Set<string>()
-  // Set when entity count changes (createEntity/destroyEntity) — forces full cache clear
   private dirtyAll = false
+
+  // ── Internal helpers ────────────────────────────────────────────────────────
+
+  private getOrCreateArchetype(types: Iterable<string>): Archetype {
+    const arr = [...types].sort()
+    const key = arr.join('\x00')
+    let arch = this.archetypes.get(key)
+    if (!arch) {
+      arch = { key, types: new Set(arr), entities: [] }
+      this.archetypes.set(key, arch)
+    }
+    return arch
+  }
+
+  private moveToArchetype(id: EntityId, newArch: Archetype): void {
+    // Remove from current archetype
+    const oldKey = this.entityArchetype.get(id)
+    if (oldKey !== undefined) {
+      const oldArch = this.archetypes.get(oldKey)
+      if (oldArch) {
+        const idx = oldArch.entities.indexOf(id)
+        if (idx !== -1) oldArch.entities.splice(idx, 1)
+      }
+    }
+    newArch.entities.push(id)
+    this.entityArchetype.set(id, newArch.key)
+  }
+
+  // ── Public API ──────────────────────────────────────────────────────────────
 
   createEntity(): EntityId {
     const id = this.nextId++
-    this.entities.add(id)
-    this.components.set(id, new Map())
+    this.componentIndex.set(id, new Map())
+    // New entity starts in the empty archetype
+    const emptyArch = this.getOrCreateArchetype([])
+    emptyArch.entities.push(id)
+    this.entityArchetype.set(id, emptyArch.key)
     this.dirtyAll = true
     return id
   }
 
   destroyEntity(id: EntityId): void {
-    const comps = this.components.get(id)
+    const comps = this.componentIndex.get(id)
     if (comps) {
-      for (const type of comps.keys()) {
-        this.dirtyTypes.add(type)
+      for (const type of comps.keys()) this.dirtyTypes.add(type)
+    }
+    // Remove from archetype
+    const archKey = this.entityArchetype.get(id)
+    if (archKey !== undefined) {
+      const arch = this.archetypes.get(archKey)
+      if (arch) {
+        const idx = arch.entities.indexOf(id)
+        if (idx !== -1) arch.entities.splice(idx, 1)
       }
     }
-    this.entities.delete(id)
-    this.components.delete(id)
+    this.componentIndex.delete(id)
+    this.entityArchetype.delete(id)
     this.dirtyAll = true
   }
 
   hasEntity(id: EntityId): boolean {
-    return this.entities.has(id)
+    return this.componentIndex.has(id)
   }
 
   addComponent<T extends Component>(id: EntityId, component: T): void {
-    this.components.get(id)?.set(component.type, component)
+    const comps = this.componentIndex.get(id)
+    if (!comps) return
+    comps.set(component.type, component)
     this.dirtyTypes.add(component.type)
+
+    // Move entity to new archetype (current types + new type)
+    const newArch = this.getOrCreateArchetype(comps.keys())
+    this.moveToArchetype(id, newArch)
   }
 
   removeComponent(id: EntityId, type: string): void {
-    this.components.get(id)?.delete(type)
+    const comps = this.componentIndex.get(id)
+    if (!comps) return
+    comps.delete(type)
     this.dirtyTypes.add(type)
+
+    // Move entity to new archetype (current types − removed type)
+    const newArch = this.getOrCreateArchetype(comps.keys())
+    this.moveToArchetype(id, newArch)
   }
 
   getComponent<T extends Component>(id: EntityId, type: string): T | undefined {
-    return this.components.get(id)?.get(type) as T | undefined
+    return this.componentIndex.get(id)?.get(type) as T | undefined
   }
 
   hasComponent(id: EntityId, type: string): boolean {
-    return this.components.get(id)?.has(type) ?? false
+    return this.componentIndex.get(id)?.has(type) ?? false
   }
 
-  // Returns all entities that have ALL of the given component types
+  // Returns all entities that have ALL of the requested component types.
+  // Uses archetype superset matching — no per-entity scan.
   query(...types: string[]): EntityId[] {
     const key = types.slice().sort().join('\x00')
     const cached = this.queryCache.get(key)
     if (cached) return cached
+
     const result: EntityId[] = []
-    for (const id of this.entities) {
-      const comps = this.components.get(id)!
-      let match = true
-      for (const t of types) {
-        if (!comps.has(t)) { match = false; break }
+    for (const arch of this.archetypes.values()) {
+      // Skip archetypes that don't have all requested types
+      if (types.every(t => arch.types.has(t))) {
+        for (const id of arch.entities) result.push(id)
       }
-      if (match) result.push(id)
     }
     this.queryCache.set(key, result)
     return result
   }
 
   queryOne(...types: string[]): EntityId | undefined {
-    for (const id of this.entities) {
-      const comps = this.components.get(id)!
-      let match = true
-      for (const t of types) {
-        if (!comps.has(t)) { match = false; break }
+    for (const arch of this.archetypes.values()) {
+      if (types.every(t => arch.types.has(t))) {
+        if (arch.entities.length > 0) return arch.entities[0]
       }
-      if (match) return id
     }
     return undefined
   }
@@ -101,17 +179,12 @@ export class ECSWorld {
   }
 
   update(dt: number): void {
-    // Selective cache invalidation: only invalidate entries whose component types changed.
-    // On frames where nothing changed (static scenes), the cache is never cleared.
+    // Selective cache invalidation — same strategy as before
     if (this.dirtyAll) {
       this.queryCache.clear()
     } else if (this.dirtyTypes.size > 0) {
       for (const key of this.queryCache.keys()) {
-        // Empty key = query() with no types — always invalidate when any type is dirty
-        if (key === '') {
-          this.queryCache.delete(key)
-          continue
-        }
+        if (key === '') { this.queryCache.delete(key); continue }
         const keyTypes = key.split('\x00')
         if (keyTypes.some(t => this.dirtyTypes.has(t))) {
           this.queryCache.delete(key)
@@ -127,8 +200,9 @@ export class ECSWorld {
   }
 
   clear(): void {
-    this.entities.clear()
-    this.components.clear()
+    this.componentIndex.clear()
+    this.archetypes.clear()
+    this.entityArchetype.clear()
     this.queryCache.clear()
     this.dirtyTypes.clear()
     this.dirtyAll = false
@@ -136,6 +210,6 @@ export class ECSWorld {
   }
 
   get entityCount(): number {
-    return this.entities.size
+    return this.componentIndex.size
   }
 }
