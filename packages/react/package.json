@@ -5,7 +5,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "bun build src/index.ts --outfile dist/index.js --target browser --format esm --external react --external react-dom --external react/jsx-runtime --define 'process.env.NODE_ENV=\"production\"' && tsc --emitDeclarationOnly --noEmit false"
+    "build": "NODE_ENV=production bun build src/index.ts --outfile dist/index.js --target browser --format esm --external react --external react-dom --external react/jsx-runtime && tsc --emitDeclarationOnly --noEmit false"
   },
   "publishConfig": {
     "main": "./dist/index.js",
