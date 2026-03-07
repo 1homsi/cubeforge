@@ -46,8 +46,11 @@ jobs:
             console.log('Stamped version ${VERSION}');
           "
 
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       - name: Publish cubeforge
-        run: cd packages/react && pnpm publish --access public --no-git-checks
+        run: cd packages/react && npm publish --provenance --access public --no-git-checks
 
       - name: Publish create-cubeforge-game
-        run: cd packages/create-cubeforge-game && pnpm publish --access public --no-git-checks
+        run: cd packages/create-cubeforge-game && npm publish --provenance --access public --no-git-checks
