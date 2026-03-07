@@ -7,6 +7,10 @@ Defines the camera view. Follows an entity, applies zoom and smoothing, constrai
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `followEntity` | string | — | String ID of the entity to follow. Must match an `<Entity id="...">` |
+| `x` | number | `0` | Initial camera X position in world space. Ignored once `followEntity` takes over. |
+| `y` | number | `0` | Initial camera Y position in world space. Ignored once `followEntity` takes over. |
+| `followOffsetX` | number | `0` | World-space X offset applied on top of the follow target (look-ahead, horizontal bias). |
+| `followOffsetY` | number | `0` | World-space Y offset applied on top of the follow target (vertical bias, e.g. look up/down). |
 | `zoom` | number | `1` | Camera zoom level. `2` makes everything appear twice as large. |
 | `smoothing` | number | `0` | Lerp factor per frame (0 = instant snap, higher values = smoother follow). Values around 0.85–0.95 work well. |
 | `background` | string | `'#1a1a2e'` | Canvas clear colour drawn each frame before rendering |
@@ -63,8 +67,30 @@ The dead zone is a rectangle centred on the current camera position. The camera 
 />
 ```
 
+## Follow offset
+
+Use `followOffsetX` / `followOffsetY` to bias the camera away from the entity centre — useful for look-ahead (shift the view forward in the direction of travel) or vertical bias (keep the player in the lower third of the screen):
+
+```tsx
+// Show more of the level ahead of the player (shift right)
+<Camera2D followEntity="player" followOffsetX={120} />
+
+// Keep player in lower portion of screen
+<Camera2D followEntity="player" followOffsetY={-80} />
+```
+
+## Static position
+
+Omit `followEntity` and set `x` / `y` to position the camera at a fixed world coordinate:
+
+```tsx
+// Centre the view on world position (400, 300)
+<Camera2D x={400} y={300} />
+```
+
 ## Notes
 
 - `<Camera2D>` creates its own internal entity in the ECS world. You do not wrap it in `<Entity>`.
-- Prop changes (smoothing, zoom, bounds, background, followEntity) are synced every render.
+- Prop changes (smoothing, zoom, bounds, background, followEntity, followOffsetX, followOffsetY) are synced every render.
 - With `<Game debug>`, the debug overlay renders in screen space (on top of the camera transform).
+- Use `useCamera()` to control shake, zoom, and follow offset programmatically at runtime.

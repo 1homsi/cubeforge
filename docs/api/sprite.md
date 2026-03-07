@@ -23,6 +23,8 @@ Renders the entity as a coloured rectangle, a plain image, or a frame from a spr
 | `flipX` | boolean | `false` | Mirror the sprite horizontally |
 | `anchorX` | number | `0.5` | Horizontal anchor (0 = left edge, 0.5 = centre, 1 = right edge) |
 | `anchorY` | number | `0.5` | Vertical anchor (0 = top edge, 0.5 = centre, 1 = bottom edge) |
+| `tileX` | boolean | `false` | Tile the image horizontally across the sprite width instead of stretching |
+| `tileY` | boolean | `false` | Tile the image vertically across the sprite height instead of stretching |
 
 ## Examples
 
@@ -85,4 +87,4 @@ const atlas = createAtlas(['idle', 'run-1', 'run-2', 'run-3', 'jump'], 5)
 
 ## Mutable props
 
-`color`, `visible`, `flipX`, `zIndex`, and `frameIndex` (or `frame`) are synced every render — you can drive them from React state. `width`, `height`, `src`, `anchorX`, `anchorY`, `offsetX`, and `offsetY` are set on mount and not updated dynamically.
+`color`, `visible`, `flipX`, `zIndex`, and `frameIndex` (or `frame`) are synced every render — you can drive them from React state. `width`, `height`, `src`, `anchorX`, `anchorY`, `offsetX`, `offsetY`, `tileX`, and `tileY` are set on mount and not updated dynamically.

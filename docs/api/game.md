@@ -15,6 +15,7 @@ Root component. Creates the canvas element, initialises the ECS world, physics s
 | `seed` | number | `0` | Seed for the deterministic RNG. Only used when `deterministic` is `true` |
 | `scale` | `'none' \| 'contain' \| 'pixel'` | `'none'` | Canvas scaling strategy |
 | `onReady` | `(controls: GameControls) => void` | — | Called once when the engine is ready |
+| `asyncAssets` | boolean | `false` | When `true`, the game loop starts immediately and sprites swap from colour → image as they load in the background. When `false` (default), the loop waits until all initial sprites have loaded so the first frame is fully rendered. |
 | `plugins` | `Plugin[]` | — | Custom plugins to register after core systems |
 | `renderer` | `new (canvas, entityIds) => System` | — | Custom render system constructor. Defaults to the Canvas2D renderer. See [@cubeforge/webgl-renderer](/guide/webgl-renderer). |
 | `style` | CSSProperties | — | CSS styles applied to the canvas element |
