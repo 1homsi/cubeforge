@@ -73,7 +73,12 @@ export default defineConfig({
             { text: 'useGame', link: '/api/use-game' },
             { text: 'useEntity', link: '/api/use-entity' },
             { text: 'useInput', link: '/api/use-input' },
+            { text: 'useInputMap', link: '/api/use-input-map' },
+            { text: 'useCamera', link: '/api/use-camera' },
             { text: 'useEvent', link: '/api/use-event' },
+            { text: 'useTriggerEnter / useTriggerExit', link: '/api/use-trigger' },
+            { text: 'useCollisionEnter / useCollisionExit', link: '/api/use-collision' },
+            { text: 'useSnapshot', link: '/api/use-snapshot' },
           ],
         },
         {
@@ -81,6 +86,9 @@ export default defineConfig({
           items: [
             { text: 'tween', link: '/api/tween' },
             { text: 'createAtlas', link: '/api/create-atlas' },
+            { text: 'createInputMap', link: '/api/create-input-map' },
+            { text: 'findByTag', link: '/api/find-by-tag' },
+            { text: 'overlapBox / raycast', link: '/api/spatial-queries' },
             { text: 'definePlugin', link: '/api/define-plugin' },
           ],
         },

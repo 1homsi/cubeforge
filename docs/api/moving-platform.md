@@ -41,7 +41,9 @@ y = y1 + (y2 - y1) * alpha
 
 ## Player interaction
 
-The platform is a static `RigidBody` with a `BoxCollider`, so the player lands on it and is carried by it via normal physics resolution. No special carrier logic is required.
+The platform is a static `RigidBody` with a `BoxCollider`. The physics system tracks the platform's position delta each fixed step. When a dynamic entity lands on the platform, its position is shifted by the platform's movement that step — horizontal movement is always carried; upward vertical movement is also applied, while downward movement lets gravity keep the entity grounded.
+
+No special code is needed in your player script for carry to work.
 
 ## Notes
 

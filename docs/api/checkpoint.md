@@ -1,6 +1,6 @@
 # Checkpoint
 
-A trigger zone that fires `onActivate` once when a player-tagged entity enters it, then destroys itself. Internally it combines `Entity`, `Transform`, `Sprite`, `BoxCollider`, and `Script`.
+A physics-backed trigger zone that fires `onActivate` once when a player-tagged entity enters its `BoxCollider`. Internally uses `useTriggerEnter` — no polling or distance checks.
 
 ## Props
 
@@ -35,10 +35,10 @@ function Level() {
 
 ## Behaviour
 
-The checkpoint detects proximity to entities tagged with `'player'`. When the player's center comes within range, `onActivate` is called and the checkpoint entity is destroyed — it only fires once.
+The checkpoint owns a `BoxCollider isTrigger` that participates in the physics trigger system. When any entity tagged `'player'` enters the zone, `onActivate` fires exactly once. The visual remains in the scene — conditional rendering in the parent controls whether the checkpoint is shown.
 
 ## Notes
 
-- The checkpoint renders as a visible coloured sprite. If you want an invisible trigger, set `color="transparent"` or build your own trigger using `<BoxCollider isTrigger>` and `useEvent`.
-- Detecting a player requires the player entity to have the `'player'` tag: `<Entity tags={['player']}>`.
-- After activation the entity self-destructs. Remove it from your game state if you track checkpoints in an array.
+- The checkpoint renders as a visible coloured sprite. For an invisible trigger, set `color="transparent"` or build one with `<BoxCollider isTrigger>` and `useTriggerEnter`.
+- Detection requires the player entity to have the `'player'` tag: `<Entity tags={['player']}>`.
+- The component does not self-destruct — it fires `onActivate` once per mount and stays in the scene. Remove it from your render tree via state to hide it.

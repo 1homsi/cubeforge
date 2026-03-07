@@ -10,8 +10,10 @@ Adds an axis-aligned bounding box (AABB) collider to an entity. The physics syst
 | `height` | number | — | **Required.** Collider height in pixels |
 | `offsetX` | number | `0` | Horizontal offset from the entity's transform position |
 | `offsetY` | number | `0` | Vertical offset from the entity's transform position |
-| `isTrigger` | boolean | `false` | If true, fires a trigger event on overlap but does not block movement |
-| `layer` | string | `'default'` | Collision layer name |
+| `isTrigger` | boolean | `false` | If true, fires trigger events on overlap but does not block movement |
+| `layer` | string | `'default'` | Collision layer this collider belongs to |
+| `mask` | `string \| string[]` | `'*'` | Which layers this collider interacts with. `'*'` = all. Both colliders must allow the other's layer (AND semantics). |
+| `oneWay` | boolean | `false` | One-way platform: only blocks entities falling onto the top surface. Entities approaching from below pass through freely. |
 | `slope` | number | `0` | Slope angle in degrees. `0` = flat box. Positive = surface rises left→right. The sloped top face is used for collision; entities riding it are pushed up along the slope. |
 
 ## Example
@@ -34,15 +36,37 @@ Adds an axis-aligned bounding box (AABB) collider to an entity. The physics syst
 
 ## Trigger events
 
-When a non-trigger collider overlaps a trigger collider, the engine emits a `trigger` event on the EventBus:
+The recommended way to respond to trigger overlaps is with the contact hooks:
 
 ```tsx
-useEvent<{ a: number; b: number }>('trigger', ({ a, b }) => {
-  console.log('entities', a, 'and', b, 'overlapped')
-})
+function CoinPickup() {
+  useTriggerEnter((other) => {
+    collectCoin()
+  }, { tag: 'player' }) // only fire if the other entity has the 'player' tag
+  return null
+}
 ```
 
-`a` and `b` are entity IDs. The order is not guaranteed.
+The physics system also emits raw EventBus events (`triggerEnter`, `trigger`, `triggerExit`, `collisionEnter`, `collision`, `collisionExit`) with payload `{ a: EntityId, b: EntityId }` for lower-level access via `useEvent`.
+
+## Layer / mask filtering
+
+```tsx
+// Player can only interact with 'solid' and 'enemy' layers
+<BoxCollider width={28} height={40} layer="player" mask={['solid', 'enemy']} />
+
+// Static wall — default mask '*' so it interacts with everything
+<BoxCollider width={20} height={200} layer="solid" />
+```
+
+Both sides of a collision must allow each other's layer. If either mask excludes the other, the pair is ignored entirely (no physics resolution AND no trigger events).
+
+## One-way platforms
+
+```tsx
+// Jump through from below, land from above
+<BoxCollider width={120} height={12} oneWay />
+```
 
 ## Debug visualisation
 
