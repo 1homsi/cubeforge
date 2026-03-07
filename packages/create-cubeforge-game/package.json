@@ -6,7 +6,7 @@
     "create-cubeforge-game": "./bin/index.js"
   },
   "scripts": {
-    "build": "bun build ./bin/index.ts --outfile bin/index.js --target node"
+    "build": "esbuild bin/index.ts --bundle --platform=node --target=node18 --outfile=bin/index.js \"--banner:js=#!/usr/bin/env node\""
   },
   "publishConfig": {
     "bin": {

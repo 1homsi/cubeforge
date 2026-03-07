@@ -2,22 +2,22 @@
   "name": "cubeforge",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["packages/*", "packages/create-cubeforge-game", "examples/*"],
   "scripts": {
-    "dev": "bun run --cwd examples/demo dev",
-    "dev:platformer": "bun run --cwd examples/platformer dev",
-    "build": "bun run --filter './packages/*' build",
-    "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun test",
+    "dev": "pnpm --filter demo dev",
+    "dev:platformer": "pnpm --filter platformer-example dev",
+    "build": "pnpm --filter './packages/*' run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test --if-present",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
-    "@types/bun": "latest",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.21.0",
+    "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitepress": "^1.6.4"
   }

@@ -1,0 +1,4 @@
+packages:
+  - 'packages/*'
+  - 'packages/create-cubeforge-game'
+  - 'examples/*'

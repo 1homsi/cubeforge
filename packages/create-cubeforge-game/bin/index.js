@@ -1,9 +1,34 @@
 #!/usr/bin/env node
+#!/usr/bin/env node
+"use strict";
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 
 // bin/index.ts
-import * as fs from "fs";
-import * as path from "path";
-import * as readline from "readline";
+var fs = __toESM(require("fs"));
+var path = __toESM(require("path"));
+var readline = __toESM(require("readline"));
+var import_meta = {};
 function prompt(question) {
   return new Promise((resolve2) => {
     const rl = readline.createInterface({
@@ -40,8 +65,7 @@ async function main() {
     projectName = await prompt("Project name: ");
   }
   if (!projectName) {
-    process.stderr.write(`Error: project name is required.
-`);
+    process.stderr.write("Error: project name is required.\n");
     process.exit(1);
   }
   const targetDir = path.resolve(process.cwd(), projectName);
@@ -50,7 +74,7 @@ async function main() {
 `);
     process.exit(1);
   }
-  const templatesDir = path.join(import.meta.dirname, "..", "templates", "default");
+  const templatesDir = path.join(import_meta.dirname, "..", "templates", "default");
   process.stdout.write(`
 Creating new Cubeforge game in ${targetDir}...
 `);
@@ -58,16 +82,11 @@ Creating new Cubeforge game in ${targetDir}...
   process.stdout.write(`
 Done! Your project "${projectName}" is ready.
 `);
-  process.stdout.write(`
-Next steps:
-`);
+  process.stdout.write("\nNext steps:\n");
   process.stdout.write(`  cd ${projectName}
 `);
-  process.stdout.write(`  npm install   # or bun install
-`);
-  process.stdout.write(`  npm run dev   # or bun dev
-
-`);
+  process.stdout.write("  npm install   # or bun install\n");
+  process.stdout.write("  npm run dev   # or bun dev\n\n");
 }
 main().catch((err) => {
   process.stderr.write(`Unexpected error: ${String(err)}
