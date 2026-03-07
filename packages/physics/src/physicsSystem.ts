@@ -94,6 +94,9 @@ export class PhysicsSystem implements System {
   private activeTriggerPairs    = new Map<string, [EntityId, EntityId]>()
   private activeCollisionPairs  = new Map<string, [EntityId, EntityId]>()
 
+  // Previous-frame positions of static entities — used to compute platform carry delta.
+  private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
+
   constructor(
     private gravity: number,
     private readonly events?: EventBus,
@@ -149,6 +152,19 @@ export class PhysicsSystem implements System {
         this.events?.emit('collisionExit', { a, b })
         this.activeCollisionPairs.delete(key)
       }
+    }
+
+    // Compute platform carry deltas (how much each static moved since last step)
+    const staticDelta = new Map<EntityId, { dx: number; dy: number }>()
+    for (const sid of statics) {
+      const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+      const prev = this.staticPrevPos.get(sid)
+      if (prev) staticDelta.set(sid, { dx: st.x - prev.x, dy: st.y - prev.y })
+      this.staticPrevPos.set(sid, { x: st.x, y: st.y })
+    }
+    // Clean up entries for entities that no longer exist
+    for (const sid of this.staticPrevPos.keys()) {
+      if (!world.hasEntity(sid)) this.staticPrevPos.delete(sid)
     }
 
     // Build spatial grid for static entities
@@ -264,6 +280,13 @@ export class PhysicsSystem implements System {
               if (ov.y < 0) {
                 rb.onGround = true
                 if (rb.friction < 1) rb.vx *= rb.friction
+                // Platform carry: inherit the platform's horizontal (and vertical) movement
+                const delta = staticDelta.get(sid)
+                if (delta) {
+                  transform.x += delta.dx
+                  // Carry upward platform movement, but don't add downward (gravity handles that)
+                  if (delta.dy < 0) transform.y += delta.dy
+                }
               }
               rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
             }

@@ -205,6 +205,41 @@ describe('PhysicsSystem', () => {
     })
   })
 
+  describe('moving platform carry', () => {
+    it('dynamic entity on a moving platform inherits its horizontal movement', () => {
+      const { world } = createTestWorld(980)
+
+      // Static platform that we'll move manually each step
+      const platId = world.createEntity()
+      world.addComponent(platId, createTransform(0, 200))
+      world.addComponent(platId, createRigidBody({ isStatic: true }))
+      world.addComponent(platId, createBoxCollider(400, 20))
+
+      // Dynamic entity resting on the platform
+      const id = addDynamic(world, 0, 100, 20, 20)
+
+      // Let entity fall and land on the platform
+      runSteps(world, 120)
+
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      expect(rb.onGround).toBe(true)
+
+      const tBefore = world.getComponent<TransformComponent>(id, 'Transform')!
+      const xBefore = tBefore.x
+
+      // Move the platform right by 5px per step for 10 steps
+      for (let i = 0; i < 10; i++) {
+        const pt = world.getComponent<TransformComponent>(platId, 'Transform')!
+        pt.x += 5
+        world.update(FIXED_DT)
+      }
+
+      const tAfter = world.getComponent<TransformComponent>(id, 'Transform')!
+      // Entity should have moved right with the platform (carry applied)
+      expect(tAfter.x).toBeGreaterThan(xBefore)
+    })
+  })
+
   describe('one-way platforms', () => {
     it('blocks dynamic entity falling onto the top of a one-way platform', () => {
       const { world } = createTestWorld(980)
