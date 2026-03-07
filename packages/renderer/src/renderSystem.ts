@@ -139,7 +139,16 @@ export class RenderSystem implements System {
         anim.timer -= frameDuration
         anim.currentIndex++
         if (anim.currentIndex >= anim.frames.length) {
-          anim.currentIndex = anim.loop ? 0 : anim.frames.length - 1
+          if (anim.loop) {
+            anim.currentIndex = 0
+          } else {
+            anim.currentIndex = anim.frames.length - 1
+            anim.playing = false
+            if (anim.onComplete && !anim._completed) {
+              anim._completed = true
+              anim.onComplete()
+            }
+          }
         }
       }
       sprite.frameIndex = anim.frames[anim.currentIndex]
