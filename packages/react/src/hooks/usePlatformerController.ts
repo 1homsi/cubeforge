@@ -17,16 +17,41 @@ export interface PlatformerControllerOptions {
   coyoteTime?: number
   /** Seconds to buffer a jump input before landing (default 0.08) */
   jumpBuffer?: number
+  /**
+   * Minimum seconds between jumps — prevents multi-jump spam when holding the
+   * jump key with double-jump enabled (default 0.18)
+   */
+  jumpCooldown?: number
+  /**
+   * Override the default key bindings. Each action accepts a single key code
+   * or an array of key codes.
+   *
+   * Defaults:
+   *   left:  ['ArrowLeft', 'KeyA', 'a']
+   *   right: ['ArrowRight', 'KeyD', 'd']
+   *   jump:  ['Space', 'ArrowUp', 'KeyW', 'w']
+   */
+  bindings?: {
+    left?:  string | string[]
+    right?: string | string[]
+    jump?:  string | string[]
+  }
 }
 
 interface ControllerState {
-  coyoteTimer: number
-  jumpBuffer: number
-  jumpsLeft: number
+  coyoteTimer:  number
+  jumpBuffer:   number
+  jumpCooldown: number
+  jumpsLeft:    number
+}
+
+function normalizeKeys(val: string | string[] | undefined, defaults: string[]): string[] {
+  if (!val) return defaults
+  return Array.isArray(val) ? val : [val]
 }
 
 /**
- * Attaches platformer movement (WASD/Arrows + Space/Up to jump) to an entity.
+ * Attaches platformer movement (customisable keys + Space/Up to jump) to an entity.
  * The entity must already have a RigidBody component.
  *
  * @example
@@ -47,15 +72,26 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
   const engine = useContext(EngineContext)!
 
   const {
-    speed      = 200,
-    jumpForce  = -500,
-    maxJumps   = 1,
-    coyoteTime = 0.08,
-    jumpBuffer = 0.08,
+    speed        = 200,
+    jumpForce    = -500,
+    maxJumps     = 1,
+    coyoteTime   = 0.08,
+    jumpBuffer   = 0.08,
+    jumpCooldown = 0.18,
+    bindings,
   } = opts
 
+  const leftKeys  = normalizeKeys(bindings?.left,  ['ArrowLeft',  'KeyA', 'a'])
+  const rightKeys = normalizeKeys(bindings?.right, ['ArrowRight', 'KeyD', 'd'])
+  const jumpKeys  = normalizeKeys(bindings?.jump,  ['Space', 'ArrowUp', 'KeyW', 'w'])
+
   useEffect(() => {
-    const state: ControllerState = { coyoteTimer: 0, jumpBuffer: 0, jumpsLeft: maxJumps }
+    const state: ControllerState = {
+      coyoteTimer:  0,
+      jumpBuffer:   0,
+      jumpCooldown: 0,
+      jumpsLeft:    maxJumps,
+    }
 
     const updateFn = (id: EntityId, world: ECSWorld, input: InputManager, dt: number) => {
       if (!world.hasEntity(id)) return
@@ -66,16 +102,17 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
       if (rb.onGround) { state.coyoteTimer = coyoteTime; state.jumpsLeft = maxJumps }
       else              state.coyoteTimer = Math.max(0, state.coyoteTimer - dt)
 
-      // Jump buffer
-      const jumpPressed =
-        input.isPressed('Space') || input.isPressed('ArrowUp') ||
-        input.isPressed('KeyW')  || input.isPressed('w')
-      if (jumpPressed) state.jumpBuffer = jumpBuffer
-      else             state.jumpBuffer = Math.max(0, state.jumpBuffer - dt)
+      // Jump cooldown
+      state.jumpCooldown = Math.max(0, state.jumpCooldown - dt)
+
+      // Jump buffer — only queue if not in cooldown
+      const jumpPressed = jumpKeys.some(k => input.isPressed(k))
+      if (jumpPressed && state.jumpCooldown === 0) state.jumpBuffer = jumpBuffer
+      else if (!jumpKeys.some(k => input.isDown(k))) state.jumpBuffer = Math.max(0, state.jumpBuffer - dt)
 
       // Horizontal movement
-      const left  = input.isDown('ArrowLeft')  || input.isDown('KeyA') || input.isDown('a')
-      const right = input.isDown('ArrowRight') || input.isDown('KeyD') || input.isDown('d')
+      const left  = leftKeys.some(k => input.isDown(k))
+      const right = rightKeys.some(k => input.isDown(k))
       if (left)       rb.vx = -speed
       else if (right) rb.vx =  speed
       else            rb.vx *= rb.onGround ? 0.6 : 0.92
@@ -90,16 +127,15 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
       // Jump
       const canJump = state.coyoteTimer > 0 || state.jumpsLeft > 0
       if (state.jumpBuffer > 0 && canJump) {
-        rb.vy              = jumpForce
-        state.jumpsLeft    = Math.max(0, state.jumpsLeft - 1)
-        state.coyoteTimer  = 0
-        state.jumpBuffer   = 0
+        rb.vy             = jumpForce
+        state.jumpsLeft   = Math.max(0, state.jumpsLeft - 1)
+        state.coyoteTimer = 0
+        state.jumpBuffer  = 0
+        state.jumpCooldown = jumpCooldown
       }
 
       // Variable jump height — release early to cut arc
-      const jumpHeld =
-        input.isDown('Space') || input.isDown('ArrowUp') ||
-        input.isDown('KeyW')  || input.isDown('w')
+      const jumpHeld = jumpKeys.some(k => input.isDown(k))
       if (!jumpHeld && rb.vy < -120) rb.vy += 800 * dt
     }
 

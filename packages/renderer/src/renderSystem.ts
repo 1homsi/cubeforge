@@ -6,6 +6,7 @@ import type { AnimationStateComponent } from './components/animationState'
 import type { SquashStretchComponent } from './components/squashStretch'
 import type { ParticlePoolComponent } from './components/particle'
 import type { ParallaxLayerComponent } from './components/parallaxLayer'
+import type { TextComponent } from './components/text'
 import { Canvas2DRenderer } from './canvas2d'
 
 const imageCache = new Map<string, HTMLImageElement>()
@@ -289,6 +290,14 @@ export class RenderSystem implements System {
         } else if (sprite.frame) {
           const { sx, sy, sw, sh } = sprite.frame
           ctx.drawImage(sprite.image, sx, sy, sw, sh, drawX, drawY, sprite.width, sprite.height)
+        } else if (sprite.tileX || sprite.tileY) {
+          const repeat = sprite.tileX && sprite.tileY ? 'repeat' : sprite.tileX ? 'repeat-x' : 'repeat-y'
+          const pat = ctx.createPattern(sprite.image, repeat)
+          if (pat) {
+            pat.setTransform(new DOMMatrix().translate(drawX, drawY))
+            ctx.fillStyle = pat
+            ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
+          }
         } else {
           ctx.drawImage(sprite.image, drawX, drawY, sprite.width, sprite.height)
         }
@@ -297,6 +306,28 @@ export class RenderSystem implements System {
         ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
       }
 
+      ctx.restore()
+    }
+
+    // --- Text rendering pass (world space) ---
+    const textEntities = world.query('Transform', 'Text')
+    textEntities.sort((a, b) => {
+      const ta = world.getComponent<TextComponent>(a, 'Text')!
+      const tb = world.getComponent<TextComponent>(b, 'Text')!
+      return ta.zIndex - tb.zIndex
+    })
+    for (const id of textEntities) {
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const text = world.getComponent<TextComponent>(id, 'Text')!
+      if (!text.visible) continue
+      ctx.save()
+      ctx.translate(transform.x + text.offsetX, transform.y + text.offsetY)
+      ctx.rotate(transform.rotation)
+      ctx.font = `${text.fontSize}px ${text.fontFamily}`
+      ctx.fillStyle = text.color
+      ctx.textAlign = text.align
+      ctx.textBaseline = text.baseline
+      ctx.fillText(text.text, 0, 0, text.maxWidth as number)
       ctx.restore()
     }
 

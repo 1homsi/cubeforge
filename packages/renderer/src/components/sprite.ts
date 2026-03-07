@@ -34,6 +34,10 @@ export interface SpriteComponent extends Component {
   frameColumns?: number
   /** Legacy sprite sheet: source region on the sheet (still supported) */
   frame?: { sx: number; sy: number; sw: number; sh: number }
+  /** Tile the image horizontally instead of stretching it */
+  tileX?: boolean
+  /** Tile the image vertically instead of stretching it */
+  tileY?: boolean
 }
 
 export function createSprite(opts: Partial<SpriteComponent> & { width: number; height: number }): SpriteComponent {
