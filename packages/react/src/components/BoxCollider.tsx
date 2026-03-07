@@ -9,6 +9,8 @@ interface BoxColliderProps {
   offsetY?: number
   isTrigger?: boolean
   layer?: string
+  /** Which layers this collider interacts with. '*' = all (default). */
+  mask?: string | string[]
 }
 
 export function BoxCollider({
@@ -18,12 +20,13 @@ export function BoxCollider({
   offsetY = 0,
   isTrigger = false,
   layer = 'default',
+  mask = '*',
 }: BoxColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer }))
+    engine.ecs.addComponent(entityId, createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask }))
 
     // Defer check so sibling components have had a chance to add their components
     const checkId = setTimeout(() => {

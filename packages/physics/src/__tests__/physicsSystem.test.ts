@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { ECSWorld } from '@cubeforge/core'
+import { ECSWorld, EventBus } from '@cubeforge/core'
 import { createTransform } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import type { RigidBodyComponent } from '../components/rigidbody'
@@ -15,6 +15,14 @@ function createTestWorld(gravity = 980) {
   const physics = new PhysicsSystem(gravity)
   world.addSystem(physics)
   return { world, physics }
+}
+
+function createTestWorldWithEvents(gravity = 0) {
+  const world = new ECSWorld()
+  const events = new EventBus()
+  const physics = new PhysicsSystem(gravity, events)
+  world.addSystem(physics)
+  return { world, physics, events }
 }
 
 /** Add a dynamic entity (has all three components needed by physics) */
@@ -210,5 +218,357 @@ describe('PhysicsSystem', () => {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       expect(rb.vy).toBe(0)
     })
+  })
+})
+
+// ── Contact events ────────────────────────────────────────────────────────────
+
+describe('Contact events', () => {
+  interface ContactPayload { a: number; b: number }
+
+  describe('triggerEnter / triggerExit', () => {
+    it('emits triggerEnter when a dynamic body overlaps a static trigger', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      // Static trigger zone centered at origin, 40x40
+      const trigger = world.createEntity()
+      world.addComponent(trigger, createTransform(0, 0))
+      world.addComponent(trigger, createRigidBody({ isStatic: true }))
+      world.addComponent(trigger, createBoxCollider(40, 40, { isTrigger: true }))
+
+      // Dynamic body placed inside the trigger zone
+      const dyn = world.createEntity()
+      world.addComponent(dyn, createTransform(0, 0))
+      world.addComponent(dyn, createRigidBody())
+      world.addComponent(dyn, createBoxCollider(10, 10))
+
+      const entered: ContactPayload[] = []
+      events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+
+      runSteps(world, 1)
+
+      expect(entered.length).toBe(1)
+      const ids = [entered[0].a, entered[0].b]
+      expect(ids).toContain(trigger)
+      expect(ids).toContain(dyn)
+    })
+
+    it('does not emit triggerEnter when bodies are not overlapping', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      const trigger = world.createEntity()
+      world.addComponent(trigger, createTransform(0, 0))
+      world.addComponent(trigger, createRigidBody({ isStatic: true }))
+      world.addComponent(trigger, createBoxCollider(20, 20, { isTrigger: true }))
+
+      // Far away — no overlap
+      const dyn = world.createEntity()
+      world.addComponent(dyn, createTransform(1000, 1000))
+      world.addComponent(dyn, createRigidBody())
+      world.addComponent(dyn, createBoxCollider(10, 10))
+
+      const entered: ContactPayload[] = []
+      events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+
+      runSteps(world, 1)
+      expect(entered.length).toBe(0)
+    })
+
+    it('emits triggerEnter only once while overlapping (not every frame)', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      const trigger = world.createEntity()
+      world.addComponent(trigger, createTransform(0, 0))
+      world.addComponent(trigger, createRigidBody({ isStatic: true }))
+      world.addComponent(trigger, createBoxCollider(40, 40, { isTrigger: true }))
+
+      const dyn = world.createEntity()
+      world.addComponent(dyn, createTransform(0, 0))
+      world.addComponent(dyn, createRigidBody())
+      world.addComponent(dyn, createBoxCollider(10, 10))
+
+      const entered: ContactPayload[] = []
+      events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+
+      runSteps(world, 5)
+
+      // triggerEnter fires only on the first frame of overlap
+      expect(entered.length).toBe(1)
+    })
+
+    it('emits trigger every frame while overlapping', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      const trigger = world.createEntity()
+      world.addComponent(trigger, createTransform(0, 0))
+      world.addComponent(trigger, createRigidBody({ isStatic: true }))
+      world.addComponent(trigger, createBoxCollider(40, 40, { isTrigger: true }))
+
+      const dyn = world.createEntity()
+      world.addComponent(dyn, createTransform(0, 0))
+      world.addComponent(dyn, createRigidBody())
+      world.addComponent(dyn, createBoxCollider(10, 10))
+
+      const ongoing: ContactPayload[] = []
+      events.on<ContactPayload>('trigger', p => ongoing.push(p))
+
+      runSteps(world, 3)
+      expect(ongoing.length).toBe(3)
+    })
+
+    it('emits triggerExit when bodies separate', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      // Trigger at origin
+      const trigger = world.createEntity()
+      world.addComponent(trigger, createTransform(0, 0))
+      world.addComponent(trigger, createRigidBody({ isStatic: true }))
+      world.addComponent(trigger, createBoxCollider(20, 20, { isTrigger: true }))
+
+      // Dynamic body starts inside
+      const dyn = world.createEntity()
+      world.addComponent(dyn, createTransform(0, 0))
+      world.addComponent(dyn, createRigidBody())
+      world.addComponent(dyn, createBoxCollider(10, 10))
+
+      const exited: ContactPayload[] = []
+      events.on<ContactPayload>('triggerExit', p => exited.push(p))
+
+      // One step — body overlaps
+      runSteps(world, 1)
+      expect(exited.length).toBe(0)
+
+      // Move body far away
+      const t = world.getComponent<TransformComponent>(dyn, 'Transform')!
+      t.x = 1000
+
+      runSteps(world, 1)
+      expect(exited.length).toBe(1)
+    })
+
+    it('emits triggerExit when a dynamic entity is destroyed mid-overlap', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      const trigger = world.createEntity()
+      world.addComponent(trigger, createTransform(0, 0))
+      world.addComponent(trigger, createRigidBody({ isStatic: true }))
+      world.addComponent(trigger, createBoxCollider(40, 40, { isTrigger: true }))
+
+      const dyn = world.createEntity()
+      world.addComponent(dyn, createTransform(0, 0))
+      world.addComponent(dyn, createRigidBody())
+      world.addComponent(dyn, createBoxCollider(10, 10))
+
+      const exited: ContactPayload[] = []
+      events.on<ContactPayload>('triggerExit', p => exited.push(p))
+
+      runSteps(world, 1) // establish overlap
+      world.destroyEntity(dyn)
+      runSteps(world, 1) // dead entity pruning fires exit
+
+      expect(exited.length).toBe(1)
+    })
+  })
+
+  describe('collisionEnter / collisionExit', () => {
+    it('emits collisionEnter when two dynamic solid bodies first touch', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      // Two dynamic bodies placed overlapping
+      const a = world.createEntity()
+      world.addComponent(a, createTransform(0, 0))
+      world.addComponent(a, createRigidBody())
+      world.addComponent(a, createBoxCollider(20, 20))
+
+      const b = world.createEntity()
+      world.addComponent(b, createTransform(5, 0)) // overlapping
+      world.addComponent(b, createRigidBody())
+      world.addComponent(b, createBoxCollider(20, 20))
+
+      const entered: ContactPayload[] = []
+      events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+
+      runSteps(world, 1)
+      expect(entered.length).toBe(1)
+    })
+
+    it('emits collisionEnter only once while in contact', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      const a = world.createEntity()
+      world.addComponent(a, createTransform(0, 0))
+      world.addComponent(a, createRigidBody())
+      world.addComponent(a, createBoxCollider(20, 20))
+
+      const b = world.createEntity()
+      world.addComponent(b, createTransform(5, 0))
+      world.addComponent(b, createRigidBody())
+      world.addComponent(b, createBoxCollider(20, 20))
+
+      const entered: ContactPayload[] = []
+      events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+
+      runSteps(world, 5)
+      expect(entered.length).toBe(1)
+    })
+
+    it('emits collisionExit when dynamic bodies separate', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      const a = world.createEntity()
+      world.addComponent(a, createTransform(0, 0))
+      world.addComponent(a, createRigidBody())
+      world.addComponent(a, createBoxCollider(20, 20))
+
+      const b = world.createEntity()
+      world.addComponent(b, createTransform(5, 0))
+      world.addComponent(b, createRigidBody())
+      world.addComponent(b, createBoxCollider(20, 20))
+
+      const exited: ContactPayload[] = []
+      events.on<ContactPayload>('collisionExit', p => exited.push(p))
+
+      runSteps(world, 1)
+
+      // Move them apart
+      const ta = world.getComponent<TransformComponent>(a, 'Transform')!
+      const tb = world.getComponent<TransformComponent>(b, 'Transform')!
+      ta.x = -100
+      tb.x = 100
+
+      runSteps(world, 1)
+      expect(exited.length).toBe(1)
+    })
+  })
+})
+
+// ── Layer / mask filtering ────────────────────────────────────────────────────
+
+describe('Layer / mask filtering', () => {
+  interface ContactPayload { a: number; b: number }
+
+  it('allows collision when mask is * (default)', () => {
+    const { world, events } = createTestWorldWithEvents()
+
+    const a = world.createEntity()
+    world.addComponent(a, createTransform(0, 0))
+    world.addComponent(a, createRigidBody())
+    world.addComponent(a, createBoxCollider(20, 20, { layer: 'player' }))
+
+    const b = world.createEntity()
+    world.addComponent(b, createTransform(5, 0))
+    world.addComponent(b, createRigidBody())
+    world.addComponent(b, createBoxCollider(20, 20, { layer: 'enemy' }))
+
+    const entered: ContactPayload[] = []
+    events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+
+    runSteps(world, 1)
+    expect(entered.length).toBe(1)
+  })
+
+  it('blocks collision when mask excludes the other layer', () => {
+    const { world, events } = createTestWorldWithEvents()
+
+    // 'a' only interacts with 'friendly' — not 'enemy'
+    const a = world.createEntity()
+    world.addComponent(a, createTransform(0, 0))
+    world.addComponent(a, createRigidBody())
+    world.addComponent(a, createBoxCollider(20, 20, { layer: 'player', mask: ['friendly'] }))
+
+    const b = world.createEntity()
+    world.addComponent(b, createTransform(5, 0))
+    world.addComponent(b, createRigidBody())
+    world.addComponent(b, createBoxCollider(20, 20, { layer: 'enemy' }))
+
+    const entered: ContactPayload[] = []
+    events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+
+    runSteps(world, 1)
+    expect(entered.length).toBe(0)
+  })
+
+  it('allows collision when both masks explicitly include the other layer', () => {
+    const { world, events } = createTestWorldWithEvents()
+
+    const a = world.createEntity()
+    world.addComponent(a, createTransform(0, 0))
+    world.addComponent(a, createRigidBody())
+    world.addComponent(a, createBoxCollider(20, 20, { layer: 'player', mask: ['enemy'] }))
+
+    const b = world.createEntity()
+    world.addComponent(b, createTransform(5, 0))
+    world.addComponent(b, createRigidBody())
+    world.addComponent(b, createBoxCollider(20, 20, { layer: 'enemy', mask: ['player'] }))
+
+    const entered: ContactPayload[] = []
+    events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+
+    runSteps(world, 1)
+    expect(entered.length).toBe(1)
+  })
+
+  it('blocks trigger events when layer mask does not match', () => {
+    const { world, events } = createTestWorldWithEvents()
+
+    // Trigger only fires for 'player' layer, but dyn is on 'enemy'
+    const trigger = world.createEntity()
+    world.addComponent(trigger, createTransform(0, 0))
+    world.addComponent(trigger, createRigidBody({ isStatic: true }))
+    world.addComponent(trigger, createBoxCollider(40, 40, { isTrigger: true, layer: 'zone', mask: ['player'] }))
+
+    const dyn = world.createEntity()
+    world.addComponent(dyn, createTransform(0, 0))
+    world.addComponent(dyn, createRigidBody())
+    world.addComponent(dyn, createBoxCollider(10, 10, { layer: 'enemy' }))
+
+    const entered: ContactPayload[] = []
+    events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+
+    runSteps(world, 1)
+    expect(entered.length).toBe(0)
+  })
+
+  it('allows trigger events when layer mask matches', () => {
+    const { world, events } = createTestWorldWithEvents()
+
+    const trigger = world.createEntity()
+    world.addComponent(trigger, createTransform(0, 0))
+    world.addComponent(trigger, createRigidBody({ isStatic: true }))
+    world.addComponent(trigger, createBoxCollider(40, 40, { isTrigger: true, layer: 'zone', mask: ['player'] }))
+
+    const dyn = world.createEntity()
+    world.addComponent(dyn, createTransform(0, 0))
+    world.addComponent(dyn, createRigidBody())
+    world.addComponent(dyn, createBoxCollider(10, 10, { layer: 'player' }))
+
+    const entered: ContactPayload[] = []
+    events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+
+    runSteps(world, 1)
+    expect(entered.length).toBe(1)
+  })
+
+  it('blocks physical separation when layers do not interact', () => {
+    // Bodies on non-interacting layers should pass through each other
+    const { world } = createTestWorldWithEvents()
+
+    const a = world.createEntity()
+    world.addComponent(a, createTransform(0, 0))
+    world.addComponent(a, createRigidBody())
+    world.addComponent(a, createBoxCollider(20, 20, { layer: 'ghost', mask: [] }))
+
+    const b = world.createEntity()
+    world.addComponent(b, createTransform(5, 0))
+    world.addComponent(b, createRigidBody())
+    world.addComponent(b, createBoxCollider(20, 20, { layer: 'solid' }))
+
+    runSteps(world, 3)
+
+    // Ghost passes through — transform.x should still be near original (not pushed apart)
+    const ta = world.getComponent<TransformComponent>(a, 'Transform')!
+    const tb = world.getComponent<TransformComponent>(b, 'Transform')!
+    // Without interaction, both bodies stay where they are (no gravity)
+    expect(Math.abs(ta.x - tb.x)).toBeLessThan(20) // still overlapping — not pushed apart
   })
 })

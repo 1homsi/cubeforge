@@ -26,6 +26,7 @@ export { useInput } from './hooks/useInput'
 export { useEvents, useEvent } from './hooks/useEvents'
 export { usePlatformerController } from './hooks/usePlatformerController'
 export { useTopDownMovement } from './hooks/useTopDownMovement'
+export { useTriggerEnter, useTriggerExit, useCollisionEnter, useCollisionExit } from './hooks/useContact'
 
 // Atlas
 export type { SpriteAtlas } from './components/spriteAtlas'

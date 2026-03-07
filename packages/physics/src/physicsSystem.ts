@@ -62,9 +62,37 @@ function getSlopeSurfaceY(
   return (cy - hh) + dx * Math.tan(angleRad)
 }
 
+// ── Layer / mask filtering ────────────────────────────────────────────────────
+
+function maskAllows(mask: string | string[], layer: string): boolean {
+  if (mask === '*') return true
+  return Array.isArray(mask) && mask.includes(layer)
+}
+
+/**
+ * Returns true if collider A and B are allowed to interact.
+ * Both sides must permit the other's layer (AND semantics).
+ * The default mask '*' always permits, so entities without an explicit mask
+ * never filter anything — backward compatible.
+ */
+function canInteract(a: BoxColliderComponent, b: BoxColliderComponent): boolean {
+  return maskAllows(a.mask, b.layer) && maskAllows(b.mask, a.layer)
+}
+
+// ── Contact pair tracking ─────────────────────────────────────────────────────
+
+/** Stable key for an unordered entity pair. */
+function pairKey(a: EntityId, b: EntityId): string {
+  return a < b ? `${a}:${b}` : `${b}:${a}`
+}
+
 export class PhysicsSystem implements System {
   private accumulator = 0
   private readonly FIXED_DT = 1 / 60
+
+  // Active contact sets — updated each physics step.
+  private activeTriggerPairs    = new Map<string, [EntityId, EntityId]>()
+  private activeCollisionPairs  = new Map<string, [EntityId, EntityId]>()
 
   constructor(
     private gravity: number,
@@ -109,6 +137,20 @@ export class PhysicsSystem implements System {
       else dynamics.push(id)
     }
 
+    // ── Prune dead-entity pairs and emit exit events ─────────────────────────
+    for (const [key, [a, b]] of this.activeTriggerPairs) {
+      if (!world.hasEntity(a) || !world.hasEntity(b)) {
+        this.events?.emit('triggerExit', { a, b })
+        this.activeTriggerPairs.delete(key)
+      }
+    }
+    for (const [key, [a, b]] of this.activeCollisionPairs) {
+      if (!world.hasEntity(a) || !world.hasEntity(b)) {
+        this.events?.emit('collisionExit', { a, b })
+        this.activeCollisionPairs.delete(key)
+      }
+    }
+
     // Build spatial grid for static entities
     const staticGrid = new Map<string, EntityId[]>()
     for (const sid of statics) {
@@ -130,7 +172,7 @@ export class PhysicsSystem implements System {
       rb.vy += this.gravity * rb.gravityScale * dt
     }
 
-    // Phase 2 & 3: move X then resolve X (broadphase via grid)
+    // Phase 2 & 3: move X then resolve X
     for (const id of dynamics) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -151,13 +193,12 @@ export class PhysicsSystem implements System {
             const st = world.getComponent<TransformComponent>(sid, 'Transform')!
             const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
             if (sc.isTrigger) continue
-            // Skip slope colliders in X-pass — handled in Y-pass
             if (sc.slope !== 0) continue
+            if (!canInteract(col, sc)) continue
 
             const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
             if (!ov) continue
 
-            // Only correct on X axis if X overlap is smaller
             if (Math.abs(ov.x) < Math.abs(ov.y)) {
               transform.x += ov.x
               rb.vx = rb.bounce > 0 ? -rb.vx * rb.bounce : 0
@@ -167,7 +208,7 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // Phase 4 & 5: move Y then resolve Y (broadphase via grid)
+    // Phase 4 & 5: move Y then resolve Y
     for (const id of dynamics) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -188,9 +229,9 @@ export class PhysicsSystem implements System {
             const st = world.getComponent<TransformComponent>(sid, 'Transform')!
             const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
             if (sc.isTrigger) continue
+            if (!canInteract(col, sc)) continue
 
             if (sc.slope !== 0) {
-              // Slope collision: check AABB overlap first, then resolve along slope surface
               const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
               if (!ov) continue
               const entityBottom = transform.y + col.offsetY + col.height / 2
@@ -208,11 +249,9 @@ export class PhysicsSystem implements System {
             const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
             if (!ov) continue
 
-            // Only correct on Y axis if Y overlap is smaller-or-equal
             if (Math.abs(ov.y) <= Math.abs(ov.x)) {
               transform.y += ov.y
               if (ov.y < 0) {
-                // Pushed upward = landed on top of platform
                 rb.onGround = true
                 if (rb.friction < 1) rb.vx *= rb.friction
               }
@@ -223,7 +262,9 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // Phase 6: dynamic vs dynamic (separation + velocity transfer for stacking)
+    // Phase 6: dynamic vs dynamic — separation + collision events
+    const currentCollisionPairs = new Map<string, [EntityId, EntityId]>()
+
     for (let i = 0; i < dynamics.length; i++) {
       for (let j = i + 1; j < dynamics.length; j++) {
         const ia = dynamics[i]
@@ -236,53 +277,53 @@ export class PhysicsSystem implements System {
         const ov = getOverlap(getAABB(ta, ca), getAABB(tb, cb))
         if (!ov) continue
 
-        if (ca.isTrigger || cb.isTrigger) {
-          this.events?.emit('trigger', { a: ia, b: ib })
-          continue
-        }
+        if (!canInteract(ca, cb)) continue
+
+        if (ca.isTrigger || cb.isTrigger) continue // handled in trigger pass
 
         const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
         const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
 
         if (Math.abs(ov.y) <= Math.abs(ov.x)) {
-          // Vertical collision — body stacking: transfer weight from upper to lower body
           if (ov.y > 0) {
-            // A is below B: B landed on A
-            if (rbb.vy > 0) {
-              rba.vy += rbb.vy * 0.3
-              rbb.vy = 0
-            }
+            if (rbb.vy > 0) { rba.vy += rbb.vy * 0.3; rbb.vy = 0 }
             rbb.onGround = true
           } else {
-            // A is above B: A landed on B
-            if (rba.vy > 0) {
-              rbb.vy += rba.vy * 0.3
-              rba.vy = 0
-            }
+            if (rba.vy > 0) { rbb.vy += rba.vy * 0.3; rba.vy = 0 }
             rba.onGround = true
           }
         }
 
-        // Push apart equally
         ta.x += ov.x / 2
         ta.y += ov.y / 2
         tb.x -= ov.x / 2
         tb.y -= ov.y / 2
 
-        this.events?.emit('collision', { a: ia, b: ib })
+        const key = pairKey(ia, ib)
+        currentCollisionPairs.set(key, [ia, ib])
       }
     }
+
+    // Emit collisionEnter / collision / collisionExit
+    for (const [key, [a, b]] of currentCollisionPairs) {
+      if (!this.activeCollisionPairs.has(key)) {
+        this.events?.emit('collisionEnter', { a, b })
+      }
+      this.events?.emit('collision', { a, b })
+    }
+    for (const [key, [a, b]] of this.activeCollisionPairs) {
+      if (!currentCollisionPairs.has(key)) {
+        this.events?.emit('collisionExit', { a, b })
+      }
+    }
+    this.activeCollisionPairs = currentCollisionPairs
 
     // Phase 7: near-ground detection (2px downward probe)
     for (const id of dynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      if (rb.onGround) {
-        rb.isNearGround = true
-        continue
-      }
+      if (rb.onGround) { rb.isNearGround = true; continue }
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
-      // Probe AABB shifted 2px downward
       const probeAABB: AABB = {
         cx: transform.x + col.offsetX,
         cy: transform.y + col.offsetY + 2,
@@ -300,6 +341,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (sc.isTrigger) continue
+          if (!canInteract(col, sc)) continue
           const ov = getOverlap(probeAABB, getAABB(st, sc))
           if (ov && Math.abs(ov.y) <= Math.abs(ov.x) && ov.y < 0) {
             rb.isNearGround = true
@@ -308,5 +350,45 @@ export class PhysicsSystem implements System {
         }
       }
     }
+
+    // Phase 8: trigger detection — ALL entities with BoxCollider, at least one isTrigger.
+    // This correctly handles static trigger zones (e.g. Checkpoint) that dynamics walk into.
+    const allWithCollider = world.query('Transform', 'BoxCollider')
+    const currentTriggerPairs = new Map<string, [EntityId, EntityId]>()
+
+    for (let i = 0; i < allWithCollider.length; i++) {
+      for (let j = i + 1; j < allWithCollider.length; j++) {
+        const ia = allWithCollider[i]
+        const ib = allWithCollider[j]
+        const ca = world.getComponent<BoxColliderComponent>(ia, 'BoxCollider')!
+        const cb = world.getComponent<BoxColliderComponent>(ib, 'BoxCollider')!
+
+        // At least one must be a trigger
+        if (!ca.isTrigger && !cb.isTrigger) continue
+        if (!canInteract(ca, cb)) continue
+
+        const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
+        const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
+        const ov = getOverlap(getAABB(ta, ca), getAABB(tb, cb))
+        if (!ov) continue
+
+        const key = pairKey(ia, ib)
+        currentTriggerPairs.set(key, [ia, ib])
+      }
+    }
+
+    // Emit triggerEnter / trigger / triggerExit
+    for (const [key, [a, b]] of currentTriggerPairs) {
+      if (!this.activeTriggerPairs.has(key)) {
+        this.events?.emit('triggerEnter', { a, b })
+      }
+      this.events?.emit('trigger', { a, b })
+    }
+    for (const [key, [a, b]] of this.activeTriggerPairs) {
+      if (!currentTriggerPairs.has(key)) {
+        this.events?.emit('triggerExit', { a, b })
+      }
+    }
+    this.activeTriggerPairs = currentTriggerPairs
   }
 }
