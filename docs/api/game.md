@@ -10,9 +10,13 @@ Root component. Creates the canvas element, initialises the ECS world, physics s
 | `height` | number | `600` | Canvas height in pixels |
 | `gravity` | number | `980` | Gravitational acceleration in pixels per second squared (downward) |
 | `debug` | boolean | `false` | Show collider wireframes, FPS counter, and entity count overlay |
+| `devtools` | boolean | `false` | Enable the time-travel DevTools overlay (timeline scrubber + entity inspector) |
+| `deterministic` | boolean | `false` | Run the simulation with a seeded RNG for reproducible results |
+| `seed` | number | `0` | Seed for the deterministic RNG. Only used when `deterministic` is `true` |
 | `scale` | `'none' \| 'contain' \| 'pixel'` | `'none'` | Canvas scaling strategy |
 | `onReady` | `(controls: GameControls) => void` | — | Called once when the engine is ready |
 | `plugins` | `Plugin[]` | — | Custom plugins to register after core systems |
+| `renderer` | `new (canvas, entityIds) => System` | — | Custom render system constructor. Defaults to the Canvas2D renderer. See [@cubeforge/webgl-renderer](/guide/webgl-renderer). |
 | `style` | CSSProperties | — | CSS styles applied to the canvas element |
 | `className` | string | — | CSS class applied to the canvas element |
 | `children` | ReactNode | — | World and other components |
@@ -96,8 +100,34 @@ function App() {
 }
 ```
 
+## DevTools
+
+The `devtools` overlay adds a time-travel debugger below the canvas:
+
+- **Scrubber** — drag to any recorded frame (up to 10 seconds / 600 frames at 60 fps)
+- **Pause / Resume** — freeze the game loop at any point
+- **Step back / forward** — advance one frame at a time
+- **Entity inspector** — click any entity to see all component values at that frame
+
+```tsx
+<Game devtools />
+```
+
+When scrubbing, the world is restored to the selected snapshot. Resuming replays from that point forward.
+
+## Deterministic mode
+
+Enable reproducible simulations — useful for replays, tests, and multiplayer rollback:
+
+```tsx
+<Game deterministic seed={12345} />
+```
+
+In deterministic mode, all internal randomness (camera shake, particles) uses a seeded LCG RNG accessed via `world.rng()`. The same seed produces identical results every run.
+
 ## Notes
 
 - The canvas is focusable (`tabindex="0"`) so it can receive keyboard events directly.
 - Changing `gravity` after mount is supported — the physics system updates on the next tick.
 - The game loop stops automatically when the component unmounts.
+- The `debug` overlay is not available when using a custom `renderer` (e.g. WebGL).

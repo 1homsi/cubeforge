@@ -176,6 +176,22 @@ You can override any preset value with explicit props:
 <ParticleEmitter preset="sparks" color="#4fc3f7" rate={50} />
 ```
 
+## WebGL renderer
+
+For sprite-heavy scenes, `@cubeforge/webgl-renderer` provides a WebGL2 instanced renderer as a drop-in replacement. See the [WebGL Renderer guide](/guide/webgl-renderer) for full details.
+
+```bash
+bun add @cubeforge/webgl-renderer
+```
+
+```tsx
+import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
+
+<Game renderer={WebGLRenderSystem} />
+```
+
+The Canvas2D renderer remains the default — no change required for existing games.
+
 ## zIndex and draw order
 
 All rendered entities are sorted by their `Sprite.zIndex` before drawing. Higher values render on top.

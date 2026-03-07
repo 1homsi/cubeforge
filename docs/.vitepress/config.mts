@@ -34,8 +34,11 @@ export default defineConfig({
           ],
         },
         {
-          text: 'Embedding',
+          text: 'Advanced',
           items: [
+            { text: 'DevTools & Deterministic Mode', link: '/guide/devtools' },
+            { text: 'WebGL Renderer', link: '/guide/webgl-renderer' },
+            { text: 'Multiplayer', link: '/guide/multiplayer' },
             { text: 'Embedding in React Apps', link: '/guide/embedding' },
           ],
         },

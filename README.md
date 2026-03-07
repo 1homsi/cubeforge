@@ -119,6 +119,10 @@ Most browser game engines are imperative. You create objects, call methods, mana
 - **TypeScript-first** — every API is fully typed
 - **Embeddable** — drop a game into any React app with one component
 - **Debug-ready** — `<Game debug>` shows collider wireframes, FPS, entity counts
+- **Time-travel DevTools** — `<Game devtools>` adds a frame scrubber and entity inspector you can use to inspect and rewind your game state
+- **Deterministic simulation** — `<Game deterministic seed={n}>` for reproducible physics and replays
+- **WebGL2 renderer** — `@cubeforge/webgl-renderer` replaces Canvas2D with instanced GPU rendering (one draw call per texture group)
+- **Multiplayer** — `@cubeforge/net` provides Room, syncEntity, useNetworkInput, and ClientPrediction rollback
 
 ---
 
@@ -164,7 +168,11 @@ Root component. Creates the canvas, engine, and all subsystems.
   height={560}
   gravity={980}
   debug                 // collider wireframes + FPS overlay
+  devtools              // time-travel debugger (frame scrubber + entity inspector)
+  deterministic         // seeded RNG for reproducible simulations
+  seed={12345}
   scale="contain"       // 'none' | 'contain' | 'pixel'
+  renderer={WebGLRenderSystem}  // optional WebGL2 renderer
   onReady={(controls) => {
     controls.pause()
     controls.resume()
@@ -441,6 +449,60 @@ Two-pass AABB (X then Y) with fixed 60hz timestep and spatial broadphase grid.
 
 ---
 
+## DevTools
+
+```tsx
+<Game devtools />
+```
+
+Adds a time-travel debugging panel below the canvas:
+- Drag the scrubber to any recorded frame (10-second ring buffer)
+- Pause and step frame-by-frame
+- Click entities to inspect their component values at any point in time
+
+## Deterministic simulation
+
+```tsx
+<Game deterministic seed={42} />
+```
+
+All internal randomness (particles, camera shake) uses a seeded LCG. The same seed + inputs = identical simulation every time. Use `world.rng()` in your scripts for reproducible logic.
+
+## WebGL renderer
+
+```bash
+bun add @cubeforge/webgl-renderer
+```
+
+```tsx
+import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
+
+<Game renderer={WebGLRenderSystem} />
+```
+
+Replaces Canvas2D with WebGL2 instanced rendering. Sprites sharing the same texture are batched into a single GPU draw call.
+
+## Multiplayer
+
+```bash
+bun add @cubeforge/net
+```
+
+```tsx
+import { createWebSocketTransport, Room, syncEntity } from '@cubeforge/net'
+
+const transport = createWebSocketTransport('wss://your-server.com/game')
+const room = new Room({ transport, roomId: 'game-1', peerId: 'p1' })
+room.connect()
+
+// Sync Transform + RigidBody from owner to all peers at 20 Hz
+syncEntity({ room, world, entityId: id, components: ['Transform', 'RigidBody'], isOwner: true })
+```
+
+Transport-agnostic — works with WebSocket, WebRTC, Partykit, or anything with `send` / `receive`.
+
+---
+
 ## Tween
 
 ```tsx
@@ -493,11 +555,14 @@ Scale modes: `'none'` (default), `'contain'` (fit parent), `'pixel'` (pixel-art)
 
 | Package | Description |
 |---|---|
-| `@cubeforge/core` | ECS, game loop, events, assets, tween |
-| `@cubeforge/input` | Keyboard and mouse |
-| `@cubeforge/renderer` | Canvas2D renderer, camera, sprites, particles |
-| `@cubeforge/physics` | AABB collision, rigid bodies, fixed timestep |
 | `cubeforge` | Components and hooks — the main API |
+| `@cubeforge/core` | ECS world (archetype-based), game loop, events, assets, tween, deterministic RNG, snapshots |
+| `@cubeforge/input` | Keyboard and mouse |
+| `@cubeforge/renderer` | Canvas2D renderer, camera, sprites, animations, particles, parallax |
+| `@cubeforge/physics` | AABB collision, rigid bodies, fixed 60 Hz timestep, spatial broadphase |
+| `@cubeforge/webgl-renderer` | Optional WebGL2 instanced renderer — drop-in replacement for Canvas2D |
+| `@cubeforge/net` | Multiplayer helpers — Room, syncEntity, useNetworkInput, ClientPrediction |
+| `create-cubeforge-game` | CLI scaffolder |
 
 ---
 
