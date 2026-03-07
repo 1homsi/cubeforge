@@ -5,6 +5,10 @@ import { EngineContext } from '../context'
 interface Camera2DProps {
   /** String ID of entity to follow */
   followEntity?: string
+  /** Initial camera X position in world space (default 0 = world origin at screen center) */
+  x?: number
+  /** Initial camera Y position in world space (default 0 = world origin at screen center) */
+  y?: number
   zoom?: number
   /** Lerp smoothing factor (0 = instant snap, 0.85 = smooth) */
   smoothing?: number
@@ -18,6 +22,8 @@ interface Camera2DProps {
 
 export function Camera2D({
   followEntity,
+  x = 0,
+  y = 0,
   zoom = 1,
   smoothing = 0,
   background = '#1a1a2e',
@@ -32,6 +38,8 @@ export function Camera2D({
     const entityId = engine.ecs.createEntity()
     engine.ecs.addComponent(entityId, createCamera2D({
       followEntityId: followEntity,
+      x,
+      y,
       zoom,
       smoothing,
       background,
