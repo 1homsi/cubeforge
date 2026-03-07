@@ -148,9 +148,33 @@ export class ECSWorld {
     return this.componentIndex.get(id)?.has(type) ?? false
   }
 
+  // Flush pending dirty flags into the query cache immediately.
+  // Called inline at the top of query() so any mid-frame mutation
+  // (destroyEntity, addComponent, removeComponent) is reflected before
+  // the next query returns its results — prevents stale entity IDs from
+  // appearing in results for systems that run later in the same frame.
+  private flushDirty(): void {
+    if (this.dirtyAll) {
+      this.queryCache.clear()
+      this.dirtyAll = false
+      this.dirtyTypes.clear()
+    } else if (this.dirtyTypes.size > 0) {
+      for (const key of this.queryCache.keys()) {
+        if (key === '') { this.queryCache.delete(key); continue }
+        const keyTypes = key.split('\x00')
+        if (keyTypes.some(t => this.dirtyTypes.has(t))) {
+          this.queryCache.delete(key)
+        }
+      }
+      this.dirtyTypes.clear()
+    }
+  }
+
   // Returns all entities that have ALL of the requested component types.
   // Uses archetype superset matching — no per-entity scan.
   query(...types: string[]): EntityId[] {
+    this.flushDirty()
+
     const key = types.slice().sort().join('\x00')
     const cached = this.queryCache.get(key)
     if (cached) return cached
@@ -167,6 +191,7 @@ export class ECSWorld {
   }
 
   queryOne(...types: string[]): EntityId | undefined {
+    this.flushDirty()
     for (const arch of this.archetypes.values()) {
       if (types.every(t => arch.types.has(t))) {
         if (arch.entities.length > 0) return arch.entities[0]
@@ -257,21 +282,6 @@ export class ECSWorld {
   }
 
   update(dt: number): void {
-    // Selective cache invalidation — same strategy as before
-    if (this.dirtyAll) {
-      this.queryCache.clear()
-    } else if (this.dirtyTypes.size > 0) {
-      for (const key of this.queryCache.keys()) {
-        if (key === '') { this.queryCache.delete(key); continue }
-        const keyTypes = key.split('\x00')
-        if (keyTypes.some(t => this.dirtyTypes.has(t))) {
-          this.queryCache.delete(key)
-        }
-      }
-    }
-    this.dirtyAll = false
-    this.dirtyTypes.clear()
-
     for (const system of this.systems) {
       system.update(this, dt)
     }
