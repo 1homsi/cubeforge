@@ -13,6 +13,8 @@ Makes an entity participate in physics. The physics system reads `RigidBody` and
 | `friction` | number | `0.85` | Horizontal velocity damping applied each frame when on the ground |
 | `vx` | number | `0` | Initial horizontal velocity |
 | `vy` | number | `0` | Initial vertical velocity |
+| `lockX` | boolean | `false` | Freeze horizontal position — velocity is zeroed each frame and the entity cannot move left/right |
+| `lockY` | boolean | `false` | Freeze vertical position — velocity is zeroed each frame and gravity is not applied |
 
 ## Runtime properties
 
@@ -39,6 +41,12 @@ These properties are set by the physics system each frame and can be read inside
 
 // Bouncy ball
 <RigidBody bounce={0.85} friction={0} />
+
+// Endless-runner player — prevent horizontal drift while keeping vertical physics
+<RigidBody lockX />
+
+// Lock both axes — body participates in collision events but never moves
+<RigidBody lockX lockY />
 ```
 
 ## Reading and writing velocity

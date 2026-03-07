@@ -106,6 +106,10 @@ Six runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-e
 | [flappy-bird](https://github.com/1homsi/cubeforge-examples/tree/main/flappy-bird) | Tap-to-flap — scrolling pipes, high score |
 | [shooter](https://github.com/1homsi/cubeforge-examples/tree/main/shooter) | Side-scrolling shoot-em-up — waves, enemy patterns, stars |
 | [top-down](https://github.com/1homsi/cubeforge-examples/tree/main/top-down) | Top-down dungeon — 4-directional movement, sword combat, keys, exit |
+| [pong](https://github.com/1homsi/cubeforge-examples/tree/main/pong) | Two-player paddle battle — first to 7 wins, ball speeds up on every hit |
+| [snake](https://github.com/1homsi/cubeforge-examples/tree/main/snake) | Classic snake — eat food to grow, avoid your tail, speed ramps up |
+| [endless-runner](https://github.com/1homsi/cubeforge-examples/tree/main/endless-runner) | Dodge incoming obstacles as the world speeds up |
+| [asteroids](https://github.com/1homsi/cubeforge-examples/tree/main/asteroids) | Rotate, thrust, and shoot through waves of splitting asteroids — 3 lives |
 
 ---
 
@@ -234,7 +238,13 @@ Renders the entity — color rect, image, or sprite sheet frame.
 Drives frame-based sprite sheet animations.
 
 ```tsx
-<Animation frames={[0, 1, 2, 3]} fps={12} loop playing />
+<Animation
+  frames={[0, 1, 2, 3]}
+  fps={12}
+  loop
+  playing
+  onComplete={() => setHitDone(true)}  // called when a non-looping animation finishes
+/>
 ```
 
 ### `<RigidBody>`
@@ -248,6 +258,8 @@ Makes an entity participate in physics.
   mass={1}
   friction={0.85}
   bounce={0}
+  lockX={false}        // freeze horizontal position (useful for vertical-only movement)
+  lockY={false}        // freeze vertical position and skip gravity
 />
 ```
 
@@ -295,6 +307,23 @@ Smooth-follow camera with bounds and dead zone.
   deadZone={{ w: 80, h: 40 }}
 />
 ```
+
+### `<CircleCollider>`
+
+Adds a circular trigger collider to an entity. Circle colliders detect overlaps with other circles and with `BoxCollider` shapes, emitting `circleEnter`/`circleExit` events. They do **not** block movement — use `BoxCollider` for solid collision.
+
+```tsx
+<CircleCollider
+  radius={20}
+  offsetX={0}
+  offsetY={0}
+  isTrigger={true}
+  layer="pickup"
+  mask="player"
+/>
+```
+
+Use `useCircleEnter` / `useCircleExit` to react to overlaps.
 
 ### `<SquashStretch>`
 
@@ -382,6 +411,16 @@ usePlatformerController(id, {
 ```tsx
 const id = useEntity()
 useTopDownMovement(id, { speed: 180, normalizeDiagonal: true })
+```
+
+### `useCircleEnter` / `useCircleExit`
+
+Subscribe to circle-collider overlap events. Must be used inside an `<Entity>` that has a `<CircleCollider>`.
+
+```tsx
+useCircleEnter((other) => {
+  collectCoin()
+}, { tag: 'player' })
 ```
 
 ### `useGame()`

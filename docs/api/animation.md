@@ -10,6 +10,7 @@ Drives frame-based sprite sheet animation. Each frame, it advances through a lis
 | `fps` | number | `12` | Animation speed in frames per second |
 | `loop` | boolean | `true` | If true, restarts from the first frame after the last |
 | `playing` | boolean | `true` | Control playback — set to `false` to pause on the current frame |
+| `onComplete` | `() => void` | — | Called once when a non-looping animation finishes on its last frame |
 
 ## Example
 
@@ -46,11 +47,21 @@ You can track velocity by reading from the RigidBody component inside a Script a
 
 ## One-shot animations
 
-Set `loop={false}` for animations that play once and stop on the last frame:
+Set `loop={false}` for animations that play once and stop on the last frame. Use `onComplete` to trigger a state change when it finishes:
 
 ```tsx
-<Animation frames={[8, 9, 10, 11]} fps={16} loop={false} playing={justHit} />
+const [hitDone, setHitDone] = useState(false)
+
+<Animation
+  frames={[8, 9, 10, 11]}
+  fps={16}
+  loop={false}
+  playing={justHit}
+  onComplete={() => setHitDone(true)}
+/>
 ```
+
+`onComplete` is only called for non-looping animations. It fires exactly once per play-through. Changing the `frames` array resets the animation and allows `onComplete` to fire again.
 
 ## Notes
 
