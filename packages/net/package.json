@@ -1,0 +1,15 @@
+{
+  "name": "@cubeforge/net",
+  "version": "0.0.6",
+  "description": "Multiplayer helpers for Cubeforge",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "bun build src/index.ts --outfile dist/index.js --target browser --format esm && tsc --emitDeclarationOnly --noEmit false",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": { "main": "./dist/index.js", "types": "./dist/index.d.ts" },
+  "files": ["dist"],
+  "peerDependencies": { "cubeforge": "^0.0.6" },
+  "devDependencies": { "@cubeforge/core": "workspace:*" },
+  "license": "MIT"
+}
