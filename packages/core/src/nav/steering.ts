@@ -5,7 +5,7 @@
  * No side effects. Caller is responsible for applying velocity to the entity.
  */
 
-import type { Vec2Like } from './pathfind'
+import type { Vec2Like } from './types'
 export type { Vec2Like }
 
 function len(v: Vec2Like): number {
