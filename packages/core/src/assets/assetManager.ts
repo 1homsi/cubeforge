@@ -1,9 +1,18 @@
+export interface AssetProgress {
+  loaded: number
+  total: number
+  percent: number
+}
+
 export class AssetManager {
   private images = new Map<string, HTMLImageElement>()
   private imagePromises = new Map<string, Promise<HTMLImageElement>>()
   private audio = new Map<string, AudioBuffer>()
   private audioCtx: AudioContext | null = null
   private activeSources = new Map<string, Set<AudioBufferSourceNode>>()
+  private _loaded = 0
+  private _total = 0
+  private _progressListeners = new Set<(p: AssetProgress) => void>()
 
   private getAudioContext(): AudioContext {
     if (!this.audioCtx) {
@@ -12,8 +21,34 @@ export class AssetManager {
     return this.audioCtx
   }
 
+  private emitProgress(): void {
+    const p: AssetProgress = {
+      loaded: this._loaded,
+      total: this._total,
+      percent: this._total > 0 ? this._loaded / this._total : 1,
+    }
+    for (const cb of this._progressListeners) cb(p)
+  }
+
+  /** Get current loading progress. */
+  getProgress(): AssetProgress {
+    return {
+      loaded: this._loaded,
+      total: this._total,
+      percent: this._total > 0 ? this._loaded / this._total : 1,
+    }
+  }
+
+  /** Subscribe to progress updates. Returns unsubscribe fn. */
+  onProgress(cb: (p: AssetProgress) => void): () => void {
+    this._progressListeners.add(cb)
+    return () => this._progressListeners.delete(cb)
+  }
+
   async loadImage(src: string): Promise<HTMLImageElement> {
     if (this.imagePromises.has(src)) return this.imagePromises.get(src)!
+    this._total++
+    this.emitProgress()
     const promise = (async () => {
       const img = new Image()
       img.src = src
@@ -25,6 +60,9 @@ export class AssetManager {
       } catch (err) {
         console.warn(`[Cubeforge] Failed to load image: ${src}`)
         throw err
+      } finally {
+        this._loaded++
+        this.emitProgress()
       }
       this.images.set(src, img)
       return img
