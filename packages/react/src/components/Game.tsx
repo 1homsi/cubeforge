@@ -133,7 +133,18 @@ export function Game({
 
     // Register plugin systems and call their onInit hooks
     if (plugins) {
-      for (const plugin of plugins) {
+      // Sort by priority descending (higher priority registered first)
+      const pluginNames = new Set(plugins.map(p => p.name))
+      const sorted = [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+      for (const plugin of sorted) {
+        // Validate dependencies
+        if (plugin.requires) {
+          for (const dep of plugin.requires) {
+            if (!pluginNames.has(dep)) {
+              console.warn(`[Cubeforge] Plugin "${plugin.name}" requires "${dep}" but it is not registered.`)
+            }
+          }
+        }
         for (const system of plugin.systems) {
           ecs.addSystem(system)
         }
@@ -178,6 +189,12 @@ export function Game({
       input.detach()
       ecs.clear()
       resizeObserver?.disconnect()
+      // Call onDestroy on all plugins
+      if (plugins) {
+        for (const plugin of plugins) {
+          plugin.onDestroy?.(state)
+        }
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

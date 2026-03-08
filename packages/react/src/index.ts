@@ -73,6 +73,12 @@ export { usePathfinding } from './hooks/usePathfinding'
 export type { PathfindingControls } from './hooks/usePathfinding'
 export { useAISteering } from './hooks/useAISteering'
 export type { AISteering } from './hooks/useAISteering'
+export { useLevelTransition } from './hooks/useLevelTransition'
+export type { LevelTransitionControls, TransitionOptions, TransitionType } from './hooks/useLevelTransition'
+export { useGameStateMachine } from './hooks/useGameStateMachine'
+export type { GameState as GameStateDefinition, GameStateMachineResult } from './hooks/useGameStateMachine'
+export { useRestart } from './hooks/useRestart'
+export type { RestartControls } from './hooks/useRestart'
 
 // Atlas
 export type { SpriteAtlas } from './components/spriteAtlas'
