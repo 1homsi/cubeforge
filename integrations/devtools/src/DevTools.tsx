@@ -259,7 +259,7 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
   // Performance stats
   const timings  = engine?.systemTimings
   const fps      = (() => {
-    const sys = engine?.renderSystem
+    const sys = engine?.activeRenderSystem
     if (!sys) return 0
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ft: number[] = (sys as unknown as { frameTimes: number[] }).frameTimes ?? []

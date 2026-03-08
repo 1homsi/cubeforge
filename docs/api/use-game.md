@@ -16,7 +16,7 @@ function useGame(): EngineState
 | `input` | InputManager | Keyboard and mouse state |
 | `events` | EventBus | Subscribe and emit game events |
 | `assets` | AssetManager | Load images and play audio |
-| `renderer` | Canvas2DRenderer | Low-level canvas renderer |
+| `activeRenderSystem` | System | The active WebGL2 render system |
 | `physics` | PhysicsSystem | Physics system — change gravity, etc. |
 | `loop` | GameLoop | The game loop — pause, resume, stop |
 | `canvas` | HTMLCanvasElement | The raw canvas element |

@@ -1,64 +1,22 @@
-# Renderers
+# Renderer
 
-Cubeforge uses **WebGL2 instanced rendering by default** — no configuration needed. For compatibility, pixel art, or custom pipelines you can opt into the Canvas2D renderer or write your own.
+Cubeforge uses **WebGL2 instanced rendering** — no configuration needed.
 
-## Default: WebGL2
+## Usage
 
-`<Game>` automatically uses WebGL2:
+`<Game>` automatically sets up the WebGL2 renderer:
 
 ```tsx
 <Game width={800} height={600}>
   <World>
-    {/* WebGL2 instanced rendering — no prop needed */}
+    {/* WebGL2 instanced rendering */}
   </World>
 </Game>
 ```
 
-If WebGL2 is unavailable in the browser (very rare in modern browsers), Cubeforge automatically falls back to Canvas2D with a console warning.
-
-## Opt-in: Canvas2D
-
-Pass `renderer={Canvas2DRenderSystem}` (or the string `'canvas2d'`) to use the Canvas2D renderer:
-
-```tsx
-import { Canvas2DRenderSystem } from 'cubeforge'
-
-<Game renderer={Canvas2DRenderSystem} width={800} height={600}>
-  <World>
-    {/* Canvas2D rendering */}
-  </World>
-</Game>
-```
-
-Good reasons to use Canvas2D:
-- Pixel-art games with `scale="pixel"` where you want explicit control
-- Environments that disable WebGL (some browser extensions, headless test environments)
-- Debugging rendering behaviour with familiar Canvas2D APIs
-
-## Custom renderers
-
-The `renderer` prop accepts any class that implements the `System` interface and takes `(canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>)`:
-
-```ts
-import type { System, ECSWorld } from '@cubeforge/core'
-
-class MyRenderer implements System {
-  constructor(
-    private canvas: HTMLCanvasElement,
-    private entityIds: Map<string, number>,
-  ) {}
-
-  update(world: ECSWorld, dt: number): void {
-    // custom rendering logic
-  }
-}
-
-<Game renderer={MyRenderer} />
-```
+No `renderer` prop or extra configuration is required.
 
 ## What the WebGL2 renderer supports
-
-Everything the Canvas2D renderer does:
 
 - Solid color quads and textured sprites
 - Sprite sheets (`frameIndex`, `frameWidth`, `frameHeight`, `frameColumns`)
@@ -80,7 +38,7 @@ This means a scene with 500 identical tree sprites (same texture) = **1 draw cal
 
 ## Debug overlay
 
-`<Game debug>` always works regardless of renderer. When WebGL2 is active, the debug wireframes are drawn on a transparent `<canvas>` overlay positioned on top of the WebGL canvas — so they never interfere with WebGL state.
+`<Game debug>` renders collider wireframes and performance stats on a transparent `<canvas>` overlay positioned on top of the WebGL canvas — they never interfere with WebGL state.
 
 ## WebGL2 browser support
 

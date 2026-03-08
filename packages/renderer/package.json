@@ -1,7 +1,7 @@
 {
   "name": "@cubeforge/renderer",
   "version": "0.0.1",
-  "description": "Canvas2D renderer with sprites, camera, animation, and particles for Cubeforge",
+  "description": "WebGL2 instanced renderer for Cubeforge",
   "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",

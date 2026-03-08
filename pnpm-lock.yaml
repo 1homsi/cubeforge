@@ -90,9 +90,6 @@ importers:
       '@cubeforge/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
-      '@cubeforge/webgl-renderer':
-        specifier: workspace:*
-        version: link:../../packages/webgl-renderer
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
@@ -194,6 +191,9 @@ importers:
       '@cubeforge/core':
         specifier: workspace:*
         version: link:../core
+      '@cubeforge/renderer':
+        specifier: workspace:*
+        version: link:../renderer
 
 packages:
 

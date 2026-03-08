@@ -1,6 +1,6 @@
 # Rendering
 
-Cubeforge renders to a Canvas 2D context. The render system draws all sprites sorted by `zIndex` each frame, after physics updates.
+Cubeforge uses a **WebGL2 instanced renderer**. All sprites are sorted by `zIndex` each frame and drawn in batched GPU draw calls after physics updates.
 
 ## Sprite
 
@@ -176,21 +176,9 @@ You can override any preset value with explicit props:
 <ParticleEmitter preset="sparks" color="#4fc3f7" rate={50} />
 ```
 
-## WebGL renderer
+## Performance
 
-For sprite-heavy scenes, `@cubeforge/webgl-renderer` provides a WebGL2 instanced renderer as a drop-in replacement. See the [WebGL Renderer guide](/guide/webgl-renderer) for full details.
-
-```bash
-bun add @cubeforge/webgl-renderer
-```
-
-```tsx
-import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
-
-<Game renderer={WebGLRenderSystem} />
-```
-
-The Canvas2D renderer remains the default — no change required for existing games.
+Sprites sharing the same texture are batched into a single GPU draw call (up to 8192 instances per batch). See the [Renderer guide](/guide/webgl-renderer) for details on how batching works.
 
 ## zIndex and draw order
 

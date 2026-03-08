@@ -21,7 +21,8 @@
     "dist"
   ],
   "dependencies": {
-    "@cubeforge/core": "workspace:*"
+    "@cubeforge/core": "workspace:*",
+    "@cubeforge/renderer": "workspace:*"
   },
   "keywords": [
     "game-engine",

@@ -57,6 +57,6 @@ You can also set `followOffsetX` / `followOffsetY` directly as props on `<Camera
 
 ## Notes
 
-- `shake` requires the default Canvas2D renderer. It has no effect when using a custom WebGL renderer (the `renderer` prop on `<Game>`).
+- `shake` writes directly to the Camera2D ECS component and works with the WebGL2 renderer.
 - `setPosition` is useful for instant scene cuts — call it before un-pausing the game to avoid the camera lerping from its old position.
 - `setZoom` updates the `Camera2D` ECS component directly; the next rendered frame will use the new zoom.

@@ -17,38 +17,21 @@ Root component. Creates the canvas element, initialises the ECS world, physics s
 | `onReady` | `(controls: GameControls) => void` | — | Called once when the engine is ready |
 | `asyncAssets` | boolean | `false` | When `true`, the game loop starts immediately and sprites swap from colour → image as they load in the background. When `false` (default), the loop waits until all initial sprites have loaded so the first frame is fully rendered. |
 | `plugins` | `Plugin[]` | — | Custom plugins to register after core systems |
-| `renderer` | `'canvas2d' \| new (canvas, entityIds) => System` | — | Renderer to use. Omit for WebGL2 (default). Pass `'canvas2d'` or `Canvas2DRenderSystem` to opt into Canvas2D. See [Renderer](#renderer) below. |
 | `style` | CSSProperties | — | CSS styles applied to the canvas element |
 | `className` | string | — | CSS class applied to the canvas element |
 | `children` | ReactNode | — | World and other components |
 
 ## Renderer
 
-By default, `<Game>` uses the **WebGL2 instanced renderer** — no prop needed:
+`<Game>` always uses the **WebGL2 instanced renderer** — no configuration needed:
 
 ```tsx
 <Game width={800} height={600}>
-  {/* WebGL2 by default */}
+  {/* WebGL2 instanced rendering */}
 </Game>
 ```
 
-To opt into the **Canvas2D renderer** (for pixel art, compatibility, or environments without WebGL2):
-
-```tsx
-import { Canvas2DRenderSystem } from 'cubeforge'
-
-<Game renderer={Canvas2DRenderSystem} width={800} height={600}>
-  {/* Canvas2D rendering */}
-</Game>
-```
-
-You can also pass a completely custom renderer class:
-
-```tsx
-<Game renderer={MyCustomRenderer} />
-```
-
-If WebGL2 is unavailable in the browser, `<Game>` automatically falls back to Canvas2D with a console warning.
+WebGL2 is supported in all modern browsers (Safari 15+, Chrome 56+, Firefox 51+). The debug overlay is rendered on a transparent `<canvas>` layered on top of the WebGL canvas so wireframes never interfere with WebGL state.
 
 ## Scale modes
 
@@ -93,7 +76,7 @@ The engine runs systems in this order each frame:
 
 1. Script system (entity update functions)
 2. Physics system (AABB collision at fixed 60 Hz)
-3. Render system (WebGL2 instanced or Canvas2D, sorted by zIndex)
+3. Render system (WebGL2 instanced, sorted by zIndex)
 4. Debug system (if `debug` is enabled — rendered on a transparent overlay canvas)
 5. Plugin systems (in array order)
 
@@ -129,27 +112,6 @@ function App() {
 }
 ```
 
-## Canvas2D opt-in example
-
-```tsx
-import { Game, World, Canvas2DRenderSystem } from 'cubeforge'
-
-function PixelArtGame() {
-  return (
-    <Game
-      width={320}
-      height={180}
-      scale="pixel"
-      renderer={Canvas2DRenderSystem}
-    >
-      <World background="#000">
-        {/* pixel-perfect rendering */}
-      </World>
-    </Game>
-  )
-}
-```
-
 ## DevTools
 
 The `devtools` overlay adds a time-travel debugger below the canvas:
@@ -180,4 +142,4 @@ In deterministic mode, all internal randomness (camera shake, particles) uses a 
 - The canvas is focusable (`tabindex="0"`) so it can receive keyboard events directly.
 - Changing `gravity` after mount is supported — the physics system updates on the next tick.
 - The game loop stops automatically when the component unmounts.
-- When `debug` is enabled with WebGL2, wireframes are drawn on a transparent overlay canvas layered on top of the WebGL canvas.
+- When `debug` is enabled, wireframes are drawn on a transparent overlay canvas layered on top of the WebGL canvas.

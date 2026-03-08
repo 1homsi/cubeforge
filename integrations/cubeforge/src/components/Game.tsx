@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin, type System, type EntityId } from '@cubeforge/core'
+import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin, type System } from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
-import { Canvas2DRenderer, RenderSystem } from '@cubeforge/renderer'
+import { RenderSystem, Canvas2DRenderer } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { DebugSystem, DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from '@cubeforge/devtools'
-import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
 
 /** Wraps a System to record execution time into a shared timings map. */
 function timedSystem(
@@ -59,13 +58,6 @@ interface GameProps {
   asyncAssets?: boolean
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
-  /**
-   * Renderer to use (default: WebGL2).
-   * - omit or undefined — WebGL2 instanced renderer (default)
-   * - 'canvas2d' — Canvas2D renderer (opt-in for compatibility or pixel art)
-   * - CustomClass — any class implementing System with (canvas, entityIds) constructor
-   */
-  renderer?: 'canvas2d' | (new (canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>) => System)
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
@@ -83,7 +75,6 @@ export function Game({
   asyncAssets = false,
   onReady,
   plugins,
-  renderer: CustomRenderer,
   style,
   className,
   children,
@@ -105,42 +96,17 @@ export function Game({
     const physics = new PhysicsSystem(gravity, events)
     const entityIds = new Map<string, number>()
 
-    // Build render system: 'canvas2d' string → Canvas2D, custom class → use it, default → WebGL2
-    let canvas2d: Canvas2DRenderer | undefined
-    let builtinRenderSystem: RenderSystem | undefined
-    let renderSystem: System
-    let activeRenderSystem: System
+    // Always use the WebGL2 render system
+    const renderSystem = new RenderSystem(canvas, entityIds)
+    const activeRenderSystem: System = renderSystem
 
-    if (CustomRenderer === 'canvas2d') {
-      canvas2d = new Canvas2DRenderer(canvas)
-      builtinRenderSystem = new RenderSystem(canvas2d, entityIds)
-      renderSystem = builtinRenderSystem
-    } else if (CustomRenderer) {
-      // Custom renderer class passed explicitly
-      renderSystem = new (CustomRenderer as new (canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>) => System)(canvas, entityIds)
-    } else {
-      // Default: WebGL2 with Canvas2D fallback
-      try {
-        renderSystem = new WebGLRenderSystem(canvas, entityIds)
-      } catch (e) {
-        console.warn('[Cubeforge] WebGL2 unavailable, falling back to Canvas2D:', e)
-        canvas2d = new Canvas2DRenderer(canvas)
-        builtinRenderSystem = new RenderSystem(canvas2d, entityIds)
-        renderSystem = builtinRenderSystem
-      }
-    }
-    activeRenderSystem = renderSystem
-
-    // Debug system: always uses a separate overlay canvas (or falls back to the main canvas2d renderer)
+    // Debug system: always uses a separate overlay canvas (Canvas2D for wireframes)
     let debugSystem: DebugSystem | null = null
     if (debug) {
       const debugCanvas2dEl = debugCanvasRef.current
       if (debugCanvas2dEl) {
         const debugCanvas2d = new Canvas2DRenderer(debugCanvas2dEl)
         debugSystem = new DebugSystem(debugCanvas2d)
-      } else if (canvas2d) {
-        // Fallback for pure Canvas2D mode where we don't have a separate overlay canvas
-        debugSystem = new DebugSystem(canvas2d)
       }
     }
 
@@ -174,8 +140,6 @@ export function Game({
     const state: EngineState = {
       ecs,
       input,
-      renderer: canvas2d,
-      renderSystem: builtinRenderSystem,
       activeRenderSystem,
       physics,
       events,
