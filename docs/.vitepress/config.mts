@@ -101,6 +101,7 @@ export default defineConfig({
             { text: 'useTriggerEnter / useTriggerExit', link: '/api/use-trigger' },
             { text: 'useCollisionEnter / useCollisionExit', link: '/api/use-collision' },
             { text: 'useCircleEnter / useCircleExit', link: '/api/use-circle' },
+            { text: 'useCollidingWith', link: '/api/use-colliding-with' },
             { text: 'useKinematicBody', link: '/api/use-kinematic-body' },
             { text: 'useDropThrough', link: '/api/use-drop-through' },
             { text: 'useSound', link: '/api/use-sound' },
@@ -114,6 +115,16 @@ export default defineConfig({
             { text: 'useGameStateMachine', link: '/api/use-game-state-machine' },
             { text: 'useRestart', link: '/api/use-restart' },
             { text: 'useSnapshot', link: '/api/use-snapshot' },
+            { text: 'useTween', link: '/api/use-tween' },
+            { text: 'useProfiler', link: '/api/use-profiler' },
+            { text: 'useObjectPool', link: '/api/use-object-pool' },
+            { text: 'usePostProcess', link: '/api/post-processing' },
+          ],
+        },
+        {
+          text: 'Effects',
+          items: [
+            { text: 'Post-Processing', link: '/api/post-processing' },
           ],
         },
         {

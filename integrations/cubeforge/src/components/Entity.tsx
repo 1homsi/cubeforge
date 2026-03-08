@@ -15,6 +15,12 @@ export function Entity({ id, tags = [], children }: EntityProps) {
   const engine = useContext(EngineContext)!
   const [entityId, setEntityId] = useState<EntityId | null>(null)
 
+  if (process.env.NODE_ENV !== 'production') {
+    if (!engine) {
+      console.warn('[Cubeforge] <Entity> must be inside a <World>. No EngineContext found.')
+    }
+  }
+
   useEffect(() => {
     const eid = engine.ecs.createEntity()
 

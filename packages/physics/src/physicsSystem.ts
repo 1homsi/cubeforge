@@ -408,6 +408,17 @@ export class PhysicsSystem implements System {
       if (!rb.lockY) rb.vy += this.gravity * rb.gravityScale * dt
       if (rb.lockX) rb.vx = 0
       if (rb.lockY) rb.vy = 0
+      // Linear damping (air resistance) — applied before collision resolution
+      if (rb.linearDamping > 0) {
+        rb.vx *= (1 - rb.linearDamping)
+        rb.vy *= (1 - rb.linearDamping)
+      }
+      // Angular velocity → transform rotation
+      if (rb.angularVelocity !== 0) {
+        const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+        transform.rotation += rb.angularVelocity * dt
+        if (rb.angularDamping > 0) rb.angularVelocity *= (1 - rb.angularDamping)
+      }
       // Decrement drop-through counter
       if (rb.dropThrough > 0) rb.dropThrough--
     }
@@ -431,6 +442,17 @@ export class PhysicsSystem implements System {
       if (!rb.lockY) rb.vy += this.gravity * rb.gravityScale * dt
       if (rb.lockX) rb.vx = 0
       if (rb.lockY) rb.vy = 0
+      // Linear damping (air resistance)
+      if (rb.linearDamping > 0) {
+        rb.vx *= (1 - rb.linearDamping)
+        rb.vy *= (1 - rb.linearDamping)
+      }
+      // Angular velocity → transform rotation
+      if (rb.angularVelocity !== 0) {
+        const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+        transform.rotation += rb.angularVelocity * dt
+        if (rb.angularDamping > 0) rb.angularVelocity *= (1 - rb.angularDamping)
+      }
       if (rb.dropThrough > 0) rb.dropThrough--
     }
 

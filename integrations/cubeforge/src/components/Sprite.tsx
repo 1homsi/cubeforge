@@ -1,5 +1,5 @@
 import { useEffect, useContext } from 'react'
-import { createSprite, type SpriteComponent, type Sampling } from '@cubeforge/renderer'
+import { createSprite, type SpriteComponent, type Sampling, type BlendMode } from '@cubeforge/renderer'
 import { EngineContext, EntityContext } from '../context'
 import type { SpriteAtlas } from './spriteAtlas'
 
@@ -13,6 +13,7 @@ interface SpriteProps {
   zIndex?: number
   visible?: boolean
   flipX?: boolean
+  flipY?: boolean
   anchorX?: number
   anchorY?: number
   frameIndex?: number
@@ -27,6 +28,10 @@ interface SpriteProps {
   tileSizeY?: number
   /** Texture sampling mode — controls filtering when the sprite is scaled */
   sampling?: Sampling
+  /** Blend mode used when drawing this sprite */
+  blendMode?: BlendMode
+  /** Render layer name — sprites are sorted by layer order first, then zIndex */
+  layer?: string
 }
 
 export function Sprite({
@@ -39,6 +44,7 @@ export function Sprite({
   zIndex = 0,
   visible = true,
   flipX = false,
+  flipY = false,
   anchorX = 0.5,
   anchorY = 0.5,
   frameIndex = 0,
@@ -52,10 +58,21 @@ export function Sprite({
   tileSizeX,
   tileSizeY,
   sampling,
+  blendMode = 'normal',
+  layer = 'default',
 }: SpriteProps) {
   const resolvedFrameIndex = (atlas && frame != null) ? (atlas[frame] ?? 0) : frameIndex
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
+
+  if (process.env.NODE_ENV !== 'production') {
+    if (entityId === null) {
+      console.warn('[Cubeforge] <Sprite> must be inside an <Entity>. No EntityContext found.')
+    }
+    if ((frameWidth != null || frameHeight != null || frameColumns != null) && !src) {
+      console.warn('[Cubeforge] <Sprite> has frameWidth/frameHeight/frameColumns but no `src`. Sprite-sheet props require an image source.')
+    }
+  }
 
   useEffect(() => {
     const comp = createSprite({
@@ -68,6 +85,7 @@ export function Sprite({
       zIndex,
       visible,
       flipX,
+      flipY,
       anchorX,
       anchorY,
       frameIndex: resolvedFrameIndex,
@@ -79,6 +97,8 @@ export function Sprite({
       tileSizeX,
       tileSizeY,
       sampling,
+      blendMode,
+      layer,
     })
     engine.ecs.addComponent(entityId, comp)
 
@@ -105,9 +125,12 @@ export function Sprite({
     comp.color = color
     comp.visible = visible
     comp.flipX = flipX
+    comp.flipY = flipY
     comp.zIndex = zIndex
     comp.frameIndex = resolvedFrameIndex
-  }, [color, visible, flipX, zIndex, resolvedFrameIndex, engine, entityId])
+    comp.blendMode = blendMode
+    comp.layer = layer
+  }, [color, visible, flipX, flipY, zIndex, resolvedFrameIndex, blendMode, layer, engine, entityId])
 
   return null
 }

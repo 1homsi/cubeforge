@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin, type System } from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
-import { RenderSystem, Canvas2DRenderer, type Sampling } from '@cubeforge/renderer'
+import { RenderSystem, Canvas2DRenderer, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { DebugSystem, DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from '@cubeforge/devtools'
@@ -149,6 +149,8 @@ export function Game({
       }
     }, deterministic ? { fixedDt: 1 / 60 } : undefined)
 
+    const postProcessStack = createPostProcessStack()
+
     const state: EngineState = {
       ecs,
       input,
@@ -160,6 +162,7 @@ export function Game({
       canvas,
       entityIds,
       systemTimings,
+      postProcessStack,
     }
     setEngine(state)
 

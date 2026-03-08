@@ -36,4 +36,14 @@ export interface ParticlePoolComponent extends Component {
   color: string
   /** Gravity applied to particles (pixels/s²) */
   gravity: number
+  /** Emit this many particles in one frame then deactivate (one-shot burst) */
+  burstCount?: number
+  /** Emission shape: 'point' (default), 'circle', or 'box' */
+  emitShape?: 'point' | 'circle' | 'box'
+  /** Radius for 'circle' emission shape */
+  emitRadius?: number
+  /** Width for 'box' emission shape */
+  emitWidth?: number
+  /** Height for 'box' emission shape */
+  emitHeight?: number
 }

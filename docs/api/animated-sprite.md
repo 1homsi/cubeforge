@@ -1,54 +1,56 @@
 # AnimatedSprite
 
-Convenience component that combines [`<Sprite>`](/api/sprite) and [`<Animation>`](/api/animation) into a single element. Supports both a simple single-clip API and a multi-clip state machine.
+Convenience component that combines [`<Sprite>`](/api/sprite) and [`<Animation>`](/api/animation) into a single element. Supports both a simple single-clip API and a multi-clip state machine with type-safe clip names.
 
-## Simple API
+## Multi-clip API (recommended)
 
-Pass `frames` directly — equivalent to composing `<Sprite>` + `<Animation>` manually:
+Use `defineAnimations()` to create a reusable, type-safe set of clips. The `current` prop gets autocomplete for all clip names.
 
 ```tsx
+const playerAnims = defineAnimations({
+  idle:   { frames: [0],          fps: 1  },
+  walk:   { frames: [1, 2, 3, 4], fps: 10 },
+  run:    { frames: [5, 6, 7, 8], fps: 14 },
+  jump:   { frames: [9],          fps: 1, loop: false },
+  attack: { frames: [10, 11, 12], fps: 16, loop: false, next: 'idle' },
+})
+
+// In your component — `current` is typed as 'idle' | 'walk' | 'run' | 'jump' | 'attack'
 <AnimatedSprite
   src="/hero.png"
   width={32} height={48}
   frameWidth={32} frameHeight={48} frameColumns={8}
-  frames={[0, 1, 2, 3]}
-  fps={10}
-/>
-```
-
-## Multi-clip API
-
-Define named animation states in `animations` and switch between them with `current`:
-
-```tsx
-<AnimatedSprite
-  src="/hero.png"
-  width={32} height={48}
-  frameWidth={32} frameHeight={48} frameColumns={8}
-  animations={{
-    idle: { frames: [0],          fps: 1  },
-    walk: { frames: [1, 2, 3, 4], fps: 10 },
-    run:  { frames: [5, 6, 7, 8], fps: 14 },
-    jump: { frames: [9],          fps: 1, loop: false },
-  }}
+  animations={playerAnims}
   current={playerState}
   flipX={facingLeft}
 />
 ```
 
-Adding new states (attack, dash, climb, etc.) is just another key in the `animations` map.
+Define the animations object **outside** your component (or in a shared file) so it's stable across renders and reusable across all instances of the same entity type.
 
 ### Clip options
-
-Each clip in the `animations` map accepts:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `frames` | number[] | — | **Required.** Frame indices to cycle through |
 | `fps` | number | `12` | Animation speed |
 | `loop` | boolean | `true` | Whether to loop |
-| `next` | string | — | Clip to auto-transition to when this one finishes (non-looping only) |
+| `next` | string | — | Auto-transition to this clip when finished (non-looping only) |
 | `onComplete` | `() => void` | — | Called when a non-looping clip finishes |
+
+## Simple API
+
+For quick prototyping, pass `frames` directly:
+
+```tsx
+<AnimatedSprite
+  src="/hero.png"
+  width={32} height={32}
+  frameWidth={32} frameHeight={32} frameColumns={8}
+  frames={[0, 1, 2, 3]}
+  fps={10}
+/>
+```
 
 ## Props
 
@@ -83,5 +85,18 @@ Each clip in the `animations` map accepts:
 
 | Prop | Type | Description |
 |---|---|---|
-| `animations` | `Record<string, AnimationClip>` | Map of named clips |
-| `current` | string | Active clip name |
+| `animations` | `AnimationSet<S>` | Map of named clips (from `defineAnimations()`) |
+| `current` | `S` | Active clip name (typed to the clip keys) |
+
+## defineAnimations
+
+```tsx
+import { defineAnimations } from 'cubeforge'
+
+const anims = defineAnimations({
+  idle: { frames: [0], fps: 1 },
+  walk: { frames: [1, 2, 3, 4], fps: 10 },
+})
+```
+
+Zero runtime cost — it's an identity function that exists purely for TypeScript inference. The returned object is a `Record<S, AnimationClip>` where `S` is the union of your clip names.

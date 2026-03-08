@@ -5,7 +5,7 @@ The audio system routes all sounds through a shared Web Audio gain graph. You ca
 ## Graph structure
 
 ```
-each sound → group gain (sfx or music) → master gain → speakers
+each sound → group gain (any name) → master gain → speakers
 ```
 
 ## Functions
@@ -16,7 +16,7 @@ import { setGroupVolume, setMasterVolume, getGroupVolume } from 'cubeforge'
 
 | Function | Description |
 |---|---|
-| `setGroupVolume(group, volume)` | Set the volume for `'sfx'` or `'music'` (0–1) |
+| `setGroupVolume(group, volume)` | Set the volume for any group (e.g. `'sfx'`, `'music'`, `'ambient'`) (0–1) |
 | `setMasterVolume(volume)` | Set the master volume affecting all sounds (0–1) |
 | `getGroupVolume(group)` | Read the current volume for a group or `'master'` |
 
@@ -68,8 +68,26 @@ setMasterVolume(0) // mute
 setMasterVolume(1) // restore
 ```
 
+## Custom groups
+
+The `group` parameter accepts any string, not just `'sfx'` and `'music'`. Custom groups are created on first use:
+
+```tsx
+// Custom 'ambient' group
+const rain = useSound('/sounds/rain.ogg', { loop: true, group: 'ambient' })
+const wind = useSound('/sounds/wind.ogg', { loop: true, group: 'ambient' })
+
+// Custom 'voice' group
+const dialogue = useSound('/vo/greeting.ogg', { group: 'voice' })
+
+// Control custom groups the same way as built-in ones
+setGroupVolume('ambient', 0.3)
+setGroupVolume('voice', 0.9)
+```
+
 ## Notes
 
+- Group names are arbitrary strings. Built-in groups `'sfx'` and `'music'` have no special behaviour — they are simply conventional names.
 - Group and master gain nodes are created lazily on first use — calling `setGroupVolume` before any sound plays still works.
 - Setting volume on a group does not affect the per-sound `volume` option or `setVolume()` on `SoundControls` — they are multiplied together in the graph.
 - Sounds with no `group` connect directly to the master gain node and are unaffected by `setGroupVolume`.

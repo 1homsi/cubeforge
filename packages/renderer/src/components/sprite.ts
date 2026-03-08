@@ -1,6 +1,8 @@
 import type { Component } from '@cubeforge/core'
 import type { Sampling } from '../textureFilter'
 
+export type BlendMode = 'normal' | 'additive' | 'multiply' | 'screen'
+
 export interface SpriteComponent extends Component {
   readonly type: 'Sprite'
   width: number
@@ -21,6 +23,8 @@ export interface SpriteComponent extends Component {
   visible: boolean
   /** Horizontal flip */
   flipX: boolean
+  /** Vertical flip */
+  flipY: boolean
   /** Anchor X: 0=left edge, 0.5=center, 1=right edge — default 0.5 */
   anchorX: number
   /** Anchor Y: 0=top edge, 0.5=center, 1=bottom edge — default 0.5 */
@@ -45,6 +49,10 @@ export interface SpriteComponent extends Component {
   tileSizeY?: number
   /** Texture sampling mode — controls how the sprite is filtered when scaled */
   sampling?: Sampling
+  /** Blend mode used when drawing this sprite */
+  blendMode: BlendMode
+  /** Render layer name — sprites are sorted by layer order first, then zIndex */
+  layer: string
 }
 
 export function createSprite(opts: Partial<SpriteComponent> & { width: number; height: number }): SpriteComponent {
@@ -56,9 +64,12 @@ export function createSprite(opts: Partial<SpriteComponent> & { width: number; h
     zIndex: 0,
     visible: true,
     flipX: false,
+    flipY: false,
     anchorX: 0.5,
     anchorY: 0.5,
     frameIndex: 0,
+    blendMode: 'normal',
+    layer: 'default',
     ...opts,
   }
 }

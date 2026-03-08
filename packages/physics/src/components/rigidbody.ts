@@ -43,6 +43,12 @@ export interface RigidBodyComponent extends Component {
    * in a single step (automatic optimization).
    */
   ccd: boolean
+  /** Angular velocity in radians per second */
+  angularVelocity: number
+  /** Angular damping (0–1): fraction of angular velocity removed each fixed step */
+  angularDamping: number
+  /** Linear damping (0–1): velocity reduction factor applied every fixed step (air resistance) */
+  linearDamping: number
 }
 
 export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyComponent {
@@ -62,6 +68,9 @@ export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyCo
     isKinematic: false,
     dropThrough: 0,
     ccd: false,
+    angularVelocity: 0,
+    angularDamping: 0,
+    linearDamping: 0,
     ...opts,
   }
 }

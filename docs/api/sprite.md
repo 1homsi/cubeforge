@@ -1,6 +1,6 @@
 # Sprite
 
-Renders the entity as a coloured rectangle, a plain image, or a frame from a sprite sheet. The render system draws all sprites sorted by `zIndex` each frame.
+Renders the entity as a coloured rectangle, a plain image, or a frame from a sprite sheet. The render system draws all sprites sorted by render layer first, then by `zIndex` within each layer.
 
 ## Props
 
@@ -21,10 +21,13 @@ Renders the entity as a coloured rectangle, a plain image, or a frame from a spr
 | `zIndex` | number | `0` | Draw order — higher values render on top |
 | `visible` | boolean | `true` | If false, the sprite is not drawn |
 | `flipX` | boolean | `false` | Mirror the sprite horizontally |
+| `flipY` | boolean | `false` | Mirror the sprite vertically |
 | `anchorX` | number | `0.5` | Horizontal anchor (0 = left edge, 0.5 = centre, 1 = right edge) |
 | `anchorY` | number | `0.5` | Vertical anchor (0 = top edge, 0.5 = centre, 1 = bottom edge) |
 | `tileX` | boolean | `false` | Tile the image horizontally across the sprite width instead of stretching |
 | `tileY` | boolean | `false` | Tile the image vertically across the sprite height instead of stretching |
+| `blendMode` | BlendMode | `'normal'` | Blend mode used when drawing the sprite. One of `'normal'`, `'additive'`, `'multiply'`, or `'screen'`. |
+| `layer` | string | `'default'` | Render layer name. Sprites are sorted by layer order first, then `zIndex`. Built-in layers: `'background'` (-100), `'default'` (0), `'foreground'` (100), `'ui'` (200). |
 
 ## Examples
 
@@ -87,4 +90,8 @@ const atlas = createAtlas(['idle', 'run-1', 'run-2', 'run-3', 'jump'], 5)
 
 ## Mutable props
 
-`color`, `visible`, `flipX`, `zIndex`, and `frameIndex` (or `frame`) are synced every render — you can drive them from React state. `width`, `height`, `src`, `anchorX`, `anchorY`, `offsetX`, `offsetY`, `tileX`, and `tileY` are set on mount and not updated dynamically.
+`color`, `visible`, `flipX`, `flipY`, `zIndex`, `blendMode`, `layer`, and `frameIndex` (or `frame`) are synced every render — you can drive them from React state. `width`, `height`, `src`, `anchorX`, `anchorY`, `offsetX`, `offsetY`, `tileX`, and `tileY` are set on mount and not updated dynamically.
+
+## Rotation
+
+Sprite rotation is controlled via the sibling `<Transform>` component's `rotation` prop (in radians). See the [Transform](/api/transform) docs for details.

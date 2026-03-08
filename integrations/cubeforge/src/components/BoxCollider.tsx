@@ -36,8 +36,13 @@ export function BoxCollider({
 
     // Defer check so sibling components have had a chance to add their components
     const checkId = setTimeout(() => {
-      if (engine.ecs.hasEntity(entityId) && !engine.ecs.hasComponent(entityId, 'Transform')) {
-        console.warn(`[Cubeforge] BoxCollider on entity ${entityId} has no Transform. Physics requires Transform.`)
+      if (process.env.NODE_ENV !== 'production') {
+        if (engine.ecs.hasEntity(entityId) && !engine.ecs.hasComponent(entityId, 'Transform')) {
+          console.warn(`[Cubeforge] BoxCollider on entity ${entityId} has no Transform. Physics requires Transform.`)
+        }
+        if (engine.ecs.hasEntity(entityId) && !engine.ecs.hasComponent(entityId, 'RigidBody')) {
+          console.warn(`[Cubeforge] BoxCollider on entity ${entityId} has no RigidBody. Add a <RigidBody> sibling for physics to work.`)
+        }
       }
     }, 0)
 

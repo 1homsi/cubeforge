@@ -11,7 +11,11 @@ function getAudioCtx(): AudioContext {
 // ─── Volume groups ─────────────────────────────────────────────────────────────
 // Graph: each sound → group gain → master gain → destination
 
-export type AudioGroup = 'sfx' | 'music'
+/**
+ * Audio group name. Built-in groups are `'sfx'` and `'music'`, but any
+ * string can be used to create custom groups (e.g. `'ambient'`, `'ui'`, `'voice'`).
+ */
+export type AudioGroup = string
 
 const groupGainNodes = new Map<AudioGroup | 'master', GainNode>()
 
@@ -127,8 +131,12 @@ async function loadBuffer(src: string): Promise<AudioBuffer> {
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export interface SoundControls {
-  /** Start playing. If already playing and loop=false, restarts from the beginning. */
-  play(): void
+  /**
+   * Start playing. If already playing and loop=false, restarts from the beginning.
+   * @param opts.delay — optional delay in seconds before playback begins
+   *   (uses AudioContext.currentTime scheduling for sample-accurate timing)
+   */
+  play(opts?: { delay?: number }): void
   /** Stop the current playback. */
   stop(): void
   /** Change this sound's volume (0–1). Does not affect the group or master volume. */
@@ -198,7 +206,7 @@ export function useSound(
   const getDestination = (): GainNode =>
     groupRef.current ? getGroupGainNode(groupRef.current) : getGroupGainNode('master')
 
-  const play = (): void => {
+  const play = (playOpts?: { delay?: number }): void => {
     if (!bufferRef.current) return
     const ctx = getAudioCtx()
     if (ctx.state === 'suspended') void ctx.resume()
@@ -217,7 +225,14 @@ export function useSound(
     source.buffer  = bufferRef.current
     source.loop    = loopRef.current
     source.connect(gain)
-    source.start()
+
+    const delay = playOpts?.delay
+    if (delay && delay > 0) {
+      source.start(ctx.currentTime + delay)
+    } else {
+      source.start()
+    }
+
     source.onended = () => { sourceRef.current = null }
     sourceRef.current = source
   }

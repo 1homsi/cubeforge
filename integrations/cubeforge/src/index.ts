@@ -13,8 +13,8 @@ export { CompoundCollider } from './components/CompoundCollider'
 export { Script } from './components/Script'
 export { Camera2D } from './components/Camera2D'
 export { Animation } from './components/Animation'
-export { AnimatedSprite } from './components/AnimatedSprite'
-export type { AnimatedSpriteProps } from './components/AnimatedSprite'
+export { AnimatedSprite, defineAnimations } from './components/AnimatedSprite'
+export type { AnimatedSpriteProps, AnimationSet } from './components/AnimatedSprite'
 export { SquashStretch } from './components/SquashStretch'
 export { ParticleEmitter } from './components/ParticleEmitter'
 export { VirtualJoystick } from './components/VirtualJoystick'
@@ -59,12 +59,16 @@ export { useGamepad } from './hooks/useGamepad'
 export type { GamepadState } from './hooks/useGamepad'
 export { usePause } from './hooks/usePause'
 export type { PauseControls } from './hooks/usePause'
+export { useProfiler } from './hooks/useProfiler'
+export type { ProfilerData } from './hooks/useProfiler'
+export { usePostProcess } from './hooks/usePostProcess'
 
 // Contact hooks (via @cubeforge/context)
 export {
   useTriggerEnter, useTriggerExit, useTriggerStay,
   useCollisionEnter, useCollisionExit, useCollisionStay,
   useCircleEnter, useCircleExit, useCircleStay,
+  useCollidingWith,
 } from '@cubeforge/context'
 
 // Gameplay hooks (via @cubeforge/gameplay)
@@ -99,6 +103,10 @@ export type { DialogueLine, DialogueScript, DialogueControls } from '@cubeforge/
 export { useCutscene } from '@cubeforge/gameplay'
 export type { CutsceneStep, CutsceneControls } from '@cubeforge/gameplay'
 export { useGameStore } from '@cubeforge/gameplay'
+export { useTween } from '@cubeforge/gameplay'
+export type { TweenControls } from '@cubeforge/gameplay'
+export { useObjectPool } from '@cubeforge/gameplay'
+export type { ObjectPool } from '@cubeforge/gameplay'
 
 // Audio (via @cubeforge/audio)
 export { useSound } from '@cubeforge/audio'
@@ -114,6 +122,12 @@ export { createAtlas } from './components/spriteAtlas'
 
 // Renderer — WebGL2 instanced renderer (re-exported for advanced use)
 export { RenderSystem } from '@cubeforge/renderer'
+export { createRenderLayerManager, defaultLayers } from '@cubeforge/renderer'
+export type { RenderLayer, RenderLayerManager } from '@cubeforge/renderer'
+
+// Post-processing effects
+export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect } from '@cubeforge/renderer'
+export type { PostProcessEffect, PostProcessStack } from '@cubeforge/renderer'
 
 // Types and utilities from engine packages
 export type { EngineState } from './context'
@@ -126,6 +140,8 @@ export type { NavGrid, Vec2Like } from '@cubeforge/core'
 export { seek, flee, arrive, patrol, wander } from '@cubeforge/core'
 export { createTimer } from '@cubeforge/core'
 export type { GameTimer } from '@cubeforge/core'
+export { mergeTileColliders } from '@cubeforge/core'
+export type { MergedRect } from '@cubeforge/core'
 export { overlapBox, raycast, raycastAll, overlapCircle, sweepBox, createCompoundCollider } from '@cubeforge/physics'
 export type { RaycastHit } from '@cubeforge/physics'
 export type { CapsuleColliderComponent } from '@cubeforge/physics'
@@ -148,7 +164,12 @@ export type { ParallaxLayerComponent } from '@cubeforge/renderer'
 export type { NineSliceComponent } from '@cubeforge/renderer'
 export { createNineSlice } from '@cubeforge/renderer'
 export { TextureFilter } from '@cubeforge/renderer'
-export type { TextureFilterValue, MagFilterValue, Sampling } from '@cubeforge/renderer'
+export type { TextureFilterValue, MagFilterValue, Sampling, BlendMode } from '@cubeforge/renderer'
 export type { TweenHandle } from '@cubeforge/core'
 export { Ease, tween } from '@cubeforge/core'
+export { createTimeline } from '@cubeforge/core'
+export type { TweenTimeline, TimelineEntry } from '@cubeforge/core'
 export type { ParticlePreset } from './components/particlePresets'
+
+// Prefab utility
+export { definePrefab } from './utils/prefab'

@@ -15,6 +15,10 @@ Makes an entity participate in physics. The physics system reads `RigidBody` and
 | `vy` | number | `0` | Initial vertical velocity |
 | `lockX` | boolean | `false` | Freeze horizontal position — velocity is zeroed each frame and the entity cannot move left/right |
 | `lockY` | boolean | `false` | Freeze vertical position — velocity is zeroed each frame and gravity is not applied |
+| `ccd` | boolean | `false` | Enable continuous collision detection to prevent tunneling through thin colliders |
+| `angularVelocity` | number | `0` | Angular velocity in radians per second |
+| `angularDamping` | number | `0` | Angular damping (0–1): fraction of angular velocity removed each fixed step |
+| `linearDamping` | number | `0` | Linear damping (0–1): velocity reduction applied every fixed step — acts as air resistance |
 
 ## Runtime properties
 
@@ -26,6 +30,7 @@ These properties are set by the physics system each frame and can be read inside
 | `rb.vy` | number | Current vertical velocity |
 | `rb.onGround` | boolean | `true` if the entity collided with a solid surface from below this frame |
 | `rb.isNearGround` | boolean | `true` if the entity is within ~2 px of solid ground even if not strictly touching. Useful for implementing coyote time. |
+| `rb.angularVelocity` | number | Current angular velocity in radians per second. Set it in scripts to spin entities. |
 
 ## Example
 
@@ -47,6 +52,12 @@ These properties are set by the physics system each frame and can be read inside
 
 // Lock both axes — body participates in collision events but never moves
 <RigidBody lockX lockY />
+
+// Spinning projectile with air resistance
+<RigidBody angularVelocity={6} angularDamping={0.02} linearDamping={0.01} />
+
+// Floaty top-down character with air drag
+<RigidBody gravityScale={0} linearDamping={0.1} />
 ```
 
 ## Reading and writing velocity

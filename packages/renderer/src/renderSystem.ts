@@ -10,6 +10,8 @@ import type { TextComponent } from './components/text'
 import type { TrailComponent } from './components/trail'
 import type { NineSliceComponent } from './components/nineSlice'
 import { Canvas2DRenderer } from './canvas2d'
+import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
+import { createPostProcessStack, type PostProcessStack } from './postProcess'
 
 const imageCache = new Map<string, HTMLImageElement>()
 
@@ -39,6 +41,12 @@ export class RenderSystem implements System {
   // Debug overlays
   private debugNavGrid: NavGrid | null = null
   private contactFlashPoints: { x: number; y: number; ttl: number }[] = []
+
+  // Render layer manager
+  readonly layers: RenderLayerManager = createRenderLayerManager()
+
+  // Post-processing effect stack
+  readonly postProcessStack: PostProcessStack = createPostProcessStack()
 
   constructor(
     private readonly renderer: Canvas2DRenderer,
@@ -266,6 +274,9 @@ export class RenderSystem implements System {
     renderables.sort((a, b) => {
       const sa = world.getComponent<SpriteComponent>(a, 'Sprite')!
       const sb = world.getComponent<SpriteComponent>(b, 'Sprite')!
+      // Sort by render layer order first
+      const layerDiff = this.layers.getOrder(sa.layer) - this.layers.getOrder(sb.layer)
+      if (layerDiff !== 0) return layerDiff
       const zDiff = sa.zIndex - sb.zIndex
       if (zDiff !== 0) return zDiff
       // Same zIndex — group by texture to batch draw calls
@@ -291,8 +302,19 @@ export class RenderSystem implements System {
       ctx.rotate(transform.rotation)
       ctx.scale(
         transform.scaleX * (sprite.flipX ? -1 : 1) * scaleXMod,
-        transform.scaleY * scaleYMod,
+        transform.scaleY * (sprite.flipY ? -1 : 1) * scaleYMod,
       )
+
+      // Blend mode
+      const blendMode = sprite.blendMode ?? 'normal'
+      if (blendMode !== 'normal') {
+        const blendMap: Record<string, GlobalCompositeOperation> = {
+          additive: 'lighter',
+          multiply: 'multiply',
+          screen: 'screen',
+        }
+        ctx.globalCompositeOperation = blendMap[blendMode] ?? 'source-over'
+      }
 
       const drawX = -sprite.anchorX * sprite.width + sprite.offsetX
       const drawY = -sprite.anchorY * sprite.height + sprite.offsetY
@@ -434,15 +456,33 @@ export class RenderSystem implements System {
 
       // Emit new particles
       if (pool.active && pool.particles.length < pool.maxParticles) {
-        pool.timer += dt
-        const spawnCount = Math.floor(pool.timer * pool.rate)
-        pool.timer -= spawnCount / pool.rate
+        let spawnCount: number
+        if (pool.burstCount != null && pool.burstCount > 0) {
+          spawnCount = pool.burstCount
+          pool.active = false
+        } else {
+          pool.timer += dt
+          spawnCount = Math.floor(pool.timer * pool.rate)
+          pool.timer -= spawnCount / pool.rate
+        }
         for (let i = 0; i < spawnCount && pool.particles.length < pool.maxParticles; i++) {
           const angle = pool.angle + (world.rng() - 0.5) * pool.spread
           const speed = pool.speed * (0.5 + world.rng() * 0.5)
+          let ox = 0
+          let oy = 0
+          const shape = pool.emitShape ?? 'point'
+          if (shape === 'circle') {
+            const r = (pool.emitRadius ?? 0) * Math.sqrt(world.rng())
+            const a = world.rng() * Math.PI * 2
+            ox = Math.cos(a) * r
+            oy = Math.sin(a) * r
+          } else if (shape === 'box') {
+            ox = (world.rng() - 0.5) * (pool.emitWidth ?? 0)
+            oy = (world.rng() - 0.5) * (pool.emitHeight ?? 0)
+          }
           pool.particles.push({
-            x: t.x,
-            y: t.y,
+            x: t.x + ox,
+            y: t.y + oy,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             life: pool.particleLife,
@@ -543,6 +583,9 @@ export class RenderSystem implements System {
     }
 
     ctx.restore()
+
+    // --- Post-processing effects (screen space) ---
+    this.postProcessStack.apply(ctx, canvas.width, canvas.height, dt)
 
     // --- Debug: FPS display (screen space, after ctx.restore) ---
     if (this.debug && this.frameTimes.length > 0) {

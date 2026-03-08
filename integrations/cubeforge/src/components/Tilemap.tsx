@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react'
-import { createTransform, createScript } from '@cubeforge/core'
+import { createTransform, createScript, mergeTileColliders } from '@cubeforge/core'
 import type { EntityId, NavGrid } from '@cubeforge/core'
 import { setWalkable } from '@cubeforge/core'
 import { createSprite } from '@cubeforge/renderer'
@@ -152,6 +152,13 @@ interface TilemapProps {
    * can filter them by `layer.name === spawnLayer` inside the callback.
    */
   spawnLayer?: string
+  /**
+   * When true (default), adjacent solid tiles in collision/trigger layers
+   * are merged into larger rectangles using a 2D greedy algorithm, reducing
+   * the number of collider entities. Set to false to create one collider per
+   * row-run (legacy behaviour).
+   */
+  mergeColliders?: boolean
 }
 
 export function Tilemap({
@@ -163,6 +170,7 @@ export function Tilemap({
   triggerLayer: triggerLayerName = 'triggers',
   onTileProperty,
   navGrid,
+  mergeColliders = true,
 }: TilemapProps): React.ReactElement | null {
   const engine = useContext(EngineContext)!
   const [spawnedNodes, setSpawnedNodes] = useState<React.ReactNode[]>([])
@@ -254,41 +262,63 @@ export function Tilemap({
           }
 
           if (collision || trigger) {
-            // Merge adjacent filled tiles in each row into single wide colliders
-            for (let row = 0; row < mapData.height; row++) {
-              let col = 0
-              while (col < mapData.width) {
-                const i = row * mapData.width + col
-                const gid = layer.data[i]
-                if (gid === 0) { col++; continue }
-
-                // Start of a run — extend right while tiles are filled
-                let runLength = 1
-                while (
-                  col + runLength < mapData.width &&
-                  layer.data[row * mapData.width + col + runLength] !== 0
-                ) {
-                  runLength++
+            if (mergeColliders) {
+              // Build a 2D solid grid and merge into large rectangles
+              const solidGrid: boolean[][] = []
+              for (let row = 0; row < mapData.height; row++) {
+                solidGrid[row] = []
+                for (let col = 0; col < mapData.width; col++) {
+                  solidGrid[row][col] = layer.data![row * mapData.width + col] !== 0
                 }
+              }
 
-                const runWidth = runLength * tilewidth
-                const x = col * tilewidth + runWidth / 2
-                const y = row * tileheight + tileheight / 2
-
+              const merged = mergeTileColliders(solidGrid, tilewidth, tileheight, 0, 0)
+              for (const rect of merged) {
                 const eid = engine.ecs.createEntity()
                 createdEntities.push(eid)
-                engine.ecs.addComponent(eid, createTransform(x, y))
+                engine.ecs.addComponent(eid, createTransform(rect.x, rect.y))
 
                 if (collision) {
-                  // Invisible solid collider spanning the entire run
                   engine.ecs.addComponent(eid, createRigidBody({ isStatic: true }))
-                  engine.ecs.addComponent(eid, createBoxCollider(runWidth, tileheight))
+                  engine.ecs.addComponent(eid, createBoxCollider(rect.width, rect.height))
                 } else {
-                  // Invisible trigger collider spanning the entire run
-                  engine.ecs.addComponent(eid, createBoxCollider(runWidth, tileheight, { isTrigger: true }))
+                  engine.ecs.addComponent(eid, createBoxCollider(rect.width, rect.height, { isTrigger: true }))
                 }
+              }
+            } else {
+              // Legacy: merge adjacent filled tiles in each row into single wide colliders
+              for (let row = 0; row < mapData.height; row++) {
+                let col = 0
+                while (col < mapData.width) {
+                  const i = row * mapData.width + col
+                  const gid = layer.data[i]
+                  if (gid === 0) { col++; continue }
 
-                col += runLength
+                  let runLength = 1
+                  while (
+                    col + runLength < mapData.width &&
+                    layer.data[row * mapData.width + col + runLength] !== 0
+                  ) {
+                    runLength++
+                  }
+
+                  const runWidth = runLength * tilewidth
+                  const x = col * tilewidth + runWidth / 2
+                  const y = row * tileheight + tileheight / 2
+
+                  const eid = engine.ecs.createEntity()
+                  createdEntities.push(eid)
+                  engine.ecs.addComponent(eid, createTransform(x, y))
+
+                  if (collision) {
+                    engine.ecs.addComponent(eid, createRigidBody({ isStatic: true }))
+                    engine.ecs.addComponent(eid, createBoxCollider(runWidth, tileheight))
+                  } else {
+                    engine.ecs.addComponent(eid, createBoxCollider(runWidth, tileheight, { isTrigger: true }))
+                  }
+
+                  col += runLength
+                }
               }
             }
           } else {

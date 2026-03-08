@@ -15,6 +15,12 @@ export function Script({ init, update }: ScriptProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
+  if (process.env.NODE_ENV !== 'production') {
+    if (entityId === null) {
+      console.warn('[Cubeforge] <Script> must be inside an <Entity>. No EntityContext found.')
+    }
+  }
+
   // Keep refs to always call the latest callback — prevents stale closures
   // when the parent re-renders with new props/state.
   const initRef = useRef(init)

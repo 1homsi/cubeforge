@@ -7,6 +7,7 @@ import {
   resolveSampling, toGLMinFilter, toGLMagFilter, needsMipmap,
   DEFAULT_SAMPLING,
 } from './textureFilter'
+import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
@@ -22,6 +23,7 @@ interface SpriteComponent {
   zIndex: number
   visible: boolean
   flipX: boolean
+  flipY: boolean
   anchorX: number
   anchorY: number
   frameIndex: number
@@ -34,6 +36,8 @@ interface SpriteComponent {
   tileSizeX?: number
   tileSizeY?: number
   sampling?: Sampling
+  blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
+  layer: string
 }
 
 interface Camera2DComponent {
@@ -101,6 +105,11 @@ interface ParticlePoolComponent {
   particleSize: number
   color: string
   gravity: number
+  burstCount?: number
+  emitShape?: 'point' | 'circle' | 'box'
+  emitRadius?: number
+  emitWidth?: number
+  emitHeight?: number
 }
 
 interface ParallaxLayerComponent {
@@ -143,11 +152,11 @@ interface TrailComponent {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Number of floats per instance in the GPU buffer. */
-const FLOATS_PER_INSTANCE = 18
+const FLOATS_PER_INSTANCE = 19
 /** Maximum sprites batched in a single draw call. */
-const MAX_INSTANCES = 8192
+const MAX_INSTANCES = 16384
 /** Maximum sprite texture cache entries before evicting least-recently-used. */
-const MAX_SPRITE_TEXTURES = 512
+const MAX_SPRITE_TEXTURES = 1024
 /** Maximum text texture cache entries before evicting oldest. */
 const MAX_TEXT_CACHE = 200
 
@@ -274,6 +283,9 @@ export class RenderSystem implements System {
   /** Insertion-order key list for LRU-style eviction. */
   private readonly textureCacheKeys: string[] = []
 
+  // ── Render layer manager ────────────────────────────────────────────────
+  readonly layers: RenderLayerManager = createRenderLayerManager()
+
   // ── Texture sampling ────────────────────────────────────────────────────
   private _defaultSampling: Sampling = DEFAULT_SAMPLING
 
@@ -374,8 +386,9 @@ export class RenderSystem implements System {
     addAttr(5, 2)  // i_anchor
     addAttr(6, 2)  // i_offset
     addAttr(7, 1)  // i_flipX
-    addAttr(8, 4)  // i_color
-    addAttr(9, 4)  // i_uvRect
+    addAttr(8, 1)  // i_flipY
+    addAttr(9, 4)  // i_color
+    addAttr(10, 4) // i_uvRect
 
     gl.bindVertexArray(null)
 
@@ -573,11 +586,32 @@ export class RenderSystem implements System {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, toGLMagFilter(gl, mag))
   }
 
+  // ── Blend mode helper ────────────────────────────────────────────────────
+
+  private applyBlendMode(mode: string): void {
+    const { gl } = this
+    switch (mode) {
+      case 'additive':
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
+        break
+      case 'multiply':
+        gl.blendFunc(gl.DST_COLOR, gl.ONE_MINUS_SRC_ALPHA)
+        break
+      case 'screen':
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR)
+        break
+      default: // 'normal'
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+        break
+    }
+  }
+
   // ── Instanced draw call ────────────────────────────────────────────────────
 
-  private flush(count: number, textureKey: string, sampling?: Sampling): void {
+  private flush(count: number, textureKey: string, sampling?: Sampling, blendMode?: string): void {
     if (count === 0) return
     const { gl } = this
+    if (blendMode && blendMode !== 'normal') this.applyBlendMode(blendMode)
     const isColor = textureKey.startsWith('__color__')
     const tex = isColor ? this.whiteTexture : this.loadTexture(textureKey)
     gl.bindTexture(gl.TEXTURE_2D, tex)
@@ -587,6 +621,7 @@ export class RenderSystem implements System {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
+    if (blendMode && blendMode !== 'normal') this.applyBlendMode('normal')
   }
 
   private flushWithTex(count: number, tex: WebGLTexture, useTexture: boolean): void {
@@ -610,6 +645,7 @@ export class RenderSystem implements System {
     anchorX: number, anchorY: number,
     offsetX: number, offsetY: number,
     flipX: boolean,
+    flipY: boolean,
     r: number, g: number, b: number, a: number,
     u: number, v: number, uw: number, vh: number,
   ): void {
@@ -624,14 +660,15 @@ export class RenderSystem implements System {
     d[base + 7]  = offsetX
     d[base + 8]  = offsetY
     d[base + 9]  = flipX ? 1 : 0
-    d[base + 10] = r
-    d[base + 11] = g
-    d[base + 12] = b
-    d[base + 13] = a
-    d[base + 14] = u
-    d[base + 15] = v
-    d[base + 16] = uw
-    d[base + 17] = vh
+    d[base + 10] = flipY ? 1 : 0
+    d[base + 11] = r
+    d[base + 12] = g
+    d[base + 13] = b
+    d[base + 14] = a
+    d[base + 15] = u
+    d[base + 16] = v
+    d[base + 17] = uw
+    d[base + 18] = vh
   }
 
   // ── Main update loop ───────────────────────────────────────────────────────
@@ -797,6 +834,9 @@ export class RenderSystem implements System {
     renderables.sort((a: EntityId, b: EntityId) => {
       const sa = world.getComponent<SpriteComponent>(a, 'Sprite')!
       const sb = world.getComponent<SpriteComponent>(b, 'Sprite')!
+      // Sort by render layer order first
+      const ld = this.layers.getOrder(sa.layer) - this.layers.getOrder(sb.layer)
+      if (ld !== 0) return ld
       const zd = sa.zIndex - sb.zIndex
       if (zd !== 0) return zd
       const ka = getTextureKey(sa), kb = getTextureKey(sb)
@@ -806,11 +846,12 @@ export class RenderSystem implements System {
     let batchCount = 0
     let batchKey   = ''
     let batchSampling: Sampling | undefined
+    let batchBlendMode: string = 'normal'
 
     for (let i = 0; i <= renderables.length; i++) {
       // Sentinel: flush remaining batch at end of list
       if (i === renderables.length) {
-        this.flush(batchCount, batchKey, batchSampling)
+        this.flush(batchCount, batchKey, batchSampling, batchBlendMode)
         break
       }
 
@@ -866,14 +907,16 @@ export class RenderSystem implements System {
       }
 
       const key = getTextureKey(sprite)
+      const spriteBlend = sprite.blendMode ?? 'normal'
 
-      // Flush if texture group changes or buffer is full
-      if ((key !== batchKey && batchCount > 0) || batchCount >= MAX_INSTANCES) {
-        this.flush(batchCount, batchKey, batchSampling)
+      // Flush if texture group or blend mode changes, or buffer is full
+      if (((key !== batchKey || spriteBlend !== batchBlendMode) && batchCount > 0) || batchCount >= MAX_INSTANCES) {
+        this.flush(batchCount, batchKey, batchSampling, batchBlendMode)
         batchCount = 0
       }
       batchKey = key
       batchSampling = sprite.sampling
+      batchBlendMode = spriteBlend
 
       const ss        = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')
       const scaleXMod = ss ? ss.currentScaleX : 1
@@ -893,6 +936,7 @@ export class RenderSystem implements System {
         sprite.anchorX, sprite.anchorY,
         sprite.offsetX, sprite.offsetY,
         sprite.flipX,
+        sprite.flipY ?? false,
         r, g, b, a,
         uv[0], uv[1], uv[2], uv[3],
       )
@@ -917,10 +961,11 @@ export class RenderSystem implements System {
       if (!entry) continue
 
       // Flush any pending sprite batch first, then draw the text quad
-      this.flush(batchCount, batchKey, batchSampling)
+      this.flush(batchCount, batchKey, batchSampling, batchBlendMode)
       batchCount = 0
       batchKey = ''
       batchSampling = undefined
+      batchBlendMode = 'normal'
 
       // Write text as a single textured instance
       this.writeInstance(
@@ -930,7 +975,8 @@ export class RenderSystem implements System {
         transform.rotation,
         0, 0,       // anchor top-left
         0, 0,
-        false,
+        false,      // flipX
+        false,      // flipY
         1, 1, 1, 1, // white tint — color baked into texture
         0, 0, 1, 1,
       )
@@ -953,14 +999,32 @@ export class RenderSystem implements System {
 
       // Emit new particles
       if (pool.active && pool.particles.length < pool.maxParticles) {
-        pool.timer += dt
-        const spawnCount = Math.floor(pool.timer * pool.rate)
-        pool.timer -= spawnCount / pool.rate
+        let spawnCount: number
+        if (pool.burstCount != null && pool.burstCount > 0) {
+          spawnCount = pool.burstCount
+          pool.active = false
+        } else {
+          pool.timer += dt
+          spawnCount = Math.floor(pool.timer * pool.rate)
+          pool.timer -= spawnCount / pool.rate
+        }
         for (let i = 0; i < spawnCount && pool.particles.length < pool.maxParticles; i++) {
           const angle = pool.angle + (world.rng() - 0.5) * pool.spread
           const speed = pool.speed * (0.5 + world.rng() * 0.5)
+          let ox = 0
+          let oy = 0
+          const shape = pool.emitShape ?? 'point'
+          if (shape === 'circle') {
+            const r = (pool.emitRadius ?? 0) * Math.sqrt(world.rng())
+            const a = world.rng() * Math.PI * 2
+            ox = Math.cos(a) * r
+            oy = Math.sin(a) * r
+          } else if (shape === 'box') {
+            ox = (world.rng() - 0.5) * (pool.emitWidth ?? 0)
+            oy = (world.rng() - 0.5) * (pool.emitHeight ?? 0)
+          }
           pool.particles.push({
-            x: t.x, y: t.y,
+            x: t.x + ox, y: t.y + oy,
             vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
             life: pool.particleLife, maxLife: pool.particleLife,
             size: pool.particleSize, color: pool.color, gravity: pool.gravity,
@@ -985,6 +1049,7 @@ export class RenderSystem implements System {
           0,
           0.5, 0.5,
           0, 0,
+          false,
           false,
           r, g, b, alpha,
           0, 0, 1, 1,
@@ -1025,6 +1090,7 @@ export class RenderSystem implements System {
           0.5, 0.5,
           0, 0,
           false,
+          false,
           tr, tg, tb, alpha,
           0, 0, 1, 1,
         )
@@ -1054,6 +1120,7 @@ export class RenderSystem implements System {
             0.5, 0.5,
             0, 0,
             false,
+            false,
             walkable ? 0 : 1, walkable ? 1 : 0, 0, walkable ? 0.08 : 0.25,
             0, 0, 1, 1,
           )
@@ -1078,6 +1145,7 @@ export class RenderSystem implements System {
           0,
           0.5, 0.5,
           0, 0,
+          false,
           false,
           1, 0.3, 0.3, 0.9,
           0, 0, 1, 1,

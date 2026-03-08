@@ -3,6 +3,7 @@ import type { ECSWorld, EventBus, AssetManager, EntityId, System } from '@cubefo
 import type { InputManager } from '@cubeforge/input'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import type { GameLoop } from '@cubeforge/core'
+import type { PostProcessStack } from '@cubeforge/renderer'
 
 export interface EngineState {
   ecs: ECSWorld
@@ -21,6 +22,8 @@ export interface EngineState {
    * Keys are system names (e.g. "ScriptSystem", "PhysicsSystem", "RenderSystem").
    */
   systemTimings: Map<string, number>
+  /** Post-processing effect stack applied after each frame. */
+  postProcessStack: PostProcessStack
 }
 
 export const EngineContext = createContext<EngineState | null>(null)

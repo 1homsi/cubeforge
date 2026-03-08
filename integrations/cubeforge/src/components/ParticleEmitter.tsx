@@ -26,6 +26,16 @@ interface ParticleEmitterProps {
   gravity?: number
   /** Maximum live particles, default 100 */
   maxParticles?: number
+  /** Emit this many particles in one frame then deactivate (one-shot burst) */
+  burstCount?: number
+  /** Emission shape: 'point' (default), 'circle', or 'box' */
+  emitShape?: 'point' | 'circle' | 'box'
+  /** Radius for 'circle' emission shape */
+  emitRadius?: number
+  /** Width for 'box' emission shape */
+  emitWidth?: number
+  /** Height for 'box' emission shape */
+  emitHeight?: number
 }
 
 export function ParticleEmitter({
@@ -40,6 +50,11 @@ export function ParticleEmitter({
   color,
   gravity,
   maxParticles,
+  burstCount,
+  emitShape,
+  emitRadius,
+  emitWidth,
+  emitHeight,
 }: ParticleEmitterProps) {
   const presetConfig = preset ? PARTICLE_PRESETS[preset] : {}
 
@@ -70,6 +85,11 @@ export function ParticleEmitter({
       particleSize: resolvedParticleSize,
       color: resolvedColor,
       gravity: resolvedGravity,
+      burstCount,
+      emitShape,
+      emitRadius,
+      emitWidth,
+      emitHeight,
     } as ParticlePoolComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParticlePool')

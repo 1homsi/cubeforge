@@ -5,13 +5,14 @@
 //   a_quadPos  vec2  (-0.5..0.5, -0.5..0.5) unit quad corners
 //   a_uv       vec2  (0..1, 0..1) corresponding UVs
 //
-// Layout (per-instance, location 2–9):
+// Layout (per-instance, location 2–10):
 //   i_pos      vec2  world-space position
 //   i_size     vec2  draw width / height (already includes scaleX/Y and squash)
 //   i_rot      float rotation in radians
 //   i_anchor   vec2  (anchorX, anchorY) 0=left/top .. 1=right/bottom
 //   i_offset   vec2  draw offset in local space
 //   i_flipX    float 1.0 = flip horizontally, 0.0 = normal
+//   i_flipY    float 1.0 = flip vertically, 0.0 = normal
 //   i_color    vec4  RGBA (0..1 each)
 //   i_uvRect   vec4  (u, v, uw, vh) normalised UV sub-rect for sprite sheets
 export const VERT_SRC = `#version 300 es
@@ -24,8 +25,9 @@ layout(location = 4) in float i_rot;
 layout(location = 5) in vec2  i_anchor;
 layout(location = 6) in vec2  i_offset;
 layout(location = 7) in float i_flipX;
-layout(location = 8) in vec4  i_color;
-layout(location = 9) in vec4  i_uvRect;
+layout(location = 8) in float i_flipY;
+layout(location = 9) in vec4  i_color;
+layout(location = 10) in vec4  i_uvRect;
 
 uniform vec2  u_camPos;
 uniform float u_zoom;
@@ -41,6 +43,8 @@ void main() {
 
   // Horizontal flip
   if (i_flipX > 0.5) local.x = -local.x;
+  // Vertical flip
+  if (i_flipY > 0.5) local.y = -local.y;
 
   // Rotate around local origin
   float c = cos(i_rot);
