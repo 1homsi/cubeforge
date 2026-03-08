@@ -23,6 +23,18 @@ export interface RigidBodyComponent extends Component {
   lockX: boolean
   /** Lock vertical velocity — entity cannot move along Y */
   lockY: boolean
+  /**
+   * Kinematic bodies skip gravity and velocity integration.
+   * They resolve collisions but don't respond to impulses.
+   * Use `useKinematicBody` to move them.
+   */
+  isKinematic: boolean
+  /**
+   * Drop-through counter: when > 0, the physics step skips one-way platform
+   * blocking for this entity. Decremented by 1 each fixed step.
+   * Set via `useDropThrough`.
+   */
+  dropThrough: number
 }
 
 export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyComponent {
@@ -39,6 +51,8 @@ export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyCo
     friction: 0.85,
     lockX: false,
     lockY: false,
+    isKinematic: false,
+    dropThrough: 0,
     ...opts,
   }
 }

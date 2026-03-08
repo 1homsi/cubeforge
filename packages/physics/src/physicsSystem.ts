@@ -196,9 +196,13 @@ export class PhysicsSystem implements System {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       rb.onGround = false
       rb.isNearGround = false
+      // Kinematic bodies skip gravity and velocity integration
+      if (rb.isKinematic) continue
       if (!rb.lockY) rb.vy += this.gravity * rb.gravityScale * dt
       if (rb.lockX) rb.vx = 0
       if (rb.lockY) rb.vy = 0
+      // Decrement drop-through counter
+      if (rb.dropThrough > 0) rb.dropThrough--
     }
 
     // Phase 2 & 3: move X then resolve X
@@ -282,6 +286,8 @@ export class PhysicsSystem implements System {
               // One-way platform: only block entities that were above the surface
               // (falling down onto it). Entities below pass through freely.
               if (sc.oneWay) {
+                // Drop-through: entity requested to pass through for N frames
+                if (rb.dropThrough > 0) continue
                 if (ov.y >= 0) continue // resolution would push entity down — skip
                 // Was entity's bottom above the platform's top BEFORE this Y step?
                 const platformTop = st.y + sc.offsetY - sc.height / 2
@@ -350,10 +356,12 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // Emit collisionEnter / collision / collisionExit
+    // Emit collisionEnter / collision / collisionStay / collisionExit
     for (const [key, [a, b]] of currentCollisionPairs) {
       if (!this.activeCollisionPairs.has(key)) {
         this.events?.emit('collisionEnter', { a, b })
+      } else {
+        this.events?.emit('collisionStay', { a, b })
       }
       this.events?.emit('collision', { a, b })
     }
@@ -423,10 +431,12 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // Emit triggerEnter / trigger / triggerExit
+    // Emit triggerEnter / trigger / triggerStay / triggerExit
     for (const [key, [a, b]] of currentTriggerPairs) {
       if (!this.activeTriggerPairs.has(key)) {
         this.events?.emit('triggerEnter', { a, b })
+      } else {
+        this.events?.emit('triggerStay', { a, b })
       }
       this.events?.emit('trigger', { a, b })
     }
@@ -486,10 +496,12 @@ export class PhysicsSystem implements System {
         }
       }
 
-      // Emit circleEnter / circle / circleExit
+      // Emit circleEnter / circle / circleStay / circleExit
       for (const [key, [a, b]] of currentCirclePairs) {
         if (!this.activeCirclePairs.has(key)) {
           this.events?.emit('circleEnter', { a, b })
+        } else {
+          this.events?.emit('circleStay', { a, b })
         }
         this.events?.emit('circle', { a, b })
       }

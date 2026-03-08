@@ -120,3 +120,27 @@ export function useCircleEnter(handler: (other: EntityId) => void, opts?: Contac
 export function useCircleExit(handler: (other: EntityId) => void, opts?: ContactOpts): void {
   useContactEvent('circleExit', handler, opts)
 }
+
+/**
+ * Fires every frame while another entity remains inside this entity's trigger.
+ * Must be used inside an `<Entity>`.
+ */
+export function useTriggerStay(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+  useContactEvent('triggerStay', handler, opts)
+}
+
+/**
+ * Fires every frame while two solid dynamic bodies remain in contact.
+ * Must be used inside an `<Entity>`.
+ */
+export function useCollisionStay(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+  useContactEvent('collisionStay', handler, opts)
+}
+
+/**
+ * Fires every frame while two CircleColliders remain overlapping.
+ * Must be used inside an `<Entity>`.
+ */
+export function useCircleStay(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+  useContactEvent('circleStay', handler, opts)
+}

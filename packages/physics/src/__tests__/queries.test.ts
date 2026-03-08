@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { ECSWorld, createTransform, findByTag, createTag } from '@cubeforge/core'
 import { createBoxCollider } from '../components/boxCollider'
-import { overlapBox, raycast } from '../queries'
+import { overlapBox, raycast, raycastAll, overlapCircle, sweepBox } from '../queries'
 
 function addCollider(world: ECSWorld, x: number, y: number, w: number, h: number, opts?: Parameters<typeof createBoxCollider>[2]) {
   const id = world.createEntity()
@@ -163,5 +163,91 @@ describe('raycast', () => {
 
     const hit = raycast(world, { x: 0, y: 0 }, { x: 1, y: 0 }, 300, { tag: 'wall' })
     expect(hit!.entityId).toBe(wall)
+  })
+})
+
+// ── raycastAll ────────────────────────────────────────────────────────────────
+
+describe('raycastAll', () => {
+  it('returns all hits sorted by distance', () => {
+    const world = new ECSWorld()
+    const near = addCollider(world, 50, 0, 10, 40)
+    const far  = addCollider(world, 150, 0, 10, 40)
+    const hits = raycastAll(world, { x: 0, y: 0 }, { x: 1, y: 0 }, 400)
+    expect(hits.length).toBe(2)
+    expect(hits[0].entityId).toBe(near)
+    expect(hits[1].entityId).toBe(far)
+  })
+
+  it('returns empty array when nothing hit', () => {
+    const world = new ECSWorld()
+    addCollider(world, 1000, 0, 10, 40)
+    const hits = raycastAll(world, { x: 0, y: 0 }, { x: 1, y: 0 }, 50)
+    expect(hits).toEqual([])
+  })
+
+  it('hits are in ascending distance order', () => {
+    const world = new ECSWorld()
+    addCollider(world, 200, 0, 10, 40)
+    addCollider(world, 80, 0, 10, 40)
+    addCollider(world, 130, 0, 10, 40)
+    const hits = raycastAll(world, { x: 0, y: 0 }, { x: 1, y: 0 }, 500)
+    for (let i = 1; i < hits.length; i++) {
+      expect(hits[i].distance).toBeGreaterThanOrEqual(hits[i - 1].distance)
+    }
+  })
+})
+
+// ── overlapCircle ─────────────────────────────────────────────────────────────
+
+describe('overlapCircle', () => {
+  it('returns entities within radius', () => {
+    const world = new ECSWorld()
+    const near = addCollider(world, 0, 0, 20, 20)
+    const far  = addCollider(world, 200, 0, 20, 20)
+    const hits = overlapCircle(world, 0, 0, 50)
+    expect(hits).toContain(near)
+    expect(hits).not.toContain(far)
+  })
+
+  it('returns empty when nothing within radius', () => {
+    const world = new ECSWorld()
+    addCollider(world, 300, 0, 10, 10)
+    expect(overlapCircle(world, 0, 0, 20)).toEqual([])
+  })
+
+  it('filters by layer', () => {
+    const world = new ECSWorld()
+    const a = addCollider(world, 0, 0, 20, 20, { layer: 'solid' })
+    const b = addCollider(world, 0, 0, 20, 20, { layer: 'trigger' })
+    const hits = overlapCircle(world, 0, 0, 50, { layer: 'solid' })
+    expect(hits).toContain(a)
+    expect(hits).not.toContain(b)
+  })
+})
+
+// ── sweepBox ──────────────────────────────────────────────────────────────────
+
+describe('sweepBox', () => {
+  it('returns hit when sweep collides with a static collider', () => {
+    const world = new ECSWorld()
+    const wall = addCollider(world, 100, 0, 20, 40)
+    const hit = sweepBox(world, 0, 0, 20, 20, 200, 0)
+    expect(hit).not.toBeNull()
+    expect(hit!.entityId).toBe(wall)
+  })
+
+  it('returns null when sweep is clear', () => {
+    const world = new ECSWorld()
+    addCollider(world, 1000, 0, 20, 40)
+    const hit = sweepBox(world, 0, 0, 20, 20, 50, 0)
+    expect(hit).toBeNull()
+  })
+
+  it('returns null for zero displacement', () => {
+    const world = new ECSWorld()
+    addCollider(world, 0, 0, 20, 20)
+    const hit = sweepBox(world, 0, 0, 20, 20, 0, 0)
+    expect(hit).toBeNull()
   })
 })

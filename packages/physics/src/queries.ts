@@ -188,3 +188,220 @@ export function raycast(
 
   return closest
 }
+
+// ── raycastAll ────────────────────────────────────────────────────────────────
+
+/**
+ * Like `raycast`, but returns **all** hits sorted by distance (nearest first).
+ *
+ * @example
+ * ```ts
+ * const hits = raycastAll(world, { x: 0, y: 0 }, { x: 1, y: 0 }, 300)
+ * for (const hit of hits) console.log(hit.entityId, hit.distance)
+ * ```
+ */
+export function raycastAll(
+  world: ECSWorld,
+  origin: { x: number; y: number },
+  direction: { x: number; y: number },
+  maxDistance: number,
+  opts: RaycastOpts = {},
+): RaycastHit[] {
+  const len = Math.hypot(direction.x, direction.y)
+  if (len === 0) return []
+  const dx = direction.x / len
+  const dy = direction.y / len
+
+  const hits: RaycastHit[] = []
+
+  for (const id of world.query('Transform', 'BoxCollider')) {
+    const t = world.getComponent<TransformComponent>(id, 'Transform')!
+    const c = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+    if (!opts.includeTriggers && c.isTrigger) continue
+    if (!passesFilter(world, id, c, opts)) continue
+
+    const cx = t.x + c.offsetX
+    const cy = t.y + c.offsetY
+    const hw = c.width / 2
+    const hh = c.height / 2
+
+    const left   = cx - hw
+    const right  = cx + hw
+    const top    = cy - hh
+    const bottom = cy + hh
+
+    let tmin = -Infinity
+    let tmax =  Infinity
+
+    if (dx !== 0) {
+      const t1 = (left  - origin.x) / dx
+      const t2 = (right - origin.x) / dx
+      tmin = Math.max(tmin, Math.min(t1, t2))
+      tmax = Math.min(tmax, Math.max(t1, t2))
+    } else if (origin.x < left || origin.x > right) { continue }
+
+    if (dy !== 0) {
+      const t1 = (top    - origin.y) / dy
+      const t2 = (bottom - origin.y) / dy
+      tmin = Math.max(tmin, Math.min(t1, t2))
+      tmax = Math.min(tmax, Math.max(t1, t2))
+    } else if (origin.y < top || origin.y > bottom) { continue }
+
+    if (tmax < 0 || tmin > tmax || tmin > maxDistance) continue
+
+    const dist = Math.max(0, tmin)
+    const hitX = origin.x + dx * tmin
+    const hitY = origin.y + dy * tmin
+
+    let nx = 0
+    let ny = 0
+    const edgeEps = 0.001
+    if (Math.abs(hitX - left)   < edgeEps) nx = -1
+    else if (Math.abs(hitX - right)  < edgeEps) nx =  1
+    else if (Math.abs(hitY - top)    < edgeEps) ny = -1
+    else if (Math.abs(hitY - bottom) < edgeEps) ny =  1
+
+    hits.push({ entityId: id, distance: dist, point: { x: hitX, y: hitY }, normal: { x: nx, y: ny } })
+  }
+
+  hits.sort((a, b) => a.distance - b.distance)
+  return hits
+}
+
+// ── overlapCircle ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns all entities whose BoxCollider overlaps the given circle.
+ *
+ * @param world  - The ECS world.
+ * @param cx     - Circle center X in world space.
+ * @param cy     - Circle center Y in world space.
+ * @param radius - Circle radius in pixels.
+ * @param opts   - Optional tag/layer filter and entity exclusion list.
+ *
+ * @example
+ * ```ts
+ * const nearby = overlapCircle(world, player.x, player.y, 64, { tag: 'collectible' })
+ * ```
+ */
+export function overlapCircle(
+  world: ECSWorld,
+  cx: number,
+  cy: number,
+  radius: number,
+  opts: QueryOpts = {},
+): EntityId[] {
+  const results: EntityId[] = []
+  for (const id of world.query('Transform', 'BoxCollider')) {
+    const t = world.getComponent<TransformComponent>(id, 'Transform')!
+    const c = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+    if (!passesFilter(world, id, c, opts)) continue
+
+    const ecx = t.x + c.offsetX
+    const ecy = t.y + c.offsetY
+    // Nearest point on AABB to circle center
+    const nearX = Math.max(ecx - c.width / 2, Math.min(cx, ecx + c.width / 2))
+    const nearY = Math.max(ecy - c.height / 2, Math.min(cy, ecy + c.height / 2))
+    const dx = cx - nearX
+    const dy = cy - nearY
+    if (dx * dx + dy * dy <= radius * radius) {
+      results.push(id)
+    }
+  }
+  return results
+}
+
+// ── sweepBox ──────────────────────────────────────────────────────────────────
+
+/**
+ * Sweeps a box of `(w × h)` from its center `(cx, cy)` by `(dx, dy)` and
+ * returns the first hit, or `null` if nothing was struck.
+ *
+ * Useful for kinematic body movement, bullet traces, etc.
+ *
+ * @example
+ * ```ts
+ * const hit = sweepBox(world, x, y, 30, 40, vx * dt, vy * dt)
+ * if (hit) console.log('blocked by', hit.entityId)
+ * ```
+ */
+export function sweepBox(
+  world: ECSWorld,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  dx: number,
+  dy: number,
+  opts: RaycastOpts = {},
+): RaycastHit | null {
+  const dist = Math.hypot(dx, dy)
+  if (dist === 0) return null
+
+  // Use a ray from box center expanded by half-extents (Minkowski sum approach)
+  // We expand each target AABB by half the sweep box size
+  const hw = w / 2
+  const hh = h / 2
+
+  const origin = { x: cx, y: cy }
+  const dir    = { x: dx / dist, y: dy / dist }
+  const len    = Math.hypot(dir.x, dir.y)
+  if (len === 0) return null
+
+  let closest: RaycastHit | null = null
+
+  for (const id of world.query('Transform', 'BoxCollider')) {
+    const t = world.getComponent<TransformComponent>(id, 'Transform')!
+    const c = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+    if (!opts.includeTriggers && c.isTrigger) continue
+    if (!passesFilter(world, id, c, opts)) continue
+
+    // Expand target by sweep box half extents (Minkowski sum)
+    const ecx = t.x + c.offsetX
+    const ecy = t.y + c.offsetY
+    const ehw = c.width / 2 + hw
+    const ehh = c.height / 2 + hh
+
+    const left   = ecx - ehw
+    const right  = ecx + ehw
+    const top    = ecy - ehh
+    const bottom = ecy + ehh
+
+    let tmin = -Infinity
+    let tmax =  Infinity
+
+    if (dir.x !== 0) {
+      const t1 = (left  - origin.x) / dir.x
+      const t2 = (right - origin.x) / dir.x
+      tmin = Math.max(tmin, Math.min(t1, t2))
+      tmax = Math.min(tmax, Math.max(t1, t2))
+    } else if (origin.x < left || origin.x > right) { continue }
+
+    if (dir.y !== 0) {
+      const t1 = (top    - origin.y) / dir.y
+      const t2 = (bottom - origin.y) / dir.y
+      tmin = Math.max(tmin, Math.min(t1, t2))
+      tmax = Math.min(tmax, Math.max(t1, t2))
+    } else if (origin.y < top || origin.y > bottom) { continue }
+
+    if (tmax < 0 || tmin > tmax || tmin > dist) continue
+
+    const d = Math.max(0, tmin)
+    if (closest && d >= closest.distance) continue
+
+    const hitX = origin.x + dir.x * tmin
+    const hitY = origin.y + dir.y * tmin
+
+    let nx = 0
+    let ny = 0
+    const edgeEps = 0.001
+    if (Math.abs(hitX - left)   < edgeEps) nx = -1
+    else if (Math.abs(hitX - right)  < edgeEps) nx =  1
+    else if (Math.abs(hitY - top)    < edgeEps) ny = -1
+    else if (Math.abs(hitY - bottom) < edgeEps) ny =  1
+
+    closest = { entityId: id, distance: d, point: { x: hitX, y: hitY }, normal: { x: nx, y: ny } }
+  }
+
+  return closest
+}
