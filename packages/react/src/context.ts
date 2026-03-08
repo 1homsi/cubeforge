@@ -19,6 +19,11 @@ export interface EngineState {
   canvas: HTMLCanvasElement
   /** Maps string entity IDs (e.g. "player") to numeric ECS EntityIds */
   entityIds: Map<string, EntityId>
+  /**
+   * Per-system timing in milliseconds from the last frame.
+   * Keys are system names (e.g. "ScriptSystem", "PhysicsSystem", "RenderSystem").
+   */
+  systemTimings: Map<string, number>
 }
 
 export const EngineContext = createContext<EngineState | null>(null)

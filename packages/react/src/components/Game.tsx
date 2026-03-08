@@ -7,6 +7,21 @@ import { EngineContext, type EngineState } from '../context'
 import { DebugSystem } from '../systems/debugSystem'
 import { DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from './DevTools'
 
+/** Wraps a System to record execution time into a shared timings map. */
+function timedSystem(
+  name: string,
+  system: System,
+  timings: Map<string, number>,
+): System {
+  return {
+    update(world, dt) {
+      const t0 = performance.now()
+      system.update(world, dt)
+      timings.set(name, performance.now() - t0)
+    },
+  }
+}
+
 export interface GameControls {
   pause(): void
   resume(): void
@@ -102,12 +117,13 @@ export function Game({
       renderSystem = builtinRenderSystem
     }
     const debugSystem = debug && canvas2d ? new DebugSystem(canvas2d) : null
+    const systemTimings = new Map<string, number>()
 
     // System order: scripts → physics → render → (debug) → plugins
-    ecs.addSystem(new ScriptSystem(input))
-    ecs.addSystem(physics)
-    ecs.addSystem(renderSystem)
-    if (debugSystem) ecs.addSystem(debugSystem)
+    ecs.addSystem(timedSystem('ScriptSystem', new ScriptSystem(input), systemTimings))
+    ecs.addSystem(timedSystem('PhysicsSystem', physics, systemTimings))
+    ecs.addSystem(timedSystem('RenderSystem', renderSystem, systemTimings))
+    if (debugSystem) ecs.addSystem(timedSystem('DebugSystem', debugSystem, systemTimings))
 
     input.attach(canvas)
     canvas.setAttribute('tabindex', '0')
@@ -128,7 +144,7 @@ export function Game({
       }
     })
 
-    const state: EngineState = { ecs, input, renderer: canvas2d, renderSystem: builtinRenderSystem, physics, events, assets, loop, canvas, entityIds }
+    const state: EngineState = { ecs, input, renderer: canvas2d, renderSystem: builtinRenderSystem, physics, events, assets, loop, canvas, entityIds, systemTimings }
     setEngine(state)
 
     // Register plugin systems and call their onInit hooks
@@ -146,7 +162,7 @@ export function Game({
           }
         }
         for (const system of plugin.systems) {
-          ecs.addSystem(system)
+          ecs.addSystem(timedSystem(`${plugin.name}`, system, systemTimings))
         }
         plugin.onInit?.(state)
       }
@@ -291,6 +307,7 @@ export function Game({
           handle={devtoolsHandle.current}
           loop={engine.loop}
           ecs={engine.ecs}
+          engine={engine}
         />
       )}
     </EngineContext.Provider>

@@ -80,6 +80,11 @@ export class AssetManager {
     return this.images.get(src)
   }
 
+  /** Returns a read-only snapshot of all loaded images keyed by src. */
+  getLoadedImages(): ReadonlyMap<string, HTMLImageElement> {
+    return this.images
+  }
+
   async loadAudio(src: string): Promise<AudioBuffer> {
     if (this.audio.has(src)) return this.audio.get(src)!
     const ctx = this.getAudioContext()

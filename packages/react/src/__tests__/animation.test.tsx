@@ -20,6 +20,7 @@ function makeEngine(): EngineState {
     loop: {} as never,
     canvas: document.createElement('canvas'),
     entityIds: new Map(),
+    systemTimings: new Map(),
   }
 }
 

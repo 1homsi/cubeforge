@@ -1,4 +1,4 @@
-import type { System, ECSWorld, EntityId } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import type { SpriteComponent } from './components/sprite'
 import type { Camera2DComponent } from './components/camera2d'
@@ -35,6 +35,10 @@ export class RenderSystem implements System {
   private frameTimes: number[] = []
   private lastTimestamp = 0
 
+  // Debug overlays
+  private debugNavGrid: NavGrid | null = null
+  private contactFlashPoints: { x: number; y: number; ttl: number }[] = []
+
   constructor(
     private readonly renderer: Canvas2DRenderer,
     private readonly entityIds: Map<string, EntityId>,
@@ -42,6 +46,16 @@ export class RenderSystem implements System {
 
   setDebug(v: boolean): void {
     this.debug = v
+  }
+
+  /** Overlay a nav grid: green = walkable, red = blocked. Pass null to clear. */
+  setDebugNavGrid(grid: NavGrid | null): void {
+    this.debugNavGrid = grid
+  }
+
+  /** Flash a point on the canvas for one frame (world-space coords). */
+  flashContactPoint(x: number, y: number): void {
+    this.contactFlashPoints.push({ x, y, ttl: 1 })
   }
 
   triggerShake(intensity: number, duration: number): void {
@@ -419,6 +433,35 @@ export class RenderSystem implements System {
           c.height,
         )
       }
+    }
+
+    // --- Debug: nav grid overlay ---
+    if (this.debugNavGrid) {
+      const g = this.debugNavGrid
+      ctx.lineWidth = 0.5
+      for (let row = 0; row < g.rows; row++) {
+        for (let col = 0; col < g.cols; col++) {
+          const walkable = g.walkable[row * g.cols + col]
+          ctx.fillStyle = walkable ? 'rgba(0,255,0,0.08)' : 'rgba(255,0,0,0.25)'
+          ctx.fillRect(col * g.cellSize, row * g.cellSize, g.cellSize, g.cellSize)
+          ctx.strokeStyle = walkable ? 'rgba(0,255,0,0.15)' : 'rgba(255,0,0,0.35)'
+          ctx.strokeRect(col * g.cellSize, row * g.cellSize, g.cellSize, g.cellSize)
+        }
+      }
+    }
+
+    // --- Debug: contact flash points ---
+    if (this.contactFlashPoints.length > 0) {
+      ctx.save()
+      for (const pt of this.contactFlashPoints) {
+        ctx.beginPath()
+        ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(255,80,80,0.9)'
+        ctx.fill()
+        pt.ttl--
+      }
+      ctx.restore()
+      this.contactFlashPoints = this.contactFlashPoints.filter(p => p.ttl > 0)
     }
 
     ctx.restore()

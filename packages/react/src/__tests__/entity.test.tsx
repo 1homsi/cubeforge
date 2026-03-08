@@ -19,6 +19,7 @@ function makeEngine(): EngineState {
     loop: { start: vi.fn(), stop: vi.fn(), pause: vi.fn(), resume: vi.fn() } as never,
     canvas: document.createElement('canvas'),
     entityIds: new Map(),
+    systemTimings: new Map(),
   }
 }
 
