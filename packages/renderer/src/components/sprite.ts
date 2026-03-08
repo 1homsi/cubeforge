@@ -38,6 +38,10 @@ export interface SpriteComponent extends Component {
   tileX?: boolean
   /** Tile the image vertically instead of stretching it */
   tileY?: boolean
+  /** Width of each tile when tiling horizontally (default: source image width) */
+  tileSizeX?: number
+  /** Height of each tile when tiling vertically (default: source image height) */
+  tileSizeY?: number
 }
 
 export function createSprite(opts: Partial<SpriteComponent> & { width: number; height: number }): SpriteComponent {

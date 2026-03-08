@@ -312,7 +312,11 @@ export class RenderSystem implements System {
           const repeat = sprite.tileX && sprite.tileY ? 'repeat' : sprite.tileX ? 'repeat-x' : 'repeat-y'
           const pat = ctx.createPattern(sprite.image, repeat)
           if (pat) {
-            pat.setTransform(new DOMMatrix().translate(drawX, drawY))
+            const natW = sprite.image.naturalWidth || sprite.image.width
+            const natH = sprite.image.naturalHeight || sprite.image.height
+            const scaleX = (sprite.tileSizeX ?? natW) / natW
+            const scaleY = (sprite.tileSizeY ?? natH) / natH
+            pat.setTransform(new DOMMatrix().translate(drawX, drawY).scale(scaleX, scaleY))
             ctx.fillStyle = pat
             ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
           }

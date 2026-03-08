@@ -23,6 +23,8 @@ interface SpriteProps {
   frame?: string
   tileX?: boolean
   tileY?: boolean
+  tileSizeX?: number
+  tileSizeY?: number
 }
 
 export function Sprite({
@@ -45,6 +47,8 @@ export function Sprite({
   frame,
   tileX,
   tileY,
+  tileSizeX,
+  tileSizeY,
 }: SpriteProps) {
   const resolvedFrameIndex = (atlas && frame != null) ? (atlas[frame] ?? 0) : frameIndex
   const engine = useContext(EngineContext)!
@@ -69,6 +73,8 @@ export function Sprite({
       frameColumns,
       tileX,
       tileY,
+      tileSizeX,
+      tileSizeY,
     })
     engine.ecs.addComponent(entityId, comp)
 
