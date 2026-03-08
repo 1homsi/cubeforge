@@ -1,11 +1,22 @@
+export interface GameLoopOptions {
+  /** When set, every tick receives this fixed dt instead of the real elapsed time. */
+  fixedDt?: number
+}
+
 export class GameLoop {
   private rafId = 0
   private lastTime = 0
   private running = false
   private paused = false
   private hitPauseTimer = 0
+  private readonly fixedDt: number | undefined
 
-  constructor(private readonly onTick: (dt: number) => void) {}
+  constructor(
+    private readonly onTick: (dt: number) => void,
+    options?: GameLoopOptions,
+  ) {
+    this.fixedDt = options?.fixedDt
+  }
 
   hitPause(duration: number): void {
     this.hitPauseTimer = duration
@@ -50,8 +61,9 @@ export class GameLoop {
   private frame = (time: number): void => {
     if (!this.running) return
     // Cap delta at 100ms to prevent spiral of death after tab switch
-    const dt = Math.min((time - this.lastTime) / 1000, 0.1)
+    const rawDt = Math.min((time - this.lastTime) / 1000, 0.1)
     this.lastTime = time
+    const dt = this.fixedDt ?? rawDt
     if (this.hitPauseTimer > 0) {
       this.hitPauseTimer -= dt
     } else {

@@ -97,6 +97,23 @@ describe('GameLoop', () => {
     })
   })
 
+  describe('fixedDt', () => {
+    it('uses fixed dt instead of real elapsed time when fixedDt is set', () => {
+      const fixedTicks: number[] = []
+      const fixedLoop = new GameLoop((dt) => { fixedTicks.push(dt) }, { fixedDt: 1 / 60 })
+      _now = 0
+      fixedLoop.start()
+      // Fire a frame with a large gap — should still get fixedDt
+      fireFrame(100)
+      expect(fixedTicks).toHaveLength(1)
+      expect(fixedTicks[0]).toBeCloseTo(1 / 60, 6)
+      // Fire another frame with different gap
+      fireFrame(150)
+      expect(fixedTicks[1]).toBeCloseTo(1 / 60, 6)
+      fixedLoop.stop()
+    })
+  })
+
   describe('onTick', () => {
     it('onTick is called with correct dt when rAF fires', () => {
       _now = 0
