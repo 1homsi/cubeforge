@@ -47,7 +47,14 @@ export function useCamera(): CameraControls {
 
   return useMemo((): CameraControls => ({
     shake(intensity, duration) {
-      engine.renderSystem?.triggerShake(intensity, duration)
+      // Directly mutate the Camera2D ECS component so shake works with any renderer
+      const cams = engine.ecs.query('Camera2D')
+      if (cams.length === 0) return
+      const cam = engine.ecs.getComponent<Camera2DComponent>(cams[0], 'Camera2D')
+      if (!cam) return
+      cam.shakeIntensity = intensity
+      cam.shakeDuration = duration
+      cam.shakeTimer = duration
     },
 
     setFollowOffset(x, y) {

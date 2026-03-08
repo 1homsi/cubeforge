@@ -12,6 +12,9 @@ export class DebugSystem implements System {
   update(world: ECSWorld, dt: number): void {
     const { ctx, canvas } = this.renderer
 
+    // Clear overlay each frame so wireframes don't accumulate
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
     // FPS tracking
     this.frameCount++
     this.lastFpsTime += dt

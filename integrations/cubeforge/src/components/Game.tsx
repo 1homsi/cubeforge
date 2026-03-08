@@ -5,6 +5,7 @@ import { Canvas2DRenderer, RenderSystem } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { DebugSystem, DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from '@cubeforge/devtools'
+import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
 
 /** Wraps a System to record execution time into a shared timings map. */
 function timedSystem(
@@ -59,13 +60,12 @@ interface GameProps {
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
   /**
-   * Custom render system constructor. Must implement the System interface and accept
-   * `(canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>)`.
-   *
-   * Defaults to the built-in Canvas2D RenderSystem.
-   * Example: `import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'`
+   * Renderer to use (default: WebGL2).
+   * - omit or undefined — WebGL2 instanced renderer (default)
+   * - 'canvas2d' — Canvas2D renderer (opt-in for compatibility or pixel art)
+   * - CustomClass — any class implementing System with (canvas, entityIds) constructor
    */
-  renderer?: new (canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>) => System
+  renderer?: 'canvas2d' | (new (canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>) => System)
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
@@ -88,8 +88,9 @@ export function Game({
   className,
   children,
 }: GameProps) {
-  const canvasRef  = useRef<HTMLCanvasElement>(null)
-  const wrapperRef = useRef<HTMLDivElement>(null)
+  const canvasRef      = useRef<HTMLCanvasElement>(null)
+  const debugCanvasRef = useRef<HTMLCanvasElement>(null)
+  const wrapperRef     = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<EngineState | null>(null)
   const [assetsReady, setAssetsReady] = useState(asyncAssets)
   const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
@@ -104,18 +105,45 @@ export function Game({
     const physics = new PhysicsSystem(gravity, events)
     const entityIds = new Map<string, number>()
 
-    // Build render system: custom WebGL renderer or default Canvas2D
+    // Build render system: 'canvas2d' string → Canvas2D, custom class → use it, default → WebGL2
     let canvas2d: Canvas2DRenderer | undefined
     let builtinRenderSystem: RenderSystem | undefined
     let renderSystem: System
-    if (CustomRenderer) {
-      renderSystem = new CustomRenderer(canvas, entityIds)
-    } else {
+    let activeRenderSystem: System
+
+    if (CustomRenderer === 'canvas2d') {
       canvas2d = new Canvas2DRenderer(canvas)
       builtinRenderSystem = new RenderSystem(canvas2d, entityIds)
       renderSystem = builtinRenderSystem
+    } else if (CustomRenderer) {
+      // Custom renderer class passed explicitly
+      renderSystem = new (CustomRenderer as new (canvas: HTMLCanvasElement, entityIds: Map<string, EntityId>) => System)(canvas, entityIds)
+    } else {
+      // Default: WebGL2 with Canvas2D fallback
+      try {
+        renderSystem = new WebGLRenderSystem(canvas, entityIds)
+      } catch (e) {
+        console.warn('[Cubeforge] WebGL2 unavailable, falling back to Canvas2D:', e)
+        canvas2d = new Canvas2DRenderer(canvas)
+        builtinRenderSystem = new RenderSystem(canvas2d, entityIds)
+        renderSystem = builtinRenderSystem
+      }
     }
-    const debugSystem = debug && canvas2d ? new DebugSystem(canvas2d) : null
+    activeRenderSystem = renderSystem
+
+    // Debug system: always uses a separate overlay canvas (or falls back to the main canvas2d renderer)
+    let debugSystem: DebugSystem | null = null
+    if (debug) {
+      const debugCanvas2dEl = debugCanvasRef.current
+      if (debugCanvas2dEl) {
+        const debugCanvas2d = new Canvas2DRenderer(debugCanvas2dEl)
+        debugSystem = new DebugSystem(debugCanvas2d)
+      } else if (canvas2d) {
+        // Fallback for pure Canvas2D mode where we don't have a separate overlay canvas
+        debugSystem = new DebugSystem(canvas2d)
+      }
+    }
+
     const systemTimings = new Map<string, number>()
 
     // System order: scripts → physics → render → (debug) → plugins
@@ -143,7 +171,20 @@ export function Game({
       }
     })
 
-    const state: EngineState = { ecs, input, renderer: canvas2d, renderSystem: builtinRenderSystem, physics, events, assets, loop, canvas, entityIds, systemTimings }
+    const state: EngineState = {
+      ecs,
+      input,
+      renderer: canvas2d,
+      renderSystem: builtinRenderSystem,
+      activeRenderSystem,
+      physics,
+      events,
+      assets,
+      loop,
+      canvas,
+      entityIds,
+      systemTimings,
+    }
     setEngine(state)
 
     // Register plugin systems and call their onInit hooks
@@ -193,6 +234,12 @@ export function Game({
         const s = Math.min(scaleX, scaleY)
         canvas.style.transform = `scale(${s})`
         canvas.style.transformOrigin = 'top left'
+        // Apply the same scale to the debug overlay canvas
+        const debugEl = debugCanvasRef.current
+        if (debugEl) {
+          debugEl.style.transform = `scale(${s})`
+          debugEl.style.transformOrigin = 'top left'
+        }
       }
       updateScale()
       resizeObserver = new ResizeObserver(updateScale)
@@ -267,6 +314,14 @@ export function Game({
           style={canvasStyle}
           className={className}
         />
+        {debug && (
+          <canvas
+            ref={debugCanvasRef}
+            width={width}
+            height={height}
+            style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+          />
+        )}
         {!assetsReady && (
           <div style={{
             position: 'absolute', inset: 0,

@@ -33,7 +33,7 @@ npm install cubeforge react react-dom
 
 - **ECS** — archetype-based entity-component-system with query caching
 - **Physics** — two-pass AABB, capsule colliders, kinematic bodies, one-way platforms, 60 Hz fixed timestep
-- **Renderer** — Canvas2D sprites, animations, trails, parallax, camera with smoothing and bounds
+- **Renderer** — WebGL2 instanced renderer by default; Canvas2D opt-in via `renderer={Canvas2DRenderSystem}`
 - **Input** — keyboard, mouse, gamepad, per-player input maps, input contexts, recording/playback
 - **Audio** — Web Audio API with volume groups, fade, crossfade, ducking (`useSound`)
 - **Gameplay hooks** — `usePlatformerController`, `useTopDownMovement`, `useHealth`, `useSave`, `useGameStateMachine`, `useLevelTransition`, `usePathfinding`, `useAISteering`, and more

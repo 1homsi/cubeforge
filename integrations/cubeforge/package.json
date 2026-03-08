@@ -1,6 +1,6 @@
 {
   "name": "cubeforge",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "React-first 2D browser game engine",
   "main": "./src/index.ts",
   "scripts": {
@@ -33,6 +33,7 @@
     "@cubeforge/input": "workspace:*",
     "@cubeforge/physics": "workspace:*",
     "@cubeforge/renderer": "workspace:*",
+    "@cubeforge/webgl-renderer": "workspace:*",
     "tsup": "^8.0.0"
   },
   "keywords": [

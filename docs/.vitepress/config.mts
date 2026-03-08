@@ -37,7 +37,7 @@ export default defineConfig({
           text: 'Advanced',
           items: [
             { text: 'DevTools & Deterministic Mode', link: '/guide/devtools' },
-            { text: 'WebGL Renderer', link: '/guide/webgl-renderer' },
+            { text: 'Renderers (WebGL2 / Canvas2D)', link: '/guide/webgl-renderer' },
             { text: 'Multiplayer', link: '/guide/multiplayer' },
             { text: 'Embedding in React Apps', link: '/guide/embedding' },
           ],

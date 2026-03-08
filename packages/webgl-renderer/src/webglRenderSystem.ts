@@ -1,6 +1,6 @@
 import type { System, ECSWorld, EntityId } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
-import { VERT_SRC, FRAG_SRC } from './shaders'
+import { VERT_SRC, FRAG_SRC, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC } from './shaders'
 import { parseCSSColor } from './colorParser'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
@@ -93,12 +93,51 @@ interface ParticlePoolComponent {
   gravity: number
 }
 
+interface ParallaxLayerComponent {
+  type: 'ParallaxLayer'
+  src: string
+  speedX: number
+  speedY: number
+  repeatX: boolean
+  repeatY: boolean
+  zIndex: number
+  offsetX: number
+  offsetY: number
+  imageWidth: number
+  imageHeight: number
+}
+
+interface TextComponent {
+  type: 'Text'
+  text: string
+  fontSize: number
+  fontFamily: string
+  color: string
+  align: CanvasTextAlign
+  baseline: CanvasTextBaseline
+  zIndex: number
+  visible: boolean
+  maxWidth?: number
+  offsetX: number
+  offsetY: number
+}
+
+interface TrailComponent {
+  type: 'Trail'
+  length: number
+  color: string
+  width: number
+  points: { x: number; y: number }[]
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Number of floats per instance in the GPU buffer. */
 const FLOATS_PER_INSTANCE = 18
 /** Maximum sprites batched in a single draw call. */
 const MAX_INSTANCES = 8192
+/** Maximum text texture cache entries before evicting oldest. */
+const MAX_TEXT_CACHE = 200
 
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
@@ -176,8 +215,12 @@ function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
  *
  * Usage:
  * ```tsx
- * import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
- * <Game renderer={WebGLRenderSystem} />
+ * // WebGL2 is now the default — no prop needed.
+ * <Game />
+ *
+ * // Or opt into Canvas2D:
+ * import { Canvas2DRenderSystem } from 'cubeforge'
+ * <Game renderer={Canvas2DRenderSystem} />
  * ```
  */
 export class WebGLRenderSystem implements System {
@@ -190,13 +233,30 @@ export class WebGLRenderSystem implements System {
   private readonly textures = new Map<string, WebGLTexture>()
   private readonly imageCache = new Map<string, HTMLImageElement>()
 
-  // Cached uniform locations
+  // Cached uniform locations — sprite program
   private readonly uCamPos: WebGLUniformLocation
   private readonly uZoom: WebGLUniformLocation
   private readonly uCanvasSize: WebGLUniformLocation
   private readonly uShake: WebGLUniformLocation
   private readonly uTexture: WebGLUniformLocation
   private readonly uUseTexture: WebGLUniformLocation
+
+  // ── Parallax program ──────────────────────────────────────────────────────
+  private readonly parallaxProgram: WebGLProgram
+  private readonly parallaxVAO: WebGLVertexArrayObject
+  private readonly parallaxTextures = new Map<string, WebGLTexture>()
+  private readonly parallaxImageCache = new Map<string, HTMLImageElement>()
+
+  // Cached uniform locations — parallax program
+  private readonly pUTexture: WebGLUniformLocation
+  private readonly pUUvOffset: WebGLUniformLocation
+  private readonly pUTexSize: WebGLUniformLocation
+  private readonly pUCanvasSize: WebGLUniformLocation
+
+  // ── Text texture cache ────────────────────────────────────────────────────
+  private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number }>()
+  /** Insertion-order key list for LRU-style eviction. */
+  private readonly textureCacheKeys: string[] = []
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -258,7 +318,7 @@ export class WebGLRenderSystem implements System {
 
     gl.bindVertexArray(null)
 
-    // Cache uniform locations
+    // Cache uniform locations — sprite program
     gl.useProgram(this.program)
     this.uCamPos     = gl.getUniformLocation(this.program, 'u_camPos')!
     this.uZoom       = gl.getUniformLocation(this.program, 'u_zoom')!
@@ -269,11 +329,42 @@ export class WebGLRenderSystem implements System {
 
     this.whiteTexture = createWhiteTexture(gl)
 
+    // ── Parallax fullscreen quad ──────────────────────────────────────────────
+    this.parallaxProgram = createProgram(gl, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC)
+
+    // Fullscreen NDC quad (-1 to 1)
+    const fsVerts = new Float32Array([
+      -1, -1,
+       1, -1,
+      -1,  1,
+       1, -1,
+       1,  1,
+      -1,  1,
+    ])
+
+    this.parallaxVAO = gl.createVertexArray()!
+    gl.bindVertexArray(this.parallaxVAO)
+
+    const fsBuf = gl.createBuffer()!
+    gl.bindBuffer(gl.ARRAY_BUFFER, fsBuf)
+    gl.bufferData(gl.ARRAY_BUFFER, fsVerts, gl.STATIC_DRAW)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0)
+
+    gl.bindVertexArray(null)
+
+    // Cache uniform locations — parallax program
+    gl.useProgram(this.parallaxProgram)
+    this.pUTexture    = gl.getUniformLocation(this.parallaxProgram, 'u_texture')!
+    this.pUUvOffset   = gl.getUniformLocation(this.parallaxProgram, 'u_uvOffset')!
+    this.pUTexSize    = gl.getUniformLocation(this.parallaxProgram, 'u_texSize')!
+    this.pUCanvasSize = gl.getUniformLocation(this.parallaxProgram, 'u_canvasSize')!
+
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
   }
 
-  // ── Texture management ────────────────────────────────────────────────────
+  // ── Texture management (sprite textures — CLAMP_TO_EDGE) ──────────────────
 
   private loadTexture(src: string): WebGLTexture {
     const cached = this.textures.get(src)
@@ -299,6 +390,89 @@ export class WebGLRenderSystem implements System {
     return this.whiteTexture
   }
 
+  // ── Parallax texture management (REPEAT wrap mode) ────────────────────────
+
+  private loadParallaxTexture(src: string): WebGLTexture | null {
+    const cached = this.parallaxTextures.get(src)
+    if (cached) return cached
+
+    let img = this.parallaxImageCache.get(src)
+    if (!img) {
+      img = new Image()
+      img.src = src
+      img.onload = () => {
+        const gl = this.gl
+        const tex = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, tex)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img!)
+        gl.generateMipmap(gl.TEXTURE_2D)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
+        this.parallaxTextures.set(src, tex)
+      }
+      this.parallaxImageCache.set(src, img)
+    }
+
+    return null  // not ready yet
+  }
+
+  // ── Text texture management ───────────────────────────────────────────────
+
+  private getTextTextureKey(text: TextComponent): string {
+    return `${text.text}|${text.fontSize ?? 16}|${text.fontFamily ?? 'monospace'}|${text.color ?? '#ffffff'}`
+  }
+
+  private getOrCreateTextTexture(text: TextComponent): { tex: WebGLTexture; w: number; h: number } | null {
+    const key = this.getTextTextureKey(text)
+    const cached = this.textureCache.get(key)
+    if (cached) return cached
+
+    // Evict oldest if over cap
+    if (this.textureCache.size >= MAX_TEXT_CACHE) {
+      const oldest = this.textureCacheKeys.shift()
+      if (oldest) {
+        const old = this.textureCache.get(oldest)
+        if (old) this.gl.deleteTexture(old.tex)
+        this.textureCache.delete(oldest)
+      }
+    }
+
+    // Render text to an offscreen canvas
+    const offscreen = document.createElement('canvas')
+    const ctx2d = offscreen.getContext('2d')!
+    const font = `${text.fontSize ?? 16}px ${text.fontFamily ?? 'monospace'}`
+    ctx2d.font = font
+    const metrics = ctx2d.measureText(text.text)
+    const textW = Math.ceil(metrics.width) + 4
+    const textH = Math.ceil((text.fontSize ?? 16) * 1.5) + 4
+    offscreen.width  = textW
+    offscreen.height = textH
+
+    // Re-apply font after resize (canvas resize resets state)
+    ctx2d.font = font
+    ctx2d.fillStyle = text.color ?? '#ffffff'
+    ctx2d.textAlign = 'left'
+    ctx2d.textBaseline = 'top'
+    ctx2d.fillText(text.text, 2, 2, text.maxWidth)
+
+    const gl = this.gl
+    const tex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen)
+    gl.generateMipmap(gl.TEXTURE_2D)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    const entry = { tex, w: textW, h: textH }
+    this.textureCache.set(key, entry)
+    this.textureCacheKeys.push(key)
+    return entry
+  }
+
   // ── Instanced draw call ────────────────────────────────────────────────────
 
   private flush(count: number, textureKey: string): void {
@@ -308,6 +482,17 @@ export class WebGLRenderSystem implements System {
     const tex = isColor ? this.whiteTexture : this.loadTexture(textureKey)
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.uniform1i(this.uUseTexture, isColor ? 0 : 1)
+    gl.bindVertexArray(this.quadVAO)
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
+  }
+
+  private flushWithTex(count: number, tex: WebGLTexture, useTexture: boolean): void {
+    if (count === 0) return
+    const { gl } = this
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.uniform1i(this.uUseTexture, useTexture ? 1 : 0)
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
@@ -443,7 +628,54 @@ export class WebGLRenderSystem implements System {
     gl.clearColor(br, bg, bb, 1)
     gl.clear(gl.COLOR_BUFFER_BIT)
 
-    // ── Upload camera uniforms ────────────────────────────────────────────────
+    // ── Parallax pre-pass ─────────────────────────────────────────────────────
+    const parallaxEntities = world.query('ParallaxLayer')
+    if (parallaxEntities.length > 0) {
+      parallaxEntities.sort((a: EntityId, b: EntityId) => {
+        const za = world.getComponent<ParallaxLayerComponent>(a, 'ParallaxLayer')!.zIndex
+        const zb = world.getComponent<ParallaxLayerComponent>(b, 'ParallaxLayer')!.zIndex
+        return za - zb
+      })
+
+      gl.useProgram(this.parallaxProgram)
+      gl.uniform2f(this.pUCanvasSize, W, H)
+      gl.uniform1i(this.pUTexture, 0)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindVertexArray(this.parallaxVAO)
+
+      for (const id of parallaxEntities) {
+        const layer = world.getComponent<ParallaxLayerComponent>(id, 'ParallaxLayer')!
+
+        // Keep imageWidth/imageHeight in sync with loaded image
+        let img = this.parallaxImageCache.get(layer.src)
+        if (!img) {
+          this.loadParallaxTexture(layer.src)
+          continue // not ready
+        }
+        if (!img.complete || img.naturalWidth === 0) continue
+        if (layer.imageWidth === 0) layer.imageWidth = img.naturalWidth
+        if (layer.imageHeight === 0) layer.imageHeight = img.naturalHeight
+
+        const tex = this.parallaxTextures.get(layer.src)
+        if (!tex) continue
+
+        const imgW = layer.imageWidth
+        const imgH = layer.imageHeight
+
+        // Compute UV offset: how much to scroll the texture based on camera and layer settings
+        const drawX = layer.offsetX - camX * layer.speedX
+        const drawY = layer.offsetY - camY * layer.speedY
+        const uvOffsetX = ((drawX / imgW) % 1 + 1) % 1
+        const uvOffsetY = ((drawY / imgH) % 1 + 1) % 1
+
+        gl.bindTexture(gl.TEXTURE_2D, tex)
+        gl.uniform2f(this.pUUvOffset, uvOffsetX, uvOffsetY)
+        gl.uniform2f(this.pUTexSize, imgW, imgH)
+        gl.drawArrays(gl.TRIANGLES, 0, 6)
+      }
+    }
+
+    // ── Upload camera uniforms for sprite program ──────────────────────────────
     gl.useProgram(this.program)
     gl.uniform2f(this.uCamPos, camX, camY)
     gl.uniform1f(this.uZoom, zoom)
@@ -528,6 +760,43 @@ export class WebGLRenderSystem implements System {
       batchCount++
     }
 
+    // ── Text rendering pass ───────────────────────────────────────────────────
+    // Text entities are rendered as textured quads using offscreen Canvas2D textures.
+    const textEntities = world.query('Transform', 'Text')
+    textEntities.sort((a: EntityId, b: EntityId) => {
+      const ta = world.getComponent<TextComponent>(a, 'Text')!
+      const tb = world.getComponent<TextComponent>(b, 'Text')!
+      return ta.zIndex - tb.zIndex
+    })
+
+    for (const id of textEntities) {
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const text      = world.getComponent<TextComponent>(id, 'Text')!
+      if (!text.visible) continue
+
+      const entry = this.getOrCreateTextTexture(text)
+      if (!entry) continue
+
+      // Flush any pending sprite batch first, then draw the text quad
+      this.flush(batchCount, batchKey)
+      batchCount = 0
+      batchKey = ''
+
+      // Write text as a single textured instance
+      this.writeInstance(
+        0,
+        transform.x + text.offsetX, transform.y + text.offsetY,
+        entry.w, entry.h,
+        transform.rotation,
+        0, 0,       // anchor top-left
+        0, 0,
+        false,
+        1, 1, 1, 1, // white tint — color baked into texture
+        0, 0, 1, 1,
+      )
+      this.flushWithTex(1, entry.tex, true)
+    }
+
     // ── Particles ────────────────────────────────────────────────────────────
     for (const id of world.query('Transform', 'ParticlePool')) {
       const t    = world.getComponent<TransformComponent>(id, 'Transform')!
@@ -583,6 +852,45 @@ export class WebGLRenderSystem implements System {
         pCount++
       }
       if (pCount > 0) this.flush(pCount, pKey)
+    }
+
+    // ── Trail update + render pass ────────────────────────────────────────────
+    for (const id of world.query('Transform', 'Trail')) {
+      const t     = world.getComponent<TransformComponent>(id, 'Transform')!
+      const trail = world.getComponent<TrailComponent>(id, 'Trail')!
+
+      // Prepend current position
+      trail.points.unshift({ x: t.x, y: t.y })
+      // Trim to max length
+      if (trail.points.length > trail.length) trail.points.length = trail.length
+
+      if (trail.points.length < 1) continue
+
+      const [tr, tg, tb] = parseCSSColor(trail.color)
+      const trailW = trail.width > 0 ? trail.width : 1
+      let tCount = 0
+
+      for (let i = 0; i < trail.points.length; i++) {
+        if (tCount >= MAX_INSTANCES) {
+          this.flush(tCount, '__color__')
+          tCount = 0
+        }
+        // Alpha fades from 1 (newest) to 0 (oldest)
+        const alpha = 1 - i / trail.points.length
+        this.writeInstance(
+          tCount * FLOATS_PER_INSTANCE,
+          trail.points[i].x, trail.points[i].y,
+          trailW, trailW,
+          0,
+          0.5, 0.5,
+          0, 0,
+          false,
+          tr, tg, tb, alpha,
+          0, 0, 1, 1,
+        )
+        tCount++
+      }
+      if (tCount > 0) this.flush(tCount, '__color__')
     }
   }
 }

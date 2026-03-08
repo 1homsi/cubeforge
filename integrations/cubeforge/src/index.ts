@@ -103,6 +103,10 @@ export type { DevToolsHandle } from '@cubeforge/devtools'
 export type { SpriteAtlas } from './components/spriteAtlas'
 export { createAtlas } from './components/spriteAtlas'
 
+// Renderer exports — Canvas2DRenderSystem for opt-in, WebGLRenderSystem for advanced use
+export { RenderSystem as Canvas2DRenderSystem } from '@cubeforge/renderer'
+export { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
+
 // Types and utilities from engine packages
 export type { EngineState } from './context'
 export type { GameControls } from './components/Game'

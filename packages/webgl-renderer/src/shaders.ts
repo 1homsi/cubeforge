@@ -82,3 +82,41 @@ void main() {
   }
 }
 `
+
+// ── Parallax layer shaders ────────────────────────────────────────────────────
+// Draws a fullscreen NDC quad and tiles the texture using UV offsets.
+
+export const PARALLAX_VERT_SRC = `#version 300 es
+layout(location = 0) in vec2 a_pos;
+
+out vec2 v_fragCoord;
+
+void main() {
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+  // Convert NDC (-1..1) to canvas pixel coords (0..canvasSize) in the frag shader
+  v_fragCoord = a_pos * 0.5 + 0.5; // 0..1 normalized screen coord
+}
+`
+
+export const PARALLAX_FRAG_SRC = `#version 300 es
+precision mediump float;
+
+in vec2 v_fragCoord;
+
+uniform sampler2D u_texture;
+uniform vec2      u_uvOffset;
+uniform vec2      u_texSize;   // texture size in pixels
+uniform vec2      u_canvasSize; // canvas size in pixels
+
+out vec4 fragColor;
+
+void main() {
+  // Screen pixel position
+  vec2 screenPx = v_fragCoord * u_canvasSize;
+  // Tile: offset by uvOffset and wrap
+  vec2 uv = mod((screenPx / u_texSize + u_uvOffset), 1.0);
+  // Y must be flipped because WebGL origin is bottom-left but canvas is top-left
+  uv.y = 1.0 - uv.y;
+  fragColor = texture(u_texture, uv);
+}
+`

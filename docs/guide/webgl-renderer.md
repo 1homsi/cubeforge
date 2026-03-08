@@ -1,55 +1,39 @@
-# WebGL Renderer
+# Renderers
 
-`@cubeforge/webgl-renderer` is an optional drop-in replacement for the default Canvas2D render system. It uses **WebGL2 instanced rendering** — sprites sharing the same texture are drawn in a single GPU draw call, which dramatically increases throughput for sprite-heavy scenes.
+Cubeforge uses **WebGL2 instanced rendering by default** — no configuration needed. For compatibility, pixel art, or custom pipelines you can opt into the Canvas2D renderer or write your own.
 
-## Install
+## Default: WebGL2
 
-```bash
-bun add @cubeforge/webgl-renderer
-# or
-npm install @cubeforge/webgl-renderer
-```
-
-## Usage
-
-Pass the `WebGLRenderSystem` constructor to `<Game renderer>`:
+`<Game>` automatically uses WebGL2:
 
 ```tsx
-import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
-
-<Game renderer={WebGLRenderSystem} width={800} height={600}>
+<Game width={800} height={600}>
   <World>
-    {/* your entities */}
+    {/* WebGL2 instanced rendering — no prop needed */}
   </World>
 </Game>
 ```
 
-The Canvas2D renderer remains the default — no change needed for existing games.
+If WebGL2 is unavailable in the browser (very rare in modern browsers), Cubeforge automatically falls back to Canvas2D with a console warning.
 
-## What it supports
+## Opt-in: Canvas2D
 
-Everything the Canvas2D renderer does:
+Pass `renderer={Canvas2DRenderSystem}` (or the string `'canvas2d'`) to use the Canvas2D renderer:
 
-- Solid color quads and textured sprites
-- Sprite sheets (`frameIndex`, `frameWidth`, `frameHeight`, `frameColumns`)
-- Legacy `frame` rect (atlas-style)
-- Camera follow, smoothing, dead zone, bounds clamping, shake
-- Rotation, flipX, anchor, offset, scaleX/Y
-- SquashStretch modifier
-- Animation system (same frame-advance logic)
-- Particle pools (rendered as instanced color quads)
+```tsx
+import { Canvas2DRenderSystem } from 'cubeforge'
 
-## How batching works
+<Game renderer={Canvas2DRenderSystem} width={800} height={600}>
+  <World>
+    {/* Canvas2D rendering */}
+  </World>
+</Game>
+```
 
-Each frame, all sprites are sorted by `(zIndex, textureSrc)`. Consecutive sprites with the same texture are emitted as a single `drawArraysInstanced` call with up to 8192 instances per batch. Solid-color sprites (no image) are grouped separately into color batches.
-
-This means a scene with 500 identical tree sprites (same texture) = **1 draw call**.
-
-## Limitations
-
-- **No parallax layers** — `<ParallaxLayer>` uses Canvas2D tiling patterns that aren't available in WebGL. Use the default renderer if you need parallax.
-- **No debug overlay** — the `debug` prop is silently ignored when using a custom `renderer`. Use browser DevTools for GPU debugging.
-- **WebGL2 required** — supported in all modern browsers. Safari 15+, Chrome 56+, Firefox 51+.
+Good reasons to use Canvas2D:
+- Pixel-art games with `scale="pixel"` where you want explicit control
+- Environments that disable WebGL (some browser extensions, headless test environments)
+- Debugging rendering behaviour with familiar Canvas2D APIs
 
 ## Custom renderers
 
@@ -71,3 +55,33 @@ class MyRenderer implements System {
 
 <Game renderer={MyRenderer} />
 ```
+
+## What the WebGL2 renderer supports
+
+Everything the Canvas2D renderer does:
+
+- Solid color quads and textured sprites
+- Sprite sheets (`frameIndex`, `frameWidth`, `frameHeight`, `frameColumns`)
+- Legacy `frame` rect (atlas-style)
+- Camera follow, smoothing, dead zone, bounds clamping, shake
+- Rotation, flipX, anchor, offset, scaleX/Y
+- SquashStretch modifier
+- Animation system (same frame-advance logic)
+- Particle pools (rendered as instanced color quads)
+- Parallax layers (tiled fullscreen quads with UV offset)
+- Text components (rendered via offscreen Canvas2D texture, cached)
+- Trail components (rendered as fading instanced quads)
+
+## How batching works
+
+Each frame, all sprites are sorted by `(zIndex, textureSrc)`. Consecutive sprites with the same texture are emitted as a single `drawArraysInstanced` call with up to 8192 instances per batch. Solid-color sprites (no image) are grouped separately.
+
+This means a scene with 500 identical tree sprites (same texture) = **1 draw call**.
+
+## Debug overlay
+
+`<Game debug>` always works regardless of renderer. When WebGL2 is active, the debug wireframes are drawn on a transparent `<canvas>` overlay positioned on top of the WebGL canvas — so they never interfere with WebGL state.
+
+## WebGL2 browser support
+
+Supported in all modern browsers: Safari 15+, Chrome 56+, Firefox 51+.
