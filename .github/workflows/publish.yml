@@ -38,7 +38,7 @@ jobs:
           VERSION="${VERSION#v}"
           node -e "
             const fs = require('fs');
-            ['packages/react/package.json', 'packages/create-cubeforge-game/package.json'].forEach(p => {
+            ['integrations/cubeforge/package.json', 'packages/create-cubeforge-game/package.json'].forEach(p => {
               const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
               pkg.version = '${VERSION}';
               // Apply publishConfig fields to root (npm publish does not do this automatically)
@@ -62,7 +62,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Publish cubeforge
-        run: cd packages/react && npm publish --provenance --access public --no-git-checks
+        run: cd integrations/cubeforge && npm publish --provenance --access public --no-git-checks
 
       - name: Publish create-cubeforge-game
         run: cd packages/create-cubeforge-game && npm publish --provenance --access public --no-git-checks
