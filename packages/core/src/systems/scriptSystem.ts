@@ -8,7 +8,9 @@ export class ScriptSystem implements System {
   update(world: ECSWorld, dt: number): void {
     const entities = world.query('Script')
     for (const id of entities) {
-      const script = world.getComponent<ScriptComponent>(id, 'Script')!
+      if (!world.hasEntity(id)) continue
+      const script = world.getComponent<ScriptComponent>(id, 'Script')
+      if (!script?.update) continue
       try {
         script.update(id, world, this.input, dt)
       } catch (err) {
