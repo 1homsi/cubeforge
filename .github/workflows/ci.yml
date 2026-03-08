@@ -30,3 +30,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Docs build
+        run: pnpm run docs:build

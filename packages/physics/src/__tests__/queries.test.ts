@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect } from 'vitest'
 import { ECSWorld, createTransform, findByTag, createTag } from '@cubeforge/core'
 import { createBoxCollider } from '../components/boxCollider'
 import { overlapBox, raycast } from '../queries'

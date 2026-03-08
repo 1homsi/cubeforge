@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { GameLoop } from '../loop/gameLoop'
 
 // Mock browser globals required by GameLoop

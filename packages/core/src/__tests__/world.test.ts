@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { ECSWorld } from '../ecs/world'
 import type { System } from '../ecs/world'
 

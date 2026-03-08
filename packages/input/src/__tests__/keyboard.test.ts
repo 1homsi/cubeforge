@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { Keyboard } from '../keyboard'
 
 // Helper: dispatch a synthetic keydown on an EventTarget

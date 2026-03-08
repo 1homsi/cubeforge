@@ -7,18 +7,22 @@
     "dev:platformer": "pnpm --filter platformer-example dev",
     "build": "pnpm --filter './packages/*' run build",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test --if-present",
+    "test": "vitest run",
+    "check-exports": "tsx scripts/check-exports.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "esbuild": "^0.21.0",
+    "happy-dom": "^14.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
+    "vitest": "^2.0.0",
     "vitepress": "^1.6.4"
   }
 }
