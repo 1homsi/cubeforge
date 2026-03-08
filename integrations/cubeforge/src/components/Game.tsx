@@ -262,6 +262,14 @@ export function Game({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine])
 
+  // Sync canvas dimensions when width/height props change
+  useEffect(() => {
+    if (!engine) return
+    const canvas = engine.canvas
+    if (canvas.width !== width) canvas.width = width
+    if (canvas.height !== height) canvas.height = height
+  }, [width, height, engine])
+
   // Sync gravity changes
   useEffect(() => {
     engine?.physics.setGravity(gravity)
