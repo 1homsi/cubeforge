@@ -1,4 +1,4 @@
-import { useEffect, useContext } from 'react'
+import { useEffect, useContext, useRef } from 'react'
 import { createScript, type ScriptUpdateFn } from '@cubeforge/core'
 import type { ECSWorld, EntityId } from '@cubeforge/core'
 import type { InputManager } from '@cubeforge/input'
@@ -15,15 +15,24 @@ export function Script({ init, update }: ScriptProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
+  // Keep refs to always call the latest callback — prevents stale closures
+  // when the parent re-renders with new props/state.
+  const initRef = useRef(init)
+  initRef.current = init
+  const updateRef = useRef(update)
+  updateRef.current = update
+
   useEffect(() => {
-    if (init) {
+    if (initRef.current) {
       try {
-        init(entityId, engine.ecs)
+        initRef.current(entityId, engine.ecs)
       } catch (err) {
         console.error(`[Cubeforge] Script init error on entity ${entityId}:`, err)
       }
     }
-    engine.ecs.addComponent(entityId, createScript(update as ScriptUpdateFn))
+    const stableUpdate: ScriptUpdateFn = (id, world, input, dt) =>
+      (updateRef.current as ScriptUpdateFn)(id, world, input, dt)
+    engine.ecs.addComponent(entityId, createScript(stableUpdate))
     return () => engine.ecs.removeComponent(entityId, 'Script')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
