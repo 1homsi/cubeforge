@@ -204,6 +204,9 @@ function pairKey(a: EntityId, b: EntityId): string {
 export class PhysicsSystem implements System {
   private accumulator = 0
   private readonly FIXED_DT = 1 / 60
+  /** Maximum accumulated time (seconds). Prevents hundreds of sub-steps when
+   *  the tab is backgrounded and dt spikes on resume. 0.1s ≈ 6 steps at 60Hz. */
+  private readonly MAX_ACCUMULATOR = 0.1
 
   // Active contact sets — updated each physics step.
   private activeTriggerPairs    = new Map<string, [EntityId, EntityId]>()
@@ -223,9 +226,9 @@ export class PhysicsSystem implements System {
 
   update(world: ECSWorld, dt: number): void {
     this.accumulator += dt
-    // Cap accumulator to prevent spiral of death
-    if (this.accumulator > 5 * this.FIXED_DT) {
-      this.accumulator = 5 * this.FIXED_DT
+    // Cap accumulator to prevent freeze after tab-background (large dt spike)
+    if (this.accumulator > this.MAX_ACCUMULATOR) {
+      this.accumulator = this.MAX_ACCUMULATOR
     }
     while (this.accumulator >= this.FIXED_DT) {
       this.step(world, this.FIXED_DT)
