@@ -1,14 +1,14 @@
 {
   "name": "cubeforge",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "React-first 2D browser game engine",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.mts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
