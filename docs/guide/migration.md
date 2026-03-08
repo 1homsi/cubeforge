@@ -37,7 +37,7 @@ Starting in 0.2.1, `ScriptSystem` skips destroyed entities mid-iteration. If you
 
 ### WebGL2 is now the default
 
-As of 0.3.0, `<Game>` uses the WebGL2 instanced renderer by default. Canvas2D is still available as an opt-in fallback:
+As of 0.3.0, `<Game>` uses the WebGL2 instanced renderer. The `renderer` prop has been removed — WebGL2 is always used.
 
 **Before (0.2.x):**
 
@@ -53,15 +53,11 @@ import { WebGLRenderer } from 'cubeforge'
 **After (0.3.x):**
 
 ```tsx
-// WebGL2 is now the default — no prop needed
+// WebGL2 is now the only renderer — no prop needed
 <Game width={800} height={600}>
-
-// Canvas2D is the opt-in fallback
-import { Canvas2DRenderSystem } from 'cubeforge'
-<Game width={800} height={600} renderer={Canvas2DRenderSystem}>
 ```
 
-If your game worked fine on 0.2.x, it should work identically on 0.3.x — the WebGL2 renderer supports everything Canvas2D did. Switch back to Canvas2D only if you encounter compatibility issues on older browsers (Safari < 15, etc.).
+If your game worked fine on 0.2.x, it should work identically on 0.3.x — the WebGL2 renderer supports everything Canvas2D did.
 
 ### Sprite tiling
 

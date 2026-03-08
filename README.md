@@ -117,7 +117,7 @@ Most browser game engines are imperative — you create objects, call methods, a
 - **Debug-ready** — `<Game debug>` shows collider wireframes, FPS, entity counts
 - **Time-travel DevTools** — `<Game devtools>` adds a frame scrubber and entity inspector
 - **Deterministic** — `<Game deterministic seed={n}>` for reproducible physics and replays
-- **WebGL2 renderer** — default renderer; instanced GPU rendering out of the box (Canvas2D opt-in via `renderer={Canvas2DRenderSystem}`)
+- **WebGL2 renderer** — instanced GPU rendering out of the box
 - **Multiplayer** — `@cubeforge/net` provides Room, syncEntity, and ClientPrediction rollback
 
 ---
@@ -150,8 +150,8 @@ Most browser game engines are imperative — you create objects, call methods, a
 | `cubeforge` | Components and hooks — the main public API |
 | `@cubeforge/core` | ECS, game loop, events, assets, tween, pathfinding, steering, deterministic RNG |
 | `@cubeforge/input` | Keyboard, mouse, gamepad, input contexts, player input, recording/playback |
-| `@cubeforge/renderer` | Canvas2D renderer, camera, sprites, animations, particles, trails, parallax |
-| `@cubeforge/physics` | AABB + capsule collision, rigid bodies, kinematic mode, fixed 60 Hz, spatial broadphase |
+| `@cubeforge/renderer` | Camera, sprites, animations, particles, trails, parallax |
+| `@cubeforge/physics` | AABB collision, rigid bodies, kinematic mode, one-way platforms, fixed 60 Hz, spatial broadphase |
 | `@cubeforge/audio` | Web Audio API — useSound, volume groups, fade, duck, crossfade |
 | `@cubeforge/webgl-renderer` | WebGL2 instanced renderer — the default renderer used by `<Game>` |
 | `@cubeforge/net` | Multiplayer — Room, syncEntity, useNetworkInput, ClientPrediction |

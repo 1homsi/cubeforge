@@ -1,5 +1,7 @@
 # CapsuleCollider
 
+> **Status: component only** — `CapsuleCollider` registers a component on the entity but the physics solver does not yet resolve capsule-vs-box or capsule-vs-capsule collisions. Use `BoxCollider` for physics-resolved collisions until capsule support is added to the solver.
+
 A pill-shaped collider (two semicircles joined by a rectangle). Ideal for characters — avoids corner-catching on platforms.
 
 ## Props
@@ -33,5 +35,5 @@ function Player({ x, y }) {
 
 ## Notes
 
-- Physics resolves capsule collisions as a compound shape (two circles + a box body) to avoid corner-catching on tile edges.
+- The component type is registered on the ECS so you can query for it, but collision resolution is not yet implemented in the physics solver.
 - Use `layer` / `mask` to filter which objects this capsule interacts with.
