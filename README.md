@@ -13,49 +13,39 @@
 </Game>
 ```
 
+**[Documentation](https://cubeforge.dev)** · **[Examples](https://github.com/1homsi/cubeforge-examples)**
+
+---
+
 ## Quick start
 
-The fastest way to get started is the CLI — it scaffolds a full Vite + React project with a working game in seconds:
-
 ```bash
-# bun
-bunx create-cubeforge-game my-game
-
 # npm
 npx create-cubeforge-game my-game
+
+# pnpm
+pnpm create cubeforge-game my-game
 
 # yarn
 yarn create cubeforge-game my-game
 
-# pnpm
-pnpm create cubeforge-game my-game
+# bun
+bunx create-cubeforge-game my-game
 ```
-
-Then:
 
 ```bash
 cd my-game
-bun install
-bun run dev
+npm install
+npm run dev
 ```
 
-## Manual install
-
-Prefer adding Cubeforge to an existing React project?
+Or add to an existing React project:
 
 ```bash
-# bun
-bun add cubeforge react react-dom
-
-# npm
 npm install cubeforge react react-dom
-
-# yarn
-yarn add cubeforge react react-dom
-
-# pnpm
-pnpm add cubeforge react react-dom
 ```
+
+---
 
 ## Example
 
@@ -94,9 +84,11 @@ export default function MyGame() {
 }
 ```
 
+---
+
 ## Examples
 
-Six runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-examples):
+Ten runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-examples):
 
 | Example | Description |
 |---|---|
@@ -115,478 +107,39 @@ Six runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-e
 
 ## Why Cubeforge
 
-Most browser game engines are imperative. You create objects, call methods, manage loops manually. Cubeforge flips that: your game is a React component tree. Mount a component → entity exists. Unmount it → entity is gone.
+Most browser game engines are imperative — you create objects, call methods, and manage loops manually. Cubeforge flips that: your game is a React component tree. Mount a component → entity exists. Unmount it → entity is gone.
 
 - **Declarative** — describe your world, not your frame loop
 - **Composable** — `<Player />`, `<Enemy />`, `<MovingPlatform />` are just React components
-- **Lightweight runtime** — no heavy engine dependencies; ECS, physics, renderer, and input are all purpose-built and small
+- **Lightweight** — purpose-built ECS, physics, renderer, and input; no heavy runtime deps
 - **TypeScript-first** — every API is fully typed
 - **Embeddable** — drop a game into any React app with one component
 - **Debug-ready** — `<Game debug>` shows collider wireframes, FPS, entity counts
-- **Time-travel DevTools** — `<Game devtools>` adds a frame scrubber and entity inspector you can use to inspect and rewind your game state
-- **Deterministic simulation** — `<Game deterministic seed={n}>` for reproducible physics and replays
-- **WebGL2 renderer** — `@cubeforge/webgl-renderer` replaces Canvas2D with instanced GPU rendering (one draw call per texture group)
-- **Multiplayer** — `@cubeforge/net` provides Room, syncEntity, useNetworkInput, and ClientPrediction rollback
+- **Time-travel DevTools** — `<Game devtools>` adds a frame scrubber and entity inspector
+- **Deterministic** — `<Game deterministic seed={n}>` for reproducible physics and replays
+- **WebGL2 renderer** — `@cubeforge/webgl-renderer` for instanced GPU rendering
+- **Multiplayer** — `@cubeforge/net` provides Room, syncEntity, and ClientPrediction rollback
 
 ---
 
 ## What can I build?
 
-Cubeforge is a good fit for:
-
 - **Platformers** — scrolling levels, jump mechanics, enemies, coins
 - **Top-down games** — dungeon crawlers, twin-stick shooters, RPG overworlds
 - **Arcade games** — breakout, flappy bird, shoot-em-ups, endless runners
 - **Roguelikes** — procedural rooms, turn-based or real-time combat
-- **Mini-games in web apps** — embed a playable game directly in a marketing page, onboarding flow, or dashboard
-- **Interactive experiences** — educational games, gamified UI, interactive demos
+- **Mini-games in web apps** — embed a playable game in a marketing page, onboarding flow, or dashboard
 - **Game jams** — fast to set up, familiar if you already know React
 
 ---
 
-## Why Cubeforge?
+## vs other tools
 
-**vs Phaser**
+**vs Phaser** — Phaser is imperative: `this.physics.add.sprite()`, scene lifecycles, manual wiring. Cubeforge is JSX — your game tree, React state, same composition model as your UI.
 
-Phaser uses an imperative API — you call `this.physics.add.sprite()`, manage scene lifecycles, and wire everything up manually. Cubeforge uses React components. Your game tree is JSX, state is React state, and everything composes the same way your UI does.
+**vs Three.js** — Three.js is a 3D rendering library with no physics, input, or entity system. Cubeforge is a complete 2D game runtime with all of that included.
 
-**vs Three.js**
-
-Three.js is a 3D rendering library. It doesn't include physics, input, game loops, or an entity system. Cubeforge is a complete 2D game runtime — you get all of that out of the box.
-
-**vs Unity WebGL**
-
-Unity exports require a separate build pipeline and ship a large runtime. Cubeforge is a npm package — add it to any existing React app, ship it as part of your normal build, and it loads instantly.
-
----
-
-## Components
-
-### `<Game>`
-
-Root component. Creates the canvas, engine, and all subsystems.
-
-```tsx
-<Game
-  width={900}
-  height={560}
-  gravity={980}
-  debug                 // collider wireframes + FPS overlay
-  devtools              // time-travel debugger (frame scrubber + entity inspector)
-  deterministic         // seeded RNG for reproducible simulations
-  seed={12345}
-  scale="contain"       // 'none' | 'contain' | 'pixel'
-  renderer={WebGLRenderSystem}  // optional WebGL2 renderer
-  onReady={(controls) => {
-    controls.pause()
-    controls.resume()
-    controls.reset()
-  }}
-/>
-```
-
-### `<World>`
-
-Sets world-level config. All game entities go inside.
-
-```tsx
-<World background="#1a1a2e" gravity={1200} />
-```
-
-### `<Entity>`
-
-Creates an ECS entity. Children attach components to it.
-
-```tsx
-<Entity id="player" tags={['player', 'hero']}>
-  {/* components */}
-</Entity>
-```
-
-### `<Transform>`
-
-Position, rotation, scale. Required for physics and rendering.
-
-```tsx
-<Transform x={100} y={300} rotation={0} scaleX={1} scaleY={1} />
-```
-
-### `<Sprite>`
-
-Renders the entity — color rect, image, or sprite sheet frame.
-
-```tsx
-<Sprite
-  width={32}
-  height={48}
-  color="#4fc3f7"
-  src="/player.png"
-  frameIndex={2}
-  frameWidth={32}
-  frameHeight={48}
-  frameColumns={8}
-  anchorX={0.5}
-  anchorY={0.5}
-  zIndex={10}
-  flipX={false}
-  visible={true}
-/>
-```
-
-### `<Animation>`
-
-Drives frame-based sprite sheet animations.
-
-```tsx
-<Animation
-  frames={[0, 1, 2, 3]}
-  fps={12}
-  loop
-  playing
-  onComplete={() => setHitDone(true)}  // called when a non-looping animation finishes
-/>
-```
-
-### `<RigidBody>`
-
-Makes an entity participate in physics.
-
-```tsx
-<RigidBody
-  isStatic={false}     // true = immovable (platforms, walls)
-  gravityScale={1}     // 0 for top-down games
-  mass={1}
-  friction={0.85}
-  bounce={0}
-  lockX={false}        // freeze horizontal position (useful for vertical-only movement)
-  lockY={false}        // freeze vertical position and skip gravity
-/>
-```
-
-`rb.onGround` is `true` when the entity rests on a solid surface.
-
-### `<BoxCollider>`
-
-Axis-aligned bounding box.
-
-```tsx
-<BoxCollider
-  width={32}
-  height={48}
-  offsetX={0}
-  offsetY={0}
-  isTrigger={false}    // trigger: fires event, doesn't block movement
-/>
-```
-
-### `<Script>`
-
-Per-entity logic. Called every frame.
-
-```tsx
-<Script
-  init={(id, world) => {
-    world.addComponent(id, { type: 'MyData', value: 42 })
-  }}
-  update={(id, world, input, dt) => {
-    // runs every frame
-  }}
-/>
-```
-
-### `<Camera2D>`
-
-Smooth-follow camera with bounds and dead zone.
-
-```tsx
-<Camera2D
-  followEntity="player"
-  smoothing={0.87}
-  zoom={1}
-  bounds={{ x: 0, y: 0, width: 3000, height: 900 }}
-  deadZone={{ w: 80, h: 40 }}
-/>
-```
-
-### `<CircleCollider>`
-
-Adds a circular trigger collider to an entity. Circle colliders detect overlaps with other circles and with `BoxCollider` shapes, emitting `circleEnter`/`circleExit` events. They do **not** block movement — use `BoxCollider` for solid collision.
-
-```tsx
-<CircleCollider
-  radius={20}
-  offsetX={0}
-  offsetY={0}
-  isTrigger={true}
-  layer="pickup"
-  mask="player"
-/>
-```
-
-Use `useCircleEnter` / `useCircleExit` to react to overlaps.
-
-### `<SquashStretch>`
-
-Adds squash-and-stretch visual feel based on velocity (visual only).
-
-```tsx
-<SquashStretch intensity={0.2} recovery={8} />
-```
-
-### `<ParticleEmitter>`
-
-Lightweight particle effect attached to an entity.
-
-```tsx
-<ParticleEmitter
-  active={true}
-  rate={20}
-  speed={80}
-  spread={Math.PI}
-  angle={-Math.PI / 2}
-  particleLife={0.8}
-  particleSize={4}
-  color="#ff6b35"
-  gravity={200}
-  maxParticles={100}
-/>
-```
-
-### `<MovingPlatform>`
-
-A static platform that oscillates between two points.
-
-```tsx
-<MovingPlatform x1={200} y1={350} x2={450} y2={350} width={120} duration={2.5} />
-```
-
-### `<Checkpoint>`
-
-Fires `onActivate` when the player enters the zone, then destroys itself.
-
-```tsx
-<Checkpoint x={800} y={450} onActivate={() => setSavePoint(800)} />
-```
-
-### `<Tilemap>`
-
-Loads a [Tiled](https://www.mapeditor.org/) JSON map, renders tiles, and auto-generates collision entities.
-
-```tsx
-<Tilemap
-  src="/levels/level1.json"
-  onSpawnObject={(obj, layer) => {
-    if (obj.type === 'player') return <Player x={obj.x} y={obj.y} />
-    if (obj.type === 'enemy')  return <Enemy  x={obj.x} y={obj.y} />
-    return null
-  }}
-/>
-```
-
-Layers named `"collision"` or with property `collision: true` auto-generate static `BoxCollider` entities.
-
----
-
-## Hooks
-
-### `usePlatformerController(entityId, opts?)`
-
-Full platformer controls (WASD/arrows + jump) with coyote time, jump buffer, and sprite flip.
-
-```tsx
-const id = useEntity()
-usePlatformerController(id, {
-  speed: 220,
-  jumpForce: -520,
-  maxJumps: 2,
-  coyoteTime: 0.08,
-  jumpBuffer: 0.08,
-})
-```
-
-### `useTopDownMovement(entityId, opts?)`
-
-4-directional top-down movement. Set `gravityScale={0}` on `<RigidBody>`.
-
-```tsx
-const id = useEntity()
-useTopDownMovement(id, { speed: 180, normalizeDiagonal: true })
-```
-
-### `useCircleEnter` / `useCircleExit`
-
-Subscribe to circle-collider overlap events. Must be used inside an `<Entity>` that has a `<CircleCollider>`.
-
-```tsx
-useCircleEnter((other) => {
-  collectCoin()
-}, { tag: 'player' })
-```
-
-### `useGame()`
-
-Full engine access — ECS, input, events, assets, renderer.
-
-```tsx
-const engine = useGame()
-engine.ecs.query('Transform', 'RigidBody')
-engine.events.on('collision', ({ a, b }) => { ... })
-engine.assets.loadImage('/tileset.png')
-```
-
-### `useEvent(event, handler)`
-
-Subscribe to an engine event with auto-cleanup on unmount.
-
-```tsx
-useEvent('collision', ({ a, b }) => { ... })
-```
-
-### `useEntity()`
-
-Get the numeric ECS entity ID for the current `<Entity>`.
-
-```tsx
-const entityId = useEntity()
-```
-
-### `useInput()`
-
-Direct `InputManager` access outside of `<Script>`.
-
-```tsx
-const input = useInput()
-if (input.isDown('ArrowRight')) { ... }
-```
-
----
-
-## Input
-
-```tsx
-input.isDown('ArrowLeft')     // held every frame
-input.isPressed('Space')      // true only on the frame pressed
-input.isReleased('Escape')    // true only on the frame released
-
-input.mouse.x                 // cursor X relative to canvas
-input.mouse.isDown(0)         // left button held
-input.mouse.isPressed(0)      // left button just clicked
-```
-
-Keys work by `e.code` (`'Space'`, `'KeyA'`) or `e.key` (`'a'`).
-
----
-
-## Physics
-
-Two-pass AABB (X then Y) with fixed 60hz timestep and spatial broadphase grid.
-
-- Fixed timestep: physics always runs at 60 steps/sec regardless of render FPS
-- Broadphase: 128px cell spatial grid — no O(n×m) checks
-- `gravityScale={0}` for top-down or zero-gravity games
-- Triggers fire a `trigger` event on `EventBus` without blocking movement
-
----
-
-## DevTools
-
-```tsx
-<Game devtools />
-```
-
-Adds a time-travel debugging panel below the canvas:
-- Drag the scrubber to any recorded frame (10-second ring buffer)
-- Pause and step frame-by-frame
-- Click entities to inspect their component values at any point in time
-
-## Deterministic simulation
-
-```tsx
-<Game deterministic seed={42} />
-```
-
-All internal randomness (particles, camera shake) uses a seeded LCG. The same seed + inputs = identical simulation every time. Use `world.rng()` in your scripts for reproducible logic.
-
-## WebGL renderer
-
-```bash
-bun add @cubeforge/webgl-renderer
-```
-
-```tsx
-import { WebGLRenderSystem } from '@cubeforge/webgl-renderer'
-
-<Game renderer={WebGLRenderSystem} />
-```
-
-Replaces Canvas2D with WebGL2 instanced rendering. Sprites sharing the same texture are batched into a single GPU draw call.
-
-## Multiplayer
-
-```bash
-bun add @cubeforge/net
-```
-
-```tsx
-import { createWebSocketTransport, Room, syncEntity } from '@cubeforge/net'
-
-const transport = createWebSocketTransport('wss://your-server.com/game')
-const room = new Room({ transport, roomId: 'game-1', peerId: 'p1' })
-room.connect()
-
-// Sync Transform + RigidBody from owner to all peers at 20 Hz
-syncEntity({ room, world, entityId: id, components: ['Transform', 'RigidBody'], isOwner: true })
-```
-
-Transport-agnostic — works with WebSocket, WebRTC, Partykit, or anything with `send` / `receive`.
-
----
-
-## Tween
-
-```tsx
-import { tween, Ease } from 'cubeforge'
-
-const handle = tween(0, 100, 0.5, Ease.easeOutQuad, (v) => {
-  sprite.width = v
-})
-
-// In a Script update:
-handle.update(dt)
-handle.stop()
-handle.isComplete
-```
-
-Available easing: `Ease.linear`, `easeInQuad`, `easeOutQuad`, `easeInOutQuad`, `easeOutBack`.
-
----
-
-## Assets
-
-```tsx
-const { assets } = useGame()
-
-await assets.preloadImages(['/player.png', '/tileset.png'])
-assets.playAudio('/jump.wav', 0.8)
-assets.playLoopAudio('/bgm.mp3', 0.5)
-assets.stopAudio('/bgm.mp3')
-assets.stopAll()
-```
-
----
-
-## Embedding in React Apps
-
-```tsx
-<Game width={800} height={500} scale="contain" onReady={setControls}>
-  <World>...</World>
-</Game>
-
-<button onClick={() => controls?.pause()}>Pause</button>
-<button onClick={() => controls?.resume()}>Resume</button>
-```
-
-Scale modes: `'none'` (default), `'contain'` (fit parent), `'pixel'` (pixel-art).
+**vs Unity WebGL** — Unity requires a separate build pipeline and ships a large runtime. Cubeforge is an npm package — add it to any React app, ship with your normal build, loads instantly.
 
 ---
 
@@ -594,13 +147,14 @@ Scale modes: `'none'` (default), `'contain'` (fit parent), `'pixel'` (pixel-art)
 
 | Package | Description |
 |---|---|
-| `cubeforge` | Components and hooks — the main API |
-| `@cubeforge/core` | ECS world (archetype-based), game loop, events, assets, tween, deterministic RNG, snapshots |
-| `@cubeforge/input` | Keyboard and mouse |
-| `@cubeforge/renderer` | Canvas2D renderer, camera, sprites, animations, particles, parallax |
-| `@cubeforge/physics` | AABB collision, rigid bodies, fixed 60 Hz timestep, spatial broadphase |
-| `@cubeforge/webgl-renderer` | Optional WebGL2 instanced renderer — drop-in replacement for Canvas2D |
-| `@cubeforge/net` | Multiplayer helpers — Room, syncEntity, useNetworkInput, ClientPrediction |
+| `cubeforge` | Components and hooks — the main public API |
+| `@cubeforge/core` | ECS, game loop, events, assets, tween, pathfinding, steering, deterministic RNG |
+| `@cubeforge/input` | Keyboard, mouse, gamepad, input contexts, player input, recording/playback |
+| `@cubeforge/renderer` | Canvas2D renderer, camera, sprites, animations, particles, trails, parallax |
+| `@cubeforge/physics` | AABB + capsule collision, rigid bodies, kinematic mode, fixed 60 Hz, spatial broadphase |
+| `@cubeforge/audio` | Web Audio API — useSound, volume groups, fade, duck, crossfade |
+| `@cubeforge/webgl-renderer` | Optional WebGL2 instanced renderer — drop-in for Canvas2D |
+| `@cubeforge/net` | Multiplayer — Room, syncEntity, useNetworkInput, ClientPrediction |
 | `create-cubeforge-game` | CLI scaffolder |
 
 ---
@@ -610,9 +164,9 @@ Scale modes: `'none'` (default), `'contain'` (fit parent), `'pixel'` (pixel-art)
 ```bash
 git clone https://github.com/1homsi/cubeforge
 cd cubeforge
-bun install
-bun run typecheck
-bun test
+pnpm install
+pnpm run typecheck
+pnpm test
 ```
 
 ---
