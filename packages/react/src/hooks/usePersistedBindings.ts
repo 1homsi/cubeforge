@@ -51,11 +51,13 @@ export function usePersistedBindings(
 
   const input = useInput()
 
-  // Normalize: ensure every action maps to string[]
+  // Normalize: ensure every action maps to string[] (skip AxisBinding entries)
   const normalized = useMemo(() => {
     const out: Record<string, string[]> = {}
     for (const [action, keys] of Object.entries(bindings)) {
-      out[action] = Array.isArray(keys) ? keys : [keys]
+      if (typeof keys === 'string') out[action] = [keys]
+      else if (Array.isArray(keys)) out[action] = keys as string[]
+      // AxisBinding entries are not supported for isActionDown etc.
     }
     return out
   }, [bindings])

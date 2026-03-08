@@ -107,7 +107,7 @@ export function createInputRecorder(): InputRecorderControls {
  * Convenience helper: create a recorder that automatically reads pressed keys
  * from the InputManager's keyboard state each frame.
  */
-export function createManagedRecorder(input: InputManager): InputRecorderControls & {
+export function createManagedRecorder(_input: InputManager): InputRecorderControls & {
   tick(): InputFrame | null
 } {
   const recorder = createInputRecorder()

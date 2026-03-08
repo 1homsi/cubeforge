@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useContext } from 'react'
 import { createTransform, createScript } from '@cubeforge/core'
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId, NavGrid } from '@cubeforge/core'
+import { setWalkable } from '@cubeforge/core'
 import { createSprite } from '@cubeforge/renderer'
 import type { SpriteComponent } from '@cubeforge/renderer'
 import { createRigidBody, createBoxCollider } from '@cubeforge/physics'
@@ -138,6 +139,19 @@ interface TilemapProps {
    * Receives the global tile ID, the property map, and the tile's world position.
    */
   onTileProperty?: (tileId: number, properties: Record<string, unknown>, x: number, y: number) => void
+  /**
+   * If provided, collision-layer tiles automatically mark the corresponding
+   * NavGrid cells as non-walkable. The grid must already be created with the
+   * correct dimensions (map.width × map.height) and cellSize (map.tilewidth).
+   */
+  navGrid?: NavGrid
+  /**
+   * Name of the object layer that contains spawn markers.
+   * Objects in this layer are forwarded to `onSpawnObject` just like any
+   * other object layer, but they are also identified as spawn points so you
+   * can filter them by `layer.name === spawnLayer` inside the callback.
+   */
+  spawnLayer?: string
 }
 
 export function Tilemap({
@@ -148,6 +162,7 @@ export function Tilemap({
   collisionLayer = 'collision',
   triggerLayer: triggerLayerName = 'triggers',
   onTileProperty,
+  navGrid,
 }: TilemapProps): React.ReactElement | null {
   const engine = useContext(EngineContext)!
   const [spawnedNodes, setSpawnedNodes] = useState<React.ReactNode[]>([])
@@ -227,6 +242,16 @@ export function Tilemap({
         if (layer.type === 'tilelayer' && layer.data) {
           const collision = isCollisionLayer(layer, collisionLayer)
           const trigger = !collision && isTriggerLayer(layer, triggerLayerName)
+
+          // Mark navGrid cells as non-walkable for collision tiles
+          if (collision && navGrid) {
+            for (let row = 0; row < mapData.height; row++) {
+              for (let col = 0; col < mapData.width; col++) {
+                const gid = layer.data[row * mapData.width + col]
+                if (gid !== 0) setWalkable(navGrid, col, row, false)
+              }
+            }
+          }
 
           if (collision || trigger) {
             // Merge adjacent filled tiles in each row into single wide colliders

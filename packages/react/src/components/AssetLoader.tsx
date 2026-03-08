@@ -28,7 +28,7 @@ interface AssetLoaderProps {
  * ```
  */
 export function AssetLoader({ assets, fallback = null, onError, children }: AssetLoaderProps) {
-  const { loaded, error, progress } = usePreload(assets)
+  const { loaded, error } = usePreload(assets)
 
   if (error && onError) {
     onError(error)
