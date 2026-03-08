@@ -360,18 +360,36 @@ export class RenderSystem implements System {
     const cached = this.textures.get(src)
     if (cached) return cached
 
+    // Check if this src is already loaded in imageCache (e.g. from fallback path)
+    const existing = this.imageCache.get(src)
+    if (existing && existing.complete && existing.naturalWidth > 0) {
+      const gl = this.gl
+      const tex = gl.createTexture()!
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, existing)
+      gl.generateMipmap(gl.TEXTURE_2D)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      this.textures.set(src, tex)
+      return tex
+    }
+
     // Return white while image loads; swap in real texture on load
-    let img = this.imageCache.get(src)
-    if (!img) {
-      img = new Image()
+    if (!existing) {
+      const img = new Image()
       img.src = src
       img.onload = () => {
-        const tex = this.gl.createTexture()!
-        this.gl.bindTexture(this.gl.TEXTURE_2D, tex)
-        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, img!)
-        this.gl.generateMipmap(this.gl.TEXTURE_2D)
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR)
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR)
+        const gl = this.gl
+        const tex = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, tex)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
+        gl.generateMipmap(gl.TEXTURE_2D)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
         this.textures.set(src, tex)
       }
       this.imageCache.set(src, img)
@@ -700,21 +718,39 @@ export class RenderSystem implements System {
       const sprite    = world.getComponent<SpriteComponent>(id, 'Sprite')!
       if (!sprite.visible) continue
 
-      // Ensure the HTMLImageElement is attached to the sprite (for UV rect calc)
-      if (sprite.src && !sprite.image) {
+      // Ensure we have a GL texture for this sprite's image.
+      // Sprite.tsx already loads the image via AssetManager (with correct BASE_URL resolution)
+      // and sets sprite.image. Use that directly to create the texture synchronously.
+      if (sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0) {
+        const src = sprite.image.src
+        if (src && !this.textures.has(src)) {
+          const gl = this.gl
+          const tex = gl.createTexture()!
+          gl.bindTexture(gl.TEXTURE_2D, tex)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sprite.image)
+          gl.generateMipmap(gl.TEXTURE_2D)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+          this.textures.set(src, tex)
+        }
+      } else if (sprite.src && !sprite.image) {
+        // Fallback: image not yet loaded by AssetManager — start loading it
         let img = this.imageCache.get(sprite.src)
         if (!img) {
           img = new Image()
           img.src = sprite.src
           this.imageCache.set(sprite.src, img)
           img.onload = () => {
-            const tex = this.gl.createTexture()!
-            this.gl.bindTexture(this.gl.TEXTURE_2D, tex)
-            this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, img!)
-            this.gl.generateMipmap(this.gl.TEXTURE_2D)
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR)
-            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR)
-            this.textures.set(sprite.src!, tex)
+            const gl = this.gl
+            const tex = gl.createTexture()!
+            gl.bindTexture(gl.TEXTURE_2D, tex)
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img!)
+            gl.generateMipmap(gl.TEXTURE_2D)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+            this.textures.set(img!.src, tex)
           }
         }
         sprite.image = img
