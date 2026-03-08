@@ -20,14 +20,18 @@ function usePlatformerController(
 | `maxJumps` | number | `1` | Maximum consecutive jumps. Use `2` for double jump. |
 | `coyoteTime` | number | `0.08` | Seconds after leaving a platform edge the player can still jump |
 | `jumpBuffer` | number | `0.08` | Seconds a jump input is buffered before landing |
+| `jumpCooldown` | number | `0.18` | Minimum seconds between consecutive jumps |
+| `bindings` | object | see below | Custom key bindings for `left`, `right`, and `jump` actions |
 
-## Controls
+### Bindings
 
-| Key | Action |
+The optional `bindings` object lets you remap controls. Each action accepts a single key name or an array of key names. If omitted, the defaults below are used.
+
+| Action | Default keys |
 |---|---|
-| Arrow Left / A | Move left |
-| Arrow Right / D | Move right |
-| Space / Arrow Up / W | Jump |
+| `left` | `['ArrowLeft', 'KeyA', 'a']` |
+| `right` | `['ArrowRight', 'KeyD', 'd']` |
+| `jump` | `['Space', 'ArrowUp', 'KeyW', 'w']` |
 
 ## Example
 
@@ -42,6 +46,11 @@ function PlayerController() {
     maxJumps: 2,
     coyoteTime: 0.08,
     jumpBuffer: 0.08,
+    bindings: {
+      left:  ['ArrowLeft', 'KeyA'],
+      right: ['ArrowRight', 'KeyD'],
+      jump:  ['Space', 'ArrowUp'],
+    },
   })
   return null
 }
