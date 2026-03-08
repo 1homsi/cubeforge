@@ -1,0 +1,41 @@
+{
+  "name": "@cubeforge/audio",
+  "version": "0.0.1",
+  "description": "Web Audio API layer for Cubeforge — group mixing, fades, ducking",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsup"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.mts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.mts"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  },
+  "keywords": [
+    "game-engine",
+    "audio",
+    "web-audio",
+    "cubeforge"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
+  },
+  "private": true
+}

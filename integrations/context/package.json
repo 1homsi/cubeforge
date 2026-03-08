@@ -1,0 +1,38 @@
+{
+  "name": "@cubeforge/context",
+  "version": "0.0.1",
+  "description": "Shared React context for Cubeforge integrations (internal)",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@cubeforge/core": "workspace:*",
+    "@cubeforge/input": "workspace:*",
+    "@cubeforge/physics": "workspace:*",
+    "@cubeforge/renderer": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
+  },
+  "private": true
+}

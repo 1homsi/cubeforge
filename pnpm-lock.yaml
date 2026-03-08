@@ -39,6 +39,121 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)
 
+  integrations/context:
+    dependencies:
+      '@cubeforge/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cubeforge/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@cubeforge/physics':
+        specifier: workspace:*
+        version: link:../../packages/physics
+      '@cubeforge/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      react:
+        specifier: ^18.0.0
+        version: 18.3.1
+
+  integrations/cubeforge:
+    dependencies:
+      react:
+        specifier: ^18.0.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.0.0
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@cubeforge/audio':
+        specifier: workspace:*
+        version: link:../../packages/audio
+      '@cubeforge/context':
+        specifier: workspace:*
+        version: link:../context
+      '@cubeforge/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cubeforge/devtools':
+        specifier: workspace:*
+        version: link:../devtools
+      '@cubeforge/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
+      '@cubeforge/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@cubeforge/physics':
+        specifier: workspace:*
+        version: link:../../packages/physics
+      '@cubeforge/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+
+  integrations/devtools:
+    dependencies:
+      '@cubeforge/context':
+        specifier: workspace:*
+        version: link:../context
+      '@cubeforge/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cubeforge/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@cubeforge/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      react:
+        specifier: ^18.0.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.0.0
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+
+  integrations/gameplay:
+    dependencies:
+      '@cubeforge/context':
+        specifier: workspace:*
+        version: link:../context
+      '@cubeforge/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cubeforge/input':
+        specifier: workspace:*
+        version: link:../../packages/input
+      '@cubeforge/physics':
+        specifier: workspace:*
+        version: link:../../packages/physics
+      '@cubeforge/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      react:
+        specifier: ^18.0.0
+        version: 18.3.1
+    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+
+  packages/audio:
+    dependencies:
+      react:
+        specifier: ^18.0.0
+        version: 18.3.1
+    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+
   packages/core: {}
 
   packages/create-cubeforge-game: {}
@@ -64,31 +179,6 @@ importers:
       '@cubeforge/core':
         specifier: workspace:*
         version: link:../core
-
-  packages/react:
-    dependencies:
-      react:
-        specifier: ^18.0.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.0.0
-        version: 18.3.1(react@18.3.1)
-    devDependencies:
-      '@cubeforge/core':
-        specifier: workspace:*
-        version: link:../core
-      '@cubeforge/input':
-        specifier: workspace:*
-        version: link:../input
-      '@cubeforge/physics':
-        specifier: workspace:*
-        version: link:../physics
-      '@cubeforge/renderer':
-        specifier: workspace:*
-        version: link:../renderer
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
 
   packages/renderer:
     dependencies:

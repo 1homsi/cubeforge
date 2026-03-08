@@ -1,0 +1,40 @@
+{
+  "name": "@cubeforge/gameplay",
+  "version": "0.0.1",
+  "description": "High-level gameplay hooks for Cubeforge (internal)",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsup"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.mts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.mts"
+      }
+    }
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@cubeforge/context": "workspace:*",
+    "@cubeforge/core": "workspace:*",
+    "@cubeforge/input": "workspace:*",
+    "@cubeforge/physics": "workspace:*",
+    "@cubeforge/renderer": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
+  },
+  "private": true
+}
