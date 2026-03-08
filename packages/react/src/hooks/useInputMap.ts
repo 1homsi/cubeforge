@@ -15,6 +15,11 @@ export interface BoundInputMap {
    * @see {@link AxisBinding}
    */
   getAxis(action: string): number
+  /**
+   * Alias for `getAxis`. Matches the `PlayerInput` naming convention — use this
+   * when writing code that needs to work with both `useInputMap` and `usePlayerInput`.
+   */
+  getActionAxis(action: string): number
 }
 
 /**
@@ -47,5 +52,6 @@ export function useInputMap(bindings: ActionBindings): BoundInputMap {
     isActionPressed:  (action: string) => map.isActionPressed(input, action),
     isActionReleased: (action: string) => map.isActionReleased(input, action),
     getAxis:          (action: string) => map.getAxis(input, action),
+    getActionAxis:    (action: string) => map.getAxis(input, action),
   }), [input, map])
 }

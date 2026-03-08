@@ -1,4 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useContext } from 'react'
+import { createScript } from '@cubeforge/core'
+import { EngineContext } from '../context'
 
 export interface GameState {
   /** Called once when this state becomes active. */
@@ -7,7 +9,7 @@ export interface GameState {
   onExit?(): void
   /**
    * Called every frame while this state is active.
-   * Wire this up by calling `update(dt)` from a Script or useEffect loop.
+   * Runs automatically inside the ScriptSystem tick — no manual wiring needed.
    */
   onUpdate?(dt: number): void
 }
@@ -20,22 +22,20 @@ export interface GameStateMachineResult<S extends string> {
    * `onEnter` on the new state.
    */
   transition(to: S): void
-  /**
-   * Advance the current state by `dt` seconds.
-   * Call this from a game loop or Script `update` callback.
-   */
-  update(dt: number): void
 }
 
 /**
  * Lightweight game state machine for top-level game flow (menu → playing → paused → dead).
  *
+ * `onUpdate` callbacks run automatically inside the ScriptSystem tick — they
+ * respect pause and deterministic mode without any manual wiring.
+ *
  * @example
  * ```tsx
- * const { state, transition, update } = useGameStateMachine({
+ * const { state, transition } = useGameStateMachine({
  *   playing: {
  *     onEnter: () => console.log('game started'),
- *     onUpdate: (dt) => { ... },
+ *     onUpdate: (dt) => { moveEnemies(dt) },
  *   },
  *   paused: {
  *     onEnter: () => console.log('paused'),
@@ -50,6 +50,7 @@ export function useGameStateMachine<S extends string>(
   states: Record<S, GameState>,
   initial: S,
 ): GameStateMachineResult<S> {
+  const engine = useContext(EngineContext)!
   const [state, setState] = useState<S>(initial)
   const stateRef = useRef<S>(initial)
   const statesRef = useRef(states)
@@ -70,9 +71,17 @@ export function useGameStateMachine<S extends string>(
     statesRef.current[to]?.onEnter?.()
   }, [])
 
-  const update = useCallback((dt: number) => {
-    statesRef.current[stateRef.current]?.onUpdate?.(dt)
-  }, [])
+  // Register a Script entity so onUpdate runs inside the ScriptSystem tick —
+  // respects pause and deterministic stepping without any caller wiring.
+  useEffect(() => {
+    const eid = engine.ecs.createEntity()
+    engine.ecs.addComponent(eid, createScript((_id, _world, _input, dt) => {
+      statesRef.current[stateRef.current]?.onUpdate?.(dt)
+    }))
+    return () => {
+      if (engine.ecs.hasEntity(eid)) engine.ecs.destroyEntity(eid)
+    }
+  }, [engine.ecs])
 
-  return { state, transition, update }
+  return { state, transition }
 }

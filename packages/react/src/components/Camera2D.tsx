@@ -59,6 +59,8 @@ export function Camera2D({
     if (camId === undefined) return
     const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')!
     cam.followEntityId = followEntity
+    cam.x = x
+    cam.y = y
     cam.zoom = zoom
     cam.smoothing = smoothing
     cam.background = background
@@ -66,7 +68,7 @@ export function Camera2D({
     cam.deadZone = deadZone
     cam.followOffsetX = followOffsetX
     cam.followOffsetY = followOffsetY
-  }, [followEntity, zoom, smoothing, background, bounds, deadZone, followOffsetX, followOffsetY, engine])
+  }, [followEntity, x, y, zoom, smoothing, background, bounds, deadZone, followOffsetX, followOffsetY, engine])
 
   return null
 }

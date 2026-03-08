@@ -7,10 +7,15 @@ export interface PlayerInput {
   isDown(key: string): boolean
   isPressed(key: string): boolean
   isReleased(key: string): boolean
+  /** Raw axis from two keys: positive - negative, range -1..1. */
   getAxis(positiveKey: string, negativeKey: string): number
   isActionDown(action: string): boolean
   isActionPressed(action: string): boolean
   isActionReleased(action: string): boolean
+  /**
+   * Returns -1..1 for the named action's axis binding, or 1/0 for key bindings.
+   * Alias: `getAxis(action)` — consistent with `BoundInputMap`.
+   */
   getActionAxis(action: string): number
 }
 
