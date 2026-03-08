@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { ActionBindings } from '@cubeforge/input'
+import { createInputMap } from '@cubeforge/input'
 import { useInput } from './useInput'
 
 export interface BoundInputMap {
@@ -9,6 +10,11 @@ export interface BoundInputMap {
   isActionPressed(action: string): boolean
   /** True only on the frame any bound key was released. */
   isActionReleased(action: string): boolean
+  /**
+   * Returns -1..1 for axis bindings. For key bindings, 1 if down, 0 otherwise.
+   * @see {@link AxisBinding}
+   */
+  getAxis(action: string): number
 }
 
 /**
@@ -34,21 +40,12 @@ export function useInputMap(bindings: ActionBindings): BoundInputMap {
   // (b) state-driven bindings (e.g. from usePersistedBindings) do re-normalize
   // when the actual content changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const normalized = useMemo(() => {
-    const out: Record<string, string[]> = {}
-    for (const [action, keys] of Object.entries(bindings)) {
-      out[action] = Array.isArray(keys) ? keys : [keys]
-    }
-    return out
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(bindings)])
+  const map = useMemo(() => createInputMap(bindings), [JSON.stringify(bindings)]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return useMemo(() => ({
-    isActionDown: (action: string) =>
-      (normalized[action] ?? []).some(k => input.isDown(k)),
-    isActionPressed: (action: string) =>
-      (normalized[action] ?? []).some(k => input.isPressed(k)),
-    isActionReleased: (action: string) =>
-      (normalized[action] ?? []).some(k => input.isReleased(k)),
-  }), [input, normalized])
+    isActionDown:     (action: string) => map.isActionDown(input, action),
+    isActionPressed:  (action: string) => map.isActionPressed(input, action),
+    isActionReleased: (action: string) => map.isActionReleased(input, action),
+    getAxis:          (action: string) => map.getAxis(input, action),
+  }), [input, map])
 }
