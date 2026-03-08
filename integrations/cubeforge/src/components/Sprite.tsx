@@ -83,17 +83,14 @@ export function Sprite({
     engine.ecs.addComponent(entityId, comp)
 
     if (src) {
-      // Apply Vite base URL so assets resolve correctly when deployed to a subdirectory.
-      // Cast through unknown because the engine tsconfig doesn't include vite/client types.
-      const viteEnv = (import.meta as unknown as { env?: { BASE_URL?: string } }).env
-      const base = (viteEnv?.BASE_URL ?? '/').replace(/\/$/, '')
-      const resolvedSrc = base && src.startsWith('/') ? base + src : src
-      // Store the resolved src on the component so the WebGL renderer uses the correct URL
-      // whether it loads the image itself or reads it from sprite.src directly.
-      comp.src = resolvedSrc
-      engine.assets.loadImage(resolvedSrc).then((img: HTMLImageElement) => {
+      // loadImage auto-resolves the base URL; store the resolved src on the
+      // component so the WebGL renderer's texture cache key matches.
+      engine.assets.loadImage(src).then((img: HTMLImageElement) => {
         const c = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
-        if (c) c.image = img
+        if (c) {
+          c.image = img
+          c.src = img.src // use the fully resolved URL for WebGL cache matching
+        }
       }).catch(console.error)
     }
 

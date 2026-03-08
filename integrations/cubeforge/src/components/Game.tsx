@@ -100,6 +100,9 @@ export function Game({
     const input = new InputManager()
     const events = new EventBus()
     const assets = new AssetManager()
+    // Apply Vite base URL so assets resolve correctly when deployed to a subdirectory
+    const viteEnv = (import.meta as unknown as { env?: { BASE_URL?: string } }).env
+    assets.baseURL = (viteEnv?.BASE_URL ?? '/').replace(/\/$/, '')
     ecs.assets = assets
     const physics = new PhysicsSystem(gravity, events)
     const entityIds = new Map<string, number>()

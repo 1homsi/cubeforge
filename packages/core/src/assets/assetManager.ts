@@ -14,6 +14,13 @@ export class AssetManager {
   private _total = 0
   private _progressListeners = new Set<(p: AssetProgress) => void>()
 
+  /** Base URL prefix applied to all asset paths starting with '/'. Set by Game component. */
+  baseURL = ''
+
+  private resolve(src: string): string {
+    return this.baseURL && src.startsWith('/') ? this.baseURL + src : src
+  }
+
   private getAudioContext(): AudioContext {
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext()
@@ -46,28 +53,29 @@ export class AssetManager {
   }
 
   async loadImage(src: string): Promise<HTMLImageElement> {
-    if (this.imagePromises.has(src)) return this.imagePromises.get(src)!
+    const resolved = this.resolve(src)
+    if (this.imagePromises.has(resolved)) return this.imagePromises.get(resolved)!
     this._total++
     this.emitProgress()
     const promise = (async () => {
       const img = new Image()
-      img.src = src
+      img.src = resolved
       try {
         await new Promise<void>((resolve, reject) => {
           img.onload  = () => resolve()
           img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
         })
       } catch (err) {
-        console.warn(`[Cubeforge] Failed to load image: ${src}`)
+        console.warn(`[Cubeforge] Failed to load image: ${resolved}`)
         throw err
       } finally {
         this._loaded++
         this.emitProgress()
       }
-      this.images.set(src, img)
+      this.images.set(resolved, img)
       return img
     })()
-    this.imagePromises.set(src, promise)
+    this.imagePromises.set(resolved, promise)
     return promise
   }
 
@@ -77,7 +85,7 @@ export class AssetManager {
   }
 
   getImage(src: string): HTMLImageElement | undefined {
-    return this.images.get(src)
+    return this.images.get(this.resolve(src))
   }
 
   /** Returns a read-only snapshot of all loaded images keyed by src. */
@@ -86,16 +94,17 @@ export class AssetManager {
   }
 
   async loadAudio(src: string): Promise<AudioBuffer> {
-    if (this.audio.has(src)) return this.audio.get(src)!
+    const resolved = this.resolve(src)
+    if (this.audio.has(resolved)) return this.audio.get(resolved)!
     const ctx = this.getAudioContext()
     try {
-      const response = await fetch(src)
+      const response = await fetch(resolved)
       const arrayBuffer = await response.arrayBuffer()
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-      this.audio.set(src, audioBuffer)
+      this.audio.set(resolved, audioBuffer)
       return audioBuffer
     } catch (err) {
-      console.warn(`[Cubeforge] Failed to load audio: ${src}`)
+      console.warn(`[Cubeforge] Failed to load audio: ${resolved}`)
       throw err
     }
   }
