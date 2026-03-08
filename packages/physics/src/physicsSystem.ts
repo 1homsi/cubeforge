@@ -439,6 +439,11 @@ export class PhysicsSystem implements System {
     }
 
     // Phase 6: dynamic vs dynamic — separation + collision events
+    // Position slop: ignore overlaps smaller than this to prevent jitter at rest.
+    const POSITION_SLOP = 0.5
+    // Correction factor: only resolve a fraction of the overlap each step to
+    // avoid ping-pong when multiple bodies are stacked.
+    const CORRECTION_FACTOR = 0.4
     const currentCollisionPairs = new Map<string, [EntityId, EntityId]>()
 
     for (let i = 0; i < dynamics.length; i++) {
@@ -470,10 +475,21 @@ export class PhysicsSystem implements System {
           }
         }
 
-        ta.x += ov.x / 2
-        ta.y += ov.y / 2
-        tb.x -= ov.x / 2
-        tb.y -= ov.y / 2
+        // Apply position correction with slop and damping to reduce stacking jitter.
+        // Subtract slop from each axis so near-resting overlaps produce zero correction.
+        const absOx = Math.abs(ov.x)
+        const absOy = Math.abs(ov.y)
+        const corrX = absOx > POSITION_SLOP
+          ? Math.sign(ov.x) * (absOx - POSITION_SLOP) * CORRECTION_FACTOR
+          : 0
+        const corrY = absOy > POSITION_SLOP
+          ? Math.sign(ov.y) * (absOy - POSITION_SLOP) * CORRECTION_FACTOR
+          : 0
+
+        ta.x += corrX / 2
+        ta.y += corrY / 2
+        tb.x -= corrX / 2
+        tb.y -= corrY / 2
 
         const key = pairKey(ia, ib)
         currentCollisionPairs.set(key, [ia, ib])
