@@ -146,6 +146,8 @@ interface TrailComponent {
 const FLOATS_PER_INSTANCE = 18
 /** Maximum sprites batched in a single draw call. */
 const MAX_INSTANCES = 8192
+/** Maximum sprite texture cache entries before evicting least-recently-used. */
+const MAX_SPRITE_TEXTURES = 512
 /** Maximum text texture cache entries before evicting oldest. */
 const MAX_TEXT_CACHE = 200
 
@@ -243,6 +245,8 @@ export class RenderSystem implements System {
   private readonly instanceData: Float32Array
   private readonly whiteTexture: WebGLTexture
   private readonly textures = new Map<string, WebGLTexture>()
+  /** Tracks texture access order for LRU eviction (most recent at end). */
+  private readonly textureLRU: string[] = []
   private readonly imageCache = new Map<string, HTMLImageElement>()
 
   // Cached uniform locations — sprite program
@@ -278,6 +282,24 @@ export class RenderSystem implements System {
 
   /** Get the current global default texture sampling mode. */
   getDefaultSampling(): Sampling { return this._defaultSampling }
+
+  // ── Sprite texture LRU helpers ──────────────────────────────────────────
+
+  /** Record a texture key as recently used; evict LRU entries if over limit. */
+  private touchTexture(key: string): void {
+    const idx = this.textureLRU.indexOf(key)
+    if (idx !== -1) this.textureLRU.splice(idx, 1)
+    this.textureLRU.push(key)
+    // Evict oldest entries if cache exceeds limit
+    while (this.textureLRU.length > MAX_SPRITE_TEXTURES) {
+      const evict = this.textureLRU.shift()!
+      const tex = this.textures.get(evict)
+      if (tex) {
+        this.gl.deleteTexture(tex)
+        this.textures.delete(evict)
+      }
+    }
+  }
 
   // ── Debug overlays ──────────────────────────────────────────────────────
   private debugNavGrid: NavGrid | null = null
@@ -407,7 +429,7 @@ export class RenderSystem implements System {
 
   private loadTexture(src: string): WebGLTexture {
     const cached = this.textures.get(src)
-    if (cached) return cached
+    if (cached) { this.touchTexture(src); return cached }
 
     // Strip :s=... sampling and :repeat suffixes used for cache keys — not part of the actual URL
     let imgSrc = src
@@ -427,6 +449,7 @@ export class RenderSystem implements System {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       this.textures.set(src, tex)
+      this.touchTexture(src)
       return tex
     }
 
@@ -446,6 +469,7 @@ export class RenderSystem implements System {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
         this.textures.set(src, tex)
+        this.touchTexture(src)
       }
       this.imageCache.set(imgSrc, img)
     }
@@ -808,6 +832,9 @@ export class RenderSystem implements System {
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
           this.textures.set(cacheKey, tex)
+          this.touchTexture(cacheKey)
+        } else if (cacheKey) {
+          this.touchTexture(cacheKey)
         }
       } else if (sprite.src && !sprite.image) {
         // Fallback: image not yet loaded by AssetManager — start loading it
@@ -824,6 +851,7 @@ export class RenderSystem implements System {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
             this.textures.set(img!.src, tex)
+            this.touchTexture(img!.src)
           }
         }
         sprite.image = img
