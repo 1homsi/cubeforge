@@ -100,6 +100,7 @@ export function Game({
     const input = new InputManager()
     const events = new EventBus()
     const assets = new AssetManager()
+    ecs.assets = assets
     const physics = new PhysicsSystem(gravity, events)
     const entityIds = new Map<string, number>()
 

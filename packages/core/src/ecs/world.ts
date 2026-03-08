@@ -39,6 +39,12 @@ export class ECSWorld {
   private _rngState = 0
   private _deterministic = false
 
+  /** Asset manager reference — set by Game, available in Script callbacks via world.assets */
+  assets!: {
+    getImage(src: string): HTMLImageElement | undefined
+    loadImage(src: string): Promise<HTMLImageElement>
+  }
+
   // Primary storage: archetypes keyed by sorted type string
   private archetypes = new Map<string, Archetype>()
 
