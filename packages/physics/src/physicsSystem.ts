@@ -4,6 +4,7 @@ import type { EventBus } from '@cubeforge/core'
 import type { RigidBodyComponent } from './components/rigidbody'
 import type { BoxColliderComponent } from './components/boxCollider'
 import type { CircleColliderComponent } from './components/circleCollider'
+import type { CapsuleColliderComponent } from './components/capsuleCollider'
 import type { CompoundColliderComponent, ColliderShape } from './components/compoundCollider'
 
 interface AABB {
@@ -22,6 +23,18 @@ function getAABB(
     cy: transform.y + collider.offsetY,
     hw: collider.width / 2,
     hh: collider.height / 2,
+  }
+}
+
+function getCapsuleAABB(
+  transform: TransformComponent,
+  capsule: CapsuleColliderComponent,
+): AABB {
+  return {
+    cx: transform.x + capsule.offsetX,
+    cy: transform.y + capsule.offsetY,
+    hw: capsule.width / 2,
+    hh: capsule.height / 2,
   }
 }
 
@@ -267,6 +280,7 @@ export class PhysicsSystem implements System {
   private activeCollisionPairs  = new Map<string, [EntityId, EntityId]>()
   private activeCirclePairs     = new Map<string, [EntityId, EntityId]>()
   private activeCompoundPairs   = new Map<string, [EntityId, EntityId]>()
+  private activeCapsulePairs    = new Map<string, [EntityId, EntityId]>()
 
   // Previous-frame positions of static entities — used to compute platform carry delta.
   private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
@@ -314,6 +328,15 @@ export class PhysicsSystem implements System {
       else dynamics.push(id)
     }
 
+    // Capsule entities (AABB approximation) — dynamic capsules participate in
+    // gravity, X/Y resolution against static boxes, and contact events.
+    const allCapsule = world.query('Transform', 'RigidBody', 'CapsuleCollider')
+    const capsuleDynamics: EntityId[] = []
+    for (const id of allCapsule) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (!rb.isStatic) capsuleDynamics.push(id)
+    }
+
     // ── Prune dead-entity pairs and emit exit events ─────────────────────────
     for (const [key, [a, b]] of this.activeTriggerPairs) {
       if (!world.hasEntity(a) || !world.hasEntity(b)) {
@@ -340,6 +363,12 @@ export class PhysicsSystem implements System {
       if (!world.hasEntity(a) || !world.hasEntity(b)) {
         this.events?.emit('compoundExit', { a, b })
         this.activeCompoundPairs.delete(key)
+      }
+    }
+    for (const [key, [a, b]] of this.activeCapsulePairs) {
+      if (!world.hasEntity(a) || !world.hasEntity(b)) {
+        this.events?.emit('capsuleExit', { a, b })
+        this.activeCapsulePairs.delete(key)
       }
     }
 
@@ -393,6 +422,18 @@ export class PhysicsSystem implements System {
       }
     }
 
+    // Phase 1b: gravity + reset for capsule dynamics
+    for (const id of capsuleDynamics) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      rb.onGround = false
+      rb.isNearGround = false
+      if (rb.isKinematic) continue
+      if (!rb.lockY) rb.vy += this.gravity * rb.gravityScale * dt
+      if (rb.lockX) rb.vx = 0
+      if (rb.lockY) rb.vy = 0
+      if (rb.dropThrough > 0) rb.dropThrough--
+    }
+
     // Phase 2 & 3: move X then resolve X
     for (const id of dynamics) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
@@ -418,6 +459,42 @@ export class PhysicsSystem implements System {
             if (!canInteract(col, sc)) continue
 
             const ov = getOverlap(getAABB(transform, col), getAABB(st, sc))
+            if (!ov) continue
+
+            if (Math.abs(ov.x) < Math.abs(ov.y)) {
+              transform.x += ov.x
+              rb.vx = rb.bounce > 0 ? -rb.vx * rb.bounce : 0
+            }
+          }
+        }
+      }
+    }
+
+    // Phase 2b & 3b: move X then resolve X for capsule dynamics
+    for (const id of capsuleDynamics) {
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const cap = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
+
+      transform.x += rb.vx * dt
+
+      if (!cap.isTrigger) {
+        const dynAABB = getCapsuleAABB(transform, cap)
+        const candidateCells = this.getCells(dynAABB.cx, dynAABB.cy, dynAABB.hw, dynAABB.hh)
+        const checked = new Set<EntityId>()
+        for (const cell of candidateCells) {
+          const bucket = staticGrid.get(cell)
+          if (!bucket) continue
+          for (const sid of bucket) {
+            if (checked.has(sid)) continue
+            checked.add(sid)
+            const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+            const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+            if (sc.isTrigger) continue
+            if (sc.slope !== 0) continue
+            if (!canInteractGeneric(cap.layer, cap.mask, sc.layer, sc.mask)) continue
+
+            const ov = getOverlap(getCapsuleAABB(transform, cap), getAABB(st, sc))
             if (!ov) continue
 
             if (Math.abs(ov.x) < Math.abs(ov.y)) {
@@ -503,10 +580,6 @@ export class PhysicsSystem implements System {
     }
 
     // Phase 5b: CCD — swept AABB for fast-moving bodies
-    // For bodies with ccd enabled that moved more than half their collider size,
-    // sweep from pre-step position to post-step position against all statics.
-    // If the sweep finds a collision earlier than where discrete resolution placed
-    // the body, clamp to the swept contact point.
     for (const [id, prev] of ccdPrev) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -514,13 +587,11 @@ export class PhysicsSystem implements System {
 
       const totalDx = transform.x - prev.x
       const totalDy = transform.y - prev.y
-      const moveLen = Math.abs(totalDx) + Math.abs(totalDy) // Manhattan for cheap threshold check
+      const moveLen = Math.abs(totalDx) + Math.abs(totalDy)
       const halfSize = Math.min(col.width, col.height) / 2
 
-      // Only activate CCD when movement exceeds half the collider's smallest dimension
       if (moveLen <= halfSize) continue
 
-      // Sweep from pre-step center to post-step center
       const startCx = prev.x + col.offsetX
       const startCy = prev.y + col.offsetY
       const sweepDx = totalDx
@@ -531,8 +602,6 @@ export class PhysicsSystem implements System {
       let earliestT = 1.0
       let hitSid: EntityId | null = null
 
-      // Check against all statics using the spatial grid
-      // Build candidate set from cells along the sweep path
       const endCx = startCx + sweepDx
       const endCy = startCy + sweepDy
       const minCx = Math.min(startCx, endCx)
@@ -566,38 +635,85 @@ export class PhysicsSystem implements System {
         }
       }
 
-      // If CCD found an earlier contact, clamp the body there
       if (hitSid !== null && earliestT < 1.0) {
-        // Place body at the swept contact point with a small epsilon push-back
         const eps = 0.01
         const clampedT = Math.max(0, earliestT - eps / (Math.hypot(sweepDx, sweepDy) || 1))
         transform.x = prev.x + totalDx * clampedT
         transform.y = prev.y + totalDy * clampedT
 
-        // Zero out velocity in the direction of the collision
-        // Determine collision normal from sweep direction
         const st = world.getComponent<TransformComponent>(hitSid, 'Transform')!
         const sc = world.getComponent<BoxColliderComponent>(hitSid, 'BoxCollider')!
         const staticAABB = getAABB(st, sc)
         const contactCx = prev.x + col.offsetX + totalDx * earliestT
         const contactCy = prev.y + col.offsetY + totalDy * earliestT
 
-        // Determine which axis the collision is on
         const dxFromCenter = contactCx - staticAABB.cx
         const dyFromCenter = contactCy - staticAABB.cy
         const overlapX = (hw + staticAABB.hw) - Math.abs(dxFromCenter)
         const overlapY = (hh + staticAABB.hh) - Math.abs(dyFromCenter)
 
         if (overlapX > overlapY) {
-          // Vertical collision
           rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
           if (dyFromCenter < 0) {
             rb.onGround = true
             if (rb.friction < 1) rb.vx *= rb.friction
           }
         } else {
-          // Horizontal collision
           rb.vx = rb.bounce > 0 ? -rb.vx * rb.bounce : 0
+        }
+      }
+    }
+
+    // Phase 4b & 5b: move Y then resolve Y for capsule dynamics
+    for (const id of capsuleDynamics) {
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const cap = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
+
+      transform.y += rb.vy * dt
+
+      if (!cap.isTrigger) {
+        const dynAABB = getCapsuleAABB(transform, cap)
+        const candidateCells = this.getCells(dynAABB.cx, dynAABB.cy, dynAABB.hw, dynAABB.hh)
+        const checked = new Set<EntityId>()
+        for (const cell of candidateCells) {
+          const bucket = staticGrid.get(cell)
+          if (!bucket) continue
+          for (const sid of bucket) {
+            if (checked.has(sid)) continue
+            checked.add(sid)
+            const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+            const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+            if (sc.isTrigger) continue
+            if (!canInteractGeneric(cap.layer, cap.mask, sc.layer, sc.mask)) continue
+
+            if (sc.slope !== 0) continue
+
+            const ov = getOverlap(getCapsuleAABB(transform, cap), getAABB(st, sc))
+            if (!ov) continue
+
+            if (Math.abs(ov.y) <= Math.abs(ov.x)) {
+              if (sc.oneWay) {
+                if (rb.dropThrough > 0) continue
+                if (ov.y >= 0) continue
+                const platformTop = st.y + sc.offsetY - sc.height / 2
+                const prevEntityBottom = (transform.y - rb.vy * dt) + cap.offsetY + cap.height / 2
+                if (prevEntityBottom > platformTop) continue
+              }
+
+              transform.y += ov.y
+              if (ov.y < 0) {
+                rb.onGround = true
+                if (rb.friction < 1) rb.vx *= rb.friction
+                const delta = staticDelta.get(sid)
+                if (delta) {
+                  transform.x += delta.dx
+                  if (delta.dy < 0) transform.y += delta.dy
+                }
+              }
+              rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
+            }
+          }
         }
       }
     }
@@ -704,6 +820,39 @@ export class PhysicsSystem implements System {
           if (ov && Math.abs(ov.y) <= Math.abs(ov.x) && ov.y < 0) {
             rb.isNearGround = true
             break outer
+          }
+        }
+      }
+    }
+
+    // Phase 7b: near-ground detection for capsule dynamics
+    for (const id of capsuleDynamics) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (rb.onGround) { rb.isNearGround = true; continue }
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const cap = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
+      const probeAABB: AABB = {
+        cx: transform.x + cap.offsetX,
+        cy: transform.y + cap.offsetY + 2,
+        hw: cap.width / 2,
+        hh: cap.height / 2,
+      }
+      const candidateCells = this.getCells(probeAABB.cx, probeAABB.cy, probeAABB.hw, probeAABB.hh)
+      const checked = new Set<EntityId>()
+      outerCapsule: for (const cell of candidateCells) {
+        const bucket = staticGrid.get(cell)
+        if (!bucket) continue
+        for (const sid of bucket) {
+          if (checked.has(sid)) continue
+          checked.add(sid)
+          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+          if (sc.isTrigger) continue
+          if (!canInteractGeneric(cap.layer, cap.mask, sc.layer, sc.mask)) continue
+          const ov = getOverlap(probeAABB, getAABB(st, sc))
+          if (ov && Math.abs(ov.y) <= Math.abs(ov.x) && ov.y < 0) {
+            rb.isNearGround = true
+            break outerCapsule
           }
         }
       }
@@ -932,6 +1081,64 @@ export class PhysicsSystem implements System {
         this.events?.emit('compoundExit', { a, b })
       }
       this.activeCompoundPairs = new Map()
+    }
+
+    // Phase 11: CapsuleCollider contacts (capsule-vs-box and capsule-vs-capsule AABB overlap)
+    // Uses AABB approximation — same overlap logic as box colliders.
+    if (allCapsule.length > 0) {
+      const currentCapsulePairs = new Map<string, [EntityId, EntityId]>()
+
+      // Capsule vs BoxCollider
+      const allBoxForCapsule = world.query('Transform', 'BoxCollider')
+      for (const cid of allCapsule) {
+        const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const capsuleAABB = getCapsuleAABB(ct, cc)
+        for (const bid of allBoxForCapsule) {
+          if (bid === cid) continue
+          const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+          if (!canInteractGeneric(cc.layer, cc.mask, bc.layer, bc.mask)) continue
+          const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+          const ov = getOverlap(capsuleAABB, getAABB(bt, bc))
+          if (ov) currentCapsulePairs.set(pairKey(cid, bid), [cid, bid])
+        }
+      }
+
+      // Capsule vs Capsule
+      for (let i = 0; i < allCapsule.length; i++) {
+        for (let j = i + 1; j < allCapsule.length; j++) {
+          const ia = allCapsule[i]
+          const ib = allCapsule[j]
+          const ca = world.getComponent<CapsuleColliderComponent>(ia, 'CapsuleCollider')!
+          const cb = world.getComponent<CapsuleColliderComponent>(ib, 'CapsuleCollider')!
+          if (!canInteractGeneric(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+          const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
+          const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
+          const ov = getOverlap(getCapsuleAABB(ta, ca), getCapsuleAABB(tb, cb))
+          if (ov) currentCapsulePairs.set(pairKey(ia, ib), [ia, ib])
+        }
+      }
+
+      // Emit capsuleEnter / capsule / capsuleStay / capsuleExit
+      for (const [key, [a, b]] of currentCapsulePairs) {
+        if (!this.activeCapsulePairs.has(key)) {
+          this.events?.emit('capsuleEnter', { a, b })
+        } else {
+          this.events?.emit('capsuleStay', { a, b })
+        }
+        this.events?.emit('capsule', { a, b })
+      }
+      for (const [key, [a, b]] of this.activeCapsulePairs) {
+        if (!currentCapsulePairs.has(key)) {
+          this.events?.emit('capsuleExit', { a, b })
+        }
+      }
+      this.activeCapsulePairs = currentCapsulePairs
+    } else if (this.activeCapsulePairs.size > 0) {
+      for (const [, [a, b]] of this.activeCapsulePairs) {
+        this.events?.emit('capsuleExit', { a, b })
+      }
+      this.activeCapsulePairs = new Map()
     }
   }
 }
