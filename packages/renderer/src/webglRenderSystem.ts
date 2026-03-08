@@ -471,6 +471,10 @@ export class RenderSystem implements System {
         this.textures.set(src, tex)
         this.touchTexture(src)
       }
+      img.onerror = () => {
+        console.warn(`[WebGLRenderSystem] Failed to load image: ${imgSrc}`)
+        this.imageCache.delete(imgSrc)
+      }
       this.imageCache.set(imgSrc, img)
     }
 
@@ -852,6 +856,10 @@ export class RenderSystem implements System {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
             this.textures.set(img!.src, tex)
             this.touchTexture(img!.src)
+          }
+          img.onerror = () => {
+            console.warn(`[WebGLRenderSystem] Failed to load image: ${img!.src}`)
+            this.imageCache.delete(img!.src)
           }
         }
         sprite.image = img
