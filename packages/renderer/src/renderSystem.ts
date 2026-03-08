@@ -7,6 +7,7 @@ import type { SquashStretchComponent } from './components/squashStretch'
 import type { ParticlePoolComponent } from './components/particle'
 import type { ParallaxLayerComponent } from './components/parallaxLayer'
 import type { TextComponent } from './components/text'
+import type { TrailComponent } from './components/trail'
 import { Canvas2DRenderer } from './canvas2d'
 
 const imageCache = new Map<string, HTMLImageElement>()
@@ -151,6 +152,8 @@ export class RenderSystem implements System {
             }
           }
         }
+        // Fire frame event for the new frame index (0-based position in frames array)
+        anim.frameEvents?.[anim.currentIndex]?.()
       }
       sprite.frameIndex = anim.frames[anim.currentIndex]
     }
@@ -375,6 +378,31 @@ export class RenderSystem implements System {
         ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size)
       }
       ctx.globalAlpha = 1
+    }
+
+    // --- Trail update + render pass ---
+    for (const id of world.query('Transform', 'Trail')) {
+      const t     = world.getComponent<TransformComponent>(id, 'Transform')!
+      const trail = world.getComponent<TrailComponent>(id, 'Trail')!
+      // Prepend current position
+      trail.points.unshift({ x: t.x, y: t.y })
+      // Trim to max length
+      if (trail.points.length > trail.length) trail.points.length = trail.length
+      // Draw fading polyline
+      if (trail.points.length < 2) continue
+      for (let i = 1; i < trail.points.length; i++) {
+        const alpha = 1 - i / trail.points.length
+        ctx.save()
+        ctx.globalAlpha = alpha
+        ctx.strokeStyle = trail.color
+        ctx.lineWidth = trail.width
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(trail.points[i - 1].x, trail.points[i - 1].y)
+        ctx.lineTo(trail.points[i].x, trail.points[i].y)
+        ctx.stroke()
+        ctx.restore()
+      }
     }
 
     // --- Debug: draw collider wireframes ---

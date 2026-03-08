@@ -13,9 +13,17 @@ interface AnimationProps {
   playing?: boolean
   /** Called once when a non-looping animation finishes playing */
   onComplete?: () => void
+  /**
+   * Callbacks fired when the animation advances to specific frame indices.
+   * Key = 0-based position in the `frames` array.
+   *
+   * @example
+   * frameEvents={{ 2: () => playFootstep(), 5: () => playFootstep() }}
+   */
+  frameEvents?: Record<number, () => void>
 }
 
-export function Animation({ frames, fps = 12, loop = true, playing = true, onComplete }: AnimationProps) {
+export function Animation({ frames, fps = 12, loop = true, playing = true, onComplete, frameEvents }: AnimationProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
@@ -30,6 +38,7 @@ export function Animation({ frames, fps = 12, loop = true, playing = true, onCom
       timer: 0,
       _completed: false,
       onComplete,
+      frameEvents,
     }
     engine.ecs.addComponent(entityId, state)
 
@@ -48,6 +57,7 @@ export function Animation({ frames, fps = 12, loop = true, playing = true, onCom
     anim.fps = fps
     anim.loop = loop
     anim.onComplete = onComplete
+    anim.frameEvents = frameEvents
     // Reset completion state if frames changed (new animation clip)
     if (wasFramesChanged) {
       anim.frames = frames
@@ -55,7 +65,7 @@ export function Animation({ frames, fps = 12, loop = true, playing = true, onCom
       anim.timer = 0
       anim._completed = false
     }
-  }, [playing, fps, loop, frames, onComplete, engine, entityId])
+  }, [playing, fps, loop, frames, onComplete, frameEvents, engine, entityId])
 
   return null
 }
