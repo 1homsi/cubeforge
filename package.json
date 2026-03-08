@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter demo dev",
     "dev:platformer": "pnpm --filter platformer-example dev",
-    "build": "pnpm --filter './packages/*' run build",
+    "build": "pnpm --filter './packages/*' --filter 'cubeforge' run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
     "check-exports": "tsx scripts/check-exports.ts",
