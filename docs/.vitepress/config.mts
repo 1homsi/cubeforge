@@ -38,6 +38,8 @@ export default defineConfig({
           items: [
             { text: 'DevTools & Deterministic Mode', link: '/guide/devtools' },
             { text: 'Renderer (WebGL2)', link: '/guide/webgl-renderer' },
+            { text: 'Performance', link: '/guide/performance' },
+            { text: 'Migration Guide', link: '/guide/migration' },
             { text: 'Multiplayer', link: '/guide/multiplayer' },
             { text: 'Embedding in React Apps', link: '/guide/embedding' },
           ],

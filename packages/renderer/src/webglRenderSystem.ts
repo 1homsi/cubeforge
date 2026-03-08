@@ -1,4 +1,4 @@
-import type { System, ECSWorld, EntityId } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import { VERT_SRC, FRAG_SRC, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC } from './shaders'
 import { parseCSSColor } from './colorParser'
@@ -252,6 +252,24 @@ export class RenderSystem implements System {
   private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number }>()
   /** Insertion-order key list for LRU-style eviction. */
   private readonly textureCacheKeys: string[] = []
+
+  // ── Debug overlays ──────────────────────────────────────────────────────
+  private debugNavGrid: NavGrid | null = null
+  private contactFlashPoints: { x: number; y: number; ttl: number }[] = []
+
+  // FPS tracking
+  private frameTimes: number[] = []
+  private lastTimestamp = 0
+
+  /** Overlay a nav grid: green = walkable, red = blocked. Pass null to clear. */
+  setDebugNavGrid(grid: NavGrid | null): void {
+    this.debugNavGrid = grid
+  }
+
+  /** Flash a point on the canvas for one frame (world-space coords). */
+  flashContactPoint(x: number, y: number): void {
+    this.contactFlashPoints.push({ x, y, ttl: 1 })
+  }
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -940,5 +958,69 @@ export class RenderSystem implements System {
       }
       if (tCount > 0) this.flush(tCount, '__color__')
     }
+
+    // ── Debug: nav grid overlay ──────────────────────────────────────────────
+    if (this.debugNavGrid) {
+      const g = this.debugNavGrid
+      let ngCount = 0
+      for (let row = 0; row < g.rows; row++) {
+        for (let col = 0; col < g.cols; col++) {
+          if (ngCount >= MAX_INSTANCES) {
+            this.flush(ngCount, '__color__')
+            ngCount = 0
+          }
+          const walkable = g.walkable[row * g.cols + col]
+          const cx = col * g.cellSize + g.cellSize / 2
+          const cy = row * g.cellSize + g.cellSize / 2
+          this.writeInstance(
+            ngCount * FLOATS_PER_INSTANCE,
+            cx, cy,
+            g.cellSize, g.cellSize,
+            0,
+            0.5, 0.5,
+            0, 0,
+            false,
+            walkable ? 0 : 1, walkable ? 1 : 0, 0, walkable ? 0.08 : 0.25,
+            0, 0, 1, 1,
+          )
+          ngCount++
+        }
+      }
+      if (ngCount > 0) this.flush(ngCount, '__color__')
+    }
+
+    // ── Debug: contact flash points ──────────────────────────────────────────
+    if (this.contactFlashPoints.length > 0) {
+      let cfCount = 0
+      for (const pt of this.contactFlashPoints) {
+        if (cfCount >= MAX_INSTANCES) {
+          this.flush(cfCount, '__color__')
+          cfCount = 0
+        }
+        this.writeInstance(
+          cfCount * FLOATS_PER_INSTANCE,
+          pt.x, pt.y,
+          8, 8,
+          0,
+          0.5, 0.5,
+          0, 0,
+          false,
+          1, 0.3, 0.3, 0.9,
+          0, 0, 1, 1,
+        )
+        cfCount++
+        pt.ttl--
+      }
+      if (cfCount > 0) this.flush(cfCount, '__color__')
+      this.contactFlashPoints = this.contactFlashPoints.filter(p => p.ttl > 0)
+    }
+
+    // ── FPS tracking ─────────────────────────────────────────────────────────
+    const now = performance.now()
+    if (this.lastTimestamp > 0) {
+      this.frameTimes.push(now - this.lastTimestamp)
+      if (this.frameTimes.length > 60) this.frameTimes.shift()
+    }
+    this.lastTimestamp = now
   }
 }

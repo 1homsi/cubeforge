@@ -4,6 +4,7 @@ import type { EventBus } from '@cubeforge/core'
 import type { RigidBodyComponent } from './components/rigidbody'
 import type { BoxColliderComponent } from './components/boxCollider'
 import type { CircleColliderComponent } from './components/circleCollider'
+import type { CompoundColliderComponent, ColliderShape } from './components/compoundCollider'
 
 interface AABB {
   cx: number
@@ -81,6 +82,118 @@ function canInteract(a: BoxColliderComponent, b: BoxColliderComponent): boolean 
   return maskAllows(a.mask, b.layer) && maskAllows(b.mask, a.layer)
 }
 
+// ── Compound collider helpers ──────────────────────────────────────────────────
+
+/** Compute the AABB for a single shape relative to the entity's transform. */
+function shapeToAABB(tx: number, ty: number, shape: ColliderShape): AABB {
+  if (shape.type === 'box') {
+    return {
+      cx: tx + shape.offsetX,
+      cy: ty + shape.offsetY,
+      hw: (shape.width ?? 0) / 2,
+      hh: (shape.height ?? 0) / 2,
+    }
+  }
+  // circle → bounding AABB
+  const r = shape.radius ?? 0
+  return {
+    cx: tx + shape.offsetX,
+    cy: ty + shape.offsetY,
+    hw: r,
+    hh: r,
+  }
+}
+
+/**
+ * Check if a compound collider shape overlaps with an AABB.
+ * For box shapes this is AABB-AABB; for circle shapes it's circle-AABB.
+ */
+function shapeOverlapsAABB(
+  tx: number,
+  ty: number,
+  shape: ColliderShape,
+  other: AABB,
+): Overlap | null {
+  if (shape.type === 'box') {
+    return getOverlap(shapeToAABB(tx, ty, shape), other)
+  }
+  // Circle vs AABB
+  const r = shape.radius ?? 0
+  const cx = tx + shape.offsetX
+  const cy = ty + shape.offsetY
+  const nearX = Math.max(other.cx - other.hw, Math.min(cx, other.cx + other.hw))
+  const nearY = Math.max(other.cy - other.hh, Math.min(cy, other.cy + other.hh))
+  const dx = cx - nearX
+  const dy = cy - nearY
+  if (dx * dx + dy * dy >= r * r) return null
+  // Approximate an overlap vector using the AABB of the circle
+  return getOverlap(shapeToAABB(tx, ty, shape), other)
+}
+
+/**
+ * Check if a compound shape overlaps with a circle collider.
+ */
+function shapeOverlapsCircle(
+  tx: number,
+  ty: number,
+  shape: ColliderShape,
+  cx: number,
+  cy: number,
+  cr: number,
+): boolean {
+  if (shape.type === 'circle') {
+    const r = shape.radius ?? 0
+    const dx = (tx + shape.offsetX) - cx
+    const dy = (ty + shape.offsetY) - cy
+    return dx * dx + dy * dy < (r + cr) * (r + cr)
+  }
+  // Box shape vs circle
+  const aabb = shapeToAABB(tx, ty, shape)
+  const nearX = Math.max(aabb.cx - aabb.hw, Math.min(cx, aabb.cx + aabb.hw))
+  const nearY = Math.max(aabb.cy - aabb.hh, Math.min(cy, aabb.cy + aabb.hh))
+  const dx = cx - nearX
+  const dy = cy - nearY
+  return dx * dx + dy * dy < cr * cr
+}
+
+/** Compute the overall bounding AABB of a compound collider. */
+function getCompoundBounds(
+  tx: number,
+  ty: number,
+  shapes: ColliderShape[],
+): AABB {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const s of shapes) {
+    const a = shapeToAABB(tx, ty, s)
+    const l = a.cx - a.hw
+    const r = a.cx + a.hw
+    const t = a.cy - a.hh
+    const b = a.cy + a.hh
+    if (l < minX) minX = l
+    if (r > maxX) maxX = r
+    if (t < minY) minY = t
+    if (b > maxY) maxY = b
+  }
+  return {
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+    hw: (maxX - minX) / 2,
+    hh: (maxY - minY) / 2,
+  }
+}
+
+function canInteractGeneric(
+  aLayer: string,
+  aMask: string | string[],
+  bLayer: string,
+  bMask: string | string[],
+): boolean {
+  return maskAllows(aMask, bLayer) && maskAllows(bMask, aLayer)
+}
+
 // ── Contact pair tracking ─────────────────────────────────────────────────────
 
 /** Stable key for an unordered entity pair. */
@@ -96,6 +209,7 @@ export class PhysicsSystem implements System {
   private activeTriggerPairs    = new Map<string, [EntityId, EntityId]>()
   private activeCollisionPairs  = new Map<string, [EntityId, EntityId]>()
   private activeCirclePairs     = new Map<string, [EntityId, EntityId]>()
+  private activeCompoundPairs   = new Map<string, [EntityId, EntityId]>()
 
   // Previous-frame positions of static entities — used to compute platform carry delta.
   private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
@@ -163,6 +277,12 @@ export class PhysicsSystem implements System {
       if (!world.hasEntity(a) || !world.hasEntity(b)) {
         this.events?.emit('circleExit', { a, b })
         this.activeCirclePairs.delete(key)
+      }
+    }
+    for (const [key, [a, b]] of this.activeCompoundPairs) {
+      if (!world.hasEntity(a) || !world.hasEntity(b)) {
+        this.events?.emit('compoundExit', { a, b })
+        this.activeCompoundPairs.delete(key)
       }
     }
 
@@ -518,6 +638,117 @@ export class PhysicsSystem implements System {
         this.events?.emit('circleExit', { a, b })
       }
       this.activeCirclePairs = new Map()
+    }
+
+    // Phase 10: CompoundCollider contacts
+    // Compound colliders emit contact events but do NOT physically resolve
+    // (same approach as CircleCollider — scripts handle response).
+    const allCompound = world.query('Transform', 'CompoundCollider')
+    if (allCompound.length > 0) {
+      const currentCompoundPairs = new Map<string, [EntityId, EntityId]>()
+
+      // Compound vs BoxCollider
+      const allBoxEntities = world.query('Transform', 'BoxCollider')
+      for (const cid of allCompound) {
+        const cc = world.getComponent<CompoundColliderComponent>(cid, 'CompoundCollider')!
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        for (const bid of allBoxEntities) {
+          if (bid === cid) continue
+          const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+          if (!canInteractGeneric(cc.layer, cc.mask, bc.layer, bc.mask)) continue
+          const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+          const boxAABB = getAABB(bt, bc)
+          let hit = false
+          for (const shape of cc.shapes) {
+            if (shapeOverlapsAABB(ct.x, ct.y, shape, boxAABB)) {
+              hit = true
+              break
+            }
+          }
+          if (hit) currentCompoundPairs.set(pairKey(cid, bid), [cid, bid])
+        }
+      }
+
+      // Compound vs CircleCollider
+      for (const cid of allCompound) {
+        const cc = world.getComponent<CompoundColliderComponent>(cid, 'CompoundCollider')!
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        for (const oid of allCircles) {
+          if (oid === cid) continue
+          const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
+          if (!canInteractGeneric(cc.layer, cc.mask, oc.layer, oc.mask)) continue
+          const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
+          let hit = false
+          for (const shape of cc.shapes) {
+            if (shapeOverlapsCircle(ct.x, ct.y, shape, ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius)) {
+              hit = true
+              break
+            }
+          }
+          if (hit) currentCompoundPairs.set(pairKey(cid, oid), [cid, oid])
+        }
+      }
+
+      // Compound vs Compound
+      for (let i = 0; i < allCompound.length; i++) {
+        for (let j = i + 1; j < allCompound.length; j++) {
+          const ia = allCompound[i]
+          const ib = allCompound[j]
+          const ca = world.getComponent<CompoundColliderComponent>(ia, 'CompoundCollider')!
+          const cb = world.getComponent<CompoundColliderComponent>(ib, 'CompoundCollider')!
+          if (!canInteractGeneric(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+          const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
+          const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
+
+          // Quick broad-phase: overall bounding AABBs
+          const boundsA = getCompoundBounds(ta.x, ta.y, ca.shapes)
+          const boundsB = getCompoundBounds(tb.x, tb.y, cb.shapes)
+          if (!getOverlap(boundsA, boundsB)) continue
+
+          // Narrow phase: any shape in A overlaps any shape in B
+          let hit = false
+          outer2: for (const sa of ca.shapes) {
+            const aabb = shapeToAABB(ta.x, ta.y, sa)
+            for (const sb of cb.shapes) {
+              if (sb.type === 'circle') {
+                const r = sb.radius ?? 0
+                if (shapeOverlapsCircle(ta.x, ta.y, sa, tb.x + sb.offsetX, tb.y + sb.offsetY, r)) {
+                  hit = true
+                  break outer2
+                }
+              } else {
+                const bAABB = shapeToAABB(tb.x, tb.y, sb)
+                if (getOverlap(aabb, bAABB)) {
+                  hit = true
+                  break outer2
+                }
+              }
+            }
+          }
+          if (hit) currentCompoundPairs.set(pairKey(ia, ib), [ia, ib])
+        }
+      }
+
+      // Emit compoundEnter / compound / compoundStay / compoundExit
+      for (const [key, [a, b]] of currentCompoundPairs) {
+        if (!this.activeCompoundPairs.has(key)) {
+          this.events?.emit('compoundEnter', { a, b })
+        } else {
+          this.events?.emit('compoundStay', { a, b })
+        }
+        this.events?.emit('compound', { a, b })
+      }
+      for (const [key, [a, b]] of this.activeCompoundPairs) {
+        if (!currentCompoundPairs.has(key)) {
+          this.events?.emit('compoundExit', { a, b })
+        }
+      }
+      this.activeCompoundPairs = currentCompoundPairs
+    } else if (this.activeCompoundPairs.size > 0) {
+      for (const [, [a, b]] of this.activeCompoundPairs) {
+        this.events?.emit('compoundExit', { a, b })
+      }
+      this.activeCompoundPairs = new Map()
     }
   }
 }

@@ -6,6 +6,7 @@ export * from './components/particle'
 export * from './components/parallaxLayer'
 export * from './components/text'
 export * from './components/trail'
+export * from './components/nineSlice'
 export { RenderSystem } from './webglRenderSystem'
 // Canvas2DRenderer is kept for the debug overlay system in @cubeforge/devtools
 export { Canvas2DRenderer } from './canvas2d'

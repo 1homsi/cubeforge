@@ -195,6 +195,8 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('entities')
   const [entitySearch, setEntitySearch] = useState('')
   const [contactLog, setContactLog] = useState<ContactLogEntry[]>([])
+  const [showNavGrid, setShowNavGrid] = useState(false)
+  const [showContactFlash, setShowContactFlash] = useState(false)
   const frameRef = useRef(0)
 
   // Subscribe to new frame notifications
@@ -209,7 +211,7 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
     return () => { handle.onFrame = undefined }
   }, [handle, paused])
 
-  // Subscribe to contact events for the contact log
+  // Subscribe to contact events for the contact log + optional visual flash
   useEffect(() => {
     if (!engine) return
     const events = engine.events
@@ -222,10 +224,27 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
           if (next.length > 20) next.length = 20
           return next
         })
+
+        // Flash contact point when debug overlay is enabled
+        if (showContactFlash) {
+          const renderer = engine.activeRenderSystem as { flashContactPoint?: (x: number, y: number) => void }
+          if (renderer?.flashContactPoint) {
+            // Compute midpoint between the two entities' transforms
+            const tA = engine.ecs.getComponent<{ type: string; x: number; y: number }>(a, 'Transform')
+            const tB = engine.ecs.getComponent<{ type: string; x: number; y: number }>(b, 'Transform')
+            if (tA && tB) {
+              renderer.flashContactPoint((tA.x + tB.x) / 2, (tA.y + tB.y) / 2)
+            } else if (tA) {
+              renderer.flashContactPoint(tA.x, tA.y)
+            } else if (tB) {
+              renderer.flashContactPoint(tB.x, tB.y)
+            }
+          }
+        }
       })
     )
     return () => unsubs.forEach(u => u())
-  }, [engine])
+  }, [engine, showContactFlash])
 
   const totalFrames = handle.buffer.length
   const currentSnap: WorldSnapshot | undefined = handle.buffer[selectedIdx]
@@ -245,6 +264,59 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
 
   const stepBack    = useCallback(() => { setSelectedIdx(i => Math.max(0, i - 1)); setSelectedEntity(null) }, [])
   const stepForward = useCallback(() => { setSelectedIdx(i => Math.min(handle.buffer.length - 1, i + 1)); setSelectedEntity(null) }, [handle])
+
+  // Toggle nav grid debug overlay on the renderer
+  const handleToggleNavGrid = useCallback(() => {
+    if (!engine) return
+    const renderer = engine.activeRenderSystem as { setDebugNavGrid?: (grid: unknown) => void }
+    if (!renderer?.setDebugNavGrid) return
+
+    if (showNavGrid) {
+      renderer.setDebugNavGrid(null)
+      setShowNavGrid(false)
+    } else {
+      // Build a nav grid from current colliders using physics walkability data
+      // We use a simple grid that marks cells blocked where static colliders exist
+      const snap = handle.buffer[handle.buffer.length - 1]
+      if (snap) {
+        // Estimate world bounds from entity transforms
+        let maxX = 0, maxY = 0
+        for (const e of snap.entities) {
+          const t = e.components.find(c => c.type === 'Transform') as { x: number; y: number } | undefined
+          if (t) {
+            if (t.x > maxX) maxX = t.x
+            if (t.y > maxY) maxY = t.y
+          }
+        }
+        const cellSize = 16
+        const cols = Math.ceil((maxX + 200) / cellSize)
+        const rows = Math.ceil((maxY + 200) / cellSize)
+        const walkable = new Uint8Array(cols * rows).fill(1)
+
+        // Mark cells as blocked where static BoxColliders exist
+        for (const e of snap.entities) {
+          const t = e.components.find(c => c.type === 'Transform') as { x: number; y: number } | undefined
+          const bc = e.components.find(c => c.type === 'BoxCollider') as { width: number; height: number; offsetX: number; offsetY: number } | undefined
+          const rb = e.components.find(c => c.type === 'RigidBody') as { isStatic?: boolean } | undefined
+          if (t && bc && (!rb || rb.isStatic)) {
+            const left = t.x + (bc.offsetX ?? 0) - bc.width / 2
+            const top = t.y + (bc.offsetY ?? 0) - bc.height / 2
+            const c0 = Math.max(0, Math.floor(left / cellSize))
+            const c1 = Math.min(cols - 1, Math.floor((left + bc.width) / cellSize))
+            const r0 = Math.max(0, Math.floor(top / cellSize))
+            const r1 = Math.min(rows - 1, Math.floor((top + bc.height) / cellSize))
+            for (let r = r0; r <= r1; r++) {
+              for (let c = c0; c <= c1; c++) {
+                walkable[r * cols + c] = 0
+              }
+            }
+          }
+        }
+        renderer.setDebugNavGrid({ cols, rows, cellSize, walkable })
+        setShowNavGrid(true)
+      }
+    }
+  }, [engine, showNavGrid, handle])
 
   const frameLabel = totalFrames === 0 ? '0/0' : `${selectedIdx + 1}/${totalFrames}`
   const entities   = currentSnap?.entities ?? []
@@ -299,13 +371,25 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
             />
           )}
           {activeTab === 'perf' && (
-            <PerfTab fps={fps} entityCount={entityCount} compCount={compCount} timings={timings} />
+            <PerfTab
+              fps={fps}
+              entityCount={entityCount}
+              compCount={compCount}
+              timings={timings}
+              showNavGrid={showNavGrid}
+              onToggleNavGrid={handleToggleNavGrid}
+            />
           )}
           {activeTab === 'input' && (
             <InputTab activeKeys={activeKeys} inputCtx={inputCtx} />
           )}
           {activeTab === 'contacts' && (
-            <ContactsTab log={contactLog} onClear={() => setContactLog([])} />
+            <ContactsTab
+              log={contactLog}
+              onClear={() => setContactLog([])}
+              showFlash={showContactFlash}
+              onToggleFlash={() => setShowContactFlash(v => !v)}
+            />
           )}
           {activeTab === 'assets' && (
             <AssetsTab assetCache={assetCache} />
@@ -435,7 +519,10 @@ function EntitiesTab({ entities, entitySearch, onSearchChange, selectedEntity, o
   )
 }
 
-function PerfTab({ fps, entityCount, compCount, timings }: { fps: number; entityCount: number; compCount: number; timings?: Map<string, number> }) {
+function PerfTab({ fps, entityCount, compCount, timings, showNavGrid, onToggleNavGrid }: {
+  fps: number; entityCount: number; compCount: number; timings?: Map<string, number>
+  showNavGrid: boolean; onToggleNavGrid(): void
+}) {
   const maxMs = 16.67
   const stats = [
     { label: 'FPS', value: String(fps), ok: fps >= 55 },
@@ -452,6 +539,11 @@ function PerfTab({ fps, entityCount, compCount, timings }: { fps: number; entity
             <span style={{ fontSize: 16, fontWeight: 700, color: ok ? C.ok : C.warn }}>{value}</span>
           </div>
         ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <button style={s.btn(showNavGrid)} onClick={onToggleNavGrid}>
+          {showNavGrid ? 'Hide' : 'Show'} Nav Grid
+        </button>
       </div>
       {timings && timings.size > 0 && (
         <div>
@@ -517,12 +609,19 @@ function InputTab({ activeKeys, inputCtx }: { activeKeys: string[]; inputCtx: st
   )
 }
 
-function ContactsTab({ log, onClear }: { log: ContactLogEntry[]; onClear(): void }) {
+function ContactsTab({ log, onClear, showFlash, onToggleFlash }: {
+  log: ContactLogEntry[]; onClear(): void; showFlash: boolean; onToggleFlash(): void
+}) {
   return (
     <div style={{ padding: '4px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 14px 8px' }}>
         <span style={{ color: C.muted, fontSize: 9 }}>Last 20 contact events</span>
-        <button style={s.btn(false, true)} onClick={onClear}>Clear</button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button style={s.btn(showFlash)} onClick={onToggleFlash}>
+            {showFlash ? 'Hide' : 'Show'} Flash
+          </button>
+          <button style={s.btn(false, true)} onClick={onClear}>Clear</button>
+        </div>
       </div>
       {log.length === 0
         ? <div style={{ padding: '4px 14px', color: C.muted }}>No contacts yet</div>

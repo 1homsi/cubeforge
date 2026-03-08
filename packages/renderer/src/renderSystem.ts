@@ -8,6 +8,7 @@ import type { ParticlePoolComponent } from './components/particle'
 import type { ParallaxLayerComponent } from './components/parallaxLayer'
 import type { TextComponent } from './components/text'
 import type { TrailComponent } from './components/trail'
+import type { NineSliceComponent } from './components/nineSlice'
 import { Canvas2DRenderer } from './canvas2d'
 
 const imageCache = new Map<string, HTMLImageElement>()
@@ -322,6 +323,63 @@ export class RenderSystem implements System {
         ctx.fillStyle = sprite.color
         ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
       }
+
+      ctx.restore()
+    }
+
+    // --- NineSlice rendering pass (world space) ---
+    const nineSliceEntities = world.query('Transform', 'NineSlice')
+    nineSliceEntities.sort((a, b) => {
+      const na = world.getComponent<NineSliceComponent>(a, 'NineSlice')!
+      const nb = world.getComponent<NineSliceComponent>(b, 'NineSlice')!
+      return na.zIndex - nb.zIndex
+    })
+    for (const id of nineSliceEntities) {
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const ns = world.getComponent<NineSliceComponent>(id, 'NineSlice')!
+
+      let img = imageCache.get(ns.src)
+      if (!img) {
+        img = new Image()
+        img.src = ns.src
+        imageCache.set(ns.src, img)
+      }
+      if (!img.complete || img.naturalWidth === 0) continue
+
+      const srcW = img.naturalWidth
+      const srcH = img.naturalHeight
+      const { borderTop: bT, borderRight: bR, borderBottom: bB, borderLeft: bL, width: w, height: h } = ns
+
+      // Destination position (top-left, centered on transform)
+      const dx = transform.x - w / 2
+      const dy = transform.y - h / 2
+
+      // Inner dimensions
+      const innerSrcW = srcW - bL - bR
+      const innerSrcH = srcH - bT - bB
+      const innerDestW = w - bL - bR
+      const innerDestH = h - bT - bB
+
+      ctx.save()
+
+      // Top-left corner
+      if (bL > 0 && bT > 0) ctx.drawImage(img, 0, 0, bL, bT, dx, dy, bL, bT)
+      // Top center
+      if (innerSrcW > 0 && bT > 0) ctx.drawImage(img, bL, 0, innerSrcW, bT, dx + bL, dy, innerDestW, bT)
+      // Top-right corner
+      if (bR > 0 && bT > 0) ctx.drawImage(img, srcW - bR, 0, bR, bT, dx + w - bR, dy, bR, bT)
+      // Middle-left
+      if (bL > 0 && innerSrcH > 0) ctx.drawImage(img, 0, bT, bL, innerSrcH, dx, dy + bT, bL, innerDestH)
+      // Center
+      if (innerSrcW > 0 && innerSrcH > 0) ctx.drawImage(img, bL, bT, innerSrcW, innerSrcH, dx + bL, dy + bT, innerDestW, innerDestH)
+      // Middle-right
+      if (bR > 0 && innerSrcH > 0) ctx.drawImage(img, srcW - bR, bT, bR, innerSrcH, dx + w - bR, dy + bT, bR, innerDestH)
+      // Bottom-left corner
+      if (bL > 0 && bB > 0) ctx.drawImage(img, 0, srcH - bB, bL, bB, dx, dy + h - bB, bL, bB)
+      // Bottom center
+      if (innerSrcW > 0 && bB > 0) ctx.drawImage(img, bL, srcH - bB, innerSrcW, bB, dx + bL, dy + h - bB, innerDestW, bB)
+      // Bottom-right corner
+      if (bR > 0 && bB > 0) ctx.drawImage(img, srcW - bR, srcH - bB, bR, bB, dx + w - bR, dy + h - bB, bR, bB)
 
       ctx.restore()
     }
