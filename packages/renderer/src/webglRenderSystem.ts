@@ -365,8 +365,11 @@ export class RenderSystem implements System {
     const cached = this.textures.get(src)
     if (cached) return cached
 
+    // Strip :repeat suffix used for tiled texture cache keys — not part of the actual URL
+    const imgSrc = src.endsWith(':repeat') ? src.slice(0, -7) : src
+
     // Check if this src is already loaded in imageCache (e.g. from fallback path)
-    const existing = this.imageCache.get(src)
+    const existing = this.imageCache.get(imgSrc)
     if (existing && existing.complete && existing.naturalWidth > 0) {
       const gl = this.gl
       const tex = gl.createTexture()!
@@ -384,7 +387,8 @@ export class RenderSystem implements System {
     // Return white while image loads; swap in real texture on load
     if (!existing) {
       const img = new Image()
-      img.src = src
+      img.src = imgSrc
+      const tiled = src.endsWith(':repeat')
       img.onload = () => {
         const gl = this.gl
         const tex = gl.createTexture()!
@@ -393,11 +397,12 @@ export class RenderSystem implements System {
         gl.generateMipmap(gl.TEXTURE_2D)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+        const wrap = tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
         this.textures.set(src, tex)
       }
-      this.imageCache.set(src, img)
+      this.imageCache.set(imgSrc, img)
     }
 
     return this.whiteTexture
@@ -577,8 +582,15 @@ export class RenderSystem implements System {
               if (dy > halfH)  cam.y = t.y - halfH
               else if (dy < -halfH) cam.y = t.y + halfH
             } else if (cam.smoothing > 0) {
-              cam.x += (t.x - cam.x) * (1 - cam.smoothing)
-              cam.y += (t.y - cam.y) * (1 - cam.smoothing)
+              const distSq = (t.x - cam.x) ** 2 + (t.y - cam.y) ** 2
+              // Snap instantly when target teleports (>400px jump)
+              if (distSq > 160000) {
+                cam.x = t.x
+                cam.y = t.y
+              } else {
+                cam.x += (t.x - cam.x) * (1 - cam.smoothing)
+                cam.y += (t.y - cam.y) * (1 - cam.smoothing)
+              }
             } else {
               cam.x = t.x
               cam.y = t.y
@@ -775,7 +787,10 @@ export class RenderSystem implements System {
       const ss        = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')
       const scaleXMod = ss ? ss.currentScaleX : 1
       const scaleYMod = ss ? ss.currentScaleY : 1
-      const [r, g, b, a] = parseCSSColor(sprite.color)
+      // Textured sprites use white tint so the texture shows true colors;
+      // only solid-color sprites use the color property as fill.
+      const hasTexture = sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0
+      const [r, g, b, a] = hasTexture ? [1, 1, 1, 1] : parseCSSColor(sprite.color)
       const uv = getUVRect(sprite)
 
       this.writeInstance(
