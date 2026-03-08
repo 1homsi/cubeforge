@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Game, World, Camera2D, useSnapshot } from 'cubeforge'
+import { Game, World, Camera2D, AssetLoader, useSnapshot } from 'cubeforge'
 import { Player } from './components/Player'
 import { Ground } from './components/Ground'
 import { Coin } from './components/Coin'
@@ -37,6 +37,14 @@ const btnStyle: React.CSSProperties = {
   fontSize: 13,
 }
 
+function Loading() {
+  return (
+    <div style={{ color: '#fff', fontFamily: 'monospace', padding: 20 }}>
+      Loading...
+    </div>
+  )
+}
+
 export function App() {
   const [score, setScore] = useState(0)
   const [collected, setCollected] = useState<Set<string>>(new Set())
@@ -49,28 +57,30 @@ export function App() {
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
-      <Game width={800} height={500} gravity={980}>
-        <HUD score={score} total={COINS.length} />
-        <World background="#1a1d27">
-          <Camera2D followEntity="player" smoothing={0.85} />
+      <Game width={800} height={500} gravity={980} asyncAssets>
+        <AssetLoader assets={[]} fallback={<Loading />}>
+          <HUD score={score} total={COINS.length} />
+          <World background="#1a1d27">
+            <Camera2D followEntity="player" smoothing={0.85} />
 
-          <Player x={100} y={300} />
+            <Player x={100} y={300} />
 
-          {/* Main ground */}
-          <Ground x={400} y={480} width={800} height={40} />
+            {/* Main ground */}
+            <Ground x={400} y={480} width={800} height={40} />
 
-          {/* One-way ledge — jump up through it */}
-          <Ground x={400} y={340} width={260} height={16} oneWay />
+            {/* One-way ledge — jump up through it */}
+            <Ground x={400} y={340} width={260} height={16} oneWay />
 
-          {COINS.map(c => (
-            <Coin
-              key={`${c.x}-${c.y}`}
-              x={c.x}
-              y={c.y}
-              onCollect={() => collect(`${c.x}-${c.y}`)}
-            />
-          ))}
-        </World>
+            {COINS.map(c => (
+              <Coin
+                key={`${c.x}-${c.y}`}
+                x={c.x}
+                y={c.y}
+                onCollect={() => collect(`${c.x}-${c.y}`)}
+              />
+            ))}
+          </World>
+        </AssetLoader>
       </Game>
     </div>
   )

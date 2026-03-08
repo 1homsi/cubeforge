@@ -1,11 +1,33 @@
 import { Entity, Transform, Sprite, RigidBody, BoxCollider } from 'cubeforge'
 
-interface GroundProps { x: number; y: number; width: number; height: number; oneWay?: boolean }
-export function Ground({ x, y, width, height, oneWay }: GroundProps) {
+interface GroundProps {
+  x: number
+  y: number
+  width: number
+  height: number
+  oneWay?: boolean
+  color?: string
+  src?: string
+  tileX?: boolean
+  tileY?: boolean
+  tileSizeX?: number
+  tileSizeY?: number
+}
+
+export function Ground({ x, y, width, height, oneWay, color, src, tileX, tileY, tileSizeX, tileSizeY }: GroundProps) {
   return (
     <Entity tags={['ground']}>
       <Transform x={x} y={y} />
-      <Sprite width={width} height={height} color={oneWay ? '#546e7a' : '#37474f'} />
+      <Sprite
+        width={width}
+        height={height}
+        color={color ?? (oneWay ? '#546e7a' : '#37474f')}
+        src={src}
+        tileX={tileX}
+        tileY={tileY}
+        tileSizeX={tileSizeX}
+        tileSizeY={tileSizeY}
+      />
       <RigidBody isStatic />
       <BoxCollider width={width} height={height} oneWay={oneWay} />
     </Entity>
