@@ -67,7 +67,8 @@ function getSlopeSurfaceY(
 
 function maskAllows(mask: string | string[], layer: string): boolean {
   if (mask === '*') return true
-  return Array.isArray(mask) && mask.includes(layer)
+  if (Array.isArray(mask)) return mask.includes(layer)
+  return mask === layer
 }
 
 /**

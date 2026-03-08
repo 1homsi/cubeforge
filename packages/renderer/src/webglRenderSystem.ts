@@ -24,6 +24,8 @@ interface SpriteComponent {
   frameHeight?: number
   frameColumns?: number
   frame?: { sx: number; sy: number; sw: number; sh: number }
+  tileX?: boolean
+  tileY?: boolean
 }
 
 interface Camera2DComponent {
@@ -178,8 +180,8 @@ function createWhiteTexture(gl: WebGL2RenderingContext): WebGLTexture {
 // ── Sprite helpers ────────────────────────────────────────────────────────────
 
 function getTextureKey(sprite: SpriteComponent): string {
-  if (sprite.image?.src) return sprite.image.src
-  if (sprite.src) return sprite.src
+  const src = sprite.image?.src || sprite.src
+  if (src) return (sprite.tileX || sprite.tileY) ? `${src}:repeat` : src
   return `__color__:${sprite.color}`
 }
 
@@ -202,7 +204,10 @@ function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
     const { sx, sy, sw, sh } = sprite.frame
     return [sx / iw, sy / ih, sw / iw, sh / ih]
   }
-  return [0, 0, 1, 1]
+  // Tiling: UV width/height > 1 causes the texture to repeat (needs REPEAT wrap mode)
+  const uw = sprite.tileX ? sprite.width / iw : 1
+  const vh = sprite.tileY ? sprite.height / ih : 1
+  return [0, 0, uw, vh]
 }
 
 // ── RenderSystem (WebGL2) ─────────────────────────────────────────────────────
@@ -722,8 +727,9 @@ export class RenderSystem implements System {
       // Sprite.tsx already loads the image via AssetManager (with correct BASE_URL resolution)
       // and sets sprite.image. Use that directly to create the texture synchronously.
       if (sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0) {
-        const src = sprite.image.src
-        if (src && !this.textures.has(src)) {
+        const tiled = sprite.tileX || sprite.tileY
+        const cacheKey = sprite.image.src ? (tiled ? `${sprite.image.src}:repeat` : sprite.image.src) : null
+        if (cacheKey && !this.textures.has(cacheKey)) {
           const gl = this.gl
           const tex = gl.createTexture()!
           gl.bindTexture(gl.TEXTURE_2D, tex)
@@ -731,9 +737,10 @@ export class RenderSystem implements System {
           gl.generateMipmap(gl.TEXTURE_2D)
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-          this.textures.set(src, tex)
+          const wrap = tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
+          this.textures.set(cacheKey, tex)
         }
       } else if (sprite.src && !sprite.image) {
         // Fallback: image not yet loaded by AssetManager — start loading it
