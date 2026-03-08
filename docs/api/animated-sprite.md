@@ -1,62 +1,87 @@
 # AnimatedSprite
 
-Convenience component that combines [`<Sprite>`](/api/sprite) and [`<Animation>`](/api/animation) into a single element. Use it when you want a sprite sheet animation without composing two separate components.
+Convenience component that combines [`<Sprite>`](/api/sprite) and [`<Animation>`](/api/animation) into a single element. Supports both a simple single-clip API and a multi-clip state machine.
+
+## Simple API
+
+Pass `frames` directly — equivalent to composing `<Sprite>` + `<Animation>` manually:
+
+```tsx
+<AnimatedSprite
+  src="/hero.png"
+  width={32} height={48}
+  frameWidth={32} frameHeight={48} frameColumns={8}
+  frames={[0, 1, 2, 3]}
+  fps={10}
+/>
+```
+
+## Multi-clip API
+
+Define named animation states in `animations` and switch between them with `current`:
+
+```tsx
+<AnimatedSprite
+  src="/hero.png"
+  width={32} height={48}
+  frameWidth={32} frameHeight={48} frameColumns={8}
+  animations={{
+    idle: { frames: [0],          fps: 1  },
+    walk: { frames: [1, 2, 3, 4], fps: 10 },
+    run:  { frames: [5, 6, 7, 8], fps: 14 },
+    jump: { frames: [9],          fps: 1, loop: false },
+  }}
+  current={playerState}
+  flipX={facingLeft}
+/>
+```
+
+Adding new states (attack, dash, climb, etc.) is just another key in the `animations` map.
+
+### Clip options
+
+Each clip in the `animations` map accepts:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `frames` | number[] | — | **Required.** Frame indices to cycle through |
+| `fps` | number | `12` | Animation speed |
+| `loop` | boolean | `true` | Whether to loop |
+| `next` | string | — | Clip to auto-transition to when this one finishes (non-looping only) |
+| `onComplete` | `() => void` | — | Called when a non-looping clip finishes |
 
 ## Props
 
-Accepts all props from both `<Sprite>` (except `frameIndex`) and `<Animation>`:
+### Sprite props (both modes)
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `src` | string | — | **Required.** Path to the sprite sheet image |
+| `src` | string | — | **Required.** Path to the sprite sheet |
 | `width` | number | — | **Required.** Display width |
 | `height` | number | — | **Required.** Display height |
-| `frames` | number[] | — | **Required.** Frame indices to cycle through |
-| `frameWidth` | number | — | Width of a single frame in the sheet |
-| `frameHeight` | number | — | Height of a single frame in the sheet |
-| `frameColumns` | number | — | Number of columns in the sprite sheet |
-| `fps` | number | `12` | Animation speed |
-| `loop` | boolean | `true` | Whether to loop |
-| `playing` | boolean | `true` | Whether currently playing |
+| `frameWidth` | number | — | Width of a single frame |
+| `frameHeight` | number | — | Height of a single frame |
+| `frameColumns` | number | — | Columns in the sprite sheet |
 | `flipX` | boolean | `false` | Flip horizontally |
-| `onComplete` | `() => void` | — | Called when a non-looping animation finishes |
-| `frameEvents` | `Record<number, () => void>` | — | Callbacks for specific frame indices |
+| `zIndex` | number | `0` | Draw order |
+| `visible` | boolean | `true` | Visibility |
+| `anchorX` / `anchorY` | number | `0.5` | Anchor point |
+| `sampling` | Sampling | — | Texture filtering |
 
-Plus all other `<Sprite>` props: `color`, `offsetX/Y`, `zIndex`, `visible`, `anchorX/Y`, `atlas`, `frame`, `tileX/Y`, `tileSizeX/Y`, `sampling`.
+### Simple mode only
 
-## Example
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `frames` | number[] | — | Frame indices |
+| `fps` | number | `12` | Speed |
+| `loop` | boolean | `true` | Loop |
+| `playing` | boolean | `true` | Playback control |
+| `onComplete` | `() => void` | — | Finish callback |
+| `frameEvents` | `Record<number, () => void>` | — | Per-frame callbacks |
 
-```tsx
-<Entity id="player">
-  <Transform x={100} y={300} />
-  <AnimatedSprite
-    src="/hero.png"
-    width={32}
-    height={48}
-    frameWidth={32}
-    frameHeight={48}
-    frameColumns={8}
-    frames={[0, 1, 2, 3]}
-    fps={10}
-    flipX={facingLeft}
-  />
-</Entity>
-```
+### Multi-clip mode only
 
-## Compared to Sprite + Animation
-
-These are equivalent:
-
-```tsx
-{/* AnimatedSprite */}
-<AnimatedSprite src="/hero.png" width={32} height={32}
-  frameWidth={32} frameHeight={32} frameColumns={4}
-  frames={[0,1,2,3]} fps={8} />
-
-{/* Manual composition */}
-<Sprite src="/hero.png" width={32} height={32}
-  frameWidth={32} frameHeight={32} frameColumns={4} />
-<Animation frames={[0,1,2,3]} fps={8} />
-```
-
-Use `AnimatedSprite` for simpler cases. Use separate `<Sprite>` + `<Animation>` when you need independent control over each.
+| Prop | Type | Description |
+|---|---|---|
+| `animations` | `Record<string, AnimationClip>` | Map of named clips |
+| `current` | string | Active clip name |
