@@ -415,14 +415,22 @@ export class RenderSystem implements System {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
 
-      // Update existing particles
-      pool.particles = pool.particles.filter(p => {
+      // Update existing particles (in-place swap-remove to avoid array reallocation)
+      let alive = pool.particles.length
+      for (let i = alive - 1; i >= 0; i--) {
+        const p = pool.particles[i]
         p.life -= dt
-        p.x += p.vx * dt
-        p.y += p.vy * dt
-        p.vy += p.gravity * dt
-        return p.life > 0
-      })
+        if (p.life <= 0) {
+          // Swap with last alive element and shrink
+          alive--
+          pool.particles[i] = pool.particles[alive]
+        } else {
+          p.x += p.vx * dt
+          p.y += p.vy * dt
+          p.vy += p.gravity * dt
+        }
+      }
+      pool.particles.length = alive
 
       // Emit new particles
       if (pool.active && pool.particles.length < pool.maxParticles) {
@@ -523,7 +531,15 @@ export class RenderSystem implements System {
         pt.ttl--
       }
       ctx.restore()
-      this.contactFlashPoints = this.contactFlashPoints.filter(p => p.ttl > 0)
+      // In-place removal to avoid array reallocation
+      let aliveFlash = this.contactFlashPoints.length
+      for (let i = aliveFlash - 1; i >= 0; i--) {
+        if (this.contactFlashPoints[i].ttl <= 0) {
+          aliveFlash--
+          this.contactFlashPoints[i] = this.contactFlashPoints[aliveFlash]
+        }
+      }
+      this.contactFlashPoints.length = aliveFlash
     }
 
     ctx.restore()
