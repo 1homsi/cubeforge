@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { usePreload } from '../hooks/usePreload'
 
 interface AssetLoaderProps {
@@ -30,9 +30,9 @@ interface AssetLoaderProps {
 export function AssetLoader({ assets, fallback = null, onError, children }: AssetLoaderProps) {
   const { loaded, error } = usePreload(assets)
 
-  if (error && onError) {
-    onError(error)
-  }
+  useEffect(() => {
+    if (error && onError) onError(error)
+  }, [error, onError])
 
   if (!loaded) {
     return <>{fallback}</>

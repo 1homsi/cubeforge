@@ -175,7 +175,24 @@ export function useSound(
   const groupRef  = useRef(opts.group)
 
   useEffect(() => {
-    loadBuffer(src).then(buf => { bufferRef.current = buf }).catch(console.error)
+    let cancelled = false
+    loadBuffer(src).then(buf => {
+      if (!cancelled) bufferRef.current = buf
+    }).catch(console.error)
+
+    return () => {
+      cancelled = true
+      // Stop active playback when src changes or component unmounts
+      if (sourceRef.current) {
+        try { sourceRef.current.stop() } catch { /* already stopped */ }
+        sourceRef.current = null
+      }
+      if (gainRef.current) {
+        gainRef.current.disconnect()
+        gainRef.current = null
+      }
+      bufferRef.current = null
+    }
   }, [src])
 
   const getDestination = (): GainNode =>

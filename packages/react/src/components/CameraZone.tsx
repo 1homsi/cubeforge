@@ -1,4 +1,5 @@
 import React, { useEffect, useContext, useRef } from 'react'
+import { createScript } from '@cubeforge/core'
 import type { Camera2DComponent } from '@cubeforge/renderer'
 import { EngineContext } from '../context'
 
@@ -28,6 +29,9 @@ interface CameraZoneProps {
  * the zone, the camera follow entity is cleared and the camera locks to the
  * zone's center (or a custom target). On exit, the camera resumes following.
  *
+ * Zone detection runs inside the ScriptSystem tick — it respects pause and
+ * deterministic stepping.
+ *
  * @example
  * ```tsx
  * <CameraZone x={500} y={300} width={200} height={150} watchTag="player" />
@@ -48,24 +52,25 @@ export function CameraZone({
   const activeRef = useRef(false)
 
   useEffect(() => {
-    // Poll entity positions each frame to detect zone entry/exit
-    const checkZone = () => {
+    // Create a lightweight ECS entity that runs zone detection inside the
+    // ScriptSystem tick — respects pause, deterministic mode, and frame rate.
+    const eid = engine.ecs.createEntity()
+
+    engine.ecs.addComponent(eid, createScript(() => {
       const cam = engine.ecs.queryOne('Camera2D')
       if (cam === undefined) return
 
       const camComp = engine.ecs.getComponent<Camera2DComponent>(cam, 'Camera2D')
       if (!camComp) return
 
-      // Find entities with watchTag
-      const tagged = engine.ecs.query('Transform', 'Tag')
-      let inside = false
       const hw = width / 2
       const hh = height / 2
+      let inside = false
 
-      for (const eid of tagged) {
-        const tagComp = engine.ecs.getComponent<{ type: 'Tag'; tags: string[] }>(eid, 'Tag')
+      for (const tid of engine.ecs.query('Transform', 'Tag')) {
+        const tagComp = engine.ecs.getComponent<{ type: 'Tag'; tags: string[] }>(tid, 'Tag')
         if (!tagComp?.tags.includes(watchTag)) continue
-        const t = engine.ecs.getComponent<{ type: 'Transform'; x: number; y: number }>(eid, 'Transform')
+        const t = engine.ecs.getComponent<{ type: 'Transform'; x: number; y: number }>(tid, 'Transform')
         if (!t) continue
         if (Math.abs(t.x - x) <= hw && Math.abs(t.y - y) <= hh) {
           inside = true
@@ -74,32 +79,31 @@ export function CameraZone({
       }
 
       if (inside && !activeRef.current) {
-        // Enter: lock camera
         activeRef.current = true
         prevFollowRef.current = camComp.followEntityId
         camComp.followEntityId = undefined
         camComp.x = targetX ?? x
         camComp.y = targetY ?? y
       } else if (!inside && activeRef.current) {
-        // Exit: restore follow
         activeRef.current = false
         camComp.followEntityId = prevFollowRef.current
       }
-    }
+    }))
 
-    // Subscribe to the game loop via a lightweight polling approach
-    const interval = setInterval(checkZone, 16)
     return () => {
-      clearInterval(interval)
-      // Restore camera on unmount if zone was active
+      // Restore camera if zone was active when unmounted
       if (activeRef.current) {
         const cam = engine.ecs.queryOne('Camera2D')
         if (cam !== undefined) {
           const camComp = engine.ecs.getComponent<Camera2DComponent>(cam, 'Camera2D')
           if (camComp) camComp.followEntityId = prevFollowRef.current
         }
+        activeRef.current = false
       }
+      if (engine.ecs.hasEntity(eid)) engine.ecs.destroyEntity(eid)
     }
+  // Props are read inside the script closure via the outer scope; the effect
+  // must re-run when they change so the script is re-created with fresh values.
   }, [engine.ecs, x, y, width, height, watchTag, targetX, targetY])
 
   return <>{children ?? null}</>

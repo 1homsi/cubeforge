@@ -1,4 +1,4 @@
-import { useContext, useEffect } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import type { EntityId } from '@cubeforge/core'
 import { EngineContext, EntityContext } from '../context'
 
@@ -25,6 +25,11 @@ function useContactEvent(
   if (!engine) throw new Error(`${eventName} hook must be used inside <Game>`)
   if (entityId === null) throw new Error(`${eventName} hook must be used inside <Entity>`)
 
+  // Always-current ref — updated synchronously every render so the subscription
+  // closure never calls a stale handler.
+  const handlerRef = useRef(handler)
+  handlerRef.current = handler
+
   useEffect(() => {
     return engine.events.on<ContactEvent>(eventName, ({ a, b }) => {
       // Only handle events involving this entity
@@ -48,8 +53,10 @@ function useContactEvent(
         if (layer !== opts.layer) return
       }
 
-      handler(other)
+      handlerRef.current(other)
     })
+  // opts.tag and opts.layer intentionally in deps: filter changes require re-subscription.
+  // handler is NOT a dep — the ref keeps it current without re-subscribing.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine.events, engine.ecs, entityId, opts?.tag, opts?.layer])
 }
