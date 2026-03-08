@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin, type System } from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
-import { RenderSystem, Canvas2DRenderer } from '@cubeforge/renderer'
+import { RenderSystem, Canvas2DRenderer, type Sampling } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { DebugSystem, DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from '@cubeforge/devtools'
@@ -56,6 +56,12 @@ interface GameProps {
    * shown is fully rendered with real assets.
    */
   asyncAssets?: boolean
+  /**
+   * Default texture sampling for all sprites (default 'nearest').
+   * Individual sprites can override via their own `sampling` prop.
+   * Use `TextureFilter.NEAREST` for pixel art or `TextureFilter.LINEAR` for smooth scaling.
+   */
+  sampling?: Sampling
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
   style?: CSSProperties
@@ -73,6 +79,7 @@ export function Game({
   deterministic = false,
   seed = 0,
   asyncAssets = false,
+  sampling,
   onReady,
   plugins,
   style,
@@ -98,6 +105,7 @@ export function Game({
 
     // Always use the WebGL2 render system
     const renderSystem = new RenderSystem(canvas, entityIds)
+    if (sampling) renderSystem.setDefaultSampling(sampling)
     const activeRenderSystem: System = renderSystem
 
     // Debug system: always uses a separate overlay canvas (Canvas2D for wireframes)

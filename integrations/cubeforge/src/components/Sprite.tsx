@@ -1,5 +1,5 @@
 import { useEffect, useContext } from 'react'
-import { createSprite, type SpriteComponent } from '@cubeforge/renderer'
+import { createSprite, type SpriteComponent, type Sampling } from '@cubeforge/renderer'
 import { EngineContext, EntityContext } from '../context'
 import type { SpriteAtlas } from './spriteAtlas'
 
@@ -25,6 +25,8 @@ interface SpriteProps {
   tileY?: boolean
   tileSizeX?: number
   tileSizeY?: number
+  /** Texture sampling mode — controls filtering when the sprite is scaled */
+  sampling?: Sampling
 }
 
 export function Sprite({
@@ -49,6 +51,7 @@ export function Sprite({
   tileY,
   tileSizeX,
   tileSizeY,
+  sampling,
 }: SpriteProps) {
   const resolvedFrameIndex = (atlas && frame != null) ? (atlas[frame] ?? 0) : frameIndex
   const engine = useContext(EngineContext)!
@@ -75,6 +78,7 @@ export function Sprite({
       tileY,
       tileSizeX,
       tileSizeY,
+      sampling,
     })
     engine.ecs.addComponent(entityId, comp)
 

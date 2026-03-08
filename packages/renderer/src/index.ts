@@ -1,4 +1,5 @@
 export * from './components/sprite'
+export * from './textureFilter'
 export * from './components/camera2d'
 export * from './components/animationState'
 export * from './components/squashStretch'

@@ -1,4 +1,5 @@
 import type { Component } from '@cubeforge/core'
+import type { Sampling } from '../textureFilter'
 
 export interface SpriteComponent extends Component {
   readonly type: 'Sprite'
@@ -42,6 +43,8 @@ export interface SpriteComponent extends Component {
   tileSizeX?: number
   /** Height of each tile when tiling vertically (default: source image height) */
   tileSizeY?: number
+  /** Texture sampling mode — controls how the sprite is filtered when scaled */
+  sampling?: Sampling
 }
 
 export function createSprite(opts: Partial<SpriteComponent> & { width: number; height: number }): SpriteComponent {

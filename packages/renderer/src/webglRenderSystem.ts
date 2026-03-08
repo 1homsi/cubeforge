@@ -2,6 +2,11 @@ import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import { VERT_SRC, FRAG_SRC, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC } from './shaders'
 import { parseCSSColor } from './colorParser'
+import {
+  type Sampling,
+  resolveSampling, toGLMinFilter, toGLMagFilter, needsMipmap,
+  DEFAULT_SAMPLING,
+} from './textureFilter'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
@@ -28,6 +33,7 @@ interface SpriteComponent {
   tileY?: boolean
   tileSizeX?: number
   tileSizeY?: number
+  sampling?: Sampling
 }
 
 interface Camera2DComponent {
@@ -181,10 +187,18 @@ function createWhiteTexture(gl: WebGL2RenderingContext): WebGLTexture {
 
 // ── Sprite helpers ────────────────────────────────────────────────────────────
 
+function getSamplingKey(sampling?: Sampling): string {
+  if (!sampling) return ''
+  if (typeof sampling === 'string') return sampling
+  return `${sampling.min}|${sampling.mag}`
+}
+
 function getTextureKey(sprite: SpriteComponent): string {
   const src = sprite.image?.src || sprite.src
-  if (src) return (sprite.tileX || sprite.tileY) ? `${src}:repeat` : src
-  return `__color__:${sprite.color}`
+  const samplingKey = getSamplingKey(sprite.sampling)
+  const suffix = samplingKey ? `:s=${samplingKey}` : ''
+  if (src) return (sprite.tileX || sprite.tileY) ? `${src}:repeat${suffix}` : `${src}${suffix}`
+  return `__color__:${sprite.color}${suffix}`
 }
 
 function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
@@ -255,6 +269,15 @@ export class RenderSystem implements System {
   private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number }>()
   /** Insertion-order key list for LRU-style eviction. */
   private readonly textureCacheKeys: string[] = []
+
+  // ── Texture sampling ────────────────────────────────────────────────────
+  private _defaultSampling: Sampling = DEFAULT_SAMPLING
+
+  /** Set the global default texture sampling mode for all sprites that don't specify their own. */
+  setDefaultSampling(sampling: Sampling): void { this._defaultSampling = sampling }
+
+  /** Get the current global default texture sampling mode. */
+  getDefaultSampling(): Sampling { return this._defaultSampling }
 
   // ── Debug overlays ──────────────────────────────────────────────────────
   private debugNavGrid: NavGrid | null = null
@@ -386,8 +409,11 @@ export class RenderSystem implements System {
     const cached = this.textures.get(src)
     if (cached) return cached
 
-    // Strip :repeat suffix used for tiled texture cache keys — not part of the actual URL
-    const imgSrc = src.endsWith(':repeat') ? src.slice(0, -7) : src
+    // Strip :s=... sampling and :repeat suffixes used for cache keys — not part of the actual URL
+    let imgSrc = src
+    const sampIdx = imgSrc.indexOf(':s=')
+    if (sampIdx !== -1) imgSrc = imgSrc.slice(0, sampIdx)
+    if (imgSrc.endsWith(':repeat')) imgSrc = imgSrc.slice(0, -7)
 
     // Check if this src is already loaded in imageCache (e.g. from fallback path)
     const existing = this.imageCache.get(imgSrc)
@@ -396,9 +422,8 @@ export class RenderSystem implements System {
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, existing)
-      gl.generateMipmap(gl.TEXTURE_2D)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       this.textures.set(src, tex)
@@ -409,15 +434,14 @@ export class RenderSystem implements System {
     if (!existing) {
       const img = new Image()
       img.src = imgSrc
-      const tiled = src.endsWith(':repeat')
+      const tiled = src.includes(':repeat')
       img.onload = () => {
         const gl = this.gl
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
-        gl.generateMipmap(gl.TEXTURE_2D)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         const wrap = tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
@@ -444,9 +468,8 @@ export class RenderSystem implements System {
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img!)
-        gl.generateMipmap(gl.TEXTURE_2D)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
         this.parallaxTextures.set(src, tex)
@@ -500,9 +523,8 @@ export class RenderSystem implements System {
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen)
-    gl.generateMipmap(gl.TEXTURE_2D)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
@@ -512,14 +534,26 @@ export class RenderSystem implements System {
     return entry
   }
 
+  // ── Texture sampling helper ────────────────────────────────────────────────
+
+  /** Apply min/mag filter params to the currently bound texture. */
+  private applySampling(spriteSampling?: Sampling): void {
+    const { gl } = this
+    const { min, mag } = resolveSampling(spriteSampling, this._defaultSampling)
+    if (needsMipmap(min)) gl.generateMipmap(gl.TEXTURE_2D)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, toGLMinFilter(gl, min))
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, toGLMagFilter(gl, mag))
+  }
+
   // ── Instanced draw call ────────────────────────────────────────────────────
 
-  private flush(count: number, textureKey: string): void {
+  private flush(count: number, textureKey: string, sampling?: Sampling): void {
     if (count === 0) return
     const { gl } = this
     const isColor = textureKey.startsWith('__color__')
     const tex = isColor ? this.whiteTexture : this.loadTexture(textureKey)
     gl.bindTexture(gl.TEXTURE_2D, tex)
+    this.applySampling(sampling)
     gl.uniform1i(this.uUseTexture, isColor ? 0 : 1)
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
@@ -743,11 +777,12 @@ export class RenderSystem implements System {
 
     let batchCount = 0
     let batchKey   = ''
+    let batchSampling: Sampling | undefined
 
     for (let i = 0; i <= renderables.length; i++) {
       // Sentinel: flush remaining batch at end of list
       if (i === renderables.length) {
-        this.flush(batchCount, batchKey)
+        this.flush(batchCount, batchKey, batchSampling)
         break
       }
 
@@ -767,9 +802,8 @@ export class RenderSystem implements System {
           const tex = gl.createTexture()!
           gl.bindTexture(gl.TEXTURE_2D, tex)
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sprite.image)
-          gl.generateMipmap(gl.TEXTURE_2D)
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
           const wrap = tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
@@ -787,9 +821,8 @@ export class RenderSystem implements System {
             const tex = gl.createTexture()!
             gl.bindTexture(gl.TEXTURE_2D, tex)
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img!)
-            gl.generateMipmap(gl.TEXTURE_2D)
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
             this.textures.set(img!.src, tex)
           }
         }
@@ -800,10 +833,11 @@ export class RenderSystem implements System {
 
       // Flush if texture group changes or buffer is full
       if ((key !== batchKey && batchCount > 0) || batchCount >= MAX_INSTANCES) {
-        this.flush(batchCount, batchKey)
+        this.flush(batchCount, batchKey, batchSampling)
         batchCount = 0
       }
       batchKey = key
+      batchSampling = sprite.sampling
 
       const ss        = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')
       const scaleXMod = ss ? ss.currentScaleX : 1
@@ -847,9 +881,10 @@ export class RenderSystem implements System {
       if (!entry) continue
 
       // Flush any pending sprite batch first, then draw the text quad
-      this.flush(batchCount, batchKey)
+      this.flush(batchCount, batchKey, batchSampling)
       batchCount = 0
       batchKey = ''
+      batchSampling = undefined
 
       // Write text as a single textured instance
       this.writeInstance(
