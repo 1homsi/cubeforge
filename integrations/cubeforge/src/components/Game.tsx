@@ -147,7 +147,7 @@ export function Game({
         if (handle.buffer.length > MAX_DEVTOOLS_FRAMES) handle.buffer.shift()
         handle.onFrame?.()
       }
-    })
+    }, deterministic ? { fixedDt: 1 / 60 } : undefined)
 
     const state: EngineState = {
       ecs,
