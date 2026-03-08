@@ -1,4 +1,4 @@
-# overlapBox / raycast
+# overlapBox / raycast / raycastAll / overlapCircle / sweepBox
 
 Physics-backed spatial queries for use in Script update functions and game logic.
 
@@ -84,10 +84,93 @@ const ground = raycast(world, { x: transform.x, y: transform.y }, { x: 0, y: 1 }
 if (ground && ground.distance < 5) console.log('nearly grounded')
 ```
 
+---
+
+## raycastAll
+
+Same as `raycast` but returns **all** hits sorted by distance (closest first).
+
+```ts
+function raycastAll(
+  world: ECSWorld,
+  origin: { x: number; y: number },
+  direction: { x: number; y: number },
+  maxDistance: number,
+  opts?: { tag?: string; layer?: string; exclude?: EntityId[]; includeTriggers?: boolean }
+): RaycastHit[]
+```
+
+### Example
+
+```ts
+import { raycastAll } from 'cubeforge'
+
+// Pierce through multiple enemies
+const hits = raycastAll(world, origin, dir, 500, { tag: 'enemy' })
+for (const hit of hits) {
+  dealPierceDamage(hit.entityId, hit.distance)
+}
+```
+
+---
+
+## overlapCircle
+
+Returns all entities whose `BoxCollider` is within `radius` pixels of `(cx, cy)`.
+
+```ts
+function overlapCircle(
+  world: ECSWorld,
+  cx: number, cy: number,
+  radius: number,
+  opts?: { tag?: string; layer?: string; exclude?: EntityId[] }
+): EntityId[]
+```
+
+### Example
+
+```ts
+import { overlapCircle } from 'cubeforge'
+
+// Explosion radius check
+const victims = overlapCircle(world, explosion.x, explosion.y, 120, { tag: 'enemy' })
+```
+
+---
+
+## sweepBox
+
+Sweeps a box along a direction and returns the **first** hit (Minkowski sum expansion), or `null`.
+
+```ts
+function sweepBox(
+  world: ECSWorld,
+  cx: number, cy: number,
+  w: number, h: number,
+  dx: number, dy: number,
+  opts?: { tag?: string; layer?: string; exclude?: EntityId[] }
+): RaycastHit | null
+```
+
+### Example
+
+```ts
+import { sweepBox } from 'cubeforge'
+
+// Safe move-and-stop for a non-physics object
+const hit = sweepBox(world, x, y, 32, 32, vx * dt, vy * dt, { layer: 'wall' })
+if (hit) {
+  // Clamp movement to just before the collision
+} else {
+  x += vx * dt; y += vy * dt
+}
+```
+
+---
+
 ## Notes
 
-- Both functions check all entities with `Transform` + `BoxCollider` — they are O(n) in the number of collider entities.
+- All functions check entities with `Transform` + `BoxCollider` — O(n) in collider count.
 - Raycast uses the **AABB slab method** for accurate intersection at any angle.
-- Triggers are skipped by default in `raycast`. Set `includeTriggers: true` to include them.
-- `overlapBox` includes triggers unless you filter by layer.
+- Triggers are skipped by default in ray functions. Set `includeTriggers: true` to include them.
 - Use `exclude: [myEntityId]` to avoid self-hits.
