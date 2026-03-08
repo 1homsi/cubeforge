@@ -1,6 +1,6 @@
 {
   "name": "create-cubeforge-game",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "Scaffold a new Cubeforge game project",
   "bin": {
     "create-cubeforge-game": "./bin/index.js"
