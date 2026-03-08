@@ -14,6 +14,8 @@ interface RigidBodyProps {
   lockX?: boolean
   /** Prevent any vertical movement — velocity.y is zeroed every frame (disables gravity) */
   lockY?: boolean
+  /** Enable continuous collision detection to prevent tunneling through thin colliders */
+  ccd?: boolean
 }
 
 export function RigidBody({
@@ -26,12 +28,13 @@ export function RigidBody({
   vy = 0,
   lockX = false,
   lockY = false,
+  ccd = false,
 }: RigidBodyProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createRigidBody({ mass, gravityScale, isStatic, bounce, friction, vx, vy, lockX, lockY }))
+    engine.ecs.addComponent(entityId, createRigidBody({ mass, gravityScale, isStatic, bounce, friction, vx, vy, lockX, lockY, ccd }))
     return () => engine.ecs.removeComponent(entityId, 'RigidBody')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

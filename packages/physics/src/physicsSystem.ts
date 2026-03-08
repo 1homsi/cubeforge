@@ -194,6 +194,60 @@ function canInteractGeneric(
   return maskAllows(aMask, bLayer) && maskAllows(bMask, aLayer)
 }
 
+// ── Swept AABB helper (for CCD) ───────────────────────────────────────────
+
+/**
+ * Performs a swept AABB test of a moving box against a static AABB.
+ * Uses the Minkowski-sum slab method: expand the static box by the moving
+ * box's half-extents and ray-cast the center point.
+ *
+ * Returns the fraction t ∈ [0,1] of the sweep at which contact occurs,
+ * or null if no contact along the sweep vector.
+ */
+function sweepAABB(
+  /** Moving box center + half-extents */
+  aCx: number, aCy: number, aHw: number, aHh: number,
+  /** Sweep displacement */
+  dx: number, dy: number,
+  /** Static box */
+  b: AABB,
+): number | null {
+  // Expand static box by moving box half-extents
+  const eHw = b.hw + aHw
+  const eHh = b.hh + aHh
+
+  const left   = b.cx - eHw
+  const right  = b.cx + eHw
+  const top    = b.cy - eHh
+  const bottom = b.cy + eHh
+
+  let tmin = -Infinity
+  let tmax =  Infinity
+
+  if (dx !== 0) {
+    const t1 = (left  - aCx) / dx
+    const t2 = (right - aCx) / dx
+    tmin = Math.max(tmin, Math.min(t1, t2))
+    tmax = Math.min(tmax, Math.max(t1, t2))
+  } else if (aCx < left || aCx > right) {
+    return null
+  }
+
+  if (dy !== 0) {
+    const t1 = (top    - aCy) / dy
+    const t2 = (bottom - aCy) / dy
+    tmin = Math.max(tmin, Math.min(t1, t2))
+    tmax = Math.min(tmax, Math.max(t1, t2))
+  } else if (aCy < top || aCy > bottom) {
+    return null
+  }
+
+  if (tmax < 0 || tmin > tmax || tmin > 1) return null
+  const t = Math.max(0, tmin)
+  if (t > 1) return null
+  return t
+}
+
 // ── Contact pair tracking ─────────────────────────────────────────────────────
 
 /** Stable key for an unordered entity pair. */
@@ -329,6 +383,16 @@ export class PhysicsSystem implements System {
       if (rb.dropThrough > 0) rb.dropThrough--
     }
 
+    // Save pre-step positions for CCD bodies
+    const ccdPrev = new Map<EntityId, { x: number; y: number }>()
+    for (const id of dynamics) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (rb.ccd) {
+        const t = world.getComponent<TransformComponent>(id, 'Transform')!
+        ccdPrev.set(id, { x: t.x, y: t.y })
+      }
+    }
+
     // Phase 2 & 3: move X then resolve X
     for (const id of dynamics) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
@@ -434,6 +498,106 @@ export class PhysicsSystem implements System {
               rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
             }
           }
+        }
+      }
+    }
+
+    // Phase 5b: CCD — swept AABB for fast-moving bodies
+    // For bodies with ccd enabled that moved more than half their collider size,
+    // sweep from pre-step position to post-step position against all statics.
+    // If the sweep finds a collision earlier than where discrete resolution placed
+    // the body, clamp to the swept contact point.
+    for (const [id, prev] of ccdPrev) {
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+
+      const totalDx = transform.x - prev.x
+      const totalDy = transform.y - prev.y
+      const moveLen = Math.abs(totalDx) + Math.abs(totalDy) // Manhattan for cheap threshold check
+      const halfSize = Math.min(col.width, col.height) / 2
+
+      // Only activate CCD when movement exceeds half the collider's smallest dimension
+      if (moveLen <= halfSize) continue
+
+      // Sweep from pre-step center to post-step center
+      const startCx = prev.x + col.offsetX
+      const startCy = prev.y + col.offsetY
+      const sweepDx = totalDx
+      const sweepDy = totalDy
+      const hw = col.width / 2
+      const hh = col.height / 2
+
+      let earliestT = 1.0
+      let hitSid: EntityId | null = null
+
+      // Check against all statics using the spatial grid
+      // Build candidate set from cells along the sweep path
+      const endCx = startCx + sweepDx
+      const endCy = startCy + sweepDy
+      const minCx = Math.min(startCx, endCx)
+      const maxCx = Math.max(startCx, endCx)
+      const minCy = Math.min(startCy, endCy)
+      const maxCy = Math.max(startCy, endCy)
+      const sweepCells = this.getCells(
+        (minCx + maxCx) / 2,
+        (minCy + maxCy) / 2,
+        (maxCx - minCx) / 2 + hw,
+        (maxCy - minCy) / 2 + hh,
+      )
+      const checked = new Set<EntityId>()
+      for (const cell of sweepCells) {
+        const bucket = staticGrid.get(cell)
+        if (!bucket) continue
+        for (const sid of bucket) {
+          if (checked.has(sid)) continue
+          checked.add(sid)
+          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+          if (sc.isTrigger) continue
+          if (!canInteract(col, sc)) continue
+
+          const staticAABB = getAABB(st, sc)
+          const t = sweepAABB(startCx, startCy, hw, hh, sweepDx, sweepDy, staticAABB)
+          if (t !== null && t < earliestT) {
+            earliestT = t
+            hitSid = sid
+          }
+        }
+      }
+
+      // If CCD found an earlier contact, clamp the body there
+      if (hitSid !== null && earliestT < 1.0) {
+        // Place body at the swept contact point with a small epsilon push-back
+        const eps = 0.01
+        const clampedT = Math.max(0, earliestT - eps / (Math.hypot(sweepDx, sweepDy) || 1))
+        transform.x = prev.x + totalDx * clampedT
+        transform.y = prev.y + totalDy * clampedT
+
+        // Zero out velocity in the direction of the collision
+        // Determine collision normal from sweep direction
+        const st = world.getComponent<TransformComponent>(hitSid, 'Transform')!
+        const sc = world.getComponent<BoxColliderComponent>(hitSid, 'BoxCollider')!
+        const staticAABB = getAABB(st, sc)
+        const contactCx = prev.x + col.offsetX + totalDx * earliestT
+        const contactCy = prev.y + col.offsetY + totalDy * earliestT
+
+        // Determine which axis the collision is on
+        const dxFromCenter = contactCx - staticAABB.cx
+        const dyFromCenter = contactCy - staticAABB.cy
+        const overlapX = (hw + staticAABB.hw) - Math.abs(dxFromCenter)
+        const overlapY = (hh + staticAABB.hh) - Math.abs(dyFromCenter)
+
+        if (overlapX > overlapY) {
+          // Vertical collision
+          rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
+          if (dyFromCenter < 0) {
+            rb.onGround = true
+            if (rb.friction < 1) rb.vx *= rb.friction
+          }
+        } else {
+          // Horizontal collision
+          rb.vx = rb.bounce > 0 ? -rb.vx * rb.bounce : 0
         }
       }
     }

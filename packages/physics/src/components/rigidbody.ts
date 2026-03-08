@@ -35,6 +35,14 @@ export interface RigidBodyComponent extends Component {
    * Set via `useDropThrough`.
    */
   dropThrough: number
+  /**
+   * Enable continuous collision detection (CCD) for this body.
+   * When true, a swept AABB test is performed after velocity integration
+   * to prevent fast-moving bodies from tunneling through thin colliders.
+   * Only activates when the body moves more than half its collider width
+   * in a single step (automatic optimization).
+   */
+  ccd: boolean
 }
 
 export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyComponent {
@@ -53,6 +61,7 @@ export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyCo
     lockY: false,
     isKinematic: false,
     dropThrough: 0,
+    ccd: false,
     ...opts,
   }
 }
