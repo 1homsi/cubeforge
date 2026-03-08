@@ -24,6 +24,7 @@ function makeEngine(): EngineState {
     canvas: document.createElement('canvas'),
     entityIds: new Map(),
     systemTimings: new Map(),
+    postProcessStack: { add: vi.fn(), remove: vi.fn(), apply: vi.fn(), clear: vi.fn() },
   }
 }
 
