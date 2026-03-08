@@ -26,6 +26,8 @@ interface SpriteComponent {
   frame?: { sx: number; sy: number; sw: number; sh: number }
   tileX?: boolean
   tileY?: boolean
+  tileSizeX?: number
+  tileSizeY?: number
 }
 
 interface Camera2DComponent {
@@ -205,8 +207,9 @@ function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
     return [sx / iw, sy / ih, sw / iw, sh / ih]
   }
   // Tiling: UV width/height > 1 causes the texture to repeat (needs REPEAT wrap mode)
-  const uw = sprite.tileX ? sprite.width / iw : 1
-  const vh = sprite.tileY ? sprite.height / ih : 1
+  // tileSizeX/tileSizeY control how many pixels each tile repeat covers
+  const uw = sprite.tileX ? sprite.width / (sprite.tileSizeX ?? iw) : 1
+  const vh = sprite.tileY ? sprite.height / (sprite.tileSizeY ?? ih) : 1
   return [0, 0, uw, vh]
 }
 
