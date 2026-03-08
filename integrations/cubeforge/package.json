@@ -1,6 +1,6 @@
 {
   "name": "cubeforge",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "React-first 2D browser game engine",
   "type": "module",
   "main": "./dist/index.js",
