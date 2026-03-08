@@ -30,7 +30,9 @@ export function Entity({ id, tags = [], children }: EntityProps) {
 
     return () => {
       engine.ecs.destroyEntity(eid)
-      if (id) engine.entityIds.delete(id)
+      // Only remove the ID mapping if it still points to this entity —
+      // a duplicate mount may have already overwritten it.
+      if (id && engine.entityIds.get(id) === eid) engine.entityIds.delete(id)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
