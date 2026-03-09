@@ -88,26 +88,13 @@ export default function MyGame() {
 
 ## Examples
 
-16 runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-examples):
+18+ playable games in [**cubeforge-examples**](https://github.com/1homsi/cubeforge-examples):
 
-| Example | Description |
-|---|---|
-| [platformer](https://github.com/1homsi/cubeforge-examples/tree/main/platformer) | Scrolling platformer — double jump, stomp, coins, lives, HUD |
-| [mario-clone](https://github.com/1homsi/cubeforge-examples/tree/main/mario-clone) | Mario-style level — question blocks, mushroom powerup, goombas, goal flag |
-| [breakout](https://github.com/1homsi/cubeforge-examples/tree/main/breakout) | Classic brick breaker — paddle, bouncing ball, multi-row bricks |
-| [flappy-bird](https://github.com/1homsi/cubeforge-examples/tree/main/flappy-bird) | Tap-to-flap — scrolling pipes, high score |
-| [shooter](https://github.com/1homsi/cubeforge-examples/tree/main/shooter) | Side-scrolling shoot-em-up — waves, enemy patterns, stars |
-| [top-down](https://github.com/1homsi/cubeforge-examples/tree/main/top-down) | Top-down dungeon — 4-directional movement, sword combat, keys, exit |
-| [pong](https://github.com/1homsi/cubeforge-examples/tree/main/pong) | Two-player paddle battle — first to 7 wins, ball speeds up on every hit |
-| [snake](https://github.com/1homsi/cubeforge-examples/tree/main/snake) | Classic snake — eat food to grow, avoid your tail, speed ramps up |
-| [endless-runner](https://github.com/1homsi/cubeforge-examples/tree/main/endless-runner) | Dodge incoming obstacles as the world speeds up |
-| [asteroids](https://github.com/1homsi/cubeforge-examples/tree/main/asteroids) | Rotate, thrust, and shoot through waves of splitting asteroids — 3 lives |
-| [sokoban](https://github.com/1homsi/cubeforge-examples/tree/main/sokoban) | Sokoban — infinite procedurally generated box-pushing puzzles |
-| [rpg](https://github.com/1homsi/cubeforge-examples/tree/main/rpg) | Top-down action RPG — slash slimes, collect coins, 5 HP |
-| [tower-defense](https://github.com/1homsi/cubeforge-examples/tree/main/tower-defense) | Wave-based TD — 3 tower types, gold economy, 5 waves |
-| [roguelike](https://github.com/1homsi/cubeforge-examples/tree/main/roguelike) | Turn-based dungeon crawler — procedural gen, fog of war, bump combat |
-| [multiplayer](https://github.com/1homsi/cubeforge-examples/tree/main/multiplayer) | Networked sync demo — local transport, Room API, shared ball |
-| [playground](https://github.com/1homsi/cubeforge-examples/tree/main/playground) | Browser IDE — write and run games live with Monaco + esbuild-wasm |
+| | | | |
+|:---:|:---:|:---:|:---:|
+| [Platformer](https://github.com/1homsi/cubeforge-examples/tree/main/platformer) | [Roguelike](https://github.com/1homsi/cubeforge-examples/tree/main/roguelike) | [Tower Defense](https://github.com/1homsi/cubeforge-examples/tree/main/tower-defense) | [Mario Clone](https://github.com/1homsi/cubeforge-examples/tree/main/mario-clone) |
+
+Platformers, arcade, puzzles, top-down RPGs, strategy, multiplayer, and more — **[browse all examples](https://github.com/1homsi/cubeforge-examples)**
 
 ---
 
