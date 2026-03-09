@@ -102,7 +102,7 @@ export default function MyGame() {
 | [snake](https://github.com/1homsi/cubeforge-examples/tree/main/snake) | Classic snake — eat food to grow, avoid your tail, speed ramps up |
 | [endless-runner](https://github.com/1homsi/cubeforge-examples/tree/main/endless-runner) | Dodge incoming obstacles as the world speeds up |
 | [asteroids](https://github.com/1homsi/cubeforge-examples/tree/main/asteroids) | Rotate, thrust, and shoot through waves of splitting asteroids — 3 lives |
-| [puzzle](https://github.com/1homsi/cubeforge-examples/tree/main/puzzle) | Sokoban — push boxes onto targets across 3 levels |
+| [sokoban](https://github.com/1homsi/cubeforge-examples/tree/main/sokoban) | Sokoban — infinite procedurally generated box-pushing puzzles |
 | [rpg](https://github.com/1homsi/cubeforge-examples/tree/main/rpg) | Top-down action RPG — slash slimes, collect coins, 5 HP |
 | [tower-defense](https://github.com/1homsi/cubeforge-examples/tree/main/tower-defense) | Wave-based TD — 3 tower types, gold economy, 5 waves |
 | [roguelike](https://github.com/1homsi/cubeforge-examples/tree/main/roguelike) | Turn-based dungeon crawler — procedural gen, fog of war, bump combat |
