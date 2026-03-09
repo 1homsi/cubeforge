@@ -88,7 +88,7 @@ export default function MyGame() {
 
 ## Examples
 
-Ten runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-examples):
+16 runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-examples):
 
 | Example | Description |
 |---|---|
@@ -102,6 +102,12 @@ Ten runnable games in [cubeforge-examples](https://github.com/1homsi/cubeforge-e
 | [snake](https://github.com/1homsi/cubeforge-examples/tree/main/snake) | Classic snake — eat food to grow, avoid your tail, speed ramps up |
 | [endless-runner](https://github.com/1homsi/cubeforge-examples/tree/main/endless-runner) | Dodge incoming obstacles as the world speeds up |
 | [asteroids](https://github.com/1homsi/cubeforge-examples/tree/main/asteroids) | Rotate, thrust, and shoot through waves of splitting asteroids — 3 lives |
+| [puzzle](https://github.com/1homsi/cubeforge-examples/tree/main/puzzle) | Sokoban — push boxes onto targets across 3 levels |
+| [rpg](https://github.com/1homsi/cubeforge-examples/tree/main/rpg) | Top-down action RPG — slash slimes, collect coins, 5 HP |
+| [tower-defense](https://github.com/1homsi/cubeforge-examples/tree/main/tower-defense) | Wave-based TD — 3 tower types, gold economy, 5 waves |
+| [roguelike](https://github.com/1homsi/cubeforge-examples/tree/main/roguelike) | Turn-based dungeon crawler — procedural gen, fog of war, bump combat |
+| [multiplayer](https://github.com/1homsi/cubeforge-examples/tree/main/multiplayer) | Networked sync demo — local transport, Room API, shared ball |
+| [playground](https://github.com/1homsi/cubeforge-examples/tree/main/playground) | Browser IDE — write and run games live with Monaco + esbuild-wasm |
 
 ---
 
