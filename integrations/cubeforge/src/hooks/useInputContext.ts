@@ -29,9 +29,14 @@ export function useInputContext(ctx?: InputContextName): InputContextControls {
     return () => globalInputContext.pop(ctx)
   }, [ctx])
 
-  return useMemo(() => ({
-    push: (c: InputContextName) => globalInputContext.push(c),
-    pop:  (c: InputContextName) => globalInputContext.pop(c),
-    get active() { return globalInputContext.active },
-  }), [])
+  return useMemo(
+    () => ({
+      push: (c: InputContextName) => globalInputContext.push(c),
+      pop: (c: InputContextName) => globalInputContext.pop(c),
+      get active() {
+        return globalInputContext.active
+      },
+    }),
+    [],
+  )
 }

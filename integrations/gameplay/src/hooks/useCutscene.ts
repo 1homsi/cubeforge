@@ -37,71 +37,86 @@ export function useCutscene(): CutsceneControls {
 
   const fireStep = useCallback((step: CutsceneStep) => {
     if (step.type === 'call') step.fn()
-    if (step.type === 'parallel') step.steps.forEach(s => { if (s.type === 'call') s.fn() })
+    if (step.type === 'parallel')
+      step.steps.forEach((s) => {
+        if (s.type === 'call') s.fn()
+      })
   }, [])
 
-  const play = useCallback((steps: CutsceneStep[]) => {
-    stepsRef.current = steps
-    idxRef.current = 0
-    timerRef.current = 0
-    playingRef.current = true
-    setPlaying(true)
-    setStepIndex(0)
+  const play = useCallback(
+    (steps: CutsceneStep[]) => {
+      stepsRef.current = steps
+      idxRef.current = 0
+      timerRef.current = 0
+      playingRef.current = true
+      setPlaying(true)
+      setStepIndex(0)
 
-    // Fire any initial 'call' steps
-    const step = steps[0]
-    if (step) fireStep(step)
+      // Fire any initial 'call' steps
+      const step = steps[0]
+      if (step) fireStep(step)
 
-    // Create script entity for frame-by-frame updates
-    const eid = engine.ecs.createEntity()
-    entityRef.current = eid
-    engine.ecs.addComponent(eid, createScript((_id, _world, _input, dt) => {
-      if (!playingRef.current) return
-      const allSteps = stepsRef.current
-      const idx = idxRef.current
-      if (idx >= allSteps.length) { finish(); return }
+      // Create script entity for frame-by-frame updates
+      const eid = engine.ecs.createEntity()
+      entityRef.current = eid
+      engine.ecs.addComponent(
+        eid,
+        createScript((_id, _world, _input, dt) => {
+          if (!playingRef.current) return
+          const allSteps = stepsRef.current
+          const idx = idxRef.current
+          if (idx >= allSteps.length) {
+            finish()
+            return
+          }
 
-      const current = allSteps[idx]
-      if (current.type === 'wait') {
-        timerRef.current += dt
-        if (timerRef.current >= current.duration) {
-          timerRef.current = 0
-          idxRef.current++
-          setStepIndex(idxRef.current)
-          const next = allSteps[idxRef.current]
-          if (next) fireStep(next)
-          if (idxRef.current >= allSteps.length) finish()
-        }
-      } else if (current.type === 'call') {
-        // Already fired, advance immediately
-        idxRef.current++
-        setStepIndex(idxRef.current)
-        const next = allSteps[idxRef.current]
-        if (next) fireStep(next)
-        if (idxRef.current >= allSteps.length) finish()
-      } else if (current.type === 'parallel') {
-        // Check wait sub-steps
-        const waits = current.steps.filter(s => s.type === 'wait') as Array<{ type: 'wait'; duration: number }>
-        const maxDuration = waits.length > 0 ? Math.max(...waits.map(w => w.duration)) : 0
-        timerRef.current += dt
-        if (timerRef.current >= maxDuration) {
-          timerRef.current = 0
-          idxRef.current++
-          setStepIndex(idxRef.current)
-          const next = allSteps[idxRef.current]
-          if (next) fireStep(next)
-          if (idxRef.current >= allSteps.length) finish()
-        }
-      }
-    }))
-  }, [engine.ecs, finish, fireStep])
+          const current = allSteps[idx]
+          if (current.type === 'wait') {
+            timerRef.current += dt
+            if (timerRef.current >= current.duration) {
+              timerRef.current = 0
+              idxRef.current++
+              setStepIndex(idxRef.current)
+              const next = allSteps[idxRef.current]
+              if (next) fireStep(next)
+              if (idxRef.current >= allSteps.length) finish()
+            }
+          } else if (current.type === 'call') {
+            // Already fired, advance immediately
+            idxRef.current++
+            setStepIndex(idxRef.current)
+            const next = allSteps[idxRef.current]
+            if (next) fireStep(next)
+            if (idxRef.current >= allSteps.length) finish()
+          } else if (current.type === 'parallel') {
+            // Check wait sub-steps
+            const waits = current.steps.filter((s) => s.type === 'wait') as Array<{ type: 'wait'; duration: number }>
+            const maxDuration = waits.length > 0 ? Math.max(...waits.map((w) => w.duration)) : 0
+            timerRef.current += dt
+            if (timerRef.current >= maxDuration) {
+              timerRef.current = 0
+              idxRef.current++
+              setStepIndex(idxRef.current)
+              const next = allSteps[idxRef.current]
+              if (next) fireStep(next)
+              if (idxRef.current >= allSteps.length) finish()
+            }
+          }
+        }),
+      )
+    },
+    [engine.ecs, finish, fireStep],
+  )
 
   const skip = useCallback(() => {
     // Fire all remaining call steps
     for (let i = idxRef.current; i < stepsRef.current.length; i++) {
       const step = stepsRef.current[i]
       if (step.type === 'call') step.fn()
-      if (step.type === 'parallel') step.steps.forEach(s => { if (s.type === 'call') s.fn() })
+      if (step.type === 'parallel')
+        step.steps.forEach((s) => {
+          if (s.type === 'call') s.fn()
+        })
     }
     finish()
   }, [finish])

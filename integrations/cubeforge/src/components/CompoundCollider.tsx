@@ -11,12 +11,7 @@ interface CompoundColliderProps {
   mask?: string | string[]
 }
 
-export function CompoundCollider({
-  shapes,
-  isTrigger = false,
-  layer = 'default',
-  mask = '*',
-}: CompoundColliderProps) {
+export function CompoundCollider({ shapes, isTrigger = false, layer = 'default', mask = '*' }: CompoundColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 

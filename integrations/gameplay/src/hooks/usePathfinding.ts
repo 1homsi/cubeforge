@@ -17,9 +17,6 @@ export function usePathfinding(): PathfindingControls {
     (grid: NavGrid, col: number, row: number, walkable: boolean) => setWalkable(grid, col, row, walkable),
     [],
   )
-  const findPath$ = useCallback(
-    (grid: NavGrid, start: Vec2Like, goal: Vec2Like) => findPath(grid, start, goal),
-    [],
-  )
+  const findPath$ = useCallback((grid: NavGrid, start: Vec2Like, goal: Vec2Like) => findPath(grid, start, goal), [])
   return { createGrid: createGrid$, setWalkable: setWalkable$, findPath: findPath$ }
 }

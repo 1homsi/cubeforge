@@ -18,12 +18,7 @@ interface QueryOpts {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function passesFilter(
-  world: ECSWorld,
-  id: EntityId,
-  col: BoxColliderComponent,
-  opts: QueryOpts,
-): boolean {
+function passesFilter(world: ECSWorld, id: EntityId, col: BoxColliderComponent, opts: QueryOpts): boolean {
   if (opts.exclude?.includes(id)) return false
   if (opts.layer && col.layer !== opts.layer) return false
   if (opts.tag) {
@@ -133,17 +128,17 @@ export function raycast(
     const hh = c.height / 2
 
     // Slab test
-    const left   = cx - hw
-    const right  = cx + hw
-    const top    = cy - hh
+    const left = cx - hw
+    const right = cx + hw
+    const top = cy - hh
     const bottom = cy + hh
 
     let tmin = -Infinity
-    let tmax =  Infinity
+    let tmax = Infinity
 
     // X slab
     if (dx !== 0) {
-      const t1 = (left  - origin.x) / dx
+      const t1 = (left - origin.x) / dx
       const t2 = (right - origin.x) / dx
       tmin = Math.max(tmin, Math.min(t1, t2))
       tmax = Math.min(tmax, Math.max(t1, t2))
@@ -153,7 +148,7 @@ export function raycast(
 
     // Y slab
     if (dy !== 0) {
-      const t1 = (top    - origin.y) / dy
+      const t1 = (top - origin.y) / dy
       const t2 = (bottom - origin.y) / dy
       tmin = Math.max(tmin, Math.min(t1, t2))
       tmax = Math.min(tmax, Math.max(t1, t2))
@@ -173,10 +168,10 @@ export function raycast(
     let nx = 0
     let ny = 0
     const edgeEps = 0.001
-    if (Math.abs(hitX - left)   < edgeEps) nx = -1
-    else if (Math.abs(hitX - right)  < edgeEps) nx =  1
-    else if (Math.abs(hitY - top)    < edgeEps) ny = -1
-    else if (Math.abs(hitY - bottom) < edgeEps) ny =  1
+    if (Math.abs(hitX - left) < edgeEps) nx = -1
+    else if (Math.abs(hitX - right) < edgeEps) nx = 1
+    else if (Math.abs(hitY - top) < edgeEps) ny = -1
+    else if (Math.abs(hitY - bottom) < edgeEps) ny = 1
 
     closest = {
       entityId: id,
@@ -225,27 +220,31 @@ export function raycastAll(
     const hw = c.width / 2
     const hh = c.height / 2
 
-    const left   = cx - hw
-    const right  = cx + hw
-    const top    = cy - hh
+    const left = cx - hw
+    const right = cx + hw
+    const top = cy - hh
     const bottom = cy + hh
 
     let tmin = -Infinity
-    let tmax =  Infinity
+    let tmax = Infinity
 
     if (dx !== 0) {
-      const t1 = (left  - origin.x) / dx
+      const t1 = (left - origin.x) / dx
       const t2 = (right - origin.x) / dx
       tmin = Math.max(tmin, Math.min(t1, t2))
       tmax = Math.min(tmax, Math.max(t1, t2))
-    } else if (origin.x < left || origin.x > right) { continue }
+    } else if (origin.x < left || origin.x > right) {
+      continue
+    }
 
     if (dy !== 0) {
-      const t1 = (top    - origin.y) / dy
+      const t1 = (top - origin.y) / dy
       const t2 = (bottom - origin.y) / dy
       tmin = Math.max(tmin, Math.min(t1, t2))
       tmax = Math.min(tmax, Math.max(t1, t2))
-    } else if (origin.y < top || origin.y > bottom) { continue }
+    } else if (origin.y < top || origin.y > bottom) {
+      continue
+    }
 
     if (tmax < 0 || tmin > tmax || tmin > maxDistance) continue
 
@@ -256,10 +255,10 @@ export function raycastAll(
     let nx = 0
     let ny = 0
     const edgeEps = 0.001
-    if (Math.abs(hitX - left)   < edgeEps) nx = -1
-    else if (Math.abs(hitX - right)  < edgeEps) nx =  1
-    else if (Math.abs(hitY - top)    < edgeEps) ny = -1
-    else if (Math.abs(hitY - bottom) < edgeEps) ny =  1
+    if (Math.abs(hitX - left) < edgeEps) nx = -1
+    else if (Math.abs(hitX - right) < edgeEps) nx = 1
+    else if (Math.abs(hitY - top) < edgeEps) ny = -1
+    else if (Math.abs(hitY - bottom) < edgeEps) ny = 1
 
     hits.push({ entityId: id, distance: dist, point: { x: hitX, y: hitY }, normal: { x: nx, y: ny } })
   }
@@ -344,8 +343,8 @@ export function sweepBox(
   const hh = h / 2
 
   const origin = { x: cx, y: cy }
-  const dir    = { x: dx / dist, y: dy / dist }
-  const len    = Math.hypot(dir.x, dir.y)
+  const dir = { x: dx / dist, y: dy / dist }
+  const len = Math.hypot(dir.x, dir.y)
   if (len === 0) return null
 
   let closest: RaycastHit | null = null
@@ -362,27 +361,31 @@ export function sweepBox(
     const ehw = c.width / 2 + hw
     const ehh = c.height / 2 + hh
 
-    const left   = ecx - ehw
-    const right  = ecx + ehw
-    const top    = ecy - ehh
+    const left = ecx - ehw
+    const right = ecx + ehw
+    const top = ecy - ehh
     const bottom = ecy + ehh
 
     let tmin = -Infinity
-    let tmax =  Infinity
+    let tmax = Infinity
 
     if (dir.x !== 0) {
-      const t1 = (left  - origin.x) / dir.x
+      const t1 = (left - origin.x) / dir.x
       const t2 = (right - origin.x) / dir.x
       tmin = Math.max(tmin, Math.min(t1, t2))
       tmax = Math.min(tmax, Math.max(t1, t2))
-    } else if (origin.x < left || origin.x > right) { continue }
+    } else if (origin.x < left || origin.x > right) {
+      continue
+    }
 
     if (dir.y !== 0) {
-      const t1 = (top    - origin.y) / dir.y
+      const t1 = (top - origin.y) / dir.y
       const t2 = (bottom - origin.y) / dir.y
       tmin = Math.max(tmin, Math.min(t1, t2))
       tmax = Math.min(tmax, Math.max(t1, t2))
-    } else if (origin.y < top || origin.y > bottom) { continue }
+    } else if (origin.y < top || origin.y > bottom) {
+      continue
+    }
 
     if (tmax < 0 || tmin > tmax || tmin > dist) continue
 
@@ -395,10 +398,10 @@ export function sweepBox(
     let nx = 0
     let ny = 0
     const edgeEps = 0.001
-    if (Math.abs(hitX - left)   < edgeEps) nx = -1
-    else if (Math.abs(hitX - right)  < edgeEps) nx =  1
-    else if (Math.abs(hitY - top)    < edgeEps) ny = -1
-    else if (Math.abs(hitY - bottom) < edgeEps) ny =  1
+    if (Math.abs(hitX - left) < edgeEps) nx = -1
+    else if (Math.abs(hitX - right) < edgeEps) nx = 1
+    else if (Math.abs(hitY - top) < edgeEps) ny = -1
+    else if (Math.abs(hitY - bottom) < edgeEps) ny = 1
 
     closest = { entityId: id, distance: d, point: { x: hitX, y: hitY }, normal: { x: nx, y: ny } }
   }

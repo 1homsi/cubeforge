@@ -1,9 +1,11 @@
 import { Keyboard } from './keyboard'
 import { Mouse } from './mouse'
+import { TouchInput } from './touch'
 
 export class InputManager {
   readonly keyboard = new Keyboard()
   readonly mouse = new Mouse()
+  readonly touch = new TouchInput()
   private _attachedElement: HTMLElement | null = null
 
   attach(canvas: HTMLElement): void {
@@ -12,24 +14,33 @@ export class InputManager {
     this._attachedElement = canvas
     this.keyboard.attach(window)
     this.mouse.attach(canvas)
+    this.touch.attach(canvas)
   }
 
   detach(): void {
     this._attachedElement = null
     this.keyboard.detach()
     this.mouse.detach()
+    this.touch.detach()
   }
 
   /** Must be called once at the start of each frame */
   flush(): void {
     this.keyboard.flush()
     this.mouse.flush()
+    this.touch.flush()
   }
 
   // Convenience pass-throughs
-  isDown(key: string): boolean { return this.keyboard.isDown(key) }
-  isPressed(key: string): boolean { return this.keyboard.isPressed(key) }
-  isReleased(key: string): boolean { return this.keyboard.isReleased(key) }
+  isDown(key: string): boolean {
+    return this.keyboard.isDown(key)
+  }
+  isPressed(key: string): boolean {
+    return this.keyboard.isPressed(key)
+  }
+  isReleased(key: string): boolean {
+    return this.keyboard.isReleased(key)
+  }
 
   /**
    * Returns a digital axis value (-1, 0, or 1) based on two keys.

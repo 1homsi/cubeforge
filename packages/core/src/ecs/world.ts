@@ -166,9 +166,12 @@ export class ECSWorld {
       this.dirtyTypes.clear()
     } else if (this.dirtyTypes.size > 0) {
       for (const key of this.queryCache.keys()) {
-        if (key === '') { this.queryCache.delete(key); continue }
+        if (key === '') {
+          this.queryCache.delete(key)
+          continue
+        }
         const keyTypes = key.split('\x00')
-        if (keyTypes.some(t => this.dirtyTypes.has(t))) {
+        if (keyTypes.some((t) => this.dirtyTypes.has(t))) {
           this.queryCache.delete(key)
         }
       }
@@ -188,7 +191,7 @@ export class ECSWorld {
     const result: EntityId[] = []
     for (const arch of this.archetypes.values()) {
       // Skip archetypes that don't have all requested types
-      if (types.every(t => arch.types.has(t))) {
+      if (types.every((t) => arch.types.has(t))) {
         for (const id of arch.entities) result.push(id)
       }
     }
@@ -199,7 +202,7 @@ export class ECSWorld {
   queryOne(...types: string[]): EntityId | undefined {
     this.flushDirty()
     for (const arch of this.archetypes.values()) {
-      if (types.every(t => arch.types.has(t))) {
+      if (types.every((t) => arch.types.has(t))) {
         if (arch.entities.length > 0) return arch.entities[0]
       }
     }
@@ -265,7 +268,7 @@ export class ECSWorld {
   /** Restore world state from a previously captured snapshot. */
   restoreSnapshot(snapshot: WorldSnapshot): void {
     this.clear()
-    this.nextId   = snapshot.nextId
+    this.nextId = snapshot.nextId
     this._rngState = snapshot.rngState
     for (const { id, components } of snapshot.entities) {
       const compMap = new Map<string, Component>()

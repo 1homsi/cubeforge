@@ -36,21 +36,24 @@ export function Camera2D({
 
   useEffect(() => {
     const entityId = engine.ecs.createEntity()
-    engine.ecs.addComponent(entityId, createCamera2D({
-      followEntityId: followEntity,
-      x,
-      y,
-      zoom,
-      smoothing,
-      background,
-      bounds,
-      deadZone,
-      followOffsetX,
-      followOffsetY,
-    }))
+    engine.ecs.addComponent(
+      entityId,
+      createCamera2D({
+        followEntityId: followEntity,
+        x,
+        y,
+        zoom,
+        smoothing,
+        background,
+        bounds,
+        deadZone,
+        followOffsetX,
+        followOffsetY,
+      }),
+    )
 
     return () => engine.ecs.destroyEntity(entityId)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync prop changes

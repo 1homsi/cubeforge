@@ -14,17 +14,17 @@ export interface PlatformerControllerOptions {
   jumpBuffer?: number
   jumpCooldown?: number
   bindings?: {
-    left?:  string | string[]
+    left?: string | string[]
     right?: string | string[]
-    jump?:  string | string[]
+    jump?: string | string[]
   }
 }
 
 interface ControllerState {
-  coyoteTimer:  number
-  jumpBuffer:   number
+  coyoteTimer: number
+  jumpBuffer: number
   jumpCooldown: number
-  jumpsLeft:    number
+  jumpsLeft: number
 }
 
 function normalizeKeys(val: string | string[] | undefined, defaults: string[]): string[] {
@@ -36,25 +36,25 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
   const engine = useContext(EngineContext)!
 
   const {
-    speed        = 200,
-    jumpForce    = -500,
-    maxJumps     = 1,
-    coyoteTime   = 0.08,
-    jumpBuffer   = 0.08,
+    speed = 200,
+    jumpForce = -500,
+    maxJumps = 1,
+    coyoteTime = 0.08,
+    jumpBuffer = 0.08,
     jumpCooldown = 0.18,
     bindings,
   } = opts
 
-  const leftKeys  = normalizeKeys(bindings?.left,  ['ArrowLeft',  'KeyA', 'a'])
+  const leftKeys = normalizeKeys(bindings?.left, ['ArrowLeft', 'KeyA', 'a'])
   const rightKeys = normalizeKeys(bindings?.right, ['ArrowRight', 'KeyD', 'd'])
-  const jumpKeys  = normalizeKeys(bindings?.jump,  ['Space', 'ArrowUp', 'KeyW', 'w'])
+  const jumpKeys = normalizeKeys(bindings?.jump, ['Space', 'ArrowUp', 'KeyW', 'w'])
 
   useEffect(() => {
     const state: ControllerState = {
-      coyoteTimer:  0,
-      jumpBuffer:   0,
+      coyoteTimer: 0,
+      jumpBuffer: 0,
       jumpCooldown: 0,
-      jumpsLeft:    maxJumps,
+      jumpsLeft: maxJumps,
     }
 
     const updateFn = (id: EntityId, world: ECSWorld, input: InputManager, dt: number) => {
@@ -62,37 +62,40 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
       if (!rb) return
 
-      if (rb.onGround) { state.coyoteTimer = coyoteTime; state.jumpsLeft = maxJumps }
-      else              state.coyoteTimer = Math.max(0, state.coyoteTimer - dt)
+      if (rb.onGround) {
+        state.coyoteTimer = coyoteTime
+        state.jumpsLeft = maxJumps
+      } else state.coyoteTimer = Math.max(0, state.coyoteTimer - dt)
 
       state.jumpCooldown = Math.max(0, state.jumpCooldown - dt)
 
-      const jumpPressed = jumpKeys.some(k => input.isPressed(k))
-      if (jumpPressed && state.jumpCooldown === 0) state.jumpBuffer = jumpBuffer
-      else if (!jumpKeys.some(k => input.isDown(k))) state.jumpBuffer = Math.max(0, state.jumpBuffer - dt)
+      const jumpPressed = jumpKeys.some((k) => input.isPressed(k))
+      const canJumpEarly = state.coyoteTimer > 0 || state.jumpsLeft > 0
+      if (jumpPressed && state.jumpCooldown <= 0 && canJumpEarly) state.jumpBuffer = jumpBuffer
+      else if (!jumpKeys.some((k) => input.isDown(k))) state.jumpBuffer = Math.max(0, state.jumpBuffer - dt)
 
-      const left  = leftKeys.some(k => input.isDown(k))
-      const right = rightKeys.some(k => input.isDown(k))
-      if (left)       rb.vx = -speed
-      else if (right) rb.vx =  speed
-      else            rb.vx *= rb.onGround ? 0.6 : 0.92
+      const left = leftKeys.some((k) => input.isDown(k))
+      const right = rightKeys.some((k) => input.isDown(k))
+      if (left) rb.vx = -speed
+      else if (right) rb.vx = speed
+      else rb.vx *= rb.onGround ? 0.6 : 0.92
 
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')
       if (sprite) {
-        if (left)  sprite.flipX = true
+        if (left) sprite.flipX = true
         if (right) sprite.flipX = false
       }
 
       const canJump = state.coyoteTimer > 0 || state.jumpsLeft > 0
-      if (state.jumpBuffer > 0 && canJump) {
-        rb.vy             = jumpForce
-        state.jumpsLeft   = Math.max(0, state.jumpsLeft - 1)
+      if (state.jumpBuffer > 0 && canJump && state.jumpCooldown <= 0) {
+        rb.vy = jumpForce
+        state.jumpsLeft = Math.max(0, state.jumpsLeft - 1)
         state.coyoteTimer = 0
-        state.jumpBuffer  = 0
+        state.jumpBuffer = 0
         state.jumpCooldown = jumpCooldown
       }
 
-      const jumpHeld = jumpKeys.some(k => input.isDown(k))
+      const jumpHeld = jumpKeys.some((k) => input.isDown(k))
       if (!jumpHeld && rb.vy < -120) rb.vy += 800 * dt
     }
 

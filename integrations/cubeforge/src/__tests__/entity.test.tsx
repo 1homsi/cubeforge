@@ -57,7 +57,9 @@ describe('Entity lifecycle', () => {
       unmount = result.unmount
     })
     expect(engine.entityIds.has('hero')).toBe(true)
-    await act(async () => { unmount() })
+    await act(async () => {
+      unmount()
+    })
     expect(engine.entityIds.has('hero')).toBe(false)
   })
 
@@ -88,7 +90,9 @@ describe('Entity lifecycle', () => {
     })
     const idBefore = engine.entityIds.get('temp')
     expect(idBefore).toBeDefined()
-    await act(async () => { unmount() })
+    await act(async () => {
+      unmount()
+    })
     expect(engine.ecs.hasEntity(idBefore!)).toBe(false)
   })
 
@@ -96,7 +100,9 @@ describe('Entity lifecycle', () => {
     let capturedId: number | null = null
     function Child() {
       const id = React.useContext(EntityContext)
-      React.useEffect(() => { capturedId = id }, [id])
+      React.useEffect(() => {
+        capturedId = id
+      }, [id])
       return null
     }
     await act(async () => {
@@ -122,7 +128,7 @@ describe('Entity lifecycle', () => {
         </Wrapper>,
       )
     })
-    const ids = ['a', 'b', 'c'].map(k => engine.entityIds.get(k))
+    const ids = ['a', 'b', 'c'].map((k) => engine.entityIds.get(k))
     const unique = new Set(ids)
     expect(unique.size).toBe(3)
   })

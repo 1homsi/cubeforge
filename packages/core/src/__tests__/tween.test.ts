@@ -54,7 +54,9 @@ describe('Ease functions', () => {
 describe('tween', () => {
   it('calls onUpdate with interpolated value at mid-point', () => {
     const values: number[] = []
-    const t = tween(0, 100, 1, Ease.linear, (v) => { values.push(v) })
+    const t = tween(0, 100, 1, Ease.linear, (v) => {
+      values.push(v)
+    })
     t.update(0.5)
     expect(values).toHaveLength(1)
     expect(values[0]).toBeCloseTo(50, 5)
@@ -62,7 +64,9 @@ describe('tween', () => {
 
   it('calls onUpdate with final value at duration boundary', () => {
     const values: number[] = []
-    const t = tween(0, 100, 1, Ease.linear, (v) => { values.push(v) })
+    const t = tween(0, 100, 1, Ease.linear, (v) => {
+      values.push(v)
+    })
     t.update(1.0)
     expect(values[values.length - 1]).toBeCloseTo(100, 5)
   })
@@ -87,14 +91,32 @@ describe('tween', () => {
 
   it('onComplete fires when tween finishes', () => {
     let fired = false
-    const t = tween(0, 100, 1, Ease.linear, () => {}, () => { fired = true })
+    const t = tween(
+      0,
+      100,
+      1,
+      Ease.linear,
+      () => {},
+      () => {
+        fired = true
+      },
+    )
     t.update(1.0)
     expect(fired).toBe(true)
   })
 
   it('onComplete fires only once even if update is called again', () => {
     let count = 0
-    const t = tween(0, 100, 1, Ease.linear, () => {}, () => { count++ })
+    const t = tween(
+      0,
+      100,
+      1,
+      Ease.linear,
+      () => {},
+      () => {
+        count++
+      },
+    )
     t.update(1.0)
     t.update(0.5)
     expect(count).toBe(1)
@@ -102,7 +124,9 @@ describe('tween', () => {
 
   it('stop() prevents further onUpdate calls', () => {
     const values: number[] = []
-    const t = tween(0, 100, 1, Ease.linear, (v) => { values.push(v) })
+    const t = tween(0, 100, 1, Ease.linear, (v) => {
+      values.push(v)
+    })
     t.update(0.2)
     t.stop()
     t.update(0.2)
@@ -112,7 +136,16 @@ describe('tween', () => {
 
   it('stop() prevents onComplete from firing', () => {
     let fired = false
-    const t = tween(0, 100, 1, Ease.linear, () => {}, () => { fired = true })
+    const t = tween(
+      0,
+      100,
+      1,
+      Ease.linear,
+      () => {},
+      () => {
+        fired = true
+      },
+    )
     t.stop()
     t.update(1.0)
     expect(fired).toBe(false)
@@ -120,7 +153,9 @@ describe('tween', () => {
 
   it('multiple update steps accumulate correctly', () => {
     const values: number[] = []
-    const t = tween(0, 100, 1, Ease.linear, (v) => { values.push(v) })
+    const t = tween(0, 100, 1, Ease.linear, (v) => {
+      values.push(v)
+    })
     t.update(0.25)
     t.update(0.25)
     t.update(0.25)
@@ -132,14 +167,18 @@ describe('tween', () => {
 
   it('tweens from non-zero start value', () => {
     const values: number[] = []
-    const t = tween(50, 150, 1, Ease.linear, (v) => { values.push(v) })
+    const t = tween(50, 150, 1, Ease.linear, (v) => {
+      values.push(v)
+    })
     t.update(0.5)
     expect(values[0]).toBeCloseTo(100, 5)
   })
 
   it('handles negative tween direction', () => {
     const values: number[] = []
-    const t = tween(100, 0, 1, Ease.linear, (v) => { values.push(v) })
+    const t = tween(100, 0, 1, Ease.linear, (v) => {
+      values.push(v)
+    })
     t.update(0.5)
     expect(values[0]).toBeCloseTo(50, 5)
   })
@@ -147,7 +186,18 @@ describe('tween', () => {
   it('zero-duration tween completes immediately at full value', () => {
     const values: number[] = []
     let fired = false
-    const t = tween(0, 100, 0, Ease.linear, (v) => { values.push(v) }, () => { fired = true })
+    const t = tween(
+      0,
+      100,
+      0,
+      Ease.linear,
+      (v) => {
+        values.push(v)
+      },
+      () => {
+        fired = true
+      },
+    )
     t.update(0)
     expect(values[0]).toBeCloseTo(100, 5)
     expect(t.isComplete).toBe(true)

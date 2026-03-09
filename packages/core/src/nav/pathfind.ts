@@ -55,7 +55,7 @@ function heuristic(ac: number, ar: number, bc: number, br: number): number {
   // Diagonal (Chebyshev) heuristic
   const dc = Math.abs(ac - bc)
   const dr = Math.abs(ar - br)
-  return (dc + dr) + (Math.SQRT2 - 2) * Math.min(dc, dr)
+  return dc + dr + (Math.SQRT2 - 2) * Math.min(dc, dr)
 }
 
 /**
@@ -71,11 +71,7 @@ function heuristic(ac: number, ar: number, bc: number, br: number): number {
  * const path = findPath(grid, { x: 16, y: 16 }, { x: 400, y: 240 })
  * ```
  */
-export function findPath(
-  grid: NavGrid,
-  start: Vec2Like,
-  goal: Vec2Like,
-): Vec2Like[] {
+export function findPath(grid: NavGrid, start: Vec2Like, goal: Vec2Like): Vec2Like[] {
   const sc = worldToCell(grid, start.x, start.y)
   const gc = worldToCell(grid, goal.x, goal.y)
 
@@ -95,8 +91,14 @@ export function findPath(
 
   // Neighbours: 8-directional
   const dirs = [
-    [0, -1, 1], [0, 1, 1], [-1, 0, 1], [1, 0, 1],
-    [-1, -1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [1, 1, Math.SQRT2],
+    [0, -1, 1],
+    [0, 1, 1],
+    [-1, 0, 1],
+    [1, 0, 1],
+    [-1, -1, Math.SQRT2],
+    [1, -1, Math.SQRT2],
+    [-1, 1, Math.SQRT2],
+    [1, 1, Math.SQRT2],
   ]
 
   while (!openSet.isEmpty()) {
@@ -163,7 +165,9 @@ class MinHeap<T> {
     return top
   }
 
-  isEmpty(): boolean { return this.data.length === 0 }
+  isEmpty(): boolean {
+    return this.data.length === 0
+  }
 
   private bubbleUp(i: number): void {
     while (i > 0) {

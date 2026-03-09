@@ -5,12 +5,7 @@
  * scene has been rendered and can draw overlays or manipulate pixel data.
  */
 
-export type PostProcessEffect = (
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  dt: number,
-) => void
+export type PostProcessEffect = (ctx: CanvasRenderingContext2D, width: number, height: number, dt: number) => void
 
 export interface PostProcessStack {
   add(effect: PostProcessEffect): void

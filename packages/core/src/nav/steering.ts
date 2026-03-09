@@ -37,12 +37,7 @@ export function flee(pos: Vec2Like, threat: Vec2Like, speed: number): Vec2Like {
  *
  * @param slowRadius - Start slowing within this distance from target.
  */
-export function arrive(
-  pos: Vec2Like,
-  target: Vec2Like,
-  speed: number,
-  slowRadius: number,
-): Vec2Like {
+export function arrive(pos: Vec2Like, target: Vec2Like, speed: number, slowRadius: number): Vec2Like {
   const dx = target.x - pos.x
   const dy = target.y - pos.y
   const dist = Math.hypot(dx, dy)

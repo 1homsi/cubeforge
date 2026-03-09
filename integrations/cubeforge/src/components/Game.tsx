@@ -7,11 +7,7 @@ import { EngineContext, type EngineState } from '../context'
 import { DebugSystem, DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from '@cubeforge/devtools'
 
 /** Wraps a System to record execution time into a shared timings map. */
-function timedSystem(
-  name: string,
-  system: System,
-  timings: Map<string, number>,
-): System {
+function timedSystem(name: string, system: System, timings: Map<string, number>): System {
   return {
     update(world, dt) {
       const t0 = performance.now()
@@ -86,9 +82,9 @@ export function Game({
   className,
   children,
 }: GameProps) {
-  const canvasRef      = useRef<HTMLCanvasElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const debugCanvasRef = useRef<HTMLCanvasElement>(null)
-  const wrapperRef     = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<EngineState | null>(null)
   const [assetsReady, setAssetsReady] = useState(asyncAssets)
   const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
@@ -138,16 +134,19 @@ export function Game({
       console.warn(`[Cubeforge] Invalid Game dimensions: ${width}x${height}. Width and height must be positive.`)
     }
 
-    const loop = new GameLoop((dt) => {
-      ecs.update(dt)
-      input.flush()
-      if (devtools) {
-        const handle = devtoolsHandle.current
-        handle.buffer.push(ecs.getSnapshot())
-        if (handle.buffer.length > MAX_DEVTOOLS_FRAMES) handle.buffer.shift()
-        handle.onFrame?.()
-      }
-    }, deterministic ? { fixedDt: 1 / 60 } : undefined)
+    const loop = new GameLoop(
+      (dt) => {
+        ecs.update(dt)
+        input.flush()
+        if (devtools) {
+          const handle = devtoolsHandle.current
+          handle.buffer.push(ecs.getSnapshot())
+          if (handle.buffer.length > MAX_DEVTOOLS_FRAMES) handle.buffer.shift()
+          handle.onFrame?.()
+        }
+      },
+      deterministic ? { fixedDt: 1 / 60 } : undefined,
+    )
 
     const postProcessStack = createPostProcessStack()
 
@@ -169,7 +168,7 @@ export function Game({
     // Register plugin systems and call their onInit hooks
     if (plugins) {
       // Sort by priority descending (higher priority registered first)
-      const pluginNames = new Set(plugins.map(p => p.name))
+      const pluginNames = new Set(plugins.map((p) => p.name))
       const sorted = [...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
       for (const plugin of sorted) {
         // Validate dependencies
@@ -192,9 +191,9 @@ export function Game({
 
     // Expose controls via onReady callback
     onReady?.({
-      pause:  () => loop.pause(),
+      pause: () => loop.pause(),
       resume: () => loop.resume(),
-      reset:  () => {
+      reset: () => {
         ecs.clear()
         loop.stop()
         loop.start()
@@ -206,7 +205,7 @@ export function Game({
     if (scale === 'contain' && wrapperRef.current) {
       const wrapper = wrapperRef.current
       const updateScale = () => {
-        const parentW = wrapper.parentElement?.clientWidth  ?? width
+        const parentW = wrapper.parentElement?.clientWidth ?? width
         const parentH = wrapper.parentElement?.clientHeight ?? height
         const scaleX = parentW / width
         const scaleY = parentH / height
@@ -237,7 +236,7 @@ export function Game({
         }
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Start loop once initial scene sprites are loaded.
@@ -261,8 +260,10 @@ export function Game({
       }
     })
 
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine])
 
   // Sync canvas dimensions when width/height props change
@@ -294,13 +295,7 @@ export function Game({
   return (
     <EngineContext.Provider value={engine}>
       <div ref={wrapperRef} style={wrapperStyle}>
-        <canvas
-          ref={canvasRef}
-          width={width}
-          height={height}
-          style={canvasStyle}
-          className={className}
-        />
+        <canvas ref={canvasRef} width={width} height={height} style={canvasStyle} className={className} />
         {debug && (
           <canvas
             ref={debugCanvasRef}
@@ -310,27 +305,41 @@ export function Game({
           />
         )}
         {!assetsReady && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            background: '#0a0a0f',
-            pointerEvents: 'none',
-          }}>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#0a0a0f',
+              pointerEvents: 'none',
+            }}
+          >
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              {[0, 1, 2].map(i => (
-                <div key={i} style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: '#4fc3f7',
-                  animation: 'cubeforge-loading-dot 1.2s ease-in-out infinite',
-                  animationDelay: `${i * 0.2}s`,
-                }} />
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: '#4fc3f7',
+                    animation: 'cubeforge-loading-dot 1.2s ease-in-out infinite',
+                    animationDelay: `${i * 0.2}s`,
+                  }}
+                />
               ))}
             </div>
-            <span style={{
-              fontFamily: 'monospace', fontSize: 11,
-              letterSpacing: 3, color: '#37474f',
-            }}>
+            <span
+              style={{
+                fontFamily: 'monospace',
+                fontSize: 11,
+                letterSpacing: 3,
+                color: '#37474f',
+              }}
+            >
               LOADING
             </span>
             <style>{`
@@ -344,12 +353,7 @@ export function Game({
       </div>
       {engine && children}
       {engine && devtools && (
-        <DevToolsOverlay
-          handle={devtoolsHandle.current}
-          loop={engine.loop}
-          ecs={engine.ecs}
-          engine={engine}
-        />
+        <DevToolsOverlay handle={devtoolsHandle.current} loop={engine.loop} ecs={engine.ecs} engine={engine} />
       )}
     </EngineContext.Provider>
   )

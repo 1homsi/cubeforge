@@ -49,6 +49,14 @@ export interface RigidBodyComponent extends Component {
   angularDamping: number
   /** Linear damping (0–1): velocity reduction factor applied every fixed step (air resistance) */
   linearDamping: number
+  /** Whether this body is sleeping (skipped in physics) */
+  sleeping: boolean
+  /** Accumulator: how long velocity has been below threshold */
+  sleepTimer: number
+  /** Velocity threshold below which sleep timer increments */
+  sleepThreshold: number
+  /** Time in seconds body must be still before sleeping */
+  sleepDelay: number
 }
 
 export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyComponent {
@@ -71,6 +79,10 @@ export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyCo
     angularVelocity: 0,
     angularDamping: 0,
     linearDamping: 0,
+    sleeping: false,
+    sleepTimer: 0,
+    sleepThreshold: 5,
+    sleepDelay: 1,
     ...opts,
   }
 }

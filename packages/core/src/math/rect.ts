@@ -8,20 +8,25 @@ export class Rect {
     public height: number,
   ) {}
 
-  get left(): number { return this.x - this.width / 2 }
-  get right(): number { return this.x + this.width / 2 }
-  get top(): number { return this.y - this.height / 2 }
-  get bottom(): number { return this.y + this.height / 2 }
+  get left(): number {
+    return this.x - this.width / 2
+  }
+  get right(): number {
+    return this.x + this.width / 2
+  }
+  get top(): number {
+    return this.y - this.height / 2
+  }
+  get bottom(): number {
+    return this.y + this.height / 2
+  }
 
   contains(v: Vec2): boolean {
     return v.x >= this.left && v.x <= this.right && v.y >= this.top && v.y <= this.bottom
   }
 
   intersects(other: Rect): boolean {
-    return this.left < other.right &&
-      this.right > other.left &&
-      this.top < other.bottom &&
-      this.bottom > other.top
+    return this.left < other.right && this.right > other.left && this.top < other.bottom && this.bottom > other.top
   }
 
   clone(): Rect {

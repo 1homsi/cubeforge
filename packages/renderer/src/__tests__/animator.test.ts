@@ -159,17 +159,20 @@ describe('Animator state transitions (simulated)', () => {
       playing: boolean
       currentState: string
       initialState: string
-      states: Record<string, {
-        clip: string
-        transitions?: Array<{
-          to: string
-          when: AnimatorCondition[]
-          priority?: number
-          exitTime?: number
-        }>
-        onEnter?: () => void
-        onExit?: () => void
-      }>
+      states: Record<
+        string,
+        {
+          clip: string
+          transitions?: Array<{
+            to: string
+            when: AnimatorCondition[]
+            priority?: number
+            exitTime?: number
+          }>
+          onEnter?: () => void
+          onExit?: () => void
+        }
+      >
       params: Record<string, unknown>
       _entered: boolean
     },
@@ -219,7 +222,15 @@ describe('Animator state transitions (simulated)', () => {
       playing: true,
       currentState: 'idle',
       initialState: 'idle',
-      states: {} as Record<string, { clip: string; transitions?: Array<{ to: string; when: AnimatorCondition[]; priority?: number; exitTime?: number }>; onEnter?: () => void; onExit?: () => void }>,
+      states: {} as Record<
+        string,
+        {
+          clip: string
+          transitions?: Array<{ to: string; when: AnimatorCondition[]; priority?: number; exitTime?: number }>
+          onEnter?: () => void
+          onExit?: () => void
+        }
+      >,
       params: {} as Record<string, unknown>,
       _entered: false,
       ...overrides,
@@ -273,9 +284,7 @@ describe('Animator state transitions (simulated)', () => {
         idle: {
           clip: 'idle_clip',
           onExit,
-          transitions: [
-            { to: 'walk', when: [{ param: 'speed', op: '>' as const, value: 0 }] },
-          ],
+          transitions: [{ to: 'walk', when: [{ param: 'speed', op: '>' as const, value: 0 }] }],
         },
         walk: { clip: 'walk_clip' },
       },
@@ -297,9 +306,7 @@ describe('Animator state transitions (simulated)', () => {
       states: {
         idle: {
           clip: 'idle_clip',
-          transitions: [
-            { to: 'walk', when: [{ param: 'speed', op: '>' as const, value: 0 }] },
-          ],
+          transitions: [{ to: 'walk', when: [{ param: 'speed', op: '>' as const, value: 0 }] }],
         },
         walk: { clip: 'walk_clip' },
       },
@@ -319,9 +326,7 @@ describe('Animator state transitions (simulated)', () => {
       states: {
         attack: {
           clip: 'attack_clip',
-          transitions: [
-            { to: 'idle', when: [{ param: 'done', op: '==' as const, value: true }], exitTime: 0.5 },
-          ],
+          transitions: [{ to: 'idle', when: [{ param: 'done', op: '==' as const, value: true }], exitTime: 0.5 }],
         },
         idle: { clip: 'idle_clip' },
       },
@@ -375,9 +380,7 @@ describe('Animator state transitions (simulated)', () => {
         idle: {
           clip: 'idle_clip',
           onExit: idleExit,
-          transitions: [
-            { to: 'walk', when: [{ param: 'speed', op: '>' as const, value: 0 }] },
-          ],
+          transitions: [{ to: 'walk', when: [{ param: 'speed', op: '>' as const, value: 0 }] }],
         },
         walk: { clip: 'walk_clip', onEnter: walkEnter },
       },

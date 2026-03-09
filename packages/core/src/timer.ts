@@ -37,8 +37,8 @@ export interface GameTimer {
 
 export function createTimer(duration: number, onComplete?: () => void, autoStart = false): GameTimer {
   let _duration = duration
-  let _elapsed  = 0
-  let _running  = autoStart
+  let _elapsed = 0
+  let _running = autoStart
 
   return {
     update(dt: number) {
@@ -50,13 +50,32 @@ export function createTimer(duration: number, onComplete?: () => void, autoStart
         onComplete?.()
       }
     },
-    start()   { _running = true },
-    stop()    { _running = false },
-    reset(d?: number) { _elapsed = 0; _running = false; if (d !== undefined) _duration = d },
-    restart() { _elapsed = 0; _running = true },
-    get running()   { return _running },
-    get elapsed()   { return _elapsed },
-    get remaining() { return Math.max(0, _duration - _elapsed) },
-    get progress()  { return _duration > 0 ? Math.min(1, _elapsed / _duration) : 1 },
+    start() {
+      _running = true
+    },
+    stop() {
+      _running = false
+    },
+    reset(d?: number) {
+      _elapsed = 0
+      _running = false
+      if (d !== undefined) _duration = d
+    },
+    restart() {
+      _elapsed = 0
+      _running = true
+    },
+    get running() {
+      return _running
+    },
+    get elapsed() {
+      return _elapsed
+    },
+    get remaining() {
+      return Math.max(0, _duration - _elapsed)
+    },
+    get progress() {
+      return _duration > 0 ? Math.min(1, _elapsed / _duration) : 1
+    },
   }
 }

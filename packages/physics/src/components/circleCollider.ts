@@ -14,10 +14,7 @@ export interface CircleColliderComponent extends Component {
   mask: string | string[]
 }
 
-export function createCircleCollider(
-  radius: number,
-  opts?: Partial<CircleColliderComponent>,
-): CircleColliderComponent {
+export function createCircleCollider(radius: number, opts?: Partial<CircleColliderComponent>): CircleColliderComponent {
   return {
     type: 'CircleCollider',
     radius,

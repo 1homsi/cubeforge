@@ -59,32 +59,32 @@ export function createInputMap(bindings: ActionBindings): InputMap {
     isActionDown(input, action) {
       if (axes[action]) {
         const ax = axes[action]
-        return ax.positive.some(k => input.isDown(k)) || ax.negative.some(k => input.isDown(k))
+        return ax.positive.some((k) => input.isDown(k)) || ax.negative.some((k) => input.isDown(k))
       }
-      return (normalized[action] ?? []).some(k => input.isDown(k))
+      return (normalized[action] ?? []).some((k) => input.isDown(k))
     },
     isActionPressed(input, action) {
       const keys = normalized[action]
       if (!keys) return false
-      return keys.some(k => (input as { isPressed(k: string): boolean }).isPressed(k))
+      return keys.some((k) => (input as { isPressed(k: string): boolean }).isPressed(k))
     },
     isActionReleased(input, action) {
       const keys = normalized[action]
       if (!keys) return false
-      return keys.some(k => (input as { isReleased(k: string): boolean }).isReleased(k))
+      return keys.some((k) => (input as { isReleased(k: string): boolean }).isReleased(k))
     },
     getAxis(input, action) {
       if (axes[action]) {
         const ax = axes[action]
         const deadZone = ax.deadZone ?? 0.1
         let value = 0
-        if (ax.positive.some(k => input.isDown(k))) value += 1
-        if (ax.negative.some(k => input.isDown(k))) value -= 1
+        if (ax.positive.some((k) => input.isDown(k))) value += 1
+        if (ax.negative.some((k) => input.isDown(k))) value -= 1
         return Math.abs(value) < deadZone ? 0 : value
       }
       // For key bindings, treat as digital axis
       const keys = normalized[action] ?? []
-      return keys.some(k => input.isDown(k)) ? 1 : 0
+      return keys.some((k) => input.isDown(k)) ? 1 : 0
     },
   }
 }

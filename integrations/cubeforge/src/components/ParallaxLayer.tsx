@@ -44,7 +44,7 @@ function ParallaxLayerInner({
     } as ParallaxLayerComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParallaxLayer')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync prop changes

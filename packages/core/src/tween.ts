@@ -6,22 +6,32 @@ export const Ease = {
   // Quad
   easeInQuad: (t: number) => t * t,
   easeOutQuad: (t: number) => t * (2 - t),
-  easeInOutQuad: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+  easeInOutQuad: (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
 
   // Cubic
   easeInCubic: (t: number) => t * t * t,
-  easeOutCubic: (t: number) => { const t1 = t - 1; return t1 * t1 * t1 + 1 },
-  easeInOutCubic: (t: number) => t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1,
+  easeOutCubic: (t: number) => {
+    const t1 = t - 1
+    return t1 * t1 * t1 + 1
+  },
+  easeInOutCubic: (t: number) => (t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1),
 
   // Quart
   easeInQuart: (t: number) => t * t * t * t,
-  easeOutQuart: (t: number) => { const t1 = t - 1; return 1 - t1 * t1 * t1 * t1 },
-  easeInOutQuart: (t: number) => t < 0.5 ? 8 * t * t * t * t : 1 - 8 * (t - 1) * (t - 1) * (t - 1) * (t - 1),
+  easeOutQuart: (t: number) => {
+    const t1 = t - 1
+    return 1 - t1 * t1 * t1 * t1
+  },
+  easeInOutQuart: (t: number) => (t < 0.5 ? 8 * t * t * t * t : 1 - 8 * (t - 1) * (t - 1) * (t - 1) * (t - 1)),
 
   // Quint
   easeInQuint: (t: number) => t * t * t * t * t,
-  easeOutQuint: (t: number) => { const t1 = t - 1; return 1 + t1 * t1 * t1 * t1 * t1 },
-  easeInOutQuint: (t: number) => t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * (t - 1) * (t - 1) * (t - 1) * (t - 1) * (t - 1),
+  easeOutQuint: (t: number) => {
+    const t1 = t - 1
+    return 1 + t1 * t1 * t1 * t1 * t1
+  },
+  easeInOutQuint: (t: number) =>
+    t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * (t - 1) * (t - 1) * (t - 1) * (t - 1) * (t - 1),
 
   // Sine
   easeInSine: (t: number) => 1 - Math.cos((t * Math.PI) / 2),
@@ -29,8 +39,8 @@ export const Ease = {
   easeInOutSine: (t: number) => -(Math.cos(Math.PI * t) - 1) / 2,
 
   // Expo
-  easeInExpo: (t: number) => t === 0 ? 0 : Math.pow(2, 10 * (t - 1)),
-  easeOutExpo: (t: number) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t),
+  easeInExpo: (t: number) => (t === 0 ? 0 : Math.pow(2, 10 * (t - 1))),
+  easeOutExpo: (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
   easeInOutExpo: (t: number) => {
     if (t === 0) return 0
     if (t === 1) return 1
@@ -41,9 +51,7 @@ export const Ease = {
   easeInCirc: (t: number) => 1 - Math.sqrt(1 - t * t),
   easeOutCirc: (t: number) => Math.sqrt(1 - (t - 1) * (t - 1)),
   easeInOutCirc: (t: number) =>
-    t < 0.5
-      ? (1 - Math.sqrt(1 - 4 * t * t)) / 2
-      : (Math.sqrt(1 - (-2 * t + 2) * (-2 * t + 2)) + 1) / 2,
+    t < 0.5 ? (1 - Math.sqrt(1 - 4 * t * t)) / 2 : (Math.sqrt(1 - (-2 * t + 2) * (-2 * t + 2)) + 1) / 2,
 
   // Back
   easeInBack: (t: number) => {
@@ -60,7 +68,7 @@ export const Ease = {
     const c1 = 1.70158
     const c2 = c1 * 1.525
     return t < 0.5
-      ? ((2 * t) * (2 * t) * ((c2 + 1) * 2 * t - c2)) / 2
+      ? (2 * t * (2 * t) * ((c2 + 1) * 2 * t - c2)) / 2
       : ((2 * t - 2) * (2 * t - 2) * ((c2 + 1) * (2 * t - 2) + c2) + 2) / 2
   },
 
@@ -86,16 +94,20 @@ export const Ease = {
     const n1 = 7.5625
     const d1 = 2.75
     if (t < 1 / d1) return n1 * t * t
-    if (t < 2 / d1) { const t2 = t - 1.5 / d1; return n1 * t2 * t2 + 0.75 }
-    if (t < 2.5 / d1) { const t2 = t - 2.25 / d1; return n1 * t2 * t2 + 0.9375 }
+    if (t < 2 / d1) {
+      const t2 = t - 1.5 / d1
+      return n1 * t2 * t2 + 0.75
+    }
+    if (t < 2.5 / d1) {
+      const t2 = t - 2.25 / d1
+      return n1 * t2 * t2 + 0.9375
+    }
     const t2 = t - 2.625 / d1
     return n1 * t2 * t2 + 0.984375
   },
   easeInBounce: (t: number) => 1 - Ease.easeOutBounce(1 - t),
   easeInOutBounce: (t: number) =>
-    t < 0.5
-      ? (1 - Ease.easeOutBounce(1 - 2 * t)) / 2
-      : (1 + Ease.easeOutBounce(2 * t - 1)) / 2,
+    t < 0.5 ? (1 - Ease.easeOutBounce(1 - 2 * t)) / 2 : (1 + Ease.easeOutBounce(2 * t - 1)) / 2,
 }
 
 export interface TweenHandle {
@@ -125,8 +137,12 @@ export function tween(
   let complete = false
 
   return {
-    get isComplete() { return complete },
-    stop() { stopped = true },
+    get isComplete() {
+      return complete
+    },
+    stop() {
+      stopped = true
+    },
     update(dt: number) {
       if (stopped || complete) return
       elapsed = Math.min(elapsed + dt, duration)

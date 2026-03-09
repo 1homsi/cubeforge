@@ -25,9 +25,7 @@ export interface RenderLayerManager {
   getOrder(name: string): number
 }
 
-export function createRenderLayerManager(
-  layers: RenderLayer[] = defaultLayers,
-): RenderLayerManager {
+export function createRenderLayerManager(layers: RenderLayer[] = defaultLayers): RenderLayerManager {
   const map = new Map<string, number>()
   for (const l of layers) map.set(l.name, l.order)
 

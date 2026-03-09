@@ -32,11 +32,7 @@ export interface ObjectPool<T> {
  * bullets.release(b)
  * ```
  */
-export function useObjectPool<T>(
-  factory: () => T,
-  reset: (obj: T) => void,
-  initialSize?: number,
-): ObjectPool<T> {
+export function useObjectPool<T>(factory: () => T, reset: (obj: T) => void, initialSize?: number): ObjectPool<T> {
   const poolRef = useRef<T[]>([])
   const activeRef = useRef(0)
   // Keep latest factory/reset in refs so the returned object stays stable
@@ -56,29 +52,32 @@ export function useObjectPool<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return useMemo<ObjectPool<T>>(() => ({
-    acquire(): T {
-      activeRef.current++
-      if (poolRef.current.length > 0) {
-        return poolRef.current.pop()!
-      }
-      return factoryRef.current()
-    },
-    release(obj: T): void {
-      resetRef.current(obj)
-      activeRef.current = Math.max(0, activeRef.current - 1)
-      poolRef.current.push(obj)
-    },
-    prewarm(count: number): void {
-      for (let i = 0; i < count; i++) {
-        poolRef.current.push(factoryRef.current())
-      }
-    },
-    get activeCount(): number {
-      return activeRef.current
-    },
-    get poolSize(): number {
-      return poolRef.current.length
-    },
-  }), [])
+  return useMemo<ObjectPool<T>>(
+    () => ({
+      acquire(): T {
+        activeRef.current++
+        if (poolRef.current.length > 0) {
+          return poolRef.current.pop()!
+        }
+        return factoryRef.current()
+      },
+      release(obj: T): void {
+        resetRef.current(obj)
+        activeRef.current = Math.max(0, activeRef.current - 1)
+        poolRef.current.push(obj)
+      },
+      prewarm(count: number): void {
+        for (let i = 0; i < count; i++) {
+          poolRef.current.push(factoryRef.current())
+        }
+      },
+      get activeCount(): number {
+        return activeRef.current
+      },
+      get poolSize(): number {
+        return poolRef.current.length
+      },
+    }),
+    [],
+  )
 }

@@ -39,9 +39,12 @@ export function useGameStateMachine<S extends string>(
 
   useEffect(() => {
     const eid = engine.ecs.createEntity()
-    engine.ecs.addComponent(eid, createScript((_id, _world, _input, dt) => {
-      statesRef.current[stateRef.current]?.onUpdate?.(dt)
-    }))
+    engine.ecs.addComponent(
+      eid,
+      createScript((_id, _world, _input, dt) => {
+        statesRef.current[stateRef.current]?.onUpdate?.(dt)
+      }),
+    )
     return () => {
       if (engine.ecs.hasEntity(eid)) engine.ecs.destroyEntity(eid)
     }

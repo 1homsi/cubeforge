@@ -62,7 +62,7 @@ export class AssetManager {
       img.src = resolved
       try {
         await new Promise<void>((resolve, reject) => {
-          img.onload  = () => resolve()
+          img.onload = () => resolve()
           img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
         })
       } catch (err) {
@@ -111,7 +111,10 @@ export class AssetManager {
 
   private trackSource(src: string, source: AudioBufferSourceNode): void {
     let set = this.activeSources.get(src)
-    if (!set) { set = new Set(); this.activeSources.set(src, set) }
+    if (!set) {
+      set = new Set()
+      this.activeSources.set(src, set)
+    }
     set.add(source)
     source.onended = () => {
       set!.delete(source)
@@ -152,7 +155,11 @@ export class AssetManager {
     const set = this.activeSources.get(src)
     if (!set) return
     for (const source of set) {
-      try { source.stop() } catch { /* already stopped */ }
+      try {
+        source.stop()
+      } catch {
+        /* already stopped */
+      }
     }
     set.clear()
   }
@@ -165,10 +172,10 @@ export class AssetManager {
   }
 
   preloadImages(srcs: string[]): Promise<HTMLImageElement[]> {
-    return Promise.all(srcs.map(src => this.loadImage(src)))
+    return Promise.all(srcs.map((src) => this.loadImage(src)))
   }
 
   preloadAudio(srcs: string[]): Promise<AudioBuffer[]> {
-    return Promise.all(srcs.map(src => this.loadAudio(src)))
+    return Promise.all(srcs.map((src) => this.loadAudio(src)))
   }
 }

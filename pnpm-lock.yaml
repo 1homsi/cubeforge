@@ -26,6 +26,9 @@ importers:
       happy-dom:
         specifier: ^14.0.0
         version: 14.12.3
+      prettier:
+        specifier: ^3.2.0
+        version: 3.8.1
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
@@ -1300,6 +1303,11 @@ packages:
   preact@10.28.4:
     resolution: {integrity: sha512-uKFfOHWuSNpRFVTnljsCluEFq57OKT+0QdOiQo8XWnQ/pSvg7OpX5eNOejELXJMWy+BwM2nobz0FkvzmnpCNsQ==}
 
+  prettier@3.8.1:
+    resolution: {integrity: sha512-UOnG6LftzbdaHZcKoPFtOcCKztrQ57WkHDeRD9t/PTQtmT0NHSeWWepj6pS0z/N7+08BHFDQVUrfmfMRcZwbMg==}
+    engines: {node: '>=14'}
+    hasBin: true
+
   pretty-format@27.5.1:
     resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
@@ -2556,6 +2564,8 @@ snapshots:
       source-map-js: 1.2.1
 
   preact@10.28.4: {}
+
+  prettier@3.8.1: {}
 
   pretty-format@27.5.1:
     dependencies:

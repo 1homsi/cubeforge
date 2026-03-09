@@ -45,37 +45,46 @@ export interface CameraControls {
 export function useCamera(): CameraControls {
   const engine = useGame()
 
-  return useMemo((): CameraControls => ({
-    shake(intensity, duration) {
-      // Directly mutate the Camera2D ECS component so shake works with any renderer
-      const cams = engine.ecs.query('Camera2D')
-      if (cams.length === 0) return
-      const cam = engine.ecs.getComponent<Camera2DComponent>(cams[0], 'Camera2D')
-      if (!cam) return
-      cam.shakeIntensity = intensity
-      cam.shakeDuration = duration
-      cam.shakeTimer = duration
-    },
+  return useMemo(
+    (): CameraControls => ({
+      shake(intensity, duration) {
+        // Directly mutate the Camera2D ECS component so shake works with any renderer
+        const cams = engine.ecs.query('Camera2D')
+        if (cams.length === 0) return
+        const cam = engine.ecs.getComponent<Camera2DComponent>(cams[0], 'Camera2D')
+        if (!cam) return
+        cam.shakeIntensity = intensity
+        cam.shakeDuration = duration
+        cam.shakeTimer = duration
+      },
 
-    setFollowOffset(x, y) {
-      const camId = engine.ecs.queryOne('Camera2D')
-      if (camId === undefined) return
-      const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
-      if (cam) { cam.followOffsetX = x; cam.followOffsetY = y }
-    },
+      setFollowOffset(x, y) {
+        const camId = engine.ecs.queryOne('Camera2D')
+        if (camId === undefined) return
+        const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
+        if (cam) {
+          cam.followOffsetX = x
+          cam.followOffsetY = y
+        }
+      },
 
-    setPosition(x, y) {
-      const camId = engine.ecs.queryOne('Camera2D')
-      if (camId === undefined) return
-      const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
-      if (cam) { cam.x = x; cam.y = y }
-    },
+      setPosition(x, y) {
+        const camId = engine.ecs.queryOne('Camera2D')
+        if (camId === undefined) return
+        const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
+        if (cam) {
+          cam.x = x
+          cam.y = y
+        }
+      },
 
-    setZoom(zoom) {
-      const camId = engine.ecs.queryOne('Camera2D')
-      if (camId === undefined) return
-      const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
-      if (cam) cam.zoom = zoom
-    },
-  }), [engine])
+      setZoom(zoom) {
+        const camId = engine.ecs.queryOne('Camera2D')
+        if (camId === undefined) return
+        const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
+        if (cam) cam.zoom = zoom
+      },
+    }),
+    [engine],
+  )
 }

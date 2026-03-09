@@ -35,24 +35,23 @@ export interface VirtualJoystickProps {
  * }
  */
 export function VirtualJoystick({
-  size          = 120,
-  position      = 'left',
+  size = 120,
+  position = 'left',
   style,
-  actionButton  = false,
-  actionLabel   = 'A',
-  actionName    = 'action',
+  actionButton = false,
+  actionLabel = 'A',
+  actionName = 'action',
 }: VirtualJoystickProps) {
-  const baseRef        = useRef<HTMLDivElement>(null)
-  const stickRef       = useRef<HTMLDivElement>(null)
-  const activePtr      = useRef<number | null>(null)
-  const baseCenterRef  = useRef({ x: 0, y: 0 })
+  const baseRef = useRef<HTMLDivElement>(null)
+  const stickRef = useRef<HTMLDivElement>(null)
+  const activePtr = useRef<number | null>(null)
+  const baseCenterRef = useRef({ x: 0, y: 0 })
 
   const radius = size / 2 - 16
 
   const applyStickPosition = (dx: number, dy: number) => {
     if (!stickRef.current) return
-    stickRef.current.style.transform =
-      `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`
+    stickRef.current.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`
   }
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -61,8 +60,8 @@ export function VirtualJoystick({
     ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
     const rect = baseRef.current!.getBoundingClientRect()
     baseCenterRef.current = {
-      x: rect.left + rect.width  / 2,
-      y: rect.top  + rect.height / 2,
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
     }
     updateFromPointer(e.clientX, e.clientY)
   }
@@ -80,8 +79,8 @@ export function VirtualJoystick({
   }
 
   const updateFromPointer = (clientX: number, clientY: number) => {
-    const dx   = clientX - baseCenterRef.current.x
-    const dy   = clientY - baseCenterRef.current.y
+    const dx = clientX - baseCenterRef.current.x
+    const dy = clientY - baseCenterRef.current.y
     const dist = Math.sqrt(dx * dx + dy * dy)
 
     if (dist === 0) {
@@ -91,21 +90,17 @@ export function VirtualJoystick({
     }
 
     const clamped = Math.min(dist, radius)
-    const angle   = Math.atan2(dy, dx)
-    const sx      = Math.cos(angle) * clamped
-    const sy      = Math.sin(angle) * clamped
+    const angle = Math.atan2(dy, dx)
+    const sx = Math.cos(angle) * clamped
+    const sy = Math.sin(angle) * clamped
 
     setVirtualAxis(sx / radius, sy / radius)
     applyStickPosition(sx, sy)
   }
 
-  const cornerStyle: React.CSSProperties = position === 'left'
-    ? { left: 24, bottom: 24 }
-    : { right: 24, bottom: 24 }
+  const cornerStyle: React.CSSProperties = position === 'left' ? { left: 24, bottom: 24 } : { right: 24, bottom: 24 }
 
-  const actionCorner: React.CSSProperties = position === 'left'
-    ? { right: 24, bottom: 24 }
-    : { left: 24, bottom: 24 }
+  const actionCorner: React.CSSProperties = position === 'left' ? { right: 24, bottom: 24 } : { left: 24, bottom: 24 }
 
   return (
     <>
@@ -117,14 +112,14 @@ export function VirtualJoystick({
         onPointerCancel={handlePointerUp}
         style={{
           position: 'absolute',
-          width:  size,
+          width: size,
           height: size,
           borderRadius: '50%',
-          background:   'rgba(255,255,255,0.12)',
-          border:       '2px solid rgba(255,255,255,0.25)',
-          touchAction:  'none',
-          userSelect:   'none',
-          cursor:       'pointer',
+          background: 'rgba(255,255,255,0.12)',
+          border: '2px solid rgba(255,255,255,0.25)',
+          touchAction: 'none',
+          userSelect: 'none',
+          cursor: 'pointer',
           ...cornerStyle,
           ...style,
         }}
@@ -134,16 +129,16 @@ export function VirtualJoystick({
         <div
           ref={stickRef}
           style={{
-            position:     'absolute',
-            width:        size * 0.38,
-            height:       size * 0.38,
+            position: 'absolute',
+            width: size * 0.38,
+            height: size * 0.38,
             borderRadius: '50%',
-            background:   'rgba(255,255,255,0.45)',
-            top:          '50%',
-            left:         '50%',
-            transform:    'translate(-50%, -50%)',
-            pointerEvents:'none',
-            transition:   'none',
+            background: 'rgba(255,255,255,0.45)',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            transition: 'none',
           }}
         />
       </div>
@@ -158,22 +153,22 @@ export function VirtualJoystick({
           onPointerUp={() => setVirtualButton(actionName, false)}
           onPointerCancel={() => setVirtualButton(actionName, false)}
           style={{
-            position:     'absolute',
-            width:        size * 0.55,
-            height:       size * 0.55,
+            position: 'absolute',
+            width: size * 0.55,
+            height: size * 0.55,
             borderRadius: '50%',
-            background:   'rgba(255,220,0,0.25)',
-            border:       '2px solid rgba(255,220,0,0.4)',
-            display:      'flex',
-            alignItems:   'center',
+            background: 'rgba(255,220,0,0.25)',
+            border: '2px solid rgba(255,220,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
-            color:        'rgba(255,255,255,0.7)',
-            fontSize:     size * 0.18,
-            fontWeight:   700,
-            fontFamily:   'monospace',
-            touchAction:  'none',
-            userSelect:   'none',
-            cursor:       'pointer',
+            color: 'rgba(255,255,255,0.7)',
+            fontSize: size * 0.18,
+            fontWeight: 700,
+            fontFamily: 'monospace',
+            touchAction: 'none',
+            userSelect: 'none',
+            cursor: 'pointer',
             ...actionCorner,
           }}
         >

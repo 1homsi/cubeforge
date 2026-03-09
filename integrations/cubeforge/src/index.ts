@@ -29,6 +29,12 @@ export { CameraZone } from './components/CameraZone'
 export { Trail } from './components/Trail'
 export { NineSlice } from './components/NineSlice'
 export { AssetLoader } from './components/AssetLoader'
+export { Circle } from './components/Circle'
+export { Line } from './components/Line'
+export { Polygon } from './components/Polygon'
+export { Gradient } from './components/Gradient'
+export { Mask } from './components/Mask'
+export { Joint } from './components/Joint'
 export type { ScreenFlashHandle } from './components/ScreenFlash'
 export type { TiledObject, TiledLayer } from './components/Tilemap'
 
@@ -63,12 +69,34 @@ export type { PauseControls } from './hooks/usePause'
 export { useProfiler } from './hooks/useProfiler'
 export type { ProfilerData } from './hooks/useProfiler'
 export { usePostProcess } from './hooks/usePostProcess'
+export { useTouch } from './hooks/useTouch'
+export type { TouchControls } from './hooks/useTouch'
+export { useTimer } from './hooks/useTimer'
+export type { TimerControls } from './hooks/useTimer'
+export { useCoroutine, wait, waitFrames, waitUntil } from './hooks/useCoroutine'
+export type { CoroutineControls, CoroutineYield, CoroutineFactory } from './hooks/useCoroutine'
+export { useSceneManager } from './hooks/useSceneManager'
+export type { SceneManagerControls } from './hooks/useSceneManager'
+export { useInputBuffer } from './hooks/useInputBuffer'
+export { useComboDetector } from './hooks/useComboDetector'
+export type { ComboDetectorResult } from './hooks/useComboDetector'
+export { useParent } from './hooks/useParent'
+export { useAccessibility } from './hooks/useAccessibility'
+export type { AccessibilityControls } from './hooks/useAccessibility'
+export { useHMR } from './hooks/useHMR'
+export type { HMRControls } from './hooks/useHMR'
 
 // Contact hooks (via @cubeforge/context)
 export {
-  useTriggerEnter, useTriggerExit, useTriggerStay,
-  useCollisionEnter, useCollisionExit, useCollisionStay,
-  useCircleEnter, useCircleExit, useCircleStay,
+  useTriggerEnter,
+  useTriggerExit,
+  useTriggerStay,
+  useCollisionEnter,
+  useCollisionExit,
+  useCollisionStay,
+  useCircleEnter,
+  useCircleExit,
+  useCircleStay,
   useCollidingWith,
 } from '@cubeforge/context'
 
@@ -113,6 +141,9 @@ export type { ObjectPool } from '@cubeforge/gameplay'
 export { useSound } from '@cubeforge/audio'
 export type { SoundControls, AudioGroup } from '@cubeforge/audio'
 export { setGroupVolume, setMasterVolume, getGroupVolume, setGroupMute, stopGroup, duck } from '@cubeforge/audio'
+export { useSpatialSound } from '@cubeforge/audio'
+export type { SpatialSoundControls, SpatialSoundOptions } from '@cubeforge/audio'
+export { setListenerPosition, getListenerPosition } from '@cubeforge/audio'
 
 // DevTools (via @cubeforge/devtools)
 export type { DevToolsHandle } from '@cubeforge/devtools'
@@ -138,6 +169,12 @@ export { definePlugin, findByTag, preloadManifest, hotReloadPlugin } from '@cube
 export type { HotReloadablePlugin } from '@cubeforge/core'
 export type { PreloadManifest, AssetProgress } from '@cubeforge/core'
 export type { NavGrid, Vec2Like } from '@cubeforge/core'
+export type { HierarchyComponent, WorldTransformComponent } from '@cubeforge/core'
+export { createHierarchy, setParent, removeParent, getDescendants, HierarchySystem } from '@cubeforge/core'
+export { SpatialHash } from '@cubeforge/core'
+export { setAccessibilityOptions, getAccessibilityOptions, announceToScreenReader } from '@cubeforge/core'
+export type { AccessibilityOptions } from '@cubeforge/core'
+export { hmrSaveState, hmrLoadState, hmrClearState } from '@cubeforge/core'
 export { seek, flee, arrive, patrol, wander } from '@cubeforge/core'
 export { createTimer } from '@cubeforge/core'
 export type { GameTimer } from '@cubeforge/core'
@@ -145,10 +182,23 @@ export { mergeTileColliders } from '@cubeforge/core'
 export type { MergedRect } from '@cubeforge/core'
 export { overlapBox, raycast, raycastAll, overlapCircle, sweepBox, createCompoundCollider } from '@cubeforge/physics'
 export type { RaycastHit } from '@cubeforge/physics'
+export { createJoint } from '@cubeforge/physics'
+export type { JointComponent, JointType } from '@cubeforge/physics'
 export type { CapsuleColliderComponent } from '@cubeforge/physics'
 export type { CompoundColliderComponent, ColliderShape } from '@cubeforge/physics'
-export type { InputManager, ActionBindings, InputMap, AxisBinding, InputContextName, PlayerInput, InputRecording as InputRecordingData } from '@cubeforge/input'
+export type {
+  InputManager,
+  ActionBindings,
+  InputMap,
+  AxisBinding,
+  InputContextName,
+  PlayerInput,
+  InputRecording as InputRecordingData,
+  TouchPoint,
+} from '@cubeforge/input'
 export { createInputMap, createPlayerInput, createInputRecorder, globalInputContext } from '@cubeforge/input'
+export { InputBuffer, ComboDetector } from '@cubeforge/input'
+export type { InputBufferOptions, BufferedAction, ComboDefinition, ComboDetectorOptions } from '@cubeforge/input'
 export type { TextComponent } from '@cubeforge/renderer'
 export type { TransformComponent, Component } from '@cubeforge/core'
 export { createTransform, createTag } from '@cubeforge/core'
@@ -164,6 +214,12 @@ export type { ParticlePoolComponent, Particle } from '@cubeforge/renderer'
 export type { ParallaxLayerComponent } from '@cubeforge/renderer'
 export type { NineSliceComponent } from '@cubeforge/renderer'
 export { createNineSlice } from '@cubeforge/renderer'
+export { createCircleShape, createLineShape, createPolygonShape } from '@cubeforge/renderer'
+export type { CircleShapeComponent, LineShapeComponent, PolygonShapeComponent } from '@cubeforge/renderer'
+export { createGradient } from '@cubeforge/renderer'
+export type { GradientComponent, GradientStop, GradientType } from '@cubeforge/renderer'
+export { createMask } from '@cubeforge/renderer'
+export type { MaskComponent, MaskShape } from '@cubeforge/renderer'
 export { TextureFilter } from '@cubeforge/renderer'
 export type { TextureFilterValue, MagFilterValue, Sampling, BlendMode } from '@cubeforge/renderer'
 export type { TweenHandle } from '@cubeforge/core'
@@ -174,7 +230,13 @@ export type { ParticlePreset } from './components/particlePresets'
 
 // Animation helpers
 export { playClip, setAnimationState, setAnimatorParam } from './utils/animationHelpers'
-export type { AnimatorComponent, AnimatorStateDefinition, AnimatorTransition, AnimatorCondition, AnimatorParamValue } from '@cubeforge/renderer'
+export type {
+  AnimatorComponent,
+  AnimatorStateDefinition,
+  AnimatorTransition,
+  AnimatorCondition,
+  AnimatorParamValue,
+} from '@cubeforge/renderer'
 export type { AnimationClipDefinition } from '@cubeforge/renderer'
 
 // Prefab utility

@@ -41,11 +41,11 @@ export function useGamepad(playerIndex = 0): GamepadState {
       if (gp) {
         setState({
           connected: true,
-          axes:    Array.from(gp.axes),
-          buttons: Array.from(gp.buttons).map(b => b.pressed),
+          axes: Array.from(gp.axes),
+          buttons: Array.from(gp.buttons).map((b) => b.pressed),
         })
       } else {
-        setState(s => s.connected ? EMPTY_STATE : s)
+        setState((s) => (s.connected ? EMPTY_STATE : s))
       }
       rafRef.current = requestAnimationFrame(poll)
     }

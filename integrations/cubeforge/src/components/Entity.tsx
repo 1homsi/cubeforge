@@ -26,7 +26,9 @@ export function Entity({ id, tags = [], children }: EntityProps) {
 
     if (id) {
       if (engine.entityIds.has(id)) {
-        console.warn(`[Cubeforge] Duplicate entity ID "${id}". Entity IDs must be unique — the previous entity with this ID will be replaced.`)
+        console.warn(
+          `[Cubeforge] Duplicate entity ID "${id}". Entity IDs must be unique — the previous entity with this ID will be replaced.`,
+        )
       }
       engine.entityIds.set(id, eid)
     }
@@ -40,14 +42,10 @@ export function Entity({ id, tags = [], children }: EntityProps) {
       // a duplicate mount may have already overwritten it.
       if (id && engine.entityIds.get(id) === eid) engine.entityIds.delete(id)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (entityId === null) return null
 
-  return (
-    <EntityContext.Provider value={entityId}>
-      {children}
-    </EntityContext.Provider>
-  )
+  return <EntityContext.Provider value={entityId}>{children}</EntityContext.Provider>
 }

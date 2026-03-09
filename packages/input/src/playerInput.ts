@@ -31,11 +31,7 @@ export interface PlayerInput {
  * const p2 = createPlayerInput(2, { jump: 'KeyW', left: 'KeyA', right: 'KeyD' }, input)
  * ```
  */
-export function createPlayerInput(
-  playerId: number,
-  bindings: ActionBindings,
-  input: InputManager,
-): PlayerInput {
+export function createPlayerInput(playerId: number, bindings: ActionBindings, input: InputManager): PlayerInput {
   const map = createInputMap(bindings)
 
   return {

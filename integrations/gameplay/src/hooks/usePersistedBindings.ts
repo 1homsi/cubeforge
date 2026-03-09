@@ -11,18 +11,17 @@ export interface BindingControls {
   reset(): void
 }
 
-export function usePersistedBindings(
-  storageKey: string,
-  defaults: ActionBindings,
-): BindingControls {
+export function usePersistedBindings(storageKey: string, defaults: ActionBindings): BindingControls {
   const engine = useContext(EngineContext)!
   const input = engine.input
 
   const [bindings, setBindings] = useState<ActionBindings>(() => {
     try {
       const stored = localStorage.getItem(storageKey)
-      if (stored) return { ...defaults, ...JSON.parse(stored) as ActionBindings }
-    } catch { /* localStorage unavailable */ }
+      if (stored) return { ...defaults, ...(JSON.parse(stored) as ActionBindings) }
+    } catch {
+      /* localStorage unavailable */
+    }
     return defaults
   })
 
@@ -35,26 +34,40 @@ export function usePersistedBindings(
     return out
   }, [bindings])
 
-  const rebind = useCallback((action: string, keys: string | string[]) => {
-    setBindings(prev => {
-      const next = { ...prev, [action]: Array.isArray(keys) ? keys : [keys] }
-      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
-      return next
-    })
-  }, [storageKey])
+  const rebind = useCallback(
+    (action: string, keys: string | string[]) => {
+      setBindings((prev) => {
+        const next = { ...prev, [action]: Array.isArray(keys) ? keys : [keys] }
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(next))
+        } catch {
+          /* ignore */
+        }
+        return next
+      })
+    },
+    [storageKey],
+  )
 
   const reset = useCallback(() => {
-    try { localStorage.removeItem(storageKey) } catch { /* ignore */ }
+    try {
+      localStorage.removeItem(storageKey)
+    } catch {
+      /* ignore */
+    }
     setBindings(defaults)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
 
-  return useMemo(() => ({
-    bindings,
-    rebind,
-    reset,
-    isActionDown:     (action: string) => (normalized[action] ?? []).some(k => input.isDown(k)),
-    isActionPressed:  (action: string) => (normalized[action] ?? []).some(k => input.isPressed(k)),
-    isActionReleased: (action: string) => (normalized[action] ?? []).some(k => input.isReleased(k)),
-  }), [bindings, normalized, rebind, reset, input])
+  return useMemo(
+    () => ({
+      bindings,
+      rebind,
+      reset,
+      isActionDown: (action: string) => (normalized[action] ?? []).some((k) => input.isDown(k)),
+      isActionPressed: (action: string) => (normalized[action] ?? []).some((k) => input.isPressed(k)),
+      isActionReleased: (action: string) => (normalized[action] ?? []).some((k) => input.isReleased(k)),
+    }),
+    [bindings, normalized, rebind, reset, input],
+  )
 }

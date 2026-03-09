@@ -53,6 +53,10 @@ export interface SpriteComponent extends Component {
   blendMode: BlendMode
   /** Render layer name — sprites are sorted by layer order first, then zIndex */
   layer: string
+  /** Color tint applied on top of the image (multiplied). e.g. '#ff0000' for red tint */
+  tint?: string
+  /** Tint opacity 0-1 */
+  tintOpacity?: number
 }
 
 export function createSprite(opts: Partial<SpriteComponent> & { width: number; height: number }): SpriteComponent {

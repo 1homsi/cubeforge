@@ -1,8 +1,8 @@
 export interface MergedRect {
-  x: number      // world x (center)
-  y: number      // world y (center)
-  width: number   // pixels
-  height: number  // pixels
+  x: number // world x (center)
+  y: number // world y (center)
+  width: number // pixels
+  height: number // pixels
 }
 
 /**
@@ -10,10 +10,10 @@ export interface MergedRect {
  * Iterates rows, extends horizontally, then extends downward.
  */
 export function mergeTileColliders(
-  solidGrid: boolean[][],  // [row][col]
+  solidGrid: boolean[][], // [row][col]
   tileWidth: number,
   tileHeight: number,
-  originX: number,   // world-space origin of the tilemap
+  originX: number, // world-space origin of the tilemap
   originY: number,
 ): MergedRect[] {
   const rows = solidGrid.length
@@ -39,8 +39,7 @@ export function mergeTileColliders(
 
       // Extend down: for each subsequent row, check if the entire horizontal span is solid and not visited
       let maxRow = row
-      outer:
-      for (let r = row + 1; r < rows; r++) {
+      outer: for (let r = row + 1; r < rows; r++) {
         for (let c = col; c <= maxCol; c++) {
           if (!solidGrid[r][c] || visited[r][c]) break outer
         }

@@ -1,7 +1,7 @@
 // Module-level store — written by VirtualJoystick, read by useVirtualInput.
 // Using a plain object avoids React re-renders on every frame.
 
-const _axes    = { x: 0, y: 0 }
+const _axes = { x: 0, y: 0 }
 const _buttons: Record<string, boolean> = {}
 
 /** Called by VirtualJoystick — not part of the public API. */
@@ -45,8 +45,12 @@ export interface VirtualInputState {
  */
 export function useVirtualInput(): VirtualInputState {
   return {
-    get axisX() { return _axes.x },
-    get axisY() { return _axes.y },
+    get axisX() {
+      return _axes.x
+    },
+    get axisY() {
+      return _axes.y
+    },
     button: (name: string) => _buttons[name] ?? false,
   }
 }

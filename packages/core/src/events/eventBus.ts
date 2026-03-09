@@ -17,7 +17,7 @@ export class EventBus {
   }
 
   emit<T>(event: string, data?: T): void {
-    this.listeners.get(event)?.forEach(l => l(data))
+    this.listeners.get(event)?.forEach((l) => l(data))
   }
 
   once<T>(event: string, listener: Listener<T>): () => void {

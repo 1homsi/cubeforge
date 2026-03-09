@@ -19,11 +19,14 @@ interface CheckpointProps {
 function CheckpointActivator({ onActivate }: { onActivate?: () => void }) {
   const [used, setUsed] = useState(false)
 
-  useTriggerEnter(() => {
-    if (used) return
-    setUsed(true)
-    onActivate?.()
-  }, { tag: 'player' })
+  useTriggerEnter(
+    () => {
+      if (used) return
+      setUsed(true)
+      onActivate?.()
+    },
+    { tag: 'player' },
+  )
 
   return null
 }
@@ -35,8 +38,10 @@ function CheckpointActivator({ onActivate }: { onActivate?: () => void }) {
  * <Checkpoint x={800} y={450} onActivate={() => setCheckpoint(800)} />
  */
 export function Checkpoint({
-  x, y,
-  width = 24, height = 48,
+  x,
+  y,
+  width = 24,
+  height = 48,
   color = '#ffd54f',
   onActivate,
 }: CheckpointProps): React.ReactElement {

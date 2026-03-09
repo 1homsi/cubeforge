@@ -79,6 +79,8 @@ export function useTween(opts: {
   return {
     start,
     stop,
-    get isRunning() { return runningRef.current },
+    get isRunning() {
+      return runningRef.current
+    },
   }
 }

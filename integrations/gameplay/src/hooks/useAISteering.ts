@@ -13,41 +13,23 @@ export interface AISteering {
     currentIdx: number,
     arriveThreshold?: number,
   ): { vel: Vec2Like; nextIdx: number }
-  wander(
-    pos: Vec2Like,
-    angle: number,
-    speed: number,
-    jitter: number,
-  ): { vel: Vec2Like; newAngle: number }
+  wander(pos: Vec2Like, angle: number, speed: number, jitter: number): { vel: Vec2Like; newAngle: number }
 }
 
 export function useAISteering(): AISteering {
-  const seek$ = useCallback(
-    (pos: Vec2Like, target: Vec2Like, speed: number) => seek(pos, target, speed),
-    [],
-  )
-  const flee$ = useCallback(
-    (pos: Vec2Like, threat: Vec2Like, speed: number) => flee(pos, threat, speed),
-    [],
-  )
+  const seek$ = useCallback((pos: Vec2Like, target: Vec2Like, speed: number) => seek(pos, target, speed), [])
+  const flee$ = useCallback((pos: Vec2Like, threat: Vec2Like, speed: number) => flee(pos, threat, speed), [])
   const arrive$ = useCallback(
-    (pos: Vec2Like, target: Vec2Like, speed: number, slowRadius: number) =>
-      arrive(pos, target, speed, slowRadius),
+    (pos: Vec2Like, target: Vec2Like, speed: number, slowRadius: number) => arrive(pos, target, speed, slowRadius),
     [],
   )
   const patrol$ = useCallback(
-    (
-      pos: Vec2Like,
-      waypoints: Vec2Like[],
-      speed: number,
-      currentIdx: number,
-      arriveThreshold?: number,
-    ) => patrol(pos, waypoints, speed, currentIdx, arriveThreshold),
+    (pos: Vec2Like, waypoints: Vec2Like[], speed: number, currentIdx: number, arriveThreshold?: number) =>
+      patrol(pos, waypoints, speed, currentIdx, arriveThreshold),
     [],
   )
   const wander$ = useCallback(
-    (pos: Vec2Like, angle: number, speed: number, jitter: number) =>
-      wander(pos, angle, speed, jitter),
+    (pos: Vec2Like, angle: number, speed: number, jitter: number) => wander(pos, angle, speed, jitter),
     [],
   )
 

@@ -16,6 +16,10 @@ export class Canvas2DRenderer {
     }
   }
 
-  get width(): number { return this.canvas.width }
-  get height(): number { return this.canvas.height }
+  get width(): number {
+    return this.canvas.width
+  }
+  get height(): number {
+    return this.canvas.height
+  }
 }

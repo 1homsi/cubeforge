@@ -28,13 +28,19 @@ function makeEngine(): EngineState {
   }
 }
 
-function Wrapper({ engine, entityId, children }: { engine: EngineState; entityId?: number; children: React.ReactNode }) {
+function Wrapper({
+  engine,
+  entityId,
+  children,
+}: {
+  engine: EngineState
+  entityId?: number
+  children: React.ReactNode
+}) {
   const eid = entityId ?? 0
   return (
     <EngineContext.Provider value={engine}>
-      <EntityContext.Provider value={eid}>
-        {children}
-      </EntityContext.Provider>
+      <EntityContext.Provider value={eid}>{children}</EntityContext.Provider>
     </EngineContext.Provider>
   )
 }
@@ -112,7 +118,11 @@ describe('useHealth', () => {
       return null
     }
     await act(async () => {
-      render(<Wrapper engine={engine} entityId={entityId}><TestComp /></Wrapper>)
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <TestComp />
+        </Wrapper>,
+      )
     })
     expect(health.hp).toBe(5)
     expect(health.maxHp).toBe(5)
@@ -126,7 +136,11 @@ describe('useHealth', () => {
       return null
     }
     await act(async () => {
-      render(<Wrapper engine={engine} entityId={entityId}><TestComp /></Wrapper>)
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <TestComp />
+        </Wrapper>,
+      )
     })
     health.takeDamage(2)
     expect(health.hp).toBe(3)
@@ -139,7 +153,11 @@ describe('useHealth', () => {
       return null
     }
     await act(async () => {
-      render(<Wrapper engine={engine} entityId={entityId}><TestComp /></Wrapper>)
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <TestComp />
+        </Wrapper>,
+      )
     })
     health.takeDamage(3)
     expect(health.isDead).toBe(true)
@@ -152,7 +170,11 @@ describe('useHealth', () => {
       return null
     }
     await act(async () => {
-      render(<Wrapper engine={engine} entityId={entityId}><TestComp /></Wrapper>)
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <TestComp />
+        </Wrapper>,
+      )
     })
     health.takeDamage(3)
     health.heal(10)
@@ -167,7 +189,11 @@ describe('useHealth', () => {
       return null
     }
     await act(async () => {
-      render(<Wrapper engine={engine} entityId={entityId}><TestComp /></Wrapper>)
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <TestComp />
+        </Wrapper>,
+      )
     })
     health.takeDamage(2)
     expect(onDeath).toHaveBeenCalledTimes(1)
@@ -191,14 +217,22 @@ describe('useInputMap', () => {
       return null
     }
     await act(async () => {
-      render(<EngineContext.Provider value={fakeEngine}><TestComp /></EngineContext.Provider>)
+      render(
+        <EngineContext.Provider value={fakeEngine}>
+          <TestComp />
+        </EngineContext.Provider>,
+      )
     })
     expect(actions.isActionDown('jump')).toBe(true)
     expect(actions.isActionDown('left')).toBe(false)
   })
 
   it('isActionPressed returns true only for pressed key', async () => {
-    const mockInput = { isDown: () => false, isPressed: (k: string) => k === 'ArrowLeft', isReleased: () => false } as never
+    const mockInput = {
+      isDown: () => false,
+      isPressed: (k: string) => k === 'ArrowLeft',
+      isReleased: () => false,
+    } as never
     const fakeEngine: EngineState = { ...makeEngine(), input: mockInput }
 
     let actions!: ReturnType<typeof useInputMap>
@@ -207,7 +241,11 @@ describe('useInputMap', () => {
       return null
     }
     await act(async () => {
-      render(<EngineContext.Provider value={fakeEngine}><TestComp /></EngineContext.Provider>)
+      render(
+        <EngineContext.Provider value={fakeEngine}>
+          <TestComp />
+        </EngineContext.Provider>,
+      )
     })
     expect(actions.isActionPressed('left')).toBe(true)
     expect(actions.isActionPressed('right')).toBe(false)

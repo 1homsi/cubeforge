@@ -36,7 +36,9 @@ describe('GameLoop', () => {
     ticks = []
     rafCallback = null
     _now = 0
-    loop = new GameLoop((dt) => { ticks.push(dt) })
+    loop = new GameLoop((dt) => {
+      ticks.push(dt)
+    })
   })
 
   describe('start / stop', () => {
@@ -100,7 +102,12 @@ describe('GameLoop', () => {
   describe('fixedDt', () => {
     it('uses fixed dt instead of real elapsed time when fixedDt is set', () => {
       const fixedTicks: number[] = []
-      const fixedLoop = new GameLoop((dt) => { fixedTicks.push(dt) }, { fixedDt: 1 / 60 })
+      const fixedLoop = new GameLoop(
+        (dt) => {
+          fixedTicks.push(dt)
+        },
+        { fixedDt: 1 / 60 },
+      )
       _now = 0
       fixedLoop.start()
       // Fire a frame with a large gap — should still get fixedDt

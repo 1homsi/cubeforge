@@ -9,7 +9,11 @@ import { EngineContext } from '../context'
 
 // ─── Tiled types ──────────────────────────────────────────────────────────────
 
-interface TiledProperty { name: string; type: string; value: string | number | boolean }
+interface TiledProperty {
+  name: string
+  type: string
+  value: string | number | boolean
+}
 
 interface TiledTileAnimation {
   tileid: number
@@ -79,32 +83,20 @@ const animatedTiles = new Map<EntityId, AnimatedTileState>()
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getProperty(
-  props: TiledProperty[] | undefined,
-  name: string,
-): string | number | boolean | undefined {
-  return props?.find(p => p.name === name)?.value
+function getProperty(props: TiledProperty[] | undefined, name: string): string | number | boolean | undefined {
+  return props?.find((p) => p.name === name)?.value
 }
 
 function matchesLayerName(layer: TiledLayer, name: string): boolean {
-  return (
-    layer.name === name ||
-    layer.name.toLowerCase() === name.toLowerCase()
-  )
+  return layer.name === name || layer.name.toLowerCase() === name.toLowerCase()
 }
 
 function isCollisionLayer(layer: TiledLayer, collisionLayer: string): boolean {
-  return (
-    matchesLayerName(layer, collisionLayer) ||
-    getProperty(layer.properties, 'collision') === true
-  )
+  return matchesLayerName(layer, collisionLayer) || getProperty(layer.properties, 'collision') === true
 }
 
 function isTriggerLayer(layer: TiledLayer, triggerLayer: string): boolean {
-  return (
-    matchesLayerName(layer, triggerLayer) ||
-    getProperty(layer.properties, 'trigger') === true
-  )
+  return matchesLayerName(layer, triggerLayer) || getProperty(layer.properties, 'trigger') === true
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -184,7 +176,7 @@ export function Tilemap({
       try {
         const res = await fetch(src)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        mapData = await res.json() as TiledMap
+        mapData = (await res.json()) as TiledMap
       } catch (err) {
         console.warn(`[Cubeforge] Tilemap: failed to load "${src}":`, err)
         return
@@ -196,16 +188,17 @@ export function Tilemap({
       function resolveTileset(gid: number): { tileset: TiledTileset; localId: number } | null {
         let tileset: TiledTileset | null = null
         for (let i = tilesets.length - 1; i >= 0; i--) {
-          if (gid >= tilesets[i].firstgid) { tileset = tilesets[i]; break }
+          if (gid >= tilesets[i].firstgid) {
+            tileset = tilesets[i]
+            break
+          }
         }
         if (!tileset) return null
         return { tileset, localId: gid - tileset.firstgid }
       }
 
       // Build tileset image map: GID → { imageSrc, sx, sy, sw, sh }
-      function getTileFrame(
-        gid: number,
-      ): { imageSrc: string; sx: number; sy: number; sw: number; sh: number } | null {
+      function getTileFrame(gid: number): { imageSrc: string; sx: number; sy: number; sw: number; sh: number } | null {
         const resolved = resolveTileset(gid)
         if (!resolved) return null
         const { tileset, localId } = resolved
@@ -224,7 +217,7 @@ export function Tilemap({
         const resolved = resolveTileset(gid)
         if (!resolved) return null
         const { tileset, localId } = resolved
-        return tileset.tiles?.find(t => t.id === localId) ?? null
+        return tileset.tiles?.find((t) => t.id === localId) ?? null
       }
 
       // Compute the frame region for a local tile id within a tileset
@@ -292,13 +285,13 @@ export function Tilemap({
                 while (col < mapData.width) {
                   const i = row * mapData.width + col
                   const gid = layer.data[i]
-                  if (gid === 0) { col++; continue }
+                  if (gid === 0) {
+                    col++
+                    continue
+                  }
 
                   let runLength = 1
-                  while (
-                    col + runLength < mapData.width &&
-                    layer.data[row * mapData.width + col + runLength] !== 0
-                  ) {
+                  while (col + runLength < mapData.width && layer.data[row * mapData.width + col + runLength] !== 0) {
                     runLength++
                   }
 
@@ -342,7 +335,8 @@ export function Tilemap({
               const sprite = createSprite({ width: tilewidth, height: tileheight, color: '#888', zIndex })
               if (frame) {
                 sprite.frame = { sx: frame.sx, sy: frame.sy, sw: frame.sw, sh: frame.sh }
-                engine.assets.loadImage(frame.imageSrc)
+                engine.assets
+                  .loadImage(frame.imageSrc)
                   .then((img) => {
                     const s = engine.ecs.getComponent<SpriteComponent>(eid, 'Sprite')
                     if (s) s.image = img
@@ -355,15 +349,16 @@ export function Tilemap({
               const tileData = getTileData(gid)
               if (tileData?.animation && tileData.animation.length > 0) {
                 const resolved = resolveTileset(gid)!
-                const frames = tileData.animation.map(a => a.tileid)
-                const durations = tileData.animation.map(a => a.duration / 1000) // ms → seconds
+                const frames = tileData.animation.map((a) => a.tileid)
+                const durations = tileData.animation.map((a) => a.duration / 1000) // ms → seconds
                 const state: AnimatedTileState = { frames, durations, timer: 0, currentFrame: 0 }
                 animatedTiles.set(eid, state)
 
                 // Pre-load first frame image (tileset image already loading above)
                 // Set initial frame region from the first animation frame
                 const firstFrameRegion = getFrameForLocalId(resolved.tileset, frames[0])
-                engine.assets.loadImage(firstFrameRegion.imageSrc)
+                engine.assets
+                  .loadImage(firstFrameRegion.imageSrc)
                   .then((img) => {
                     const s = engine.ecs.getComponent<SpriteComponent>(eid, 'Sprite')
                     if (s) {
@@ -378,24 +373,27 @@ export function Tilemap({
                   })
                   .catch(() => {})
 
-                engine.ecs.addComponent(eid, createScript((_eid, world, _input, dt) => {
-                  const animState = animatedTiles.get(_eid)
-                  if (!animState) return
-                  animState.timer += dt
-                  const currentDuration = animState.durations[animState.currentFrame]
-                  if (animState.timer >= currentDuration) {
-                    animState.timer -= currentDuration
-                    animState.currentFrame = (animState.currentFrame + 1) % animState.frames.length
-                    const nextLocalId = animState.frames[animState.currentFrame]
-                    const resolvedTs = resolveTileset(gid)
-                    if (!resolvedTs) return
-                    const region = getFrameForLocalId(resolvedTs.tileset, nextLocalId)
-                    const s = world.getComponent<SpriteComponent>(_eid, 'Sprite')
-                    if (s) {
-                      s.frame = { sx: region.sx, sy: region.sy, sw: region.sw, sh: region.sh }
+                engine.ecs.addComponent(
+                  eid,
+                  createScript((_eid, world, _input, dt) => {
+                    const animState = animatedTiles.get(_eid)
+                    if (!animState) return
+                    animState.timer += dt
+                    const currentDuration = animState.durations[animState.currentFrame]
+                    if (animState.timer >= currentDuration) {
+                      animState.timer -= currentDuration
+                      animState.currentFrame = (animState.currentFrame + 1) % animState.frames.length
+                      const nextLocalId = animState.frames[animState.currentFrame]
+                      const resolvedTs = resolveTileset(gid)
+                      if (!resolvedTs) return
+                      const region = getFrameForLocalId(resolvedTs.tileset, nextLocalId)
+                      const s = world.getComponent<SpriteComponent>(_eid, 'Sprite')
+                      if (s) {
+                        s.frame = { sx: region.sx, sy: region.sy, sw: region.sw, sh: region.sh }
+                      }
                     }
-                  }
-                }))
+                  }),
+                )
               }
 
               // Fire onTileProperty callback if tile has custom properties
@@ -429,7 +427,7 @@ export function Tilemap({
         if (engine.ecs.hasEntity(eid)) engine.ecs.destroyEntity(eid)
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src])
 
   if (spawnedNodes.length === 0) return null

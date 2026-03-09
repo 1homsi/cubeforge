@@ -31,8 +31,12 @@ interface MovingPlatformProps {
  * <MovingPlatform x1={200} y1={350} x2={450} y2={350} width={120} duration={2.5} />
  */
 export function MovingPlatform({
-  x1, y1, x2, y2,
-  width = 120, height = 18,
+  x1,
+  y1,
+  x2,
+  y2,
+  width = 120,
+  height = 18,
   duration = 3,
   color = '#37474f',
 }: MovingPlatformProps): React.ReactElement {
@@ -48,9 +52,9 @@ export function MovingPlatform({
           if (!world.hasEntity(id)) return
           const t = world.getComponent<TransformComponent>(id, 'Transform')
           if (!t) return
-          const phase = (platformPhases.get(id) ?? 0) + dt * (Math.PI * 2) / duration
+          const phase = (platformPhases.get(id) ?? 0) + (dt * (Math.PI * 2)) / duration
           platformPhases.set(id, phase)
-          const alpha = (Math.sin(phase) + 1) / 2   // 0..1
+          const alpha = (Math.sin(phase) + 1) / 2 // 0..1
           t.x = x1 + (x2 - x1) * alpha
           t.y = y1 + (y2 - y1) * alpha
         }}

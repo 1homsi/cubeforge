@@ -26,10 +26,14 @@ export class DebugSystem implements System {
 
     // Get camera for world-space drawing
     const camId = world.queryOne('Camera2D')
-    let camX = 0, camY = 0, zoom = 1
+    let camX = 0,
+      camY = 0,
+      zoom = 1
     if (camId !== undefined) {
       const cam = world.getComponent<{ type: 'Camera2D'; x: number; y: number; zoom: number }>(camId, 'Camera2D')!
-      camX = cam.x; camY = cam.y; zoom = cam.zoom
+      camX = cam.x
+      camY = cam.y
+      zoom = cam.zoom
     }
 
     // Draw collider wireframes in world space
@@ -41,29 +45,79 @@ export class DebugSystem implements System {
     for (const id of world.query('Transform', 'BoxCollider')) {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const c = world.getComponent<{
-        type: 'BoxCollider'; width: number; height: number
-        offsetX: number; offsetY: number; isTrigger: boolean
+        type: 'BoxCollider'
+        width: number
+        height: number
+        offsetX: number
+        offsetY: number
+        isTrigger: boolean
+        layer?: string
+        mask?: string | string[]
       }>(id, 'BoxCollider')!
 
-      ctx.strokeStyle = c.isTrigger ? 'rgba(255,200,0,0.85)' : 'rgba(0,255,120,0.85)'
+      if (c.layer) {
+        ctx.strokeStyle = debugLayerColor(c.layer, c.isTrigger ? 0.6 : 0.85)
+      } else {
+        ctx.strokeStyle = c.isTrigger ? 'rgba(255,200,0,0.85)' : 'rgba(0,255,120,0.85)'
+      }
       ctx.lineWidth = lw
-      ctx.strokeRect(
-        t.x + c.offsetX - c.width / 2,
-        t.y + c.offsetY - c.height / 2,
-        c.width,
-        c.height,
-      )
+
+      const bx = t.x + c.offsetX - c.width / 2
+      const by = t.y + c.offsetY - c.height / 2
+      ctx.strokeRect(bx, by, c.width, c.height)
 
       // Entity ID label
       ctx.fillStyle = 'rgba(255,255,255,0.5)'
       ctx.font = `${10 / zoom}px monospace`
-      ctx.fillText(String(id), t.x + c.offsetX - c.width / 2 + lw, t.y + c.offsetY - c.height / 2 - lw * 2)
+      ctx.fillText(String(id), bx + lw, by - lw * 2)
+
+      // Collision layer label
+      if (c.layer || c.mask) {
+        ctx.save()
+        ctx.font = `${8 / zoom}px monospace`
+        ctx.fillStyle = 'rgba(255,255,255,0.7)'
+        const label = c.layer ?? 'default'
+        ctx.fillText(label, bx, by - lw * 2 - 12 / zoom)
+        if (c.mask) {
+          const maskArr = Array.isArray(c.mask) ? c.mask : [c.mask]
+          ctx.fillStyle = 'rgba(255,255,255,0.4)'
+          ctx.font = `${6 / zoom}px monospace`
+          ctx.fillText('-> ' + maskArr.join(', '), bx, by - lw * 2 - 4 / zoom)
+        }
+        ctx.restore()
+      }
+    }
+
+    // CircleCollider debug wireframes
+    for (const id of world.query('Transform', 'CircleCollider')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const c = world.getComponent<{
+        type: string
+        radius: number
+        offsetX?: number
+        offsetY?: number
+        isTrigger?: boolean
+        layer?: string
+      }>(id, 'CircleCollider')!
+
+      if (c.layer) {
+        ctx.strokeStyle = debugLayerColor(c.layer, c.isTrigger ? 0.6 : 0.85)
+      } else {
+        ctx.strokeStyle = c.isTrigger ? 'rgba(255,200,0,0.85)' : 'rgba(0,255,120,0.85)'
+      }
+      ctx.lineWidth = lw
+      ctx.beginPath()
+      ctx.arc(t.x + (c.offsetX || 0), t.y + (c.offsetY || 0), c.radius, 0, Math.PI * 2)
+      ctx.stroke()
     }
 
     // Camera bounds visualization (drawn in same world-space context)
     if (camId !== undefined) {
       const camFull = world.getComponent<{
-        type: 'Camera2D'; x: number; y: number; zoom: number
+        type: 'Camera2D'
+        x: number
+        y: number
+        zoom: number
         bounds?: { x: number; y: number; width: number; height: number }
       }>(camId, 'Camera2D')!
       if (camFull.bounds) {
@@ -119,17 +173,27 @@ export class DebugSystem implements System {
     // Screen-space HUD
     const entityCount = world.entityCount
     const physicsCount = world.query('RigidBody', 'BoxCollider').length
-    const renderCount  = world.query('Transform', 'Sprite').length
+    const renderCount = world.query('Transform', 'Sprite').length
 
     ctx.save()
     ctx.fillStyle = 'rgba(0,0,0,0.65)'
     ctx.fillRect(8, 8, 184, 84)
     ctx.fillStyle = '#00ff88'
     ctx.font = '11px monospace'
-    ctx.fillText(`FPS         ${this.fps}`,        16, 26)
-    ctx.fillText(`Entities    ${entityCount}`,     16, 42)
-    ctx.fillText(`Physics     ${physicsCount}`,    16, 58)
-    ctx.fillText(`Renderables ${renderCount}`,     16, 74)
+    ctx.fillText(`FPS         ${this.fps}`, 16, 26)
+    ctx.fillText(`Entities    ${entityCount}`, 16, 42)
+    ctx.fillText(`Physics     ${physicsCount}`, 16, 58)
+    ctx.fillText(`Renderables ${renderCount}`, 16, 74)
     ctx.restore()
   }
+}
+
+/** Generate a consistent HSL colour for a collision layer name. */
+function debugLayerColor(layer: string, alpha: number): string {
+  let hash = 0
+  for (let i = 0; i < layer.length; i++) {
+    hash = ((hash << 5) - hash + layer.charCodeAt(i)) | 0
+  }
+  const hue = ((hash % 360) + 360) % 360
+  return `hsla(${hue}, 80%, 60%, ${alpha})`
 }

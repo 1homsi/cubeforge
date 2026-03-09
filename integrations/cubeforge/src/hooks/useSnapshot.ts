@@ -47,8 +47,11 @@ export interface SnapshotControls {
 export function useSnapshot(): SnapshotControls {
   const engine = useGame()
 
-  return useMemo((): SnapshotControls => ({
-    save: () => engine.ecs.getSnapshot(),
-    restore: (snapshot) => engine.ecs.restoreSnapshot(snapshot),
-  }), [engine])
+  return useMemo(
+    (): SnapshotControls => ({
+      save: () => engine.ecs.getSnapshot(),
+      restore: (snapshot) => engine.ecs.restoreSnapshot(snapshot),
+    }),
+    [engine],
+  )
 }

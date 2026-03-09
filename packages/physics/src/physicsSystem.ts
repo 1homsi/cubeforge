@@ -6,6 +6,7 @@ import type { BoxColliderComponent } from './components/boxCollider'
 import type { CircleColliderComponent } from './components/circleCollider'
 import type { CapsuleColliderComponent } from './components/capsuleCollider'
 import type { CompoundColliderComponent, ColliderShape } from './components/compoundCollider'
+import type { JointComponent } from './components/joint'
 
 interface AABB {
   cx: number
@@ -14,10 +15,7 @@ interface AABB {
   hh: number
 }
 
-function getAABB(
-  transform: TransformComponent,
-  collider: BoxColliderComponent,
-): AABB {
+function getAABB(transform: TransformComponent, collider: BoxColliderComponent): AABB {
   return {
     cx: transform.x + collider.offsetX,
     cy: transform.y + collider.offsetY,
@@ -26,10 +24,7 @@ function getAABB(
   }
 }
 
-function getCapsuleAABB(
-  transform: TransformComponent,
-  capsule: CapsuleColliderComponent,
-): AABB {
+function getCapsuleAABB(transform: TransformComponent, capsule: CapsuleColliderComponent): AABB {
   return {
     cx: transform.x + capsule.offsetX,
     cy: transform.y + capsule.offsetY,
@@ -46,8 +41,8 @@ interface Overlap {
 function getOverlap(a: AABB, b: AABB): Overlap | null {
   const dx = a.cx - b.cx
   const dy = a.cy - b.cy
-  const ox = (a.hw + b.hw) - Math.abs(dx)
-  const oy = (a.hh + b.hh) - Math.abs(dy)
+  const ox = a.hw + b.hw - Math.abs(dx)
+  const oy = a.hh + b.hh - Math.abs(dy)
   if (ox <= 0 || oy <= 0) return null
   return {
     x: dx >= 0 ? ox : -ox,
@@ -60,11 +55,7 @@ function getOverlap(a: AABB, b: AABB): Overlap | null {
  * Returns null if worldX is outside the collider's horizontal extent.
  * slope is in degrees; positive = surface rises left→right.
  */
-function getSlopeSurfaceY(
-  st: TransformComponent,
-  sc: BoxColliderComponent,
-  worldX: number,
-): number | null {
+function getSlopeSurfaceY(st: TransformComponent, sc: BoxColliderComponent, worldX: number): number | null {
   const hw = sc.width / 2
   const hh = sc.height / 2
   const cx = st.x + sc.offsetX
@@ -74,7 +65,7 @@ function getSlopeSurfaceY(
   if (worldX < left || worldX > right) return null
   const dx = worldX - left
   const angleRad = sc.slope * (Math.PI / 180)
-  return (cy - hh) + dx * Math.tan(angleRad)
+  return cy - hh + dx * Math.tan(angleRad)
 }
 
 // ── Layer / mask filtering ────────────────────────────────────────────────────
@@ -121,12 +112,7 @@ function shapeToAABB(tx: number, ty: number, shape: ColliderShape): AABB {
  * Check if a compound collider shape overlaps with an AABB.
  * For box shapes this is AABB-AABB; for circle shapes it's circle-AABB.
  */
-function shapeOverlapsAABB(
-  tx: number,
-  ty: number,
-  shape: ColliderShape,
-  other: AABB,
-): Overlap | null {
+function shapeOverlapsAABB(tx: number, ty: number, shape: ColliderShape, other: AABB): Overlap | null {
   if (shape.type === 'box') {
     return getOverlap(shapeToAABB(tx, ty, shape), other)
   }
@@ -156,8 +142,8 @@ function shapeOverlapsCircle(
 ): boolean {
   if (shape.type === 'circle') {
     const r = shape.radius ?? 0
-    const dx = (tx + shape.offsetX) - cx
-    const dy = (ty + shape.offsetY) - cy
+    const dx = tx + shape.offsetX - cx
+    const dy = ty + shape.offsetY - cy
     return dx * dx + dy * dy < (r + cr) * (r + cr)
   }
   // Box shape vs circle
@@ -170,11 +156,7 @@ function shapeOverlapsCircle(
 }
 
 /** Compute the overall bounding AABB of a compound collider. */
-function getCompoundBounds(
-  tx: number,
-  ty: number,
-  shapes: ColliderShape[],
-): AABB {
+function getCompoundBounds(tx: number, ty: number, shapes: ColliderShape[]): AABB {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
@@ -219,9 +201,13 @@ function canInteractGeneric(
  */
 function sweepAABB(
   /** Moving box center + half-extents */
-  aCx: number, aCy: number, aHw: number, aHh: number,
+  aCx: number,
+  aCy: number,
+  aHw: number,
+  aHh: number,
   /** Sweep displacement */
-  dx: number, dy: number,
+  dx: number,
+  dy: number,
   /** Static box */
   b: AABB,
 ): number | null {
@@ -229,16 +215,16 @@ function sweepAABB(
   const eHw = b.hw + aHw
   const eHh = b.hh + aHh
 
-  const left   = b.cx - eHw
-  const right  = b.cx + eHw
-  const top    = b.cy - eHh
+  const left = b.cx - eHw
+  const right = b.cx + eHw
+  const top = b.cy - eHh
   const bottom = b.cy + eHh
 
   let tmin = -Infinity
-  let tmax =  Infinity
+  let tmax = Infinity
 
   if (dx !== 0) {
-    const t1 = (left  - aCx) / dx
+    const t1 = (left - aCx) / dx
     const t2 = (right - aCx) / dx
     tmin = Math.max(tmin, Math.min(t1, t2))
     tmax = Math.min(tmax, Math.max(t1, t2))
@@ -247,7 +233,7 @@ function sweepAABB(
   }
 
   if (dy !== 0) {
-    const t1 = (top    - aCy) / dy
+    const t1 = (top - aCy) / dy
     const t2 = (bottom - aCy) / dy
     tmin = Math.max(tmin, Math.min(t1, t2))
     tmax = Math.min(tmax, Math.max(t1, t2))
@@ -276,11 +262,11 @@ export class PhysicsSystem implements System {
   private readonly MAX_ACCUMULATOR = 0.1
 
   // Active contact sets — updated each physics step.
-  private activeTriggerPairs    = new Map<string, [EntityId, EntityId]>()
-  private activeCollisionPairs  = new Map<string, [EntityId, EntityId]>()
-  private activeCirclePairs     = new Map<string, [EntityId, EntityId]>()
-  private activeCompoundPairs   = new Map<string, [EntityId, EntityId]>()
-  private activeCapsulePairs    = new Map<string, [EntityId, EntityId]>()
+  private activeTriggerPairs = new Map<string, [EntityId, EntityId]>()
+  private activeCollisionPairs = new Map<string, [EntityId, EntityId]>()
+  private activeCirclePairs = new Map<string, [EntityId, EntityId]>()
+  private activeCompoundPairs = new Map<string, [EntityId, EntityId]>()
+  private activeCapsulePairs = new Map<string, [EntityId, EntityId]>()
 
   // Previous-frame positions of static entities — used to compute platform carry delta.
   private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
@@ -290,7 +276,9 @@ export class PhysicsSystem implements System {
     private readonly events?: EventBus,
   ) {}
 
-  setGravity(g: number): void { this.gravity = g }
+  setGravity(g: number): void {
+    this.gravity = g
+  }
 
   update(world: ECSWorld, dt: number): void {
     this.accumulator += dt
@@ -311,9 +299,7 @@ export class PhysicsSystem implements System {
     const y0 = Math.floor((cy - hh) / CELL)
     const y1 = Math.floor((cy + hh) / CELL)
     const cells: string[] = []
-    for (let x = x0; x <= x1; x++)
-      for (let y = y0; y <= y1; y++)
-        cells.push(`${x},${y}`)
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) cells.push(`${x},${y}`)
     return cells
   }
 
@@ -385,6 +371,29 @@ export class PhysicsSystem implements System {
       if (!world.hasEntity(sid)) this.staticPrevPos.delete(sid)
     }
 
+    // Wake sleeping dynamic bodies resting on moving statics (platform carry)
+    for (const id of dynamics) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (!rb.sleeping) continue
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
+      const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+      const dynAABB = getAABB(transform, col)
+      // Check against moving statics via a downward probe (same as near-ground)
+      const probeAABB: AABB = { cx: dynAABB.cx, cy: dynAABB.cy + 2, hw: dynAABB.hw, hh: dynAABB.hh }
+      for (const sid of statics) {
+        const delta = staticDelta.get(sid)
+        if (!delta || (delta.dx === 0 && delta.dy === 0)) continue
+        const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+        const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+        const ov = getOverlap(probeAABB, getAABB(st, sc))
+        if (ov && Math.abs(ov.y) <= Math.abs(ov.x) && ov.y < 0) {
+          rb.sleeping = false
+          rb.sleepTimer = 0
+          break
+        }
+      }
+    }
+
     // Build spatial grid for static entities
     const staticGrid = new Map<string, EntityId[]>()
     for (const sid of statics) {
@@ -393,7 +402,10 @@ export class PhysicsSystem implements System {
       const aabb = getAABB(st, sc)
       for (const cell of this.getCells(aabb.cx, aabb.cy, aabb.hw, aabb.hh)) {
         let bucket = staticGrid.get(cell)
-        if (!bucket) { bucket = []; staticGrid.set(cell, bucket) }
+        if (!bucket) {
+          bucket = []
+          staticGrid.set(cell, bucket)
+        }
         bucket.push(sid)
       }
     }
@@ -401,6 +413,25 @@ export class PhysicsSystem implements System {
     // Phase 1: gravity + reset ground flags + axis locks
     for (const id of dynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+
+      // Sleep check: if velocity is below threshold, increment sleep timer
+      if (!rb.isStatic && !rb.isKinematic) {
+        const speed = Math.abs(rb.vx) + Math.abs(rb.vy)
+        if (speed < rb.sleepThreshold) {
+          rb.sleepTimer += dt
+          if (rb.sleepTimer >= rb.sleepDelay) {
+            rb.sleeping = true
+          }
+        } else {
+          rb.sleepTimer = 0
+          rb.sleeping = false
+        }
+      }
+
+      // Sleeping bodies skip gravity, velocity integration, and collision response
+      // but preserve their onGround / isNearGround state from when they fell asleep
+      if (rb.sleeping) continue
+
       rb.onGround = false
       rb.isNearGround = false
       // Kinematic bodies skip gravity and velocity integration
@@ -410,14 +441,14 @@ export class PhysicsSystem implements System {
       if (rb.lockY) rb.vy = 0
       // Linear damping (air resistance) — applied before collision resolution
       if (rb.linearDamping > 0) {
-        rb.vx *= (1 - rb.linearDamping)
-        rb.vy *= (1 - rb.linearDamping)
+        rb.vx *= 1 - rb.linearDamping
+        rb.vy *= 1 - rb.linearDamping
       }
       // Angular velocity → transform rotation
       if (rb.angularVelocity !== 0) {
         const transform = world.getComponent<TransformComponent>(id, 'Transform')!
         transform.rotation += rb.angularVelocity * dt
-        if (rb.angularDamping > 0) rb.angularVelocity *= (1 - rb.angularDamping)
+        if (rb.angularDamping > 0) rb.angularVelocity *= 1 - rb.angularDamping
       }
       // Decrement drop-through counter
       if (rb.dropThrough > 0) rb.dropThrough--
@@ -444,22 +475,23 @@ export class PhysicsSystem implements System {
       if (rb.lockY) rb.vy = 0
       // Linear damping (air resistance)
       if (rb.linearDamping > 0) {
-        rb.vx *= (1 - rb.linearDamping)
-        rb.vy *= (1 - rb.linearDamping)
+        rb.vx *= 1 - rb.linearDamping
+        rb.vy *= 1 - rb.linearDamping
       }
       // Angular velocity → transform rotation
       if (rb.angularVelocity !== 0) {
         const transform = world.getComponent<TransformComponent>(id, 'Transform')!
         transform.rotation += rb.angularVelocity * dt
-        if (rb.angularDamping > 0) rb.angularVelocity *= (1 - rb.angularDamping)
+        if (rb.angularDamping > 0) rb.angularVelocity *= 1 - rb.angularDamping
       }
       if (rb.dropThrough > 0) rb.dropThrough--
     }
 
     // Phase 2 & 3: move X then resolve X
     for (const id of dynamics) {
-      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (rb.sleeping) continue
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
 
       transform.x += rb.vx * dt
@@ -530,8 +562,9 @@ export class PhysicsSystem implements System {
 
     // Phase 4 & 5: move Y then resolve Y
     for (const id of dynamics) {
-      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (rb.sleeping) continue
+      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
 
       transform.y += rb.vy * dt
@@ -558,7 +591,7 @@ export class PhysicsSystem implements System {
               const entityCenterX = transform.x + col.offsetX
               const surfaceY = getSlopeSurfaceY(st, sc, entityCenterX)
               if (surfaceY !== null && entityBottom > surfaceY) {
-                transform.y -= (entityBottom - surfaceY)
+                transform.y -= entityBottom - surfaceY
                 rb.onGround = true
                 if (rb.friction < 1) rb.vx *= rb.friction
                 rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
@@ -578,7 +611,7 @@ export class PhysicsSystem implements System {
                 if (ov.y >= 0) continue // resolution would push entity down — skip
                 // Was entity's bottom above the platform's top BEFORE this Y step?
                 const platformTop = st.y + sc.offsetY - sc.height / 2
-                const prevEntityBottom = (transform.y - rb.vy * dt) + col.offsetY + col.height / 2
+                const prevEntityBottom = transform.y - rb.vy * dt + col.offsetY + col.height / 2
                 if (prevEntityBottom > platformTop) continue // was below — skip
               }
 
@@ -671,8 +704,8 @@ export class PhysicsSystem implements System {
 
         const dxFromCenter = contactCx - staticAABB.cx
         const dyFromCenter = contactCy - staticAABB.cy
-        const overlapX = (hw + staticAABB.hw) - Math.abs(dxFromCenter)
-        const overlapY = (hh + staticAABB.hh) - Math.abs(dyFromCenter)
+        const overlapX = hw + staticAABB.hw - Math.abs(dxFromCenter)
+        const overlapY = hh + staticAABB.hh - Math.abs(dyFromCenter)
 
         if (overlapX > overlapY) {
           rb.vy = rb.bounce > 0 ? -rb.vy * rb.bounce : 0
@@ -719,7 +752,7 @@ export class PhysicsSystem implements System {
                 if (rb.dropThrough > 0) continue
                 if (ov.y >= 0) continue
                 const platformTop = st.y + sc.offsetY - sc.height / 2
-                const prevEntityBottom = (transform.y - rb.vy * dt) + cap.offsetY + cap.height / 2
+                const prevEntityBottom = transform.y - rb.vy * dt + cap.offsetY + cap.height / 2
                 if (prevEntityBottom > platformTop) continue
               }
 
@@ -767,12 +800,28 @@ export class PhysicsSystem implements System {
         const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
         const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
 
+        // Wake sleeping bodies on collision contact
+        if (rba.sleeping) {
+          rba.sleeping = false
+          rba.sleepTimer = 0
+        }
+        if (rbb.sleeping) {
+          rbb.sleeping = false
+          rbb.sleepTimer = 0
+        }
+
         if (Math.abs(ov.y) <= Math.abs(ov.x)) {
           if (ov.y > 0) {
-            if (rbb.vy > 0) { rba.vy += rbb.vy * 0.3; rbb.vy = 0 }
+            if (rbb.vy > 0) {
+              rba.vy += rbb.vy * 0.3
+              rbb.vy = 0
+            }
             rbb.onGround = true
           } else {
-            if (rba.vy > 0) { rbb.vy += rba.vy * 0.3; rba.vy = 0 }
+            if (rba.vy > 0) {
+              rbb.vy += rba.vy * 0.3
+              rba.vy = 0
+            }
             rba.onGround = true
           }
         }
@@ -781,12 +830,8 @@ export class PhysicsSystem implements System {
         // Subtract slop from each axis so near-resting overlaps produce zero correction.
         const absOx = Math.abs(ov.x)
         const absOy = Math.abs(ov.y)
-        const corrX = absOx > POSITION_SLOP
-          ? Math.sign(ov.x) * (absOx - POSITION_SLOP) * CORRECTION_FACTOR
-          : 0
-        const corrY = absOy > POSITION_SLOP
-          ? Math.sign(ov.y) * (absOy - POSITION_SLOP) * CORRECTION_FACTOR
-          : 0
+        const corrX = absOx > POSITION_SLOP ? Math.sign(ov.x) * (absOx - POSITION_SLOP) * CORRECTION_FACTOR : 0
+        const corrY = absOy > POSITION_SLOP ? Math.sign(ov.y) * (absOy - POSITION_SLOP) * CORRECTION_FACTOR : 0
 
         ta.x += corrX / 2
         ta.y += corrY / 2
@@ -814,10 +859,141 @@ export class PhysicsSystem implements System {
     }
     this.activeCollisionPairs = currentCollisionPairs
 
+    // Phase 6b: Joint constraint solving
+    const jointEntities = world.query('Joint')
+    if (jointEntities.length > 0) {
+      const JOINT_ITERATIONS = 4
+      for (let iter = 0; iter < JOINT_ITERATIONS; iter++) {
+        for (const jid of jointEntities) {
+          const joint = world.getComponent<JointComponent>(jid, 'Joint')!
+          const tA = world.getComponent<TransformComponent>(joint.entityA, 'Transform')
+          const tB = world.getComponent<TransformComponent>(joint.entityB, 'Transform')
+          if (!tA || !tB) continue
+          const rbA = world.getComponent<RigidBodyComponent>(joint.entityA, 'RigidBody')
+          const rbB = world.getComponent<RigidBodyComponent>(joint.entityB, 'RigidBody')
+
+          // World-space anchor positions
+          const ax = tA.x + joint.anchorA.x
+          const ay = tA.y + joint.anchorA.y
+          const bx = tB.x + joint.anchorB.x
+          const by = tB.y + joint.anchorB.y
+
+          const dx = bx - ax
+          const dy = by - ay
+          const currentLength = Math.sqrt(dx * dx + dy * dy)
+
+          if (joint.jointType === 'distance') {
+            // Enforce exact distance between anchor points
+            if (currentLength < 0.0001) continue
+            const nx = dx / currentLength
+            const ny = dy / currentLength
+            const diff = currentLength - joint.length
+            const correctionX = nx * diff * 0.5
+            const correctionY = ny * diff * 0.5
+
+            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
+            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
+
+            if (!aStatic && !bStatic) {
+              tA.x += correctionX
+              tA.y += correctionY
+              tB.x -= correctionX
+              tB.y -= correctionY
+            } else if (!aStatic) {
+              tA.x += correctionX * 2
+              tA.y += correctionY * 2
+            } else if (!bStatic) {
+              tB.x -= correctionX * 2
+              tB.y -= correctionY * 2
+            }
+          } else if (joint.jointType === 'spring') {
+            // Hooke's law: F = -stiffness * (currentLength - restLength)
+            // plus damping on relative velocity
+            if (currentLength < 0.0001) continue
+            const nx = dx / currentLength
+            const ny = dy / currentLength
+            const displacement = currentLength - joint.length
+            let fx = joint.stiffness * displacement * nx
+            let fy = joint.stiffness * displacement * ny
+
+            // Damping based on relative velocity
+            if (rbA && rbB) {
+              const relVx = rbB.vx - rbA.vx
+              const relVy = rbB.vy - rbA.vy
+              const relVDot = relVx * nx + relVy * ny
+              fx += joint.damping * relVDot * nx
+              fy += joint.damping * relVDot * ny
+            }
+
+            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
+            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
+
+            if (!aStatic && rbA) {
+              rbA.vx += fx * dt
+              rbA.vy += fy * dt
+            }
+            if (!bStatic && rbB) {
+              rbB.vx -= fx * dt
+              rbB.vy -= fy * dt
+            }
+          } else if (joint.jointType === 'revolute') {
+            // Pin/hinge: keep anchor points coincident
+            const midX = (ax + bx) / 2
+            const midY = (ay + by) / 2
+
+            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
+            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
+
+            if (!aStatic && !bStatic) {
+              tA.x += midX - ax
+              tA.y += midY - ay
+              tB.x += midX - bx
+              tB.y += midY - by
+            } else if (!aStatic) {
+              tA.x += bx - ax
+              tA.y += by - ay
+            } else if (!bStatic) {
+              tB.x += ax - bx
+              tB.y += ay - by
+            }
+          } else if (joint.jointType === 'rope') {
+            // Like distance but only enforces max length (allows slack)
+            const maxLen = joint.maxLength ?? joint.length
+            if (currentLength <= maxLen) continue
+            if (currentLength < 0.0001) continue
+            const nx = dx / currentLength
+            const ny = dy / currentLength
+            const diff = currentLength - maxLen
+            const correctionX = nx * diff * 0.5
+            const correctionY = ny * diff * 0.5
+
+            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
+            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
+
+            if (!aStatic && !bStatic) {
+              tA.x += correctionX
+              tA.y += correctionY
+              tB.x -= correctionX
+              tB.y -= correctionY
+            } else if (!aStatic) {
+              tA.x += correctionX * 2
+              tA.y += correctionY * 2
+            } else if (!bStatic) {
+              tB.x -= correctionX * 2
+              tB.y -= correctionY * 2
+            }
+          }
+        }
+      }
+    }
+
     // Phase 7: near-ground detection (2px downward probe)
     for (const id of dynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      if (rb.onGround) { rb.isNearGround = true; continue }
+      if (rb.onGround) {
+        rb.isNearGround = true
+        continue
+      }
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
       const probeAABB: AABB = {
@@ -850,7 +1026,10 @@ export class PhysicsSystem implements System {
     // Phase 7b: near-ground detection for capsule dynamics
     for (const id of capsuleDynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      if (rb.onGround) { rb.isNearGround = true; continue }
+      if (rb.onGround) {
+        rb.isNearGround = true
+        continue
+      }
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const cap = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
       const probeAABB: AABB = {
@@ -938,8 +1117,8 @@ export class PhysicsSystem implements System {
           if (!maskAllows(ca.mask, cb.layer) || !maskAllows(cb.mask, ca.layer)) continue
           const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
           const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
-          const dx = (ta.x + ca.offsetX) - (tb.x + cb.offsetX)
-          const dy = (ta.y + ca.offsetY) - (tb.y + cb.offsetY)
+          const dx = ta.x + ca.offsetX - (tb.x + cb.offsetX)
+          const dy = ta.y + ca.offsetY - (tb.y + cb.offsetY)
           if (dx * dx + dy * dy < (ca.radius + cb.radius) ** 2) {
             currentCirclePairs.set(pairKey(ia, ib), [ia, ib])
           }

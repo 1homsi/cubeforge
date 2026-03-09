@@ -37,16 +37,7 @@ interface CameraZoneProps {
  * <CameraZone x={500} y={300} width={200} height={150} watchTag="player" />
  * ```
  */
-export function CameraZone({
-  x,
-  y,
-  width,
-  height,
-  watchTag = 'player',
-  targetX,
-  targetY,
-  children,
-}: CameraZoneProps) {
+export function CameraZone({ x, y, width, height, watchTag = 'player', targetX, targetY, children }: CameraZoneProps) {
   const engine = useContext(EngineContext)!
   const prevFollowRef = useRef<string | undefined>(undefined)
   const activeRef = useRef(false)
@@ -56,39 +47,42 @@ export function CameraZone({
     // ScriptSystem tick — respects pause, deterministic mode, and frame rate.
     const eid = engine.ecs.createEntity()
 
-    engine.ecs.addComponent(eid, createScript(() => {
-      const cam = engine.ecs.queryOne('Camera2D')
-      if (cam === undefined) return
+    engine.ecs.addComponent(
+      eid,
+      createScript(() => {
+        const cam = engine.ecs.queryOne('Camera2D')
+        if (cam === undefined) return
 
-      const camComp = engine.ecs.getComponent<Camera2DComponent>(cam, 'Camera2D')
-      if (!camComp) return
+        const camComp = engine.ecs.getComponent<Camera2DComponent>(cam, 'Camera2D')
+        if (!camComp) return
 
-      const hw = width / 2
-      const hh = height / 2
-      let inside = false
+        const hw = width / 2
+        const hh = height / 2
+        let inside = false
 
-      for (const tid of engine.ecs.query('Transform', 'Tag')) {
-        const tagComp = engine.ecs.getComponent<{ type: 'Tag'; tags: string[] }>(tid, 'Tag')
-        if (!tagComp?.tags.includes(watchTag)) continue
-        const t = engine.ecs.getComponent<{ type: 'Transform'; x: number; y: number }>(tid, 'Transform')
-        if (!t) continue
-        if (Math.abs(t.x - x) <= hw && Math.abs(t.y - y) <= hh) {
-          inside = true
-          break
+        for (const tid of engine.ecs.query('Transform', 'Tag')) {
+          const tagComp = engine.ecs.getComponent<{ type: 'Tag'; tags: string[] }>(tid, 'Tag')
+          if (!tagComp?.tags.includes(watchTag)) continue
+          const t = engine.ecs.getComponent<{ type: 'Transform'; x: number; y: number }>(tid, 'Transform')
+          if (!t) continue
+          if (Math.abs(t.x - x) <= hw && Math.abs(t.y - y) <= hh) {
+            inside = true
+            break
+          }
         }
-      }
 
-      if (inside && !activeRef.current) {
-        activeRef.current = true
-        prevFollowRef.current = camComp.followEntityId
-        camComp.followEntityId = undefined
-        camComp.x = targetX ?? x
-        camComp.y = targetY ?? y
-      } else if (!inside && activeRef.current) {
-        activeRef.current = false
-        camComp.followEntityId = prevFollowRef.current
-      }
-    }))
+        if (inside && !activeRef.current) {
+          activeRef.current = true
+          prevFollowRef.current = camComp.followEntityId
+          camComp.followEntityId = undefined
+          camComp.x = targetX ?? x
+          camComp.y = targetY ?? y
+        } else if (!inside && activeRef.current) {
+          activeRef.current = false
+          camComp.followEntityId = prevFollowRef.current
+        }
+      }),
+    )
 
     return () => {
       // Restore camera if zone was active when unmounted
@@ -102,8 +96,8 @@ export function CameraZone({
       }
       if (engine.ecs.hasEntity(eid)) engine.ecs.destroyEntity(eid)
     }
-  // Props are read inside the script closure via the outer scope; the effect
-  // must re-run when they change so the script is re-created with fresh values.
+    // Props are read inside the script closure via the outer scope; the effect
+    // must re-run when they change so the script is re-created with fresh values.
   }, [engine.ecs, x, y, width, height, watchTag, targetX, targetY])
 
   return <>{children ?? null}</>

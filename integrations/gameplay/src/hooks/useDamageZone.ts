@@ -10,7 +10,10 @@ interface DamageZoneOpts {
 export function useDamageZone(damage: number, opts: DamageZoneOpts = {}): void {
   const engine = useContext(EngineContext)!
 
-  useTriggerEnter((other: EntityId) => {
-    engine.events.emit(`damage:${other}`, { amount: damage })
-  }, { tag: opts.tag, layer: opts.layer })
+  useTriggerEnter(
+    (other: EntityId) => {
+      engine.events.emit(`damage:${other}`, { amount: damage })
+    },
+    { tag: opts.tag, layer: opts.layer },
+  )
 }

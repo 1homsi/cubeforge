@@ -270,7 +270,7 @@ describe('PhysicsSystem', () => {
       // Dynamic entity starts below the platform and moves upward
       const id = addDynamic(world, 0, 100, 20, 20)
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      rb.vy = -400  // moving upward
+      rb.vy = -400 // moving upward
 
       runSteps(world, 10)
 
@@ -300,7 +300,10 @@ describe('PhysicsSystem', () => {
 // ── Contact events ────────────────────────────────────────────────────────────
 
 describe('Contact events', () => {
-  interface ContactPayload { a: number; b: number }
+  interface ContactPayload {
+    a: number
+    b: number
+  }
 
   describe('triggerEnter / triggerExit', () => {
     it('emits triggerEnter when a dynamic body overlaps a static trigger', () => {
@@ -319,7 +322,7 @@ describe('Contact events', () => {
       world.addComponent(dyn, createBoxCollider(10, 10))
 
       const entered: ContactPayload[] = []
-      events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+      events.on<ContactPayload>('triggerEnter', (p) => entered.push(p))
 
       runSteps(world, 1)
 
@@ -344,7 +347,7 @@ describe('Contact events', () => {
       world.addComponent(dyn, createBoxCollider(10, 10))
 
       const entered: ContactPayload[] = []
-      events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+      events.on<ContactPayload>('triggerEnter', (p) => entered.push(p))
 
       runSteps(world, 1)
       expect(entered.length).toBe(0)
@@ -364,7 +367,7 @@ describe('Contact events', () => {
       world.addComponent(dyn, createBoxCollider(10, 10))
 
       const entered: ContactPayload[] = []
-      events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+      events.on<ContactPayload>('triggerEnter', (p) => entered.push(p))
 
       runSteps(world, 5)
 
@@ -386,7 +389,7 @@ describe('Contact events', () => {
       world.addComponent(dyn, createBoxCollider(10, 10))
 
       const ongoing: ContactPayload[] = []
-      events.on<ContactPayload>('trigger', p => ongoing.push(p))
+      events.on<ContactPayload>('trigger', (p) => ongoing.push(p))
 
       runSteps(world, 3)
       expect(ongoing.length).toBe(3)
@@ -408,7 +411,7 @@ describe('Contact events', () => {
       world.addComponent(dyn, createBoxCollider(10, 10))
 
       const exited: ContactPayload[] = []
-      events.on<ContactPayload>('triggerExit', p => exited.push(p))
+      events.on<ContactPayload>('triggerExit', (p) => exited.push(p))
 
       // One step — body overlaps
       runSteps(world, 1)
@@ -436,7 +439,7 @@ describe('Contact events', () => {
       world.addComponent(dyn, createBoxCollider(10, 10))
 
       const exited: ContactPayload[] = []
-      events.on<ContactPayload>('triggerExit', p => exited.push(p))
+      events.on<ContactPayload>('triggerExit', (p) => exited.push(p))
 
       runSteps(world, 1) // establish overlap
       world.destroyEntity(dyn)
@@ -462,7 +465,7 @@ describe('Contact events', () => {
       world.addComponent(b, createBoxCollider(20, 20))
 
       const entered: ContactPayload[] = []
-      events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+      events.on<ContactPayload>('collisionEnter', (p) => entered.push(p))
 
       runSteps(world, 1)
       expect(entered.length).toBe(1)
@@ -482,7 +485,7 @@ describe('Contact events', () => {
       world.addComponent(b, createBoxCollider(20, 20))
 
       const entered: ContactPayload[] = []
-      events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+      events.on<ContactPayload>('collisionEnter', (p) => entered.push(p))
 
       runSteps(world, 5)
       expect(entered.length).toBe(1)
@@ -502,7 +505,7 @@ describe('Contact events', () => {
       world.addComponent(b, createBoxCollider(20, 20))
 
       const exited: ContactPayload[] = []
-      events.on<ContactPayload>('collisionExit', p => exited.push(p))
+      events.on<ContactPayload>('collisionExit', (p) => exited.push(p))
 
       runSteps(world, 1)
 
@@ -521,7 +524,10 @@ describe('Contact events', () => {
 // ── Layer / mask filtering ────────────────────────────────────────────────────
 
 describe('Layer / mask filtering', () => {
-  interface ContactPayload { a: number; b: number }
+  interface ContactPayload {
+    a: number
+    b: number
+  }
 
   it('allows collision when mask is * (default)', () => {
     const { world, events } = createTestWorldWithEvents()
@@ -537,7 +543,7 @@ describe('Layer / mask filtering', () => {
     world.addComponent(b, createBoxCollider(20, 20, { layer: 'enemy' }))
 
     const entered: ContactPayload[] = []
-    events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+    events.on<ContactPayload>('collisionEnter', (p) => entered.push(p))
 
     runSteps(world, 1)
     expect(entered.length).toBe(1)
@@ -558,7 +564,7 @@ describe('Layer / mask filtering', () => {
     world.addComponent(b, createBoxCollider(20, 20, { layer: 'enemy' }))
 
     const entered: ContactPayload[] = []
-    events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+    events.on<ContactPayload>('collisionEnter', (p) => entered.push(p))
 
     runSteps(world, 1)
     expect(entered.length).toBe(0)
@@ -578,7 +584,7 @@ describe('Layer / mask filtering', () => {
     world.addComponent(b, createBoxCollider(20, 20, { layer: 'enemy', mask: ['player'] }))
 
     const entered: ContactPayload[] = []
-    events.on<ContactPayload>('collisionEnter', p => entered.push(p))
+    events.on<ContactPayload>('collisionEnter', (p) => entered.push(p))
 
     runSteps(world, 1)
     expect(entered.length).toBe(1)
@@ -599,7 +605,7 @@ describe('Layer / mask filtering', () => {
     world.addComponent(dyn, createBoxCollider(10, 10, { layer: 'enemy' }))
 
     const entered: ContactPayload[] = []
-    events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+    events.on<ContactPayload>('triggerEnter', (p) => entered.push(p))
 
     runSteps(world, 1)
     expect(entered.length).toBe(0)
@@ -619,7 +625,7 @@ describe('Layer / mask filtering', () => {
     world.addComponent(dyn, createBoxCollider(10, 10, { layer: 'player' }))
 
     const entered: ContactPayload[] = []
-    events.on<ContactPayload>('triggerEnter', p => entered.push(p))
+    events.on<ContactPayload>('triggerEnter', (p) => entered.push(p))
 
     runSteps(world, 1)
     expect(entered.length).toBe(1)

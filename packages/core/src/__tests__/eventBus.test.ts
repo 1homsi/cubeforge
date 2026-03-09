@@ -11,14 +11,18 @@ describe('EventBus', () => {
   describe('on / emit', () => {
     it('registers a listener that is called on emit', () => {
       let received: number | undefined
-      bus.on<number>('score', (data) => { received = data })
+      bus.on<number>('score', (data) => {
+        received = data
+      })
       bus.emit('score', 42)
       expect(received).toBe(42)
     })
 
     it('listener receives correct data', () => {
       const received: { x: number; y: number }[] = []
-      bus.on<{ x: number; y: number }>('move', (data) => { received.push(data) })
+      bus.on<{ x: number; y: number }>('move', (data) => {
+        received.push(data)
+      })
       bus.emit('move', { x: 1, y: 2 })
       bus.emit('move', { x: 3, y: 4 })
       expect(received).toHaveLength(2)
@@ -44,7 +48,9 @@ describe('EventBus', () => {
 
     it('emit without data passes undefined to listener', () => {
       let received: unknown = 'sentinel'
-      bus.on('ping', (data) => { received = data })
+      bus.on('ping', (data) => {
+        received = data
+      })
       bus.emit('ping')
       expect(received).toBeUndefined()
     })
@@ -53,7 +59,9 @@ describe('EventBus', () => {
   describe('on returns unsubscribe function', () => {
     it('unsubscribe function removes the listener', () => {
       let count = 0
-      const unsub = bus.on('tick', () => { count++ })
+      const unsub = bus.on('tick', () => {
+        count++
+      })
       bus.emit('tick')
       expect(count).toBe(1)
       unsub()
@@ -65,7 +73,9 @@ describe('EventBus', () => {
   describe('off', () => {
     it('removes a specific listener', () => {
       let count = 0
-      const listener = () => { count++ }
+      const listener = () => {
+        count++
+      }
       bus.on('event', listener)
       bus.emit('event')
       expect(count).toBe(1)
@@ -77,8 +87,12 @@ describe('EventBus', () => {
     it('does not affect other listeners on the same event', () => {
       let countA = 0
       let countB = 0
-      const listenerA = () => { countA++ }
-      const listenerB = () => { countB++ }
+      const listenerA = () => {
+        countA++
+      }
+      const listenerB = () => {
+        countB++
+      }
       bus.on('event', listenerA)
       bus.on('event', listenerB)
       bus.off('event', listenerA)
@@ -91,7 +105,9 @@ describe('EventBus', () => {
   describe('once', () => {
     it('fires exactly once', () => {
       let count = 0
-      bus.once('boom', () => { count++ })
+      bus.once('boom', () => {
+        count++
+      })
       bus.emit('boom')
       bus.emit('boom')
       bus.emit('boom')
@@ -100,14 +116,18 @@ describe('EventBus', () => {
 
     it('passes data to the once listener', () => {
       let received: string | undefined
-      bus.once<string>('msg', (data) => { received = data })
+      bus.once<string>('msg', (data) => {
+        received = data
+      })
       bus.emit('msg', 'hello')
       expect(received).toBe('hello')
     })
 
     it('once returns an unsubscribe that prevents the single firing', () => {
       let count = 0
-      const unsub = bus.once('rare', () => { count++ })
+      const unsub = bus.once('rare', () => {
+        count++
+      })
       unsub()
       bus.emit('rare')
       expect(count).toBe(0)
@@ -117,8 +137,12 @@ describe('EventBus', () => {
   describe('clear', () => {
     it('clear(event) removes all listeners for that event', () => {
       let count = 0
-      bus.on('x', () => { count++ })
-      bus.on('x', () => { count++ })
+      bus.on('x', () => {
+        count++
+      })
+      bus.on('x', () => {
+        count++
+      })
       bus.clear('x')
       bus.emit('x')
       expect(count).toBe(0)
@@ -127,8 +151,12 @@ describe('EventBus', () => {
     it('clear(event) does not remove listeners for other events', () => {
       let countX = 0
       let countY = 0
-      bus.on('x', () => { countX++ })
-      bus.on('y', () => { countY++ })
+      bus.on('x', () => {
+        countX++
+      })
+      bus.on('y', () => {
+        countY++
+      })
       bus.clear('x')
       bus.emit('x')
       bus.emit('y')
@@ -139,8 +167,12 @@ describe('EventBus', () => {
     it('clear() with no args removes all listeners', () => {
       let countA = 0
       let countB = 0
-      bus.on('a', () => { countA++ })
-      bus.on('b', () => { countB++ })
+      bus.on('a', () => {
+        countA++
+      })
+      bus.on('b', () => {
+        countB++
+      })
       bus.clear()
       bus.emit('a')
       bus.emit('b')

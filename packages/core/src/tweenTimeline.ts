@@ -62,17 +62,10 @@ export function createTimeline(): TweenTimeline {
 
     const startTween = () => {
       if (!running) return
-      currentTween = tween(
-        entry.from,
-        entry.to,
-        entry.duration,
-        entry.ease ?? Ease.linear,
-        entry.onUpdate,
-        () => {
-          entry.onComplete?.()
-          playEntry(index + 1)
-        },
-      )
+      currentTween = tween(entry.from, entry.to, entry.duration, entry.ease ?? Ease.linear, entry.onUpdate, () => {
+        entry.onComplete?.()
+        playEntry(index + 1)
+      })
       lastTime = performance.now()
       rafId = requestAnimationFrame(tick)
     }

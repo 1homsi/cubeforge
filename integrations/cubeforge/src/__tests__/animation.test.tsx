@@ -29,9 +29,7 @@ function makeEngine(): EngineState {
 function Wrapper({ engine, entityId, children }: { engine: EngineState; entityId: number; children: React.ReactNode }) {
   return (
     <EngineContext.Provider value={engine}>
-      <EntityContext.Provider value={entityId}>
-        {children}
-      </EntityContext.Provider>
+      <EntityContext.Provider value={entityId}>{children}</EntityContext.Provider>
     </EngineContext.Provider>
   )
 }
@@ -72,7 +70,9 @@ describe('Animation component', () => {
       unmount = result.unmount
     })
     expect(engine.ecs.getComponent(entityId, 'AnimationState')).toBeDefined()
-    await act(async () => { unmount() })
+    await act(async () => {
+      unmount()
+    })
     expect(engine.ecs.getComponent(entityId, 'AnimationState')).toBeUndefined()
   })
 
@@ -179,9 +179,13 @@ describe('AnimatedSprite simple mode', () => {
       render(
         <Wrapper engine={engine} entityId={entityId}>
           <AnimatedSprite
-            src="/hero.png" width={32} height={32}
-            frameWidth={32} frameHeight={32}
-            frames={[0, 1, 2]} fps={10}
+            src="/hero.png"
+            width={32}
+            height={32}
+            frameWidth={32}
+            frameHeight={32}
+            frames={[0, 1, 2]}
+            fps={10}
           />
         </Wrapper>,
       )
@@ -217,9 +221,13 @@ describe('AnimatedSprite multi-clip mode', () => {
       render(
         <Wrapper engine={engine} entityId={entityId}>
           <AnimatedSprite
-            src="/hero.png" width={32} height={32}
-            frameWidth={32} frameHeight={32}
-            animations={anims} current="idle"
+            src="/hero.png"
+            width={32}
+            height={32}
+            frameWidth={32}
+            frameHeight={32}
+            animations={anims}
+            current="idle"
           />
         </Wrapper>,
       )
@@ -241,9 +249,13 @@ describe('AnimatedSprite multi-clip mode', () => {
       const result = render(
         <Wrapper engine={engine} entityId={entityId}>
           <AnimatedSprite
-            src="/hero.png" width={32} height={32}
-            frameWidth={32} frameHeight={32}
-            animations={anims} current="idle"
+            src="/hero.png"
+            width={32}
+            height={32}
+            frameWidth={32}
+            frameHeight={32}
+            animations={anims}
+            current="idle"
           />
         </Wrapper>,
       )
@@ -254,9 +266,13 @@ describe('AnimatedSprite multi-clip mode', () => {
       rerender(
         <Wrapper engine={engine} entityId={entityId}>
           <AnimatedSprite
-            src="/hero.png" width={32} height={32}
-            frameWidth={32} frameHeight={32}
-            animations={anims} current="walk"
+            src="/hero.png"
+            width={32}
+            height={32}
+            frameWidth={32}
+            frameHeight={32}
+            animations={anims}
+            current="walk"
           />
         </Wrapper>,
       )
@@ -274,16 +290,22 @@ describe('AnimatedSprite multi-clip mode', () => {
       const result = render(
         <Wrapper engine={engine} entityId={entityId}>
           <AnimatedSprite
-            src="/hero.png" width={32} height={32}
-            frameWidth={32} frameHeight={32}
-            animations={anims} current="idle"
+            src="/hero.png"
+            width={32}
+            height={32}
+            frameWidth={32}
+            frameHeight={32}
+            animations={anims}
+            current="idle"
           />
         </Wrapper>,
       )
       unmount = result.unmount
     })
     expect(engine.ecs.getComponent(entityId, 'AnimationState')).toBeDefined()
-    await act(async () => { unmount() })
+    await act(async () => {
+      unmount()
+    })
     expect(engine.ecs.getComponent(entityId, 'AnimationState')).toBeUndefined()
   })
 
@@ -292,9 +314,13 @@ describe('AnimatedSprite multi-clip mode', () => {
       render(
         <Wrapper engine={engine} entityId={entityId}>
           <AnimatedSprite
-            src="/hero.png" width={32} height={32}
-            frameWidth={32} frameHeight={32}
-            animations={anims} current="attack"
+            src="/hero.png"
+            width={32}
+            height={32}
+            frameWidth={32}
+            frameHeight={32}
+            animations={anims}
+            current="attack"
           />
         </Wrapper>,
       )

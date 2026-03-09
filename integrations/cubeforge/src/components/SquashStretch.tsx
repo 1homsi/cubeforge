@@ -23,7 +23,7 @@ export function SquashStretch({ intensity = 0.2, recovery = 8 }: SquashStretchPr
     } as SquashStretchComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'SquashStretch')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return null

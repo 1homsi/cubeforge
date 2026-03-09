@@ -16,6 +16,16 @@ import { createPostProcessStack, type PostProcessStack } from './postProcess'
 
 const imageCache = new Map<string, HTMLImageElement>()
 
+/** Generate a consistent HSL colour for a collision layer name. */
+function layerColor(layer: string, alpha: number): string {
+  let hash = 0
+  for (let i = 0; i < layer.length; i++) {
+    hash = ((hash << 5) - hash + layer.charCodeAt(i)) | 0
+  }
+  const hue = ((hash % 360) + 360) % 360
+  return `hsla(${hue}, 80%, 60%, ${alpha})`
+}
+
 interface BoxColliderShape {
   type: 'BoxCollider'
   width: number
@@ -23,6 +33,8 @@ interface BoxColliderShape {
   offsetX: number
   offsetY: number
   isTrigger: boolean
+  layer?: string
+  mask?: string | string[]
 }
 
 interface RigidBodyShape {
@@ -144,7 +156,8 @@ export class RenderSystem implements System {
       if (cam.shakeTimer > 0) {
         cam.shakeTimer -= dt
         if (cam.shakeTimer < 0) cam.shakeTimer = 0
-        const progress = cam.shakeDuration > 0 ? cam.shakeTimer / cam.shakeDuration : 0
+        const t = cam.shakeDuration > 0 ? cam.shakeTimer / cam.shakeDuration : 0
+        const progress = t * t // quadratic ease-out (stronger at start, gentle at end)
         shakeX = (world.rng() * 2 - 1) * cam.shakeIntensity * progress
         shakeY = (world.rng() * 2 - 1) * cam.shakeIntensity * progress
       }
@@ -248,8 +261,8 @@ export class RenderSystem implements System {
       const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
       const rb = world.getComponent<RigidBodyShape>(id, 'RigidBody')!
       const speed = Math.sqrt(rb.vx * rb.vx + rb.vy * rb.vy)
-      const targetScaleX = rb.vy < -100 ? 1 + ss.intensity * 0.4 : (speed > 50 ? 1 - ss.intensity * 0.3 : 1)
-      const targetScaleY = rb.vy < -100 ? 1 - ss.intensity * 0.4 : (speed > 50 ? 1 + ss.intensity * 0.3 : 1)
+      const targetScaleX = rb.vy < -100 ? 1 + ss.intensity * 0.4 : speed > 50 ? 1 - ss.intensity * 0.3 : 1
+      const targetScaleY = rb.vy < -100 ? 1 - ss.intensity * 0.4 : speed > 50 ? 1 + ss.intensity * 0.3 : 1
       ss.currentScaleX += (targetScaleX - ss.currentScaleX) * ss.recovery * dt
       ss.currentScaleY += (targetScaleY - ss.currentScaleY) * ss.recovery * dt
     }
@@ -294,7 +307,10 @@ export class RenderSystem implements System {
       ctx.save()
       if (layer.repeatX || layer.repeatY) {
         // Tile using pattern
-        const pattern = ctx.createPattern(img, layer.repeatX && layer.repeatY ? 'repeat' : layer.repeatX ? 'repeat-x' : 'repeat-y')
+        const pattern = ctx.createPattern(
+          img,
+          layer.repeatX && layer.repeatY ? 'repeat' : layer.repeatX ? 'repeat-x' : 'repeat-y',
+        )
         if (pattern) {
           // Offset the pattern to match parallax position
           const offsetX = ((drawX % imgW) + imgW) % imgW
@@ -313,10 +329,7 @@ export class RenderSystem implements System {
 
     // Apply camera transform: translate so camX,camY is at screen center, plus shake offset
     ctx.save()
-    ctx.translate(
-      canvas.width / 2 - camX * zoom + shakeX,
-      canvas.height / 2 - camY * zoom + shakeY,
-    )
+    ctx.translate(canvas.width / 2 - camX * zoom + shakeX, canvas.height / 2 - camY * zoom + shakeY)
     ctx.scale(zoom, zoom)
 
     // Collect renderable entities.
@@ -388,7 +401,17 @@ export class RenderSystem implements System {
           const row = Math.floor(sprite.frameIndex / cols)
           const sx = col * sprite.frameWidth
           const sy = row * sprite.frameHeight
-          ctx.drawImage(sprite.image, sx, sy, sprite.frameWidth, sprite.frameHeight, drawX, drawY, sprite.width, sprite.height)
+          ctx.drawImage(
+            sprite.image,
+            sx,
+            sy,
+            sprite.frameWidth,
+            sprite.frameHeight,
+            drawX,
+            drawY,
+            sprite.width,
+            sprite.height,
+          )
         } else if (sprite.frame) {
           const { sx, sy, sw, sh } = sprite.frame
           ctx.drawImage(sprite.image, sx, sy, sw, sh, drawX, drawY, sprite.width, sprite.height)
@@ -410,6 +433,16 @@ export class RenderSystem implements System {
       } else {
         ctx.fillStyle = sprite.color
         ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
+      }
+
+      // Tint overlay
+      if (sprite.tint) {
+        ctx.globalCompositeOperation = 'source-atop'
+        ctx.globalAlpha = sprite.tintOpacity ?? 0.3
+        ctx.fillStyle = sprite.tint
+        ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
+        ctx.globalAlpha = 1
+        ctx.globalCompositeOperation = 'source-over'
       }
 
       ctx.restore()
@@ -459,16 +492,157 @@ export class RenderSystem implements System {
       // Middle-left
       if (bL > 0 && innerSrcH > 0) ctx.drawImage(img, 0, bT, bL, innerSrcH, dx, dy + bT, bL, innerDestH)
       // Center
-      if (innerSrcW > 0 && innerSrcH > 0) ctx.drawImage(img, bL, bT, innerSrcW, innerSrcH, dx + bL, dy + bT, innerDestW, innerDestH)
+      if (innerSrcW > 0 && innerSrcH > 0)
+        ctx.drawImage(img, bL, bT, innerSrcW, innerSrcH, dx + bL, dy + bT, innerDestW, innerDestH)
       // Middle-right
-      if (bR > 0 && innerSrcH > 0) ctx.drawImage(img, srcW - bR, bT, bR, innerSrcH, dx + w - bR, dy + bT, bR, innerDestH)
+      if (bR > 0 && innerSrcH > 0)
+        ctx.drawImage(img, srcW - bR, bT, bR, innerSrcH, dx + w - bR, dy + bT, bR, innerDestH)
       // Bottom-left corner
       if (bL > 0 && bB > 0) ctx.drawImage(img, 0, srcH - bB, bL, bB, dx, dy + h - bB, bL, bB)
       // Bottom center
-      if (innerSrcW > 0 && bB > 0) ctx.drawImage(img, bL, srcH - bB, innerSrcW, bB, dx + bL, dy + h - bB, innerDestW, bB)
+      if (innerSrcW > 0 && bB > 0)
+        ctx.drawImage(img, bL, srcH - bB, innerSrcW, bB, dx + bL, dy + h - bB, innerDestW, bB)
       // Bottom-right corner
       if (bR > 0 && bB > 0) ctx.drawImage(img, srcW - bR, srcH - bB, bR, bB, dx + w - bR, dy + h - bB, bR, bB)
 
+      ctx.restore()
+    }
+
+    // --- Shape rendering pass (world space) ---
+    for (const id of world.query('Transform', 'CircleShape')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const c = world.getComponent<{
+        type: string
+        radius: number
+        color: string
+        strokeColor?: string
+        strokeWidth?: number
+        zIndex: number
+        visible: boolean
+        opacity: number
+      }>(id, 'CircleShape')!
+      if (!c.visible) continue
+      ctx.save()
+      ctx.translate(t.x, t.y)
+      ctx.rotate(t.rotation)
+      ctx.globalAlpha = c.opacity
+      ctx.beginPath()
+      ctx.arc(0, 0, c.radius, 0, Math.PI * 2)
+      ctx.fillStyle = c.color
+      ctx.fill()
+      if (c.strokeColor && c.strokeWidth) {
+        ctx.strokeStyle = c.strokeColor
+        ctx.lineWidth = c.strokeWidth
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
+
+    for (const id of world.query('Transform', 'LineShape')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const l = world.getComponent<{
+        type: string
+        endX: number
+        endY: number
+        color: string
+        lineWidth: number
+        visible: boolean
+        opacity: number
+        lineCap: CanvasLineCap
+      }>(id, 'LineShape')!
+      if (!l.visible) continue
+      ctx.save()
+      ctx.translate(t.x, t.y)
+      ctx.rotate(t.rotation)
+      ctx.globalAlpha = l.opacity
+      ctx.strokeStyle = l.color
+      ctx.lineWidth = l.lineWidth
+      ctx.lineCap = l.lineCap
+      ctx.beginPath()
+      ctx.moveTo(0, 0)
+      ctx.lineTo(l.endX, l.endY)
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    for (const id of world.query('Transform', 'PolygonShape')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const p = world.getComponent<{
+        type: string
+        points: { x: number; y: number }[]
+        color: string
+        strokeColor?: string
+        strokeWidth?: number
+        visible: boolean
+        opacity: number
+        closed: boolean
+      }>(id, 'PolygonShape')!
+      if (!p.visible || p.points.length < 2) continue
+      ctx.save()
+      ctx.translate(t.x, t.y)
+      ctx.rotate(t.rotation)
+      ctx.globalAlpha = p.opacity
+      ctx.beginPath()
+      ctx.moveTo(p.points[0].x, p.points[0].y)
+      for (let i = 1; i < p.points.length; i++) ctx.lineTo(p.points[i].x, p.points[i].y)
+      if (p.closed) ctx.closePath()
+      ctx.fillStyle = p.color
+      ctx.fill()
+      if (p.strokeColor && p.strokeWidth) {
+        ctx.strokeStyle = p.strokeColor
+        ctx.lineWidth = p.strokeWidth
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
+
+    // --- Gradient rendering pass (world space) ---
+    for (const id of world.query('Transform', 'Gradient')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const g = world.getComponent<{
+        type: string
+        gradientType: string
+        stops: { offset: number; color: string }[]
+        angle: number
+        innerRadius: number
+        visible: boolean
+        zIndex: number
+        width: number
+        height: number
+        anchorX: number
+        anchorY: number
+      }>(id, 'Gradient')!
+      if (!g.visible || g.stops.length === 0) continue
+      ctx.save()
+      ctx.translate(t.x, t.y)
+      ctx.rotate(t.rotation)
+      const dx = -g.anchorX * g.width
+      const dy = -g.anchorY * g.height
+      let gradient: CanvasGradient
+      if (g.gradientType === 'radial') {
+        gradient = ctx.createRadialGradient(
+          dx + g.width / 2,
+          dy + g.height / 2,
+          (g.innerRadius * Math.min(g.width, g.height)) / 2,
+          dx + g.width / 2,
+          dy + g.height / 2,
+          Math.min(g.width, g.height) / 2,
+        )
+      } else {
+        const cos = Math.cos(g.angle)
+        const sin = Math.sin(g.angle)
+        const hw = g.width / 2
+        const hh = g.height / 2
+        gradient = ctx.createLinearGradient(
+          dx + hw - cos * hw,
+          dy + hh - sin * hh,
+          dx + hw + cos * hw,
+          dy + hh + sin * hh,
+        )
+      }
+      for (const s of g.stops) gradient.addColorStop(s.offset, s.color)
+      ctx.fillStyle = gradient
+      ctx.fillRect(dx, dy, g.width, g.height)
       ctx.restore()
     }
 
@@ -486,18 +660,74 @@ export class RenderSystem implements System {
       ctx.save()
       ctx.translate(transform.x + text.offsetX, transform.y + text.offsetY)
       ctx.rotate(transform.rotation)
+      if (text.opacity != null) ctx.globalAlpha = text.opacity
       ctx.font = `${text.fontSize}px ${text.fontFamily}`
-      ctx.fillStyle = text.color
       ctx.textAlign = text.align
       ctx.textBaseline = text.baseline
-      ctx.fillText(text.text, 0, 0, text.maxWidth as number)
+
+      // Shadow
+      if (text.shadowColor) {
+        ctx.shadowColor = text.shadowColor
+        ctx.shadowOffsetX = text.shadowOffsetX ?? 2
+        ctx.shadowOffsetY = text.shadowOffsetY ?? 2
+        ctx.shadowBlur = text.shadowBlur ?? 0
+      }
+
+      // Word wrap support
+      const lines: string[] = []
+      if (text.wordWrap && text.maxWidth) {
+        const words = text.text.split(' ')
+        let currentLine = ''
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word
+          const metrics = ctx.measureText(testLine)
+          if (metrics.width > text.maxWidth && currentLine) {
+            lines.push(currentLine)
+            currentLine = word
+          } else {
+            currentLine = testLine
+          }
+        }
+        if (currentLine) lines.push(currentLine)
+      } else {
+        lines.push(text.text)
+      }
+
+      const lh = text.fontSize * (text.lineHeight ?? 1.2)
+      for (let i = 0; i < lines.length; i++) {
+        const ly = i * lh
+        // Stroke (outline)
+        if (text.strokeColor && text.strokeWidth) {
+          ctx.strokeStyle = text.strokeColor
+          ctx.lineWidth = text.strokeWidth
+          ctx.strokeText(lines[i], 0, ly, text.maxWidth as number)
+        }
+        // Fill
+        ctx.fillStyle = text.color
+        ctx.fillText(lines[i], 0, ly, text.maxWidth as number)
+      }
       ctx.restore()
     }
+
+    // Mask components are registered for future clipping support
+    // Currently masks are data-only — visual masking can be applied via
+    // globalCompositeOperation in custom render passes or plugins
 
     // --- Particle update + render pass ---
     for (const id of world.query('Transform', 'ParticlePool')) {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
+
+      // Load texture if specified
+      if (pool.textureSrc && !pool._textureImage) {
+        let img = imageCache.get(pool.textureSrc)
+        if (!img) {
+          img = new Image()
+          img.src = pool.textureSrc
+          imageCache.set(pool.textureSrc, img)
+        }
+        if (img.complete && img.naturalWidth > 0) pool._textureImage = img
+      }
 
       // Update existing particles (in-place swap-remove to avoid array reallocation)
       let alive = pool.particles.length
@@ -509,9 +739,29 @@ export class RenderSystem implements System {
           alive--
           pool.particles[i] = pool.particles[alive]
         } else {
+          // Attractors
+          if (pool.attractors) {
+            for (const attr of pool.attractors) {
+              const adx = attr.x - p.x
+              const ady = attr.y - p.y
+              const dist = Math.sqrt(adx * adx + ady * ady)
+              if (dist < attr.radius && dist > 0) {
+                const force = attr.strength * (1 - dist / attr.radius)
+                p.vx += (adx / dist) * force * dt
+                p.vy += (ady / dist) * force * dt
+              }
+            }
+          }
           p.x += p.vx * dt
           p.y += p.vy * dt
           p.vy += p.gravity * dt
+          // Rotation
+          if (p.rotation != null && p.rotationSpeed) p.rotation += p.rotationSpeed * dt
+          // Size over life
+          if (p.startSize != null && p.endSize != null) {
+            const lifeT = 1 - p.life / p.maxLife
+            p.currentSize = p.startSize + (p.endSize - p.startSize) * lifeT
+          }
         }
       }
       pool.particles.length = alive
@@ -542,6 +792,11 @@ export class RenderSystem implements System {
             ox = (world.rng() - 0.5) * (pool.emitWidth ?? 0)
             oy = (world.rng() - 0.5) * (pool.emitHeight ?? 0)
           }
+          const sol = pool.sizeOverLife
+          const startSz = sol ? sol.start : pool.particleSize
+          const endSz = sol ? sol.end : pool.particleSize
+          const rsr = pool.rotationSpeedRange
+          const rotSpeed = pool.enableRotation && rsr ? rsr[0] + world.rng() * (rsr[1] - rsr[0]) : 0
           pool.particles.push({
             x: t.x + ox,
             y: t.y + oy,
@@ -549,26 +804,41 @@ export class RenderSystem implements System {
             vy: Math.sin(angle) * speed,
             life: pool.particleLife,
             maxLife: pool.particleLife,
-            size: pool.particleSize,
+            size: startSz,
             color: pool.color,
             gravity: pool.gravity,
+            rotation: pool.enableRotation ? world.rng() * Math.PI * 2 : 0,
+            rotationSpeed: rotSpeed,
+            currentSize: startSz,
+            startSize: startSz,
+            endSize: endSz,
           })
         }
       }
 
       // Render particles
+      const texImg = pool._textureImage
       for (const p of pool.particles) {
         const alpha = p.life / p.maxLife
+        const sz = p.currentSize ?? p.size
+        ctx.save()
         ctx.globalAlpha = alpha
-        ctx.fillStyle = p.color
-        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size)
+        ctx.translate(p.x, p.y)
+        if (p.rotation) ctx.rotate(p.rotation)
+        if (texImg) {
+          ctx.drawImage(texImg, -sz / 2, -sz / 2, sz, sz)
+        } else {
+          ctx.fillStyle = p.color
+          ctx.fillRect(-sz / 2, -sz / 2, sz, sz)
+        }
+        ctx.restore()
       }
       ctx.globalAlpha = 1
     }
 
     // --- Trail update + render pass ---
     for (const id of world.query('Transform', 'Trail')) {
-      const t     = world.getComponent<TransformComponent>(id, 'Transform')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const trail = world.getComponent<TrailComponent>(id, 'Trail')!
       // Prepend current position
       trail.points.unshift({ x: t.x, y: t.y })
@@ -597,13 +867,56 @@ export class RenderSystem implements System {
       for (const id of world.query('Transform', 'BoxCollider')) {
         const t = world.getComponent<TransformComponent>(id, 'Transform')!
         const c = world.getComponent<BoxColliderShape>(id, 'BoxCollider')!
-        ctx.strokeStyle = c.isTrigger ? 'rgba(255,200,0,0.6)' : 'rgba(0,255,0,0.6)'
-        ctx.strokeRect(
-          t.x + c.offsetX - c.width / 2,
-          t.y + c.offsetY - c.height / 2,
-          c.width,
-          c.height,
-        )
+
+        // Color-code by layer when a layer is set, otherwise use default green/yellow
+        if (c.layer) {
+          ctx.strokeStyle = layerColor(c.layer, c.isTrigger ? 0.6 : 0.85)
+        } else {
+          ctx.strokeStyle = c.isTrigger ? 'rgba(255,200,0,0.6)' : 'rgba(0,255,0,0.6)'
+        }
+
+        const bx = t.x + c.offsetX - c.width / 2
+        const by = t.y + c.offsetY - c.height / 2
+        ctx.strokeRect(bx, by, c.width, c.height)
+
+        // Show collision layer name above the collider
+        if (c.layer || c.mask) {
+          ctx.save()
+          ctx.font = `${8 / zoom}px monospace`
+          ctx.fillStyle = 'rgba(255,255,255,0.7)'
+          const label = c.layer ?? 'default'
+          ctx.fillText(label, bx, by - 4 / zoom)
+
+          // Show mask indicator below the layer label
+          if (c.mask) {
+            const maskArr = Array.isArray(c.mask) ? c.mask : [c.mask]
+            ctx.fillStyle = 'rgba(255,255,255,0.4)'
+            ctx.font = `${6 / zoom}px monospace`
+            ctx.fillText('-> ' + maskArr.join(', '), bx, by - 4 / zoom + 10 / zoom)
+          }
+          ctx.restore()
+        }
+      }
+
+      // CircleCollider debug wireframes
+      for (const id of world.query('Transform', 'CircleCollider')) {
+        const t = world.getComponent<TransformComponent>(id, 'Transform')!
+        const c = world.getComponent<{
+          type: string
+          radius: number
+          offsetX?: number
+          offsetY?: number
+          isTrigger?: boolean
+          layer?: string
+        }>(id, 'CircleCollider')!
+        if (c.layer) {
+          ctx.strokeStyle = layerColor(c.layer, c.isTrigger ? 0.6 : 0.85)
+        } else {
+          ctx.strokeStyle = c.isTrigger ? 'rgba(255,200,0,0.6)' : 'rgba(0,255,0,0.6)'
+        }
+        ctx.beginPath()
+        ctx.arc(t.x + (c.offsetX || 0), t.y + (c.offsetY || 0), c.radius, 0, Math.PI * 2)
+        ctx.stroke()
       }
     }
 
@@ -678,20 +991,29 @@ export function resolveClip(anim: AnimationStateComponent, clip: AnimationClipDe
   anim.playing = true
 }
 
-export function evaluateConditions(
-  conditions: AnimatorCondition[],
-  params: Record<string, unknown>,
-): boolean {
+export function evaluateConditions(conditions: AnimatorCondition[], params: Record<string, unknown>): boolean {
   for (const cond of conditions) {
     const val = params[cond.param]
     if (val === undefined) return false
     switch (cond.op) {
-      case '==': if (val !== cond.value) return false; break
-      case '!=': if (val === cond.value) return false; break
-      case '>':  if ((val as number) <= (cond.value as number)) return false; break
-      case '>=': if ((val as number) < (cond.value as number)) return false; break
-      case '<':  if ((val as number) >= (cond.value as number)) return false; break
-      case '<=': if ((val as number) > (cond.value as number)) return false; break
+      case '==':
+        if (val !== cond.value) return false
+        break
+      case '!=':
+        if (val === cond.value) return false
+        break
+      case '>':
+        if ((val as number) <= (cond.value as number)) return false
+        break
+      case '>=':
+        if ((val as number) < (cond.value as number)) return false
+        break
+      case '<':
+        if ((val as number) >= (cond.value as number)) return false
+        break
+      case '<=':
+        if ((val as number) > (cond.value as number)) return false
+        break
     }
   }
   return true

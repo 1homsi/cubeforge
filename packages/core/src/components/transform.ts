@@ -9,12 +9,6 @@ export interface TransformComponent extends Component {
   scaleY: number
 }
 
-export function createTransform(
-  x = 0,
-  y = 0,
-  rotation = 0,
-  scaleX = 1,
-  scaleY = 1,
-): TransformComponent {
+export function createTransform(x = 0, y = 0, rotation = 0, scaleX = 1, scaleY = 1): TransformComponent {
   return { type: 'Transform', x, y, rotation, scaleX, scaleY }
 }

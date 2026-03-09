@@ -29,7 +29,7 @@ interface TrailProps {
  * ```
  */
 export function Trail({ length = 20, color = '#ffffff', width = 3 }: TrailProps) {
-  const engine   = useContext(EngineContext)!
+  const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {

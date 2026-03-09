@@ -36,6 +36,18 @@ interface ParticleEmitterProps {
   emitWidth?: number
   /** Height for 'box' emission shape */
   emitHeight?: number
+  /** Sprite/texture source for particles (if undefined, renders as colored rect) */
+  textureSrc?: string
+  /** Enable particle rotation. Default false */
+  enableRotation?: boolean
+  /** Random rotation speed range [min, max] in radians/s */
+  rotationSpeedRange?: [number, number]
+  /** Size over lifetime: start and end size. If set, overrides particleSize */
+  sizeOverLife?: { start: number; end: number }
+  /** Attractor points that pull particles toward them */
+  attractors?: Array<{ x: number; y: number; strength: number; radius: number }>
+  /** Color over lifetime: array of colors to interpolate through */
+  colorOverLife?: string[]
 }
 
 export function ParticleEmitter({
@@ -55,6 +67,12 @@ export function ParticleEmitter({
   emitRadius,
   emitWidth,
   emitHeight,
+  textureSrc,
+  enableRotation,
+  rotationSpeedRange,
+  sizeOverLife,
+  attractors,
+  colorOverLife,
 }: ParticleEmitterProps) {
   const presetConfig = preset ? PARTICLE_PRESETS[preset] : {}
 
@@ -90,10 +108,16 @@ export function ParticleEmitter({
       emitRadius,
       emitWidth,
       emitHeight,
+      textureSrc,
+      enableRotation,
+      rotationSpeedRange,
+      sizeOverLife,
+      attractors,
+      colorOverLife,
     } as ParticlePoolComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParticlePool')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync active state

@@ -1,0 +1,23 @@
+#!/bin/sh
+
+echo "🔍 Running pre-push checks..."
+
+# 1. Format check — fail if files are not formatted
+echo "  Checking formatting..."
+pnpm format:check
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ Formatting check failed. Run 'pnpm format' to fix."
+  exit 1
+fi
+
+# 2. Build — fail if build breaks
+echo "  Building..."
+pnpm build
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ Build failed. Fix build errors before pushing."
+  exit 1
+fi
+
+echo "✅ All pre-push checks passed."

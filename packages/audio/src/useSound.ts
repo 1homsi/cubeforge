@@ -1,134 +1,85 @@
 import { useEffect, useRef } from 'react'
+import { getAudioCtx, getGroupGainNode } from './audioContext'
+import type { AudioGroup } from './audioContext'
 
-// ─── AudioContext ──────────────────────────────────────────────────────────────
+// Re-export everything from audioContext for backwards compatibility
+export {
+  getAudioCtx,
+  getGroupGainNode,
+  setGroupVolume,
+  setMasterVolume,
+  getGroupVolume,
+  setGroupMute,
+  stopGroup,
+  duck,
+} from './audioContext'
+export type { AudioGroup } from './audioContext'
 
-let _audioCtx: AudioContext | null = null
-function getAudioCtx(): AudioContext {
-  if (!_audioCtx) _audioCtx = new AudioContext()
-  return _audioCtx
-}
-
-// ─── Volume groups ─────────────────────────────────────────────────────────────
-// Graph: each sound → group gain → master gain → destination
-
-/**
- * Audio group name. Built-in groups are `'sfx'` and `'music'`, but any
- * string can be used to create custom groups (e.g. `'ambient'`, `'ui'`, `'voice'`).
- */
-export type AudioGroup = string
-
-const groupGainNodes = new Map<AudioGroup | 'master', GainNode>()
-
-function getGroupGainNode(group: AudioGroup | 'master'): GainNode {
-  const existing = groupGainNodes.get(group)
-  if (existing) return existing
-
-  const ctx  = getAudioCtx()
-  const gain = ctx.createGain()
-  gain.gain.value = 1
-
-  if (group === 'master') {
-    gain.connect(ctx.destination)
-  } else {
-    gain.connect(getGroupGainNode('master'))
-  }
-
-  groupGainNodes.set(group, gain)
-  return gain
-}
-
-/**
- * Set the volume for a named group ('sfx' or 'music'). Range 0–1.
- *
- * @example
- * setGroupVolume('music', 0.4)
- * setGroupVolume('sfx',   0.8)
- */
-export function setGroupVolume(group: AudioGroup, volume: number): void {
-  const node = groupGainNodes.get(group)
-  if (node) node.gain.value = Math.max(0, Math.min(1, volume))
-  else {
-    // Node not yet created — create it so the value is applied when first used
-    getGroupGainNode(group).gain.value = Math.max(0, Math.min(1, volume))
-  }
-}
-
-/**
- * Set the master volume (affects all groups). Range 0–1.
- *
- * @example
- * setMasterVolume(0)   // mute all
- * setMasterVolume(1)   // full volume
- */
-export function setMasterVolume(volume: number): void {
-  getGroupGainNode('master').gain.value = Math.max(0, Math.min(1, volume))
-}
-
-/** Read the current volume for a group or master. */
-export function getGroupVolume(group: AudioGroup | 'master'): number {
-  return groupGainNodes.get(group)?.gain.value ?? 1
-}
-
-/**
- * Mute or unmute an audio group.
- *
- * @example
- * setGroupMute('music', true)  // mute music
- * setGroupMute('music', false) // restore music
- */
-export function setGroupMute(group: AudioGroup, muted: boolean): void {
-  const node = getGroupGainNode(group)
-  node.gain.value = muted ? 0 : 1
-}
-
-/**
- * Stop all currently playing sounds in a group.
- * (Individual source nodes track is not possible via the group node alone,
- *  so this is handled by setting gain to 0 — sounds stop naturally.)
- */
-export function stopGroup(group: AudioGroup): void {
-  setGroupMute(group, true)
-  // Re-enable after a tick so new sounds can play
-  setTimeout(() => {
-    const node = groupGainNodes.get(group)
-    if (node) node.gain.value = 1
-  }, 16)
-}
-
-/**
- * Temporarily lower a group's volume by `amount` (0–1) for `duration` seconds,
- * then restore it. Useful for ducking music under SFX.
- *
- * @example
- * duck('music', 0.3, 2) // lower music to 30% for 2 seconds
- */
-export function duck(group: AudioGroup, amount: number, duration: number): void {
-  const node = getGroupGainNode(group)
-  const ctx  = getAudioCtx()
-  const now  = ctx.currentTime
-  const prev = node.gain.value
-  node.gain.cancelScheduledValues(now)
-  node.gain.setValueAtTime(prev, now)
-  node.gain.linearRampToValueAtTime(amount, now + 0.05)
-  node.gain.setValueAtTime(amount, now + duration)
-  node.gain.linearRampToValueAtTime(prev, now + duration + 0.2)
-}
-
-// ─── Buffer cache ──────────────────────────────────────────────────────────────
+// ─── Buffer cache with reference counting ────────────────────────────────────
 
 const bufferCache = new Map<string, AudioBuffer>()
+const bufferRefCount = new Map<string, number>()
+
+/** @internal Exposed for testing. */
+export function _getBufferCache(): Map<string, AudioBuffer> {
+  return bufferCache
+}
+/** @internal Exposed for testing. */
+export function _getBufferRefCount(): Map<string, number> {
+  return bufferRefCount
+}
 
 async function loadBuffer(src: string): Promise<AudioBuffer> {
+  // Increment ref count
+  bufferRefCount.set(src, (bufferRefCount.get(src) ?? 0) + 1)
+
   const cached = bufferCache.get(src)
   if (cached) return cached
-  const res  = await fetch(src)
+
+  const res = await fetch(src)
   const data = await res.arrayBuffer()
-  const buf  = await getAudioCtx().decodeAudioData(data)
+  const buf = await getAudioCtx().decodeAudioData(data)
   bufferCache.set(src, buf)
   return buf
 }
 
-// ─── Hook ──────────────────────────────────────────────────────────────────────
+function releaseBuffer(src: string): void {
+  const count = bufferRefCount.get(src) ?? 0
+  if (count <= 1) {
+    bufferRefCount.delete(src)
+    bufferCache.delete(src)
+  } else {
+    bufferRefCount.set(src, count - 1)
+  }
+}
+
+// ─── Source pool ─────────────────────────────────────────────────────────────
+
+interface PoolEntry {
+  source: AudioBufferSourceNode
+  gain: GainNode
+}
+
+function createPoolEntry(
+  ctx: AudioContext,
+  buffer: AudioBuffer,
+  loop: boolean,
+  volume: number,
+  destination: GainNode,
+): PoolEntry {
+  const gain = ctx.createGain()
+  gain.gain.value = volume
+  gain.connect(destination)
+
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  source.loop = loop
+  source.connect(gain)
+
+  return { source, gain }
+}
+
+// ─── Hook ────────────────────────────────────────────────────────────────────
 
 export interface SoundControls {
   /**
@@ -157,6 +108,18 @@ export interface SoundControls {
   crossfadeTo(src: string, duration: number): void
 }
 
+export interface SoundOptions {
+  volume?: number
+  loop?: boolean
+  group?: AudioGroup
+  /**
+   * Maximum number of concurrent instances of this sound.
+   * When exceeded, the oldest instance is stopped to make room.
+   * @default 4
+   */
+  maxInstances?: number
+}
+
 /**
  * Loads and plays an audio file via the Web Audio API.
  *
@@ -171,82 +134,102 @@ export interface SoundControls {
  * @example
  * const { play, fadeIn, fadeOut } = useSound('/music.ogg', { group: 'music', loop: true })
  */
-export function useSound(
-  src: string,
-  opts: { volume?: number; loop?: boolean; group?: AudioGroup } = {},
-): SoundControls {
+export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
   const bufferRef = useRef<AudioBuffer | null>(null)
-  const sourceRef = useRef<AudioBufferSourceNode | null>(null)
-  const gainRef   = useRef<GainNode | null>(null)
-  const volRef    = useRef(opts.volume ?? 1)
-  const loopRef   = useRef(opts.loop   ?? false)
-  const groupRef  = useRef(opts.group)
+  const activeInstances = useRef<PoolEntry[]>([])
+  const volRef = useRef(opts.volume ?? 1)
+  const loopRef = useRef(opts.loop ?? false)
+  const groupRef = useRef(opts.group)
+  const maxInstances = opts.maxInstances ?? 4
 
   useEffect(() => {
     let cancelled = false
-    loadBuffer(src).then(buf => {
-      if (!cancelled) bufferRef.current = buf
-    }).catch(console.error)
+    loadBuffer(src)
+      .then((buf) => {
+        if (!cancelled) bufferRef.current = buf
+      })
+      .catch(console.error)
 
     return () => {
       cancelled = true
-      // Stop active playback when src changes or component unmounts
-      if (sourceRef.current) {
-        try { sourceRef.current.stop() } catch { /* already stopped */ }
-        sourceRef.current = null
+      // Stop all active playback
+      for (const entry of activeInstances.current) {
+        try {
+          entry.source.stop()
+        } catch {
+          /* already stopped */
+        }
+        entry.gain.disconnect()
       }
-      if (gainRef.current) {
-        gainRef.current.disconnect()
-        gainRef.current = null
-      }
+      activeInstances.current = []
       bufferRef.current = null
+      releaseBuffer(src)
     }
   }, [src])
 
   const getDestination = (): GainNode =>
     groupRef.current ? getGroupGainNode(groupRef.current) : getGroupGainNode('master')
 
+  const removeInstance = (entry: PoolEntry): void => {
+    const idx = activeInstances.current.indexOf(entry)
+    if (idx !== -1) activeInstances.current.splice(idx, 1)
+  }
+
+  const stopOldestIfNeeded = (): void => {
+    while (activeInstances.current.length >= maxInstances) {
+      const oldest = activeInstances.current.shift()
+      if (oldest) {
+        try {
+          oldest.source.stop()
+        } catch {
+          /* already stopped */
+        }
+        oldest.gain.disconnect()
+      }
+    }
+  }
+
   const play = (playOpts?: { delay?: number }): void => {
     if (!bufferRef.current) return
     const ctx = getAudioCtx()
     if (ctx.state === 'suspended') void ctx.resume()
 
-    if (sourceRef.current) {
-      try { sourceRef.current.stop() } catch { /* already stopped */ }
-      sourceRef.current = null
+    stopOldestIfNeeded()
+
+    const entry = createPoolEntry(ctx, bufferRef.current, loopRef.current, volRef.current, getDestination())
+
+    entry.source.onended = () => {
+      removeInstance(entry)
+      entry.gain.disconnect()
     }
-
-    const gain = ctx.createGain()
-    gain.gain.value = volRef.current
-    gain.connect(getDestination())
-    gainRef.current = gain
-
-    const source = ctx.createBufferSource()
-    source.buffer  = bufferRef.current
-    source.loop    = loopRef.current
-    source.connect(gain)
 
     const delay = playOpts?.delay
     if (delay && delay > 0) {
-      source.start(ctx.currentTime + delay)
+      entry.source.start(ctx.currentTime + delay)
     } else {
-      source.start()
+      entry.source.start()
     }
 
-    source.onended = () => { sourceRef.current = null }
-    sourceRef.current = source
+    activeInstances.current.push(entry)
   }
 
   const stop = (): void => {
-    if (sourceRef.current) {
-      try { sourceRef.current.stop() } catch { /* already stopped */ }
-      sourceRef.current = null
+    for (const entry of activeInstances.current) {
+      try {
+        entry.source.stop()
+      } catch {
+        /* already stopped */
+      }
+      entry.gain.disconnect()
     }
+    activeInstances.current = []
   }
 
   const setVolume = (v: number): void => {
     volRef.current = v
-    if (gainRef.current) gainRef.current.gain.value = v
+    for (const entry of activeInstances.current) {
+      entry.gain.gain.value = v
+    }
   }
 
   const fadeIn = (duration: number): void => {
@@ -254,61 +237,68 @@ export function useSound(
     const ctx = getAudioCtx()
     if (ctx.state === 'suspended') void ctx.resume()
 
-    if (sourceRef.current) {
-      try { sourceRef.current.stop() } catch { /* already stopped */ }
-      sourceRef.current = null
+    // Stop existing
+    stop()
+
+    const entry = createPoolEntry(ctx, bufferRef.current, loopRef.current, 0, getDestination())
+    entry.gain.gain.setValueAtTime(0, ctx.currentTime)
+    entry.gain.gain.linearRampToValueAtTime(volRef.current, ctx.currentTime + duration)
+
+    entry.source.onended = () => {
+      removeInstance(entry)
+      entry.gain.disconnect()
     }
 
-    const gain = ctx.createGain()
-    gain.gain.setValueAtTime(0, ctx.currentTime)
-    gain.gain.linearRampToValueAtTime(volRef.current, ctx.currentTime + duration)
-    gain.connect(getDestination())
-    gainRef.current = gain
-
-    const source = ctx.createBufferSource()
-    source.buffer = bufferRef.current
-    source.loop   = loopRef.current
-    source.connect(gain)
-    source.start()
-    source.onended = () => { sourceRef.current = null }
-    sourceRef.current = source
+    entry.source.start()
+    activeInstances.current.push(entry)
   }
 
   const fadeOut = (duration: number): void => {
-    if (!gainRef.current || !sourceRef.current) return
+    if (activeInstances.current.length === 0) return
     const ctx = getAudioCtx()
     const now = ctx.currentTime
-    gainRef.current.gain.cancelScheduledValues(now)
-    gainRef.current.gain.setValueAtTime(gainRef.current.gain.value, now)
-    gainRef.current.gain.linearRampToValueAtTime(0, now + duration)
-    const src = sourceRef.current
-    setTimeout(() => {
-      try { src.stop() } catch { /* already stopped */ }
-    }, duration * 1000 + 50)
+
+    for (const entry of [...activeInstances.current]) {
+      entry.gain.gain.cancelScheduledValues(now)
+      entry.gain.gain.setValueAtTime(entry.gain.gain.value, now)
+      entry.gain.gain.linearRampToValueAtTime(0, now + duration)
+      setTimeout(
+        () => {
+          try {
+            entry.source.stop()
+          } catch {
+            /* already stopped */
+          }
+          removeInstance(entry)
+          entry.gain.disconnect()
+        },
+        duration * 1000 + 50,
+      )
+    }
   }
 
   const crossfadeTo = (newSrc: string, duration: number): void => {
     fadeOut(duration)
-    loadBuffer(newSrc).then(buf => {
-      if (!buf) return
-      const ctx = getAudioCtx()
-      if (ctx.state === 'suspended') void ctx.resume()
+    loadBuffer(newSrc)
+      .then((buf) => {
+        if (!buf) return
+        const ctx = getAudioCtx()
+        if (ctx.state === 'suspended') void ctx.resume()
 
-      const gain = ctx.createGain()
-      gain.gain.setValueAtTime(0, ctx.currentTime)
-      gain.gain.linearRampToValueAtTime(volRef.current, ctx.currentTime + duration)
-      gain.connect(getDestination())
-      gainRef.current = gain
+        const entry = createPoolEntry(ctx, buf, loopRef.current, 0, getDestination())
+        entry.gain.gain.setValueAtTime(0, ctx.currentTime)
+        entry.gain.gain.linearRampToValueAtTime(volRef.current, ctx.currentTime + duration)
 
-      const source = ctx.createBufferSource()
-      source.buffer = buf
-      source.loop   = loopRef.current
-      source.connect(gain)
-      source.start()
-      source.onended = () => { sourceRef.current = null }
-      sourceRef.current = source
-      bufferRef.current = buf
-    }).catch(console.error)
+        entry.source.onended = () => {
+          removeInstance(entry)
+          entry.gain.disconnect()
+        }
+
+        entry.source.start()
+        activeInstances.current.push(entry)
+        bufferRef.current = buf
+      })
+      .catch(console.error)
   }
 
   return { play, stop, setVolume, fadeIn, fadeOut, crossfadeTo }

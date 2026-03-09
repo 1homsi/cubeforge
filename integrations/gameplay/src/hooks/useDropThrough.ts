@@ -3,7 +3,7 @@ import type { RigidBodyComponent } from '@cubeforge/physics'
 import { EngineContext, EntityContext } from '@cubeforge/context'
 
 export function useDropThrough(frames = 8): { dropThrough(): void } {
-  const engine   = useContext(EngineContext)!
+  const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   const dropThrough = useCallback((): void => {

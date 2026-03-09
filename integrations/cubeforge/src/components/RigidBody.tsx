@@ -49,9 +49,26 @@ export function RigidBody({
   }
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createRigidBody({ mass, gravityScale, isStatic, bounce, friction, vx, vy, lockX, lockY, ccd, angularVelocity, angularDamping, linearDamping }))
+    engine.ecs.addComponent(
+      entityId,
+      createRigidBody({
+        mass,
+        gravityScale,
+        isStatic,
+        bounce,
+        friction,
+        vx,
+        vy,
+        lockX,
+        lockY,
+        ccd,
+        angularVelocity,
+        angularDamping,
+        linearDamping,
+      }),
+    )
     return () => engine.ecs.removeComponent(entityId, 'RigidBody')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return null

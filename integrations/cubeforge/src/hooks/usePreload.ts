@@ -27,7 +27,11 @@ export interface PreloadState {
  */
 export function usePreload(assets: string[]): PreloadState {
   const engine = useContext(EngineContext)!
-  const [state, setState] = useState<PreloadState>({ progress: assets.length === 0 ? 1 : 0, loaded: assets.length === 0, error: null })
+  const [state, setState] = useState<PreloadState>({
+    progress: assets.length === 0 ? 1 : 0,
+    loaded: assets.length === 0,
+    error: null,
+  })
 
   useEffect(() => {
     if (assets.length === 0) {
@@ -45,16 +49,24 @@ export function usePreload(assets: string[]): PreloadState {
       setState({ progress: done / total, loaded: done >= total, error: firstError })
     }
 
-    const promises = assets.map(src => {
+    const promises = assets.map((src) => {
       const isAudio = /\.(mp3|ogg|wav|aac|flac|m4a)$/i.test(src)
       if (isAudio) {
-        return engine.assets.loadAudio(src).then(() => onDone(), (e: unknown) => onDone(e as Error))
+        return engine.assets.loadAudio(src).then(
+          () => onDone(),
+          (e: unknown) => onDone(e as Error),
+        )
       }
-      return engine.assets.loadImage(src).then(() => onDone(), (e: unknown) => onDone(e as Error))
+      return engine.assets.loadImage(src).then(
+        () => onDone(),
+        (e: unknown) => onDone(e as Error),
+      )
     })
 
-    return () => { void promises } // effect cleanup — promises are already in flight
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      void promises
+    } // effect cleanup — promises are already in flight
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(assets), engine.assets])
 
   return state

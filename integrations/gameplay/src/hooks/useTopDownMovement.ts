@@ -20,10 +20,10 @@ export function useTopDownMovement(entityId: EntityId, opts: TopDownMovementOpti
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
       if (!rb) return
 
-      const left  = (input.isDown('ArrowLeft')  || input.isDown('KeyA') || input.isDown('a')) ? -1 : 0
-      const right = (input.isDown('ArrowRight') || input.isDown('KeyD') || input.isDown('d')) ?  1 : 0
-      const up    = (input.isDown('ArrowUp')    || input.isDown('KeyW') || input.isDown('w')) ? -1 : 0
-      const down  = (input.isDown('ArrowDown')  || input.isDown('KeyS') || input.isDown('s')) ?  1 : 0
+      const left = input.isDown('ArrowLeft') || input.isDown('KeyA') || input.isDown('a') ? -1 : 0
+      const right = input.isDown('ArrowRight') || input.isDown('KeyD') || input.isDown('d') ? 1 : 0
+      const up = input.isDown('ArrowUp') || input.isDown('KeyW') || input.isDown('w') ? -1 : 0
+      const down = input.isDown('ArrowDown') || input.isDown('KeyS') || input.isDown('s') ? 1 : 0
 
       let dx = left + right
       let dy = up + down

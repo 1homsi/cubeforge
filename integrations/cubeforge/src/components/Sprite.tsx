@@ -32,6 +32,10 @@ interface SpriteProps {
   blendMode?: BlendMode
   /** Render layer name — sprites are sorted by layer order first, then zIndex */
   layer?: string
+  /** Color tint applied on top of the image (multiplied). e.g. '#ff0000' for red tint */
+  tint?: string
+  /** Tint opacity 0-1 */
+  tintOpacity?: number
 }
 
 export function Sprite({
@@ -60,8 +64,10 @@ export function Sprite({
   sampling,
   blendMode = 'normal',
   layer = 'default',
+  tint,
+  tintOpacity,
 }: SpriteProps) {
-  const resolvedFrameIndex = (atlas && frame != null) ? (atlas[frame] ?? 0) : frameIndex
+  const resolvedFrameIndex = atlas && frame != null ? (atlas[frame] ?? 0) : frameIndex
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
@@ -70,7 +76,9 @@ export function Sprite({
       console.warn('[Cubeforge] <Sprite> must be inside an <Entity>. No EntityContext found.')
     }
     if ((frameWidth != null || frameHeight != null || frameColumns != null) && !src) {
-      console.warn('[Cubeforge] <Sprite> has frameWidth/frameHeight/frameColumns but no `src`. Sprite-sheet props require an image source.')
+      console.warn(
+        '[Cubeforge] <Sprite> has frameWidth/frameHeight/frameColumns but no `src`. Sprite-sheet props require an image source.',
+      )
     }
   }
 
@@ -99,23 +107,28 @@ export function Sprite({
       sampling,
       blendMode,
       layer,
+      tint,
+      tintOpacity,
     })
     engine.ecs.addComponent(entityId, comp)
 
     if (src) {
       // loadImage auto-resolves the base URL; store the resolved src on the
       // component so the WebGL renderer's texture cache key matches.
-      engine.assets.loadImage(src).then((img: HTMLImageElement) => {
-        const c = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
-        if (c) {
-          c.image = img
-          c.src = img.src // use the fully resolved URL for WebGL cache matching
-        }
-      }).catch(console.error)
+      engine.assets
+        .loadImage(src)
+        .then((img: HTMLImageElement) => {
+          const c = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
+          if (c) {
+            c.image = img
+            c.src = img.src // use the fully resolved URL for WebGL cache matching
+          }
+        })
+        .catch(console.error)
     }
 
     return () => engine.ecs.removeComponent(entityId, 'Sprite')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync mutable props
@@ -130,7 +143,9 @@ export function Sprite({
     comp.frameIndex = resolvedFrameIndex
     comp.blendMode = blendMode
     comp.layer = layer
-  }, [color, visible, flipX, flipY, zIndex, resolvedFrameIndex, blendMode, layer, engine, entityId])
+    comp.tint = tint
+    comp.tintOpacity = tintOpacity
+  }, [color, visible, flipX, flipY, zIndex, resolvedFrameIndex, blendMode, layer, tint, tintOpacity, engine, entityId])
 
   return null
 }

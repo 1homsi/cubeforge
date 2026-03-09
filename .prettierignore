@@ -1,0 +1,11 @@
+dist
+node_modules
+*.md
+*.json
+*.yaml
+*.yml
+pnpm-lock.yaml
+packages/create-cubeforge-game/templates
+packages/webgl-renderer
+docs/.vitepress/cache
+docs/.vitepress/dist

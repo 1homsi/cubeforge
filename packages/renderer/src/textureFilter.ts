@@ -31,7 +31,7 @@ export const TextureFilter = {
 } as const
 
 /** Any single filter value from TextureFilter */
-export type TextureFilterValue = typeof TextureFilter[keyof typeof TextureFilter]
+export type TextureFilterValue = (typeof TextureFilter)[keyof typeof TextureFilter]
 
 /** Filter modes valid for MAG_FILTER (no mipmap options) */
 export type MagFilterValue = 'nearest' | 'linear'
@@ -60,26 +60,27 @@ export function resolveSampling(
 }
 
 /** Map engine filter string → WebGL constant */
-export function toGLMinFilter(
-  gl: WebGL2RenderingContext,
-  filter: TextureFilterValue,
-): GLenum {
+export function toGLMinFilter(gl: WebGL2RenderingContext, filter: TextureFilterValue): GLenum {
   switch (filter) {
-    case 'nearest': return gl.NEAREST
-    case 'linear': return gl.LINEAR
-    case 'nearest-mipmap-nearest': return gl.NEAREST_MIPMAP_NEAREST
-    case 'linear-mipmap-nearest': return gl.LINEAR_MIPMAP_NEAREST
-    case 'nearest-mipmap-linear': return gl.NEAREST_MIPMAP_LINEAR
-    case 'linear-mipmap-linear': return gl.LINEAR_MIPMAP_LINEAR
-    default: return gl.NEAREST
+    case 'nearest':
+      return gl.NEAREST
+    case 'linear':
+      return gl.LINEAR
+    case 'nearest-mipmap-nearest':
+      return gl.NEAREST_MIPMAP_NEAREST
+    case 'linear-mipmap-nearest':
+      return gl.LINEAR_MIPMAP_NEAREST
+    case 'nearest-mipmap-linear':
+      return gl.NEAREST_MIPMAP_LINEAR
+    case 'linear-mipmap-linear':
+      return gl.LINEAR_MIPMAP_LINEAR
+    default:
+      return gl.NEAREST
   }
 }
 
 /** Map engine mag filter string → WebGL constant */
-export function toGLMagFilter(
-  gl: WebGL2RenderingContext,
-  filter: MagFilterValue,
-): GLenum {
+export function toGLMagFilter(gl: WebGL2RenderingContext, filter: MagFilterValue): GLenum {
   return filter === 'linear' ? gl.LINEAR : gl.NEAREST
 }
 

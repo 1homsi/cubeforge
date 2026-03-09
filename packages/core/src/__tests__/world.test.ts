@@ -217,13 +217,19 @@ describe('ECSWorld', () => {
       const callOrder: string[] = []
 
       const sysA: System = {
-        update(_w, _dt) { callOrder.push('A') },
+        update(_w, _dt) {
+          callOrder.push('A')
+        },
       }
       const sysB: System = {
-        update(_w, _dt) { callOrder.push('B') },
+        update(_w, _dt) {
+          callOrder.push('B')
+        },
       }
       const sysC: System = {
-        update(_w, _dt) { callOrder.push('C') },
+        update(_w, _dt) {
+          callOrder.push('C')
+        },
       }
 
       world.addSystem(sysA)
@@ -237,7 +243,9 @@ describe('ECSWorld', () => {
     it('passes the correct dt to each system', () => {
       const received: number[] = []
       const sys: System = {
-        update(_w, dt) { received.push(dt) },
+        update(_w, dt) {
+          received.push(dt)
+        },
       }
       world.addSystem(sys)
       world.update(0.016)
@@ -247,7 +255,9 @@ describe('ECSWorld', () => {
     it('does not call removed system', () => {
       let called = false
       const sys: System = {
-        update() { called = true },
+        update() {
+          called = true
+        },
       }
       world.addSystem(sys)
       world.removeSystem(sys)

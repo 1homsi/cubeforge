@@ -3,6 +3,7 @@ import { useCallback, useRef } from 'react'
 export interface SaveOptions<T> {
   version?: number
   migrate?: (oldData: unknown, savedVersion: number) => T
+  validate?: (data: unknown) => data is T
 }
 
 export interface SaveControls<T> {
@@ -18,23 +19,22 @@ interface StoredSlot<T> {
   data: T
 }
 
-export function useSave<T>(
-  key: string,
-  defaultValue: T,
-  opts: SaveOptions<T> = {},
-): SaveControls<T> {
+export function useSave<T>(key: string, defaultValue: T, opts: SaveOptions<T> = {}): SaveControls<T> {
   const version = opts.version ?? 1
   const dataRef = useRef<T>(defaultValue)
 
-  const save = useCallback((value: T): void => {
-    dataRef.current = value
-    const slot: StoredSlot<T> = { version, data: value }
-    try {
-      localStorage.setItem(key, JSON.stringify(slot))
-    } catch (err) {
-      console.warn('[Cubeforge] useSave: failed to write to localStorage', err)
-    }
-  }, [key, version])
+  const save = useCallback(
+    (value: T): void => {
+      dataRef.current = value
+      const slot: StoredSlot<T> = { version, data: value }
+      try {
+        localStorage.setItem(key, JSON.stringify(slot))
+      } catch (err) {
+        console.warn('[Cubeforge] useSave: failed to write to localStorage', err)
+      }
+    },
+    [key, version],
+  )
 
   const load = useCallback((): T => {
     try {
@@ -42,23 +42,26 @@ export function useSave<T>(
       if (!raw) return defaultValue
       const slot = JSON.parse(raw) as StoredSlot<unknown>
       let data: T
-      if (opts.migrate && slot.version < version) {
+      if (opts.migrate && slot.version !== version) {
         data = opts.migrate(slot.data, slot.version)
       } else {
         data = slot.data as T
+      }
+      if (opts.validate && !opts.validate(data)) {
+        return defaultValue
       }
       dataRef.current = data
       return data
     } catch {
       return defaultValue
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, version])
 
   const clear = useCallback((): void => {
     localStorage.removeItem(key)
     dataRef.current = defaultValue
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
   const exists = useCallback((): boolean => {
@@ -66,7 +69,9 @@ export function useSave<T>(
   }, [key])
 
   return {
-    get data() { return dataRef.current },
+    get data() {
+      return dataRef.current
+    },
     save,
     load,
     clear,

@@ -61,9 +61,7 @@ interface MultiAnimatedSpriteProps<S extends string = string> extends SpriteOpti
   frameEvents?: never
 }
 
-export type AnimatedSpriteProps<S extends string = string> =
-  | SimpleAnimatedSpriteProps
-  | MultiAnimatedSpriteProps<S>
+export type AnimatedSpriteProps<S extends string = string> = SimpleAnimatedSpriteProps | MultiAnimatedSpriteProps<S>
 
 /** A typed set of animation clips. Created by `defineAnimations()`. */
 export type AnimationSet<S extends string = string> = Record<S, AnimationClip>
@@ -119,20 +117,56 @@ export function defineAnimations<S extends string>(clips: Record<S, AnimationCli
  */
 export function AnimatedSprite<S extends string>(props: AnimatedSpriteProps<S>): ReactElement {
   const {
-    width, height, src, color, offsetX, offsetY, zIndex, visible, flipX, flipY,
-    anchorX, anchorY, frameWidth, frameHeight, frameColumns, atlas, frame,
-    tileX, tileY, tileSizeX, tileSizeY, sampling, blendMode,
+    width,
+    height,
+    src,
+    color,
+    offsetX,
+    offsetY,
+    zIndex,
+    visible,
+    flipX,
+    flipY,
+    anchorX,
+    anchorY,
+    frameWidth,
+    frameHeight,
+    frameColumns,
+    atlas,
+    frame,
+    tileX,
+    tileY,
+    tileSizeX,
+    tileSizeY,
+    sampling,
+    blendMode,
   } = props
 
   const spriteEl = (
     <Sprite
-      width={width} height={height} src={src} color={color}
-      offsetX={offsetX} offsetY={offsetY} zIndex={zIndex} visible={visible}
-      flipX={flipX} flipY={flipY} anchorX={anchorX} anchorY={anchorY}
-      frameWidth={frameWidth} frameHeight={frameHeight} frameColumns={frameColumns}
-      atlas={atlas} frame={frame}
-      tileX={tileX} tileY={tileY} tileSizeX={tileSizeX} tileSizeY={tileSizeY}
-      sampling={sampling} blendMode={blendMode}
+      width={width}
+      height={height}
+      src={src}
+      color={color}
+      offsetX={offsetX}
+      offsetY={offsetY}
+      zIndex={zIndex}
+      visible={visible}
+      flipX={flipX}
+      flipY={flipY}
+      anchorX={anchorX}
+      anchorY={anchorY}
+      frameWidth={frameWidth}
+      frameHeight={frameHeight}
+      frameColumns={frameColumns}
+      atlas={atlas}
+      frame={frame}
+      tileX={tileX}
+      tileY={tileY}
+      tileSizeX={tileSizeX}
+      tileSizeY={tileSizeY}
+      sampling={sampling}
+      blendMode={blendMode}
     />
   )
 
@@ -186,7 +220,7 @@ function MultiClipAnimation({ animations, current }: { animations: Record<string
     }
     engine.ecs.addComponent(entityId, state)
     return () => engine.ecs.removeComponent(entityId, 'AnimationState')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync current clip and clips map

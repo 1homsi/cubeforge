@@ -20,7 +20,7 @@ export function CircleCollider({
   layer = 'default',
   mask = '*',
 }: CircleColliderProps) {
-  const engine   = useContext(EngineContext)!
+  const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {

@@ -32,7 +32,10 @@ export function BoxCollider({
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask, oneWay }))
+    engine.ecs.addComponent(
+      entityId,
+      createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask, oneWay }),
+    )
 
     // Defer check so sibling components have had a chance to add their components
     const checkId = setTimeout(() => {
@@ -41,7 +44,9 @@ export function BoxCollider({
           console.warn(`[Cubeforge] BoxCollider on entity ${entityId} has no Transform. Physics requires Transform.`)
         }
         if (engine.ecs.hasEntity(entityId) && !engine.ecs.hasComponent(entityId, 'RigidBody')) {
-          console.warn(`[Cubeforge] BoxCollider on entity ${entityId} has no RigidBody. Add a <RigidBody> sibling for physics to work.`)
+          console.warn(
+            `[Cubeforge] BoxCollider on entity ${entityId} has no RigidBody. Add a <RigidBody> sibling for physics to work.`,
+          )
         }
       }
     }, 0)

@@ -8,6 +8,8 @@ export type SpriteAtlas = Record<string, number>
  */
 export function createAtlas(names: string[], _columns: number): SpriteAtlas {
   const atlas: SpriteAtlas = {}
-  names.forEach((name, i) => { atlas[name] = i })
+  names.forEach((name, i) => {
+    atlas[name] = i
+  })
   return atlas
 }

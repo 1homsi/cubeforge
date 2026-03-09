@@ -22,11 +22,9 @@ export function useNetworkInput(config: NetworkInputConfig): {
   const { room, keys } = config
 
   const [localInput, setLocalInput] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(keys.map(k => [k, false])),
+    Object.fromEntries(keys.map((k) => [k, false])),
   )
-  const [remoteInputs] = useState<Map<string, Record<string, boolean>>>(
-    () => new Map(),
-  )
+  const [remoteInputs] = useState<Map<string, Record<string, boolean>>>(() => new Map())
 
   // Keep a mutable ref so the broadcast interval closure always sees fresh state.
   const localInputRef = useRef<Record<string, boolean>>(localInput)
@@ -36,7 +34,7 @@ export function useNetworkInput(config: NetworkInputConfig): {
     function handleKeyDown(e: KeyboardEvent) {
       if (!keys.includes(e.code) && !keys.includes(e.key)) return
       const key = keys.includes(e.code) ? e.code : e.key
-      setLocalInput(prev => {
+      setLocalInput((prev) => {
         const next = { ...prev, [key]: true }
         localInputRef.current = next
         return next
@@ -46,7 +44,7 @@ export function useNetworkInput(config: NetworkInputConfig): {
     function handleKeyUp(e: KeyboardEvent) {
       if (!keys.includes(e.code) && !keys.includes(e.key)) return
       const key = keys.includes(e.code) ? e.code : e.key
-      setLocalInput(prev => {
+      setLocalInput((prev) => {
         const next = { ...prev, [key]: false }
         localInputRef.current = next
         return next
@@ -66,7 +64,7 @@ export function useNetworkInput(config: NetworkInputConfig): {
     }, 50)
 
     // Receive remote peer inputs.
-    room.onMessage(msg => {
+    room.onMessage((msg) => {
       if (msg.type !== INPUT_MSG_TYPE) return
       if (!msg.peerId) return
       remoteInputs.set(msg.peerId, msg.payload as Record<string, boolean>)

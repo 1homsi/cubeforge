@@ -17,11 +17,13 @@ function createStore<T extends Record<string, unknown>>(initialState: T): Store<
     setState: (partial) => {
       const updates = typeof partial === 'function' ? partial(state) : partial
       state = { ...state, ...updates }
-      listeners.forEach(l => l())
+      listeners.forEach((l) => l())
     },
     subscribe: (listener) => {
       listeners.add(listener)
-      return () => { listeners.delete(listener) }
+      return () => {
+        listeners.delete(listener)
+      }
     },
   }
 }
@@ -38,14 +40,14 @@ export function useGameStore<T extends Record<string, unknown>>(
   }
   const store = stores.get(key)! as Store<T>
 
-  const state = useSyncExternalStore(
-    store.subscribe,
-    store.getState,
-  )
+  const state = useSyncExternalStore(store.subscribe, store.getState)
 
-  const setState = useCallback((partial: Partial<T> | ((prev: T) => Partial<T>)) => {
-    store.setState(partial)
-  }, [store])
+  const setState = useCallback(
+    (partial: Partial<T> | ((prev: T) => Partial<T>)) => {
+      store.setState(partial)
+    },
+    [store],
+  )
 
   return [state, setState]
 }

@@ -74,8 +74,12 @@ export function createInputRecorder(): InputRecorderControls {
     getRecording(): InputRecording {
       return { frames: [..._frames] }
     },
-    get isRecording() { return _recording },
-    get isPlaying() { return _playing },
+    get isRecording() {
+      return _recording
+    },
+    get isPlaying() {
+      return _playing
+    },
     captureFrame(pressedKeys: string[]) {
       if (!_recording) return
       _frames.push({ frame: _frameCount++, pressedKeys: [...pressedKeys] })

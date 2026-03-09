@@ -27,7 +27,7 @@ export function useAnimationController<S extends string>(
   const [stateName, setStateName] = useState<S>(initial)
 
   const setState = useCallback((next: S) => {
-    setStateName(prev => (prev === next ? prev : next))
+    setStateName((prev) => (prev === next ? prev : next))
   }, [])
 
   const clip = states[stateName] ?? states[initial]
@@ -44,10 +44,10 @@ export function useAnimationController<S extends string>(
     state: stateName,
     setState,
     animProps: {
-      frames:     clip.frames,
-      fps:        clip.fps ?? 12,
-      loop:       clip.loop ?? true,
-      playing:    true,
+      frames: clip.frames,
+      fps: clip.fps ?? 12,
+      loop: clip.loop ?? true,
+      playing: true,
       onComplete,
     },
   }

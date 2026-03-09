@@ -6,6 +6,7 @@ export default defineConfig({
     globals: false,
     include: [
       'packages/*/src/**/__tests__/**/*.test.{ts,tsx}',
+      'packages/create-cubeforge-game/templates/__tests__/**/*.test.{ts,tsx}',
       'integrations/*/src/**/__tests__/**/*.test.{ts,tsx}',
     ],
   },

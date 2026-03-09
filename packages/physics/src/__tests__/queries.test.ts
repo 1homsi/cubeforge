@@ -3,7 +3,14 @@ import { ECSWorld, createTransform, findByTag, createTag } from '@cubeforge/core
 import { createBoxCollider } from '../components/boxCollider'
 import { overlapBox, raycast, raycastAll, overlapCircle, sweepBox } from '../queries'
 
-function addCollider(world: ECSWorld, x: number, y: number, w: number, h: number, opts?: Parameters<typeof createBoxCollider>[2]) {
+function addCollider(
+  world: ECSWorld,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  opts?: Parameters<typeof createBoxCollider>[2],
+) {
   const id = world.createEntity()
   world.addComponent(id, createTransform(x, y))
   world.addComponent(id, createBoxCollider(w, h, opts))
@@ -39,7 +46,7 @@ describe('findByTag', () => {
 describe('overlapBox', () => {
   it('returns entities overlapping the test box', () => {
     const world = new ECSWorld()
-    const a = addCollider(world, 0, 0, 20, 20)    // center 0,0 — overlaps test box at origin
+    const a = addCollider(world, 0, 0, 20, 20) // center 0,0 — overlaps test box at origin
     const b = addCollider(world, 100, 100, 20, 20) // far away
 
     const hits = overlapBox(world, 0, 0, 20, 20)
@@ -172,7 +179,7 @@ describe('raycastAll', () => {
   it('returns all hits sorted by distance', () => {
     const world = new ECSWorld()
     const near = addCollider(world, 50, 0, 10, 40)
-    const far  = addCollider(world, 150, 0, 10, 40)
+    const far = addCollider(world, 150, 0, 10, 40)
     const hits = raycastAll(world, { x: 0, y: 0 }, { x: 1, y: 0 }, 400)
     expect(hits.length).toBe(2)
     expect(hits[0].entityId).toBe(near)
@@ -204,7 +211,7 @@ describe('overlapCircle', () => {
   it('returns entities within radius', () => {
     const world = new ECSWorld()
     const near = addCollider(world, 0, 0, 20, 20)
-    const far  = addCollider(world, 200, 0, 20, 20)
+    const far = addCollider(world, 200, 0, 20, 20)
     const hits = overlapCircle(world, 0, 0, 50)
     expect(hits).toContain(near)
     expect(hits).not.toContain(far)

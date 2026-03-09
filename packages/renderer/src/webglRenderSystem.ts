@@ -4,7 +4,10 @@ import { VERT_SRC, FRAG_SRC, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC } from './shad
 import { parseCSSColor } from './colorParser'
 import {
   type Sampling,
-  resolveSampling, toGLMinFilter, toGLMagFilter, needsMipmap,
+  resolveSampling,
+  toGLMinFilter,
+  toGLMagFilter,
+  needsMipmap,
   DEFAULT_SAMPLING,
 } from './textureFilter'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
@@ -90,7 +93,15 @@ interface AnimatorComponent {
   type: 'Animator'
   initialState: string
   currentState: string
-  states: Record<string, { clip: string; transitions?: { to: string; when: AnimatorCondition[]; priority?: number; exitTime?: number }[]; onEnter?: () => void; onExit?: () => void }>
+  states: Record<
+    string,
+    {
+      clip: string
+      transitions?: { to: string; when: AnimatorCondition[]; priority?: number; exitTime?: number }[]
+      onEnter?: () => void
+      onExit?: () => void
+    }
+  >
   params: Record<string, unknown>
   playing: boolean
   _entered: boolean
@@ -239,7 +250,7 @@ function getTextureKey(sprite: SpriteComponent): string {
   const src = sprite.image?.src || sprite.src
   const samplingKey = getSamplingKey(sprite.sampling)
   const suffix = samplingKey ? `:s=${samplingKey}` : ''
-  if (src) return (sprite.tileX || sprite.tileY) ? `${src}:repeat${suffix}` : `${src}${suffix}`
+  if (src) return sprite.tileX || sprite.tileY ? `${src}:repeat${suffix}` : `${src}${suffix}`
   return `__color__:${sprite.color}${suffix}`
 }
 
@@ -321,10 +332,14 @@ export class RenderSystem implements System {
   private _defaultSampling: Sampling = DEFAULT_SAMPLING
 
   /** Set the global default texture sampling mode for all sprites that don't specify their own. */
-  setDefaultSampling(sampling: Sampling): void { this._defaultSampling = sampling }
+  setDefaultSampling(sampling: Sampling): void {
+    this._defaultSampling = sampling
+  }
 
   /** Get the current global default texture sampling mode. */
-  getDefaultSampling(): Sampling { return this._defaultSampling }
+  getDefaultSampling(): Sampling {
+    return this._defaultSampling
+  }
 
   // ── Sprite texture LRU helpers ──────────────────────────────────────────
 
@@ -375,12 +390,7 @@ export class RenderSystem implements System {
     // ── Unit quad geometry (6 vertices, 2 triangles) ──────────────────────────
     // Corners at (-0.5, -0.5) to (0.5, 0.5), UVs at (0,0) to (1,1)
     const quadVerts = new Float32Array([
-      -0.5, -0.5,  0, 0,
-       0.5, -0.5,  1, 0,
-      -0.5,  0.5,  0, 1,
-       0.5, -0.5,  1, 0,
-       0.5,  0.5,  1, 1,
-      -0.5,  0.5,  0, 1,
+      -0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, -0.5, 1, 0, 0.5, 0.5, 1, 1, -0.5, 0.5, 0, 1,
     ])
 
     this.quadVAO = gl.createVertexArray()!
@@ -393,9 +403,9 @@ export class RenderSystem implements System {
 
     const qStride = 4 * 4
     gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, qStride, 0)       // a_quadPos
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, qStride, 0) // a_quadPos
     gl.enableVertexAttribArray(1)
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, qStride, 2 * 4)   // a_uv
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, qStride, 2 * 4) // a_uv
 
     // Per-instance buffer
     this.instanceData = new Float32Array(MAX_INSTANCES * FLOATS_PER_INSTANCE)
@@ -411,25 +421,25 @@ export class RenderSystem implements System {
       gl.vertexAttribDivisor(loc, 1)
       byteOffset += size * 4
     }
-    addAttr(2, 2)  // i_pos
-    addAttr(3, 2)  // i_size
-    addAttr(4, 1)  // i_rot
-    addAttr(5, 2)  // i_anchor
-    addAttr(6, 2)  // i_offset
-    addAttr(7, 1)  // i_flipX
-    addAttr(8, 1)  // i_flipY
-    addAttr(9, 4)  // i_color
+    addAttr(2, 2) // i_pos
+    addAttr(3, 2) // i_size
+    addAttr(4, 1) // i_rot
+    addAttr(5, 2) // i_anchor
+    addAttr(6, 2) // i_offset
+    addAttr(7, 1) // i_flipX
+    addAttr(8, 1) // i_flipY
+    addAttr(9, 4) // i_color
     addAttr(10, 4) // i_uvRect
 
     gl.bindVertexArray(null)
 
     // Cache uniform locations — sprite program
     gl.useProgram(this.program)
-    this.uCamPos     = gl.getUniformLocation(this.program, 'u_camPos')!
-    this.uZoom       = gl.getUniformLocation(this.program, 'u_zoom')!
+    this.uCamPos = gl.getUniformLocation(this.program, 'u_camPos')!
+    this.uZoom = gl.getUniformLocation(this.program, 'u_zoom')!
     this.uCanvasSize = gl.getUniformLocation(this.program, 'u_canvasSize')!
-    this.uShake      = gl.getUniformLocation(this.program, 'u_shake')!
-    this.uTexture    = gl.getUniformLocation(this.program, 'u_texture')!
+    this.uShake = gl.getUniformLocation(this.program, 'u_shake')!
+    this.uTexture = gl.getUniformLocation(this.program, 'u_texture')!
     this.uUseTexture = gl.getUniformLocation(this.program, 'u_useTexture')!
 
     this.whiteTexture = createWhiteTexture(gl)
@@ -438,14 +448,7 @@ export class RenderSystem implements System {
     this.parallaxProgram = createProgram(gl, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC)
 
     // Fullscreen NDC quad (-1 to 1)
-    const fsVerts = new Float32Array([
-      -1, -1,
-       1, -1,
-      -1,  1,
-       1, -1,
-       1,  1,
-      -1,  1,
-    ])
+    const fsVerts = new Float32Array([-1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, 1])
 
     this.parallaxVAO = gl.createVertexArray()!
     gl.bindVertexArray(this.parallaxVAO)
@@ -460,9 +463,9 @@ export class RenderSystem implements System {
 
     // Cache uniform locations — parallax program
     gl.useProgram(this.parallaxProgram)
-    this.pUTexture    = gl.getUniformLocation(this.parallaxProgram, 'u_texture')!
-    this.pUUvOffset   = gl.getUniformLocation(this.parallaxProgram, 'u_uvOffset')!
-    this.pUTexSize    = gl.getUniformLocation(this.parallaxProgram, 'u_texSize')!
+    this.pUTexture = gl.getUniformLocation(this.parallaxProgram, 'u_texture')!
+    this.pUUvOffset = gl.getUniformLocation(this.parallaxProgram, 'u_uvOffset')!
+    this.pUTexSize = gl.getUniformLocation(this.parallaxProgram, 'u_texSize')!
     this.pUCanvasSize = gl.getUniformLocation(this.parallaxProgram, 'u_canvasSize')!
 
     gl.enable(gl.BLEND)
@@ -473,7 +476,10 @@ export class RenderSystem implements System {
 
   private loadTexture(src: string): WebGLTexture {
     const cached = this.textures.get(src)
-    if (cached) { this.touchTexture(src); return cached }
+    if (cached) {
+      this.touchTexture(src)
+      return cached
+    }
 
     // Strip :s=... sampling and :repeat suffixes used for cache keys — not part of the actual URL
     let imgSrc = src
@@ -549,7 +555,7 @@ export class RenderSystem implements System {
       this.parallaxImageCache.set(src, img)
     }
 
-    return null  // not ready yet
+    return null // not ready yet
   }
 
   // ── Text texture management ───────────────────────────────────────────────
@@ -581,7 +587,7 @@ export class RenderSystem implements System {
     const metrics = ctx2d.measureText(text.text)
     const textW = Math.ceil(metrics.width) + 4
     const textH = Math.ceil((text.fontSize ?? 16) * 1.5) + 4
-    offscreen.width  = textW
+    offscreen.width = textW
     offscreen.height = textH
 
     // Re-apply font after resize (canvas resize resets state)
@@ -670,27 +676,37 @@ export class RenderSystem implements System {
 
   private writeInstance(
     base: number,
-    x: number, y: number,
-    w: number, h: number,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
     rot: number,
-    anchorX: number, anchorY: number,
-    offsetX: number, offsetY: number,
+    anchorX: number,
+    anchorY: number,
+    offsetX: number,
+    offsetY: number,
     flipX: boolean,
     flipY: boolean,
-    r: number, g: number, b: number, a: number,
-    u: number, v: number, uw: number, vh: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    u: number,
+    v: number,
+    uw: number,
+    vh: number,
   ): void {
     const d = this.instanceData
-    d[base + 0]  = x
-    d[base + 1]  = y
-    d[base + 2]  = w
-    d[base + 3]  = h
-    d[base + 4]  = rot
-    d[base + 5]  = anchorX
-    d[base + 6]  = anchorY
-    d[base + 7]  = offsetX
-    d[base + 8]  = offsetY
-    d[base + 9]  = flipX ? 1 : 0
+    d[base + 0] = x
+    d[base + 1] = y
+    d[base + 2] = w
+    d[base + 3] = h
+    d[base + 4] = rot
+    d[base + 5] = anchorX
+    d[base + 6] = anchorY
+    d[base + 7] = offsetX
+    d[base + 8] = offsetY
+    d[base + 9] = flipX ? 1 : 0
     d[base + 10] = flipY ? 1 : 0
     d[base + 11] = r
     d[base + 12] = g
@@ -710,9 +726,12 @@ export class RenderSystem implements System {
     const H = canvas.height
 
     // ── Camera ──────────────────────────────────────────────────────────────
-    let camX = 0, camY = 0, zoom = 1
+    let camX = 0,
+      camY = 0,
+      zoom = 1
     let background = '#000000'
-    let shakeX = 0, shakeY = 0
+    let shakeX = 0,
+      shakeY = 0
 
     const camId = world.queryOne('Camera2D')
     if (camId !== undefined) {
@@ -727,10 +746,11 @@ export class RenderSystem implements System {
             if (cam.deadZone) {
               const halfW = cam.deadZone.w / 2
               const halfH = cam.deadZone.h / 2
-              const dx = t.x - cam.x, dy = t.y - cam.y
-              if (dx > halfW)  cam.x = t.x - halfW
+              const dx = t.x - cam.x,
+                dy = t.y - cam.y
+              if (dx > halfW) cam.x = t.x - halfW
               else if (dx < -halfW) cam.x = t.x + halfW
-              if (dy > halfH)  cam.y = t.y - halfH
+              if (dy > halfH) cam.y = t.y - halfH
               else if (dy < -halfH) cam.y = t.y + halfH
             } else if (cam.smoothing > 0) {
               const distSq = (t.x - cam.x) ** 2 + (t.y - cam.y) ** 2
@@ -815,7 +835,7 @@ export class RenderSystem implements System {
 
     // ── Animation clip resolution + playback pass ─────────────────────────────
     for (const id of world.query('AnimationState', 'Sprite')) {
-      const anim   = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
+      const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
 
       // Resolve named clip if changed
@@ -861,11 +881,11 @@ export class RenderSystem implements System {
 
     // ── SquashStretch update ─────────────────────────────────────────────────
     for (const id of world.query('SquashStretch', 'RigidBody')) {
-      const ss   = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
-      const rb   = world.getComponent<RigidBodyShape>(id, 'RigidBody')!
-      const spd  = Math.sqrt(rb.vx * rb.vx + rb.vy * rb.vy)
-      const tScX = rb.vy < -100 ? 1 + ss.intensity * 0.4 : (spd > 50 ? 1 - ss.intensity * 0.3 : 1)
-      const tScY = rb.vy < -100 ? 1 - ss.intensity * 0.4 : (spd > 50 ? 1 + ss.intensity * 0.3 : 1)
+      const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
+      const rb = world.getComponent<RigidBodyShape>(id, 'RigidBody')!
+      const spd = Math.sqrt(rb.vx * rb.vx + rb.vy * rb.vy)
+      const tScX = rb.vy < -100 ? 1 + ss.intensity * 0.4 : spd > 50 ? 1 - ss.intensity * 0.3 : 1
+      const tScY = rb.vy < -100 ? 1 - ss.intensity * 0.4 : spd > 50 ? 1 + ss.intensity * 0.3 : 1
       ss.currentScaleX += (tScX - ss.currentScaleX) * ss.recovery * dt
       ss.currentScaleY += (tScY - ss.currentScaleY) * ss.recovery * dt
     }
@@ -913,8 +933,8 @@ export class RenderSystem implements System {
         // Compute UV offset: how much to scroll the texture based on camera and layer settings
         const drawX = layer.offsetX - camX * layer.speedX
         const drawY = layer.offsetY - camY * layer.speedY
-        const uvOffsetX = ((drawX / imgW) % 1 + 1) % 1
-        const uvOffsetY = ((drawY / imgH) % 1 + 1) % 1
+        const uvOffsetX = (((drawX / imgW) % 1) + 1) % 1
+        const uvOffsetY = (((drawY / imgH) % 1) + 1) % 1
 
         gl.bindTexture(gl.TEXTURE_2D, tex)
         gl.uniform2f(this.pUUvOffset, uvOffsetX, uvOffsetY)
@@ -942,12 +962,13 @@ export class RenderSystem implements System {
       if (ld !== 0) return ld
       const zd = sa.zIndex - sb.zIndex
       if (zd !== 0) return zd
-      const ka = getTextureKey(sa), kb = getTextureKey(sb)
+      const ka = getTextureKey(sa),
+        kb = getTextureKey(sb)
       return ka < kb ? -1 : ka > kb ? 1 : 0
     })
 
     let batchCount = 0
-    let batchKey   = ''
+    let batchKey = ''
     let batchSampling: Sampling | undefined
     let batchBlendMode: string = 'normal'
 
@@ -958,9 +979,9 @@ export class RenderSystem implements System {
         break
       }
 
-      const id        = renderables[i]
+      const id = renderables[i]
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
-      const sprite    = world.getComponent<SpriteComponent>(id, 'Sprite')!
+      const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
       if (!sprite.visible) continue
 
       // Ensure we have a GL texture for this sprite's image.
@@ -1021,7 +1042,7 @@ export class RenderSystem implements System {
       batchSampling = sprite.sampling
       batchBlendMode = spriteBlend
 
-      const ss        = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')
+      const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')
       const scaleXMod = ss ? ss.currentScaleX : 1
       const scaleYMod = ss ? ss.currentScaleY : 1
       // Textured sprites use white tint so the texture shows true colors;
@@ -1032,16 +1053,25 @@ export class RenderSystem implements System {
 
       this.writeInstance(
         batchCount * FLOATS_PER_INSTANCE,
-        transform.x, transform.y,
-        sprite.width  * transform.scaleX * scaleXMod,
+        transform.x,
+        transform.y,
+        sprite.width * transform.scaleX * scaleXMod,
         sprite.height * transform.scaleY * scaleYMod,
         transform.rotation,
-        sprite.anchorX, sprite.anchorY,
-        sprite.offsetX, sprite.offsetY,
+        sprite.anchorX,
+        sprite.anchorY,
+        sprite.offsetX,
+        sprite.offsetY,
         sprite.flipX,
         sprite.flipY ?? false,
-        r, g, b, a,
-        uv[0], uv[1], uv[2], uv[3],
+        r,
+        g,
+        b,
+        a,
+        uv[0],
+        uv[1],
+        uv[2],
+        uv[3],
       )
       batchCount++
     }
@@ -1057,7 +1087,7 @@ export class RenderSystem implements System {
 
     for (const id of textEntities) {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
-      const text      = world.getComponent<TextComponent>(id, 'Text')!
+      const text = world.getComponent<TextComponent>(id, 'Text')!
       if (!text.visible) continue
 
       const entry = this.getOrCreateTextTexture(text)
@@ -1073,22 +1103,32 @@ export class RenderSystem implements System {
       // Write text as a single textured instance
       this.writeInstance(
         0,
-        transform.x + text.offsetX, transform.y + text.offsetY,
-        entry.w, entry.h,
+        transform.x + text.offsetX,
+        transform.y + text.offsetY,
+        entry.w,
+        entry.h,
         transform.rotation,
-        0, 0,       // anchor top-left
-        0, 0,
-        false,      // flipX
-        false,      // flipY
-        1, 1, 1, 1, // white tint — color baked into texture
-        0, 0, 1, 1,
+        0,
+        0, // anchor top-left
+        0,
+        0,
+        false, // flipX
+        false, // flipY
+        1,
+        1,
+        1,
+        1, // white tint — color baked into texture
+        0,
+        0,
+        1,
+        1,
       )
       this.flushWithTex(1, entry.tex, true)
     }
 
     // ── Particles ────────────────────────────────────────────────────────────
     for (const id of world.query('Transform', 'ParticlePool')) {
-      const t    = world.getComponent<TransformComponent>(id, 'Transform')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
 
       // Update existing particles
@@ -1127,10 +1167,15 @@ export class RenderSystem implements System {
             oy = (world.rng() - 0.5) * (pool.emitHeight ?? 0)
           }
           pool.particles.push({
-            x: t.x + ox, y: t.y + oy,
-            vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-            life: pool.particleLife, maxLife: pool.particleLife,
-            size: pool.particleSize, color: pool.color, gravity: pool.gravity,
+            x: t.x + ox,
+            y: t.y + oy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: pool.particleLife,
+            maxLife: pool.particleLife,
+            size: pool.particleSize,
+            color: pool.color,
+            gravity: pool.gravity,
           })
         }
       }
@@ -1147,15 +1192,25 @@ export class RenderSystem implements System {
         const [r, g, b] = parseCSSColor(p.color)
         this.writeInstance(
           pCount * FLOATS_PER_INSTANCE,
-          p.x, p.y,
-          p.size, p.size,
+          p.x,
+          p.y,
+          p.size,
+          p.size,
           0,
-          0.5, 0.5,
-          0, 0,
+          0.5,
+          0.5,
+          0,
+          0,
           false,
           false,
-          r, g, b, alpha,
-          0, 0, 1, 1,
+          r,
+          g,
+          b,
+          alpha,
+          0,
+          0,
+          1,
+          1,
         )
         pCount++
       }
@@ -1164,7 +1219,7 @@ export class RenderSystem implements System {
 
     // ── Trail update + render pass ────────────────────────────────────────────
     for (const id of world.query('Transform', 'Trail')) {
-      const t     = world.getComponent<TransformComponent>(id, 'Transform')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const trail = world.getComponent<TrailComponent>(id, 'Trail')!
 
       // Prepend current position
@@ -1187,15 +1242,25 @@ export class RenderSystem implements System {
         const alpha = 1 - i / trail.points.length
         this.writeInstance(
           tCount * FLOATS_PER_INSTANCE,
-          trail.points[i].x, trail.points[i].y,
-          trailW, trailW,
+          trail.points[i].x,
+          trail.points[i].y,
+          trailW,
+          trailW,
           0,
-          0.5, 0.5,
-          0, 0,
+          0.5,
+          0.5,
+          0,
+          0,
           false,
           false,
-          tr, tg, tb, alpha,
-          0, 0, 1, 1,
+          tr,
+          tg,
+          tb,
+          alpha,
+          0,
+          0,
+          1,
+          1,
         )
         tCount++
       }
@@ -1217,15 +1282,25 @@ export class RenderSystem implements System {
           const cy = row * g.cellSize + g.cellSize / 2
           this.writeInstance(
             ngCount * FLOATS_PER_INSTANCE,
-            cx, cy,
-            g.cellSize, g.cellSize,
+            cx,
+            cy,
+            g.cellSize,
+            g.cellSize,
             0,
-            0.5, 0.5,
-            0, 0,
+            0.5,
+            0.5,
+            0,
+            0,
             false,
             false,
-            walkable ? 0 : 1, walkable ? 1 : 0, 0, walkable ? 0.08 : 0.25,
-            0, 0, 1, 1,
+            walkable ? 0 : 1,
+            walkable ? 1 : 0,
+            0,
+            walkable ? 0.08 : 0.25,
+            0,
+            0,
+            1,
+            1,
           )
           ngCount++
         }
@@ -1243,21 +1318,31 @@ export class RenderSystem implements System {
         }
         this.writeInstance(
           cfCount * FLOATS_PER_INSTANCE,
-          pt.x, pt.y,
-          8, 8,
+          pt.x,
+          pt.y,
+          8,
+          8,
           0,
-          0.5, 0.5,
-          0, 0,
+          0.5,
+          0.5,
+          0,
+          0,
           false,
           false,
-          1, 0.3, 0.3, 0.9,
-          0, 0, 1, 1,
+          1,
+          0.3,
+          0.3,
+          0.9,
+          0,
+          0,
+          1,
+          1,
         )
         cfCount++
         pt.ttl--
       }
       if (cfCount > 0) this.flush(cfCount, '__color__')
-      this.contactFlashPoints = this.contactFlashPoints.filter(p => p.ttl > 0)
+      this.contactFlashPoints = this.contactFlashPoints.filter((p) => p.ttl > 0)
     }
 
     // ── FPS tracking ─────────────────────────────────────────────────────────
@@ -1284,20 +1369,29 @@ function resolveClip(anim: AnimationStateComponent, clip: AnimationClipDefinitio
   anim.playing = true
 }
 
-function evaluateConditions(
-  conditions: AnimatorCondition[],
-  params: Record<string, unknown>,
-): boolean {
+function evaluateConditions(conditions: AnimatorCondition[], params: Record<string, unknown>): boolean {
   for (const cond of conditions) {
     const val = params[cond.param]
     if (val === undefined) return false
     switch (cond.op) {
-      case '==': if (val !== cond.value) return false; break
-      case '!=': if (val === cond.value) return false; break
-      case '>':  if ((val as number) <= (cond.value as number)) return false; break
-      case '>=': if ((val as number) < (cond.value as number)) return false; break
-      case '<':  if ((val as number) >= (cond.value as number)) return false; break
-      case '<=': if ((val as number) > (cond.value as number)) return false; break
+      case '==':
+        if (val !== cond.value) return false
+        break
+      case '!=':
+        if (val === cond.value) return false
+        break
+      case '>':
+        if ((val as number) <= (cond.value as number)) return false
+        break
+      case '>=':
+        if ((val as number) < (cond.value as number)) return false
+        break
+      case '<':
+        if ((val as number) >= (cond.value as number)) return false
+        break
+      case '<=':
+        if ((val as number) > (cond.value as number)) return false
+        break
     }
   }
   return true

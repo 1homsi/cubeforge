@@ -14,11 +14,7 @@ interface ContactOpts {
   layer?: string
 }
 
-function useContactEvent(
-  eventName: string,
-  handler: (other: EntityId) => void,
-  opts?: ContactOpts,
-): void {
+function useContactEvent(eventName: string, handler: (other: EntityId) => void, opts?: ContactOpts): void {
   const engine = useContext(EngineContext)
   const entityId = useContext(EntityContext)
 
@@ -47,17 +43,17 @@ function useContactEvent(
       // Layer filter — check BoxCollider first, fall back to CircleCollider so
       // that circle-circle contacts are not incorrectly dropped by the filter.
       if (opts?.layer) {
-        const box    = engine.ecs.getComponent<{ type: 'BoxCollider';    layer: string }>(other, 'BoxCollider')
+        const box = engine.ecs.getComponent<{ type: 'BoxCollider'; layer: string }>(other, 'BoxCollider')
         const circle = engine.ecs.getComponent<{ type: 'CircleCollider'; layer: string }>(other, 'CircleCollider')
-        const layer  = box?.layer ?? circle?.layer
+        const layer = box?.layer ?? circle?.layer
         if (layer !== opts.layer) return
       }
 
       handlerRef.current(other)
     })
-  // opts.tag and opts.layer intentionally in deps: filter changes require re-subscription.
-  // handler is NOT a dep — the ref keeps it current without re-subscribing.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // opts.tag and opts.layer intentionally in deps: filter changes require re-subscription.
+    // handler is NOT a dep — the ref keeps it current without re-subscribing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine.events, engine.ecs, entityId, opts?.tag, opts?.layer])
 }
 

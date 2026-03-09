@@ -3,7 +3,12 @@ import type { AnimatorComponent } from '@cubeforge/renderer'
 import { EngineContext, EntityContext } from '../context'
 
 // Re-export the types users will need
-import type { AnimatorStateDefinition, AnimatorTransition, AnimatorCondition, AnimatorParamValue } from '@cubeforge/renderer'
+import type {
+  AnimatorStateDefinition,
+  AnimatorTransition,
+  AnimatorCondition,
+  AnimatorParamValue,
+} from '@cubeforge/renderer'
 export type { AnimatorStateDefinition, AnimatorTransition, AnimatorCondition, AnimatorParamValue }
 
 interface AnimatorProps {
@@ -29,7 +34,7 @@ export function Animator({ initial, states, params = {}, playing = true }: Anima
     }
     engine.ecs.addComponent(entityId, comp)
     return () => engine.ecs.removeComponent(entityId, 'Animator')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync params and playing

@@ -21,11 +21,14 @@ export function CapsuleCollider({
   layer = 'default',
   mask = '*',
 }: CapsuleColliderProps) {
-  const engine   = useContext(EngineContext)!
+  const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createCapsuleCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask }))
+    engine.ecs.addComponent(
+      entityId,
+      createCapsuleCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask }),
+    )
     return () => engine.ecs.removeComponent(entityId, 'CapsuleCollider')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

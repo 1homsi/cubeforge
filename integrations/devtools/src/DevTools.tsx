@@ -184,13 +184,13 @@ interface DevToolsProps {
   engine?: EngineState
 }
 
-type Tab = 'entities' | 'perf' | 'input' | 'contacts' | 'assets'
+type Tab = 'entities' | 'perf' | 'input' | 'contacts' | 'assets' | 'animation'
 
 export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
-  const [, forceUpdate]     = useState(0)
+  const [, forceUpdate] = useState(0)
   const [paused, setPaused] = useState(false)
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const [panelOpen, setPanelOpen]     = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [selectedEntity, setSelectedEntity] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('entities')
   const [entitySearch, setEntitySearch] = useState('')
@@ -204,11 +204,13 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
     handle.onFrame = () => {
       frameRef.current++
       if (!paused) {
-        forceUpdate(n => n + 1)
+        forceUpdate((n) => n + 1)
         setSelectedIdx(Math.max(0, handle.buffer.length - 1))
       }
     }
-    return () => { handle.onFrame = undefined }
+    return () => {
+      handle.onFrame = undefined
+    }
   }, [handle, paused])
 
   // Subscribe to contact events for the contact log + optional visual flash
@@ -216,9 +218,9 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
     if (!engine) return
     const events = engine.events
     const types = ['triggerEnter', 'triggerExit', 'collisionEnter', 'collisionExit', 'circleEnter', 'circleExit']
-    const unsubs = types.map(type =>
+    const unsubs = types.map((type) =>
       events.on<{ a: number; b: number }>(type, ({ a, b }) => {
-        setContactLog(prev => {
+        setContactLog((prev) => {
           const entry: ContactLogEntry = { frame: frameRef.current, type, entityA: a, entityB: b }
           const next = [entry, ...prev]
           if (next.length > 20) next.length = 20
@@ -241,9 +243,9 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
             }
           }
         }
-      })
+      }),
     )
-    return () => unsubs.forEach(u => u())
+    return () => unsubs.forEach((u) => u())
   }, [engine, showContactFlash])
 
   const totalFrames = handle.buffer.length
@@ -262,8 +264,14 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
     }
   }, [paused, currentSnap, ecs, loop, handle])
 
-  const stepBack    = useCallback(() => { setSelectedIdx(i => Math.max(0, i - 1)); setSelectedEntity(null) }, [])
-  const stepForward = useCallback(() => { setSelectedIdx(i => Math.min(handle.buffer.length - 1, i + 1)); setSelectedEntity(null) }, [handle])
+  const stepBack = useCallback(() => {
+    setSelectedIdx((i) => Math.max(0, i - 1))
+    setSelectedEntity(null)
+  }, [])
+  const stepForward = useCallback(() => {
+    setSelectedIdx((i) => Math.min(handle.buffer.length - 1, i + 1))
+    setSelectedEntity(null)
+  }, [handle])
 
   // Toggle nav grid debug overlay on the renderer
   const handleToggleNavGrid = useCallback(() => {
@@ -280,9 +288,10 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
       const snap = handle.buffer[handle.buffer.length - 1]
       if (snap) {
         // Estimate world bounds from entity transforms
-        let maxX = 0, maxY = 0
+        let maxX = 0,
+          maxY = 0
         for (const e of snap.entities) {
-          const t = e.components.find(c => c.type === 'Transform') as { x: number; y: number } | undefined
+          const t = e.components.find((c) => c.type === 'Transform') as { x: number; y: number } | undefined
           if (t) {
             if (t.x > maxX) maxX = t.x
             if (t.y > maxY) maxY = t.y
@@ -295,9 +304,11 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
 
         // Mark cells as blocked where static BoxColliders exist
         for (const e of snap.entities) {
-          const t = e.components.find(c => c.type === 'Transform') as { x: number; y: number } | undefined
-          const bc = e.components.find(c => c.type === 'BoxCollider') as { width: number; height: number; offsetX: number; offsetY: number } | undefined
-          const rb = e.components.find(c => c.type === 'RigidBody') as { isStatic?: boolean } | undefined
+          const t = e.components.find((c) => c.type === 'Transform') as { x: number; y: number } | undefined
+          const bc = e.components.find((c) => c.type === 'BoxCollider') as
+            | { width: number; height: number; offsetX: number; offsetY: number }
+            | undefined
+          const rb = e.components.find((c) => c.type === 'RigidBody') as { isStatic?: boolean } | undefined
           if (t && bc && (!rb || rb.isStatic)) {
             const left = t.x + (bc.offsetX ?? 0) - bc.width / 2
             const top = t.y + (bc.offsetY ?? 0) - bc.height / 2
@@ -319,18 +330,19 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
   }, [engine, showNavGrid, handle])
 
   const frameLabel = totalFrames === 0 ? '0/0' : `${selectedIdx + 1}/${totalFrames}`
-  const entities   = currentSnap?.entities ?? []
-  const filtered   = entitySearch
-    ? entities.filter(e =>
-        String(e.id).includes(entitySearch) ||
-        e.components.some(c => c.type.toLowerCase().includes(entitySearch.toLowerCase()))
+  const entities = currentSnap?.entities ?? []
+  const filtered = entitySearch
+    ? entities.filter(
+        (e) =>
+          String(e.id).includes(entitySearch) ||
+          e.components.some((c) => c.type.toLowerCase().includes(entitySearch.toLowerCase())),
       )
     : entities
-  const selectedEntityData = selectedEntity !== null ? entities.find(e => e.id === selectedEntity) : null
+  const selectedEntityData = selectedEntity !== null ? entities.find((e) => e.id === selectedEntity) : null
 
   // Performance stats
-  const timings  = engine?.systemTimings
-  const fps      = (() => {
+  const timings = engine?.systemTimings
+  const fps = (() => {
     const sys = engine?.activeRenderSystem
     if (!sys) return 0
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -339,21 +351,21 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
     return Math.round(1000 / (ft.reduce((a, b) => a + b, 0) / ft.length))
   })()
   const entityCount = entities.length
-  const compCount   = entities.reduce((sum, e) => sum + e.components.length, 0)
+  const compCount = entities.reduce((sum, e) => sum + e.components.length, 0)
 
   // Input state
   const activeKeys = engine ? getActiveKeys(engine) : []
-  const inputCtx   = (() => {
+  const inputCtx = (() => {
     try {
       // Access globalInputContext from input package via engine if available
       return 'gameplay'
-    } catch { return '—' }
+    } catch {
+      return '—'
+    }
   })()
 
   // Asset list
-  const assetCache: ReadonlyMap<string, HTMLImageElement> = engine?.assets
-    ? engine.assets.getLoadedImages()
-    : new Map()
+  const assetCache: ReadonlyMap<string, HTMLImageElement> = engine?.assets ? engine.assets.getLoadedImages() : new Map()
 
   return createPortal(
     <div style={s.overlay}>
@@ -366,7 +378,7 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
               entitySearch={entitySearch}
               onSearchChange={setEntitySearch}
               selectedEntity={selectedEntity}
-              onSelectEntity={id => setSelectedEntity(p => p === id ? null : id)}
+              onSelectEntity={(id) => setSelectedEntity((p) => (p === id ? null : id))}
               selectedEntityData={selectedEntityData}
             />
           )}
@@ -380,20 +392,17 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
               onToggleNavGrid={handleToggleNavGrid}
             />
           )}
-          {activeTab === 'input' && (
-            <InputTab activeKeys={activeKeys} inputCtx={inputCtx} />
-          )}
+          {activeTab === 'input' && <InputTab activeKeys={activeKeys} inputCtx={inputCtx} />}
           {activeTab === 'contacts' && (
             <ContactsTab
               log={contactLog}
               onClear={() => setContactLog([])}
               showFlash={showContactFlash}
-              onToggleFlash={() => setShowContactFlash(v => !v)}
+              onToggleFlash={() => setShowContactFlash((v) => !v)}
             />
           )}
-          {activeTab === 'assets' && (
-            <AssetsTab assetCache={assetCache} />
-          )}
+          {activeTab === 'assets' && <AssetsTab assetCache={assetCache} />}
+          {activeTab === 'animation' && <AnimationTab entities={entities} />}
         </div>
       )}
 
@@ -408,8 +417,12 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
 
         {paused && (
           <>
-            <button style={s.btn()} onClick={stepBack}>◀◀</button>
-            <button style={s.btn()} onClick={stepForward}>▶▶</button>
+            <button style={s.btn()} onClick={stepBack}>
+              ◀◀
+            </button>
+            <button style={s.btn()} onClick={stepForward}>
+              ▶▶
+            </button>
           </>
         )}
 
@@ -420,43 +433,60 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
           max={Math.max(0, totalFrames - 1)}
           value={selectedIdx}
           style={s.scrubber}
-          onChange={e => {
+          onChange={(e) => {
             const idx = Number(e.target.value)
             setSelectedIdx(idx)
             setSelectedEntity(null)
-            if (!paused) { loop.pause(); setPaused(true) }
+            if (!paused) {
+              loop.pause()
+              setPaused(true)
+            }
           }}
         />
 
         <span style={s.counter}>{frameLabel}</span>
 
         {/* Tabs */}
-        {(['entities', 'perf', 'input', 'contacts', 'assets'] as Tab[]).map(tab => (
+        {(['entities', 'perf', 'input', 'contacts', 'assets', 'animation'] as Tab[]).map((tab) => (
           <button
             key={tab}
             style={s.tab(panelOpen && activeTab === tab)}
             onClick={() => {
-              if (panelOpen && activeTab === tab) { setPanelOpen(false) }
-              else { setActiveTab(tab); setPanelOpen(true) }
+              if (panelOpen && activeTab === tab) {
+                setPanelOpen(false)
+              } else {
+                setActiveTab(tab)
+                setPanelOpen(true)
+              }
             }}
           >
-            {tab === 'entities' ? `⬡ ${entities.length}` :
-             tab === 'perf'     ? `⚡ ${fps}fps` :
-             tab === 'input'    ? '⌨' :
-             tab === 'contacts' ? `✦ ${contactLog.length}` :
-             '📦'}
+            {tab === 'entities'
+              ? `⬡ ${entities.length}`
+              : tab === 'perf'
+                ? `⚡ ${fps}fps`
+                : tab === 'input'
+                  ? '⌨'
+                  : tab === 'contacts'
+                    ? `✦ ${contactLog.length}`
+                    : tab === 'animation'
+                      ? '▶ Anim'
+                      : '📦'}
           </button>
         ))}
 
         <button
           style={s.btn(false, true)}
-          onClick={() => { handle.buffer.length = 0; setSelectedIdx(0); forceUpdate(n => n + 1) }}
+          onClick={() => {
+            handle.buffer.length = 0
+            setSelectedIdx(0)
+            forceUpdate((n) => n + 1)
+          }}
         >
           Clear
         </button>
       </div>
     </div>,
-    document.body
+    document.body,
   )
 }
 
@@ -471,7 +501,14 @@ interface EntitiesTabProps {
   selectedEntityData: WorldSnapshot['entities'][0] | null | undefined
 }
 
-function EntitiesTab({ entities, entitySearch, onSearchChange, selectedEntity, onSelectEntity, selectedEntityData }: EntitiesTabProps) {
+function EntitiesTab({
+  entities,
+  entitySearch,
+  onSearchChange,
+  selectedEntity,
+  onSelectEntity,
+  selectedEntityData,
+}: EntitiesTabProps) {
   return (
     <>
       <div style={{ padding: '4px 12px 8px', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -479,26 +516,28 @@ function EntitiesTab({ entities, entitySearch, onSearchChange, selectedEntity, o
           style={s.search}
           placeholder="Search by id or component…"
           value={entitySearch}
-          onChange={e => onSearchChange(e.target.value)}
+          onChange={(e) => onSearchChange(e.target.value)}
         />
         <span style={{ color: C.muted, fontSize: 10 }}>{entities.length} entities</span>
       </div>
       <div style={{ maxHeight: 140, overflowY: 'auto' }}>
-        {entities.length === 0 && (
-          <div style={{ padding: '4px 14px', color: '#3d4666' }}>No entities</div>
-        )}
-        {entities.map(e => (
+        {entities.length === 0 && <div style={{ padding: '4px 14px', color: '#3d4666' }}>No entities</div>}
+        {entities.map((e) => (
           <div key={e.id} style={s.row(selectedEntity === e.id)} onClick={() => onSelectEntity(e.id)}>
             <span style={{ color: C.accent, minWidth: 28, fontSize: 10 }}>#{e.id}</span>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
-              {e.components.map(c => <span key={c.type} style={s.pill}>{c.type}</span>)}
+              {e.components.map((c) => (
+                <span key={c.type} style={s.pill}>
+                  {c.type}
+                </span>
+              ))}
             </div>
           </div>
         ))}
       </div>
       {selectedEntityData && (
         <div style={s.detailPanel}>
-          {selectedEntityData.components.map(comp => (
+          {selectedEntityData.components.map((comp) => (
             <div key={comp.type} style={{ marginBottom: 10 }}>
               <div style={{ color: C.accent, fontSize: 10, fontWeight: 700, marginBottom: 4 }}>{comp.type}</div>
               <div style={s.kv}>
@@ -519,9 +558,20 @@ function EntitiesTab({ entities, entitySearch, onSearchChange, selectedEntity, o
   )
 }
 
-function PerfTab({ fps, entityCount, compCount, timings, showNavGrid, onToggleNavGrid }: {
-  fps: number; entityCount: number; compCount: number; timings?: Map<string, number>
-  showNavGrid: boolean; onToggleNavGrid(): void
+function PerfTab({
+  fps,
+  entityCount,
+  compCount,
+  timings,
+  showNavGrid,
+  onToggleNavGrid,
+}: {
+  fps: number
+  entityCount: number
+  compCount: number
+  timings?: Map<string, number>
+  showNavGrid: boolean
+  onToggleNavGrid(): void
 }) {
   const maxMs = 16.67
   const stats = [
@@ -558,7 +608,15 @@ function PerfTab({ fps, entityCount, compCount, timings, showNavGrid, onToggleNa
                   <span style={{ color, fontSize: 9 }}>{ms.toFixed(2)}ms</span>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 2, height: 4 }}>
-                  <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.1s' }} />
+                  <div
+                    style={{
+                      width: `${pct}%`,
+                      height: '100%',
+                      background: color,
+                      borderRadius: 2,
+                      transition: 'width 0.1s',
+                    }}
+                  />
                 </div>
               </div>
             )
@@ -578,10 +636,15 @@ function InputTab({ activeKeys, inputCtx }: { activeKeys: string[]; inputCtx: st
       <div style={{ marginBottom: 10 }}>
         <div style={{ color: C.muted, fontSize: 9, marginBottom: 6, letterSpacing: '0.08em' }}>ACTIVE KEYS</div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const, minHeight: 24 }}>
-          {activeKeys.length === 0
-            ? <span style={{ color: C.muted }}>—</span>
-            : activeKeys.map(k => <span key={k} style={{ ...s.pill, color: C.accent, borderColor: 'rgba(79,195,247,0.3)' }}>{k}</span>)
-          }
+          {activeKeys.length === 0 ? (
+            <span style={{ color: C.muted }}>—</span>
+          ) : (
+            activeKeys.map((k) => (
+              <span key={k} style={{ ...s.pill, color: C.accent, borderColor: 'rgba(79,195,247,0.3)' }}>
+                {k}
+              </span>
+            ))
+          )}
         </div>
       </div>
       <div style={{ marginBottom: 10 }}>
@@ -591,26 +654,39 @@ function InputTab({ activeKeys, inputCtx }: { activeKeys: string[]; inputCtx: st
       {gamepads.length > 0 && (
         <div>
           <div style={{ color: C.muted, fontSize: 9, marginBottom: 6, letterSpacing: '0.08em' }}>GAMEPAD AXES</div>
-          {gamepads.map((gp, gi) => gp && (
-            <div key={gi} style={{ marginBottom: 6 }}>
-              <div style={{ color: C.muted, fontSize: 9, marginBottom: 2 }}>Gamepad {gi}: {gp.id.slice(0, 30)}</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                {Array.from(gp.axes).map((ax, ai) => (
-                  <span key={ai} style={{ fontSize: 9, color: Math.abs(ax) > 0.1 ? C.accent : C.muted }}>
-                    [{ai}] {ax.toFixed(2)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+          {gamepads.map(
+            (gp, gi) =>
+              gp && (
+                <div key={gi} style={{ marginBottom: 6 }}>
+                  <div style={{ color: C.muted, fontSize: 9, marginBottom: 2 }}>
+                    Gamepad {gi}: {gp.id.slice(0, 30)}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                    {Array.from(gp.axes).map((ax, ai) => (
+                      <span key={ai} style={{ fontSize: 9, color: Math.abs(ax) > 0.1 ? C.accent : C.muted }}>
+                        [{ai}] {ax.toFixed(2)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ),
+          )}
         </div>
       )}
     </div>
   )
 }
 
-function ContactsTab({ log, onClear, showFlash, onToggleFlash }: {
-  log: ContactLogEntry[]; onClear(): void; showFlash: boolean; onToggleFlash(): void
+function ContactsTab({
+  log,
+  onClear,
+  showFlash,
+  onToggleFlash,
+}: {
+  log: ContactLogEntry[]
+  onClear(): void
+  showFlash: boolean
+  onToggleFlash(): void
 }) {
   return (
     <div style={{ padding: '4px 0' }}>
@@ -620,21 +696,31 @@ function ContactsTab({ log, onClear, showFlash, onToggleFlash }: {
           <button style={s.btn(showFlash)} onClick={onToggleFlash}>
             {showFlash ? 'Hide' : 'Show'} Flash
           </button>
-          <button style={s.btn(false, true)} onClick={onClear}>Clear</button>
+          <button style={s.btn(false, true)} onClick={onClear}>
+            Clear
+          </button>
         </div>
       </div>
-      {log.length === 0
-        ? <div style={{ padding: '4px 14px', color: C.muted }}>No contacts yet</div>
-        : log.map((entry, i) => (
-            <div key={i} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
-              <span style={{ color: C.muted, fontSize: 9, minWidth: 46 }}>f{entry.frame}</span>
-              <span style={{ ...s.pill, color: entry.type.includes('Enter') ? C.ok : entry.type.includes('Exit') ? C.warn : C.accent }}>
-                {entry.type}
-              </span>
-              <span style={{ color: C.text, fontSize: 10 }}>#{entry.entityA} ↔ #{entry.entityB}</span>
-            </div>
-          ))
-      }
+      {log.length === 0 ? (
+        <div style={{ padding: '4px 14px', color: C.muted }}>No contacts yet</div>
+      ) : (
+        log.map((entry, i) => (
+          <div key={i} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span style={{ color: C.muted, fontSize: 9, minWidth: 46 }}>f{entry.frame}</span>
+            <span
+              style={{
+                ...s.pill,
+                color: entry.type.includes('Enter') ? C.ok : entry.type.includes('Exit') ? C.warn : C.accent,
+              }}
+            >
+              {entry.type}
+            </span>
+            <span style={{ color: C.text, fontSize: 10 }}>
+              #{entry.entityA} ↔ #{entry.entityB}
+            </span>
+          </div>
+        ))
+      )}
     </div>
   )
 }
@@ -644,21 +730,259 @@ function AssetsTab({ assetCache }: { assetCache: ReadonlyMap<string, HTMLImageEl
   return (
     <div style={{ padding: '8px 0' }}>
       <div style={{ padding: '0 14px 8px', color: C.muted, fontSize: 9 }}>{entries.length} loaded images</div>
-      {entries.length === 0
-        ? <div style={{ padding: '4px 14px', color: C.muted }}>No assets loaded</div>
-        : entries.map(([src, img]) => {
-            const loaded = img.complete && img.naturalWidth > 0
-            return (
-              <div key={src} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
-                <span style={{ color: loaded ? C.ok : C.warn, fontSize: 9, minWidth: 10 }}>{loaded ? '✓' : '✗'}</span>
-                <span style={{ color: C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                  {src.split('/').pop()}
+      {entries.length === 0 ? (
+        <div style={{ padding: '4px 14px', color: C.muted }}>No assets loaded</div>
+      ) : (
+        entries.map(([src, img]) => {
+          const loaded = img.complete && img.naturalWidth > 0
+          return (
+            <div key={src} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
+              <span style={{ color: loaded ? C.ok : C.warn, fontSize: 9, minWidth: 10 }}>{loaded ? '✓' : '✗'}</span>
+              <span
+                style={{
+                  color: C.text,
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap' as const,
+                }}
+              >
+                {src.split('/').pop()}
+              </span>
+              {loaded && (
+                <span style={{ color: C.muted, fontSize: 9 }}>
+                  {img.naturalWidth}×{img.naturalHeight}
                 </span>
-                {loaded && <span style={{ color: C.muted, fontSize: 9 }}>{img.naturalWidth}×{img.naturalHeight}</span>}
+              )}
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+// ── Animation tab ─────────────────────────────────────────────────────────────
+
+interface AnimatorData {
+  currentState: string
+  initialState: string
+  states: Record<
+    string,
+    {
+      clip: string
+      transitions?: Array<{
+        to: string
+        when: Array<{ param: string; op: string; value: unknown }>
+        priority?: number
+        exitTime?: number
+      }>
+    }
+  >
+  params: Record<string, unknown>
+  playing: boolean
+}
+
+interface AnimationStateData {
+  currentClip?: string
+  currentIndex: number
+  frames: number[]
+  fps: number
+  loop: boolean
+  playing: boolean
+  clips?: Record<string, { frames: number[]; fps?: number; loop?: boolean; next?: string }>
+}
+
+function AnimationTab({ entities }: { entities: WorldSnapshot['entities'] }) {
+  // Find entities that have Animator or AnimationState components
+  const animEntities = entities.filter((e) =>
+    e.components.some((c) => c.type === 'Animator' || c.type === 'AnimationState'),
+  )
+
+  if (animEntities.length === 0) {
+    return (
+      <div style={{ padding: '10px 14px', color: C.muted }}>No entities with Animator or AnimationState components</div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ padding: '0 14px 8px', color: C.muted, fontSize: 9, letterSpacing: '0.08em' }}>
+        {animEntities.length} ANIMATED {animEntities.length === 1 ? 'ENTITY' : 'ENTITIES'}
+      </div>
+      {animEntities.map((entity) => {
+        const animator = entity.components.find((c) => c.type === 'Animator') as unknown as AnimatorData | undefined
+        const animState = entity.components.find((c) => c.type === 'AnimationState') as unknown as
+          | AnimationStateData
+          | undefined
+
+        return (
+          <div key={entity.id} style={{ padding: '6px 14px', borderBottom: `1px solid ${C.border}` }}>
+            {/* Entity header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ color: C.accent, fontSize: 10, fontWeight: 700 }}>#{entity.id}</span>
+              {animator && (
+                <span
+                  style={{
+                    ...s.pill,
+                    color: animator.playing ? C.ok : C.warn,
+                    borderColor: animator.playing ? 'rgba(166,227,161,0.3)' : 'rgba(243,139,168,0.3)',
+                  }}
+                >
+                  {animator.playing ? 'playing' : 'stopped'}
+                </span>
+              )}
+            </div>
+
+            {/* Animator state info */}
+            {animator && (
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ color: C.muted, fontSize: 9, letterSpacing: '0.08em', marginBottom: 4 }}>
+                  STATE MACHINE
+                </div>
+                <div style={s.kv}>
+                  <span style={{ color: C.muted }}>State</span>
+                  <span style={{ color: C.accent, fontWeight: 700 }}>{animator.currentState}</span>
+                  <span style={{ color: C.muted }}>Clip</span>
+                  <span style={{ color: C.text }}>{animator.states[animator.currentState]?.clip ?? '—'}</span>
+                </div>
               </div>
-            )
-          })
-      }
+            )}
+
+            {/* Animation playback info */}
+            {animState && (
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ color: C.muted, fontSize: 9, letterSpacing: '0.08em', marginBottom: 4 }}>PLAYBACK</div>
+                <div style={s.kv}>
+                  {animState.currentClip && (
+                    <>
+                      <span style={{ color: C.muted }}>Active Clip</span>
+                      <span style={{ color: C.text }}>{animState.currentClip}</span>
+                    </>
+                  )}
+                  <span style={{ color: C.muted }}>Frame</span>
+                  <span style={{ color: C.text }}>
+                    {animState.frames.length > 0 ? `${animState.currentIndex} / ${animState.frames.length}` : '—'}
+                  </span>
+                  <span style={{ color: C.muted }}>FPS</span>
+                  <span style={{ color: C.text }}>{animState.fps}</span>
+                  <span style={{ color: C.muted }}>Loop</span>
+                  <span style={{ color: animState.loop ? C.ok : C.muted }}>{animState.loop ? 'yes' : 'no'}</span>
+                </div>
+
+                {/* Frame progress bar */}
+                {animState.frames.length > 0 && (
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 2, height: 4 }}>
+                      <div
+                        style={{
+                          width: `${(animState.currentIndex / Math.max(1, animState.frames.length - 1)) * 100}%`,
+                          height: '100%',
+                          background: C.accent,
+                          borderRadius: 2,
+                          transition: 'width 0.05s',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Animator parameters */}
+            {animator && Object.keys(animator.params).length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ color: C.muted, fontSize: 9, letterSpacing: '0.08em', marginBottom: 4 }}>PARAMETERS</div>
+                <div style={s.kv}>
+                  {Object.entries(animator.params).map(([key, val]) => (
+                    <React.Fragment key={key}>
+                      <span style={{ color: C.muted }}>{key}</span>
+                      <span
+                        style={{
+                          color: typeof val === 'boolean' ? (val ? C.ok : C.warn) : C.text,
+                        }}
+                      >
+                        {formatValue(val)}
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Transition conditions */}
+            {animator && animator.states[animator.currentState]?.transitions && (
+              <div>
+                <div style={{ color: C.muted, fontSize: 9, letterSpacing: '0.08em', marginBottom: 4 }}>TRANSITIONS</div>
+                {animator.states[animator.currentState].transitions!.map((trans, ti) => {
+                  // Evaluate each condition against current params
+                  const condResults = trans.when.map((cond) => {
+                    const val = animator.params[cond.param]
+                    if (val === undefined) return false
+                    switch (cond.op) {
+                      case '==':
+                        return val === cond.value
+                      case '!=':
+                        return val !== cond.value
+                      case '>':
+                        return (val as number) > (cond.value as number)
+                      case '>=':
+                        return (val as number) >= (cond.value as number)
+                      case '<':
+                        return (val as number) < (cond.value as number)
+                      case '<=':
+                        return (val as number) <= (cond.value as number)
+                      default:
+                        return false
+                    }
+                  })
+                  const allMet = condResults.every(Boolean)
+
+                  return (
+                    <div
+                      key={ti}
+                      style={{
+                        padding: '3px 6px',
+                        marginBottom: 3,
+                        background: allMet ? 'rgba(166,227,161,0.08)' : 'rgba(255,255,255,0.02)',
+                        borderRadius: 3,
+                        border: `1px solid ${allMet ? 'rgba(166,227,161,0.2)' : C.border}`,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ color: allMet ? C.ok : C.muted, fontSize: 9 }}>{allMet ? '=> ' : '   '}</span>
+                        <span style={{ color: C.text, fontSize: 10 }}>{trans.to}</span>
+                        {trans.priority != null && trans.priority !== 0 && (
+                          <span style={{ ...s.pill, fontSize: 8 }}>p:{trans.priority}</span>
+                        )}
+                        {trans.exitTime != null && (
+                          <span style={{ ...s.pill, fontSize: 8 }}>exit:{trans.exitTime}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const, paddingLeft: 18 }}>
+                        {trans.when.map((cond, ci) => (
+                          <span
+                            key={ci}
+                            style={{
+                              fontSize: 9,
+                              padding: '1px 4px',
+                              borderRadius: 2,
+                              background: condResults[ci] ? 'rgba(166,227,161,0.15)' : 'rgba(243,139,168,0.1)',
+                              color: condResults[ci] ? C.ok : C.warn,
+                            }}
+                          >
+                            {cond.param} {cond.op} {formatValue(cond.value)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -676,6 +1000,6 @@ function formatValue(v: unknown): string {
 function getActiveKeys(engine: EngineState): string[] {
   // Access the internal `held` Set<string> from Keyboard via InputManager
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const kb = (engine.input.keyboard) as unknown as { held?: Set<string> }
+  const kb = engine.input.keyboard as unknown as { held?: Set<string> }
   return kb.held ? Array.from(kb.held) : []
 }

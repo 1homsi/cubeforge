@@ -31,29 +31,38 @@ export function useDialogue(): DialogueControls {
     setActive(true)
   }, [])
 
-  const advance = useCallback((choiceIndex?: number) => {
-    if (!scriptRef.current || !currentId) return
-    const line = scriptRef.current[currentId]
-    if (!line) { setActive(false); setCurrentId(null); return }
+  const advance = useCallback(
+    (choiceIndex?: number) => {
+      if (!scriptRef.current || !currentId) return
+      const line = scriptRef.current[currentId]
+      if (!line) {
+        setActive(false)
+        setCurrentId(null)
+        return
+      }
 
-    if (line.choices && choiceIndex !== undefined) {
-      const choice = line.choices[choiceIndex]
-      if (choice?.next && scriptRef.current[choice.next]) {
-        setCurrentId(choice.next)
+      if (line.choices && choiceIndex !== undefined) {
+        const choice = line.choices[choiceIndex]
+        if (choice?.next && scriptRef.current[choice.next]) {
+          setCurrentId(choice.next)
+        } else {
+          setActive(false)
+          setCurrentId(null)
+        }
       } else {
-        setActive(false); setCurrentId(null)
+        // Auto-advance to next sequential key
+        const keys = Object.keys(scriptRef.current)
+        const idx = keys.indexOf(currentId)
+        if (idx >= 0 && idx + 1 < keys.length) {
+          setCurrentId(keys[idx + 1])
+        } else {
+          setActive(false)
+          setCurrentId(null)
+        }
       }
-    } else {
-      // Auto-advance to next sequential key
-      const keys = Object.keys(scriptRef.current)
-      const idx = keys.indexOf(currentId)
-      if (idx >= 0 && idx + 1 < keys.length) {
-        setCurrentId(keys[idx + 1])
-      } else {
-        setActive(false); setCurrentId(null)
-      }
-    }
-  }, [currentId])
+    },
+    [currentId],
+  )
 
   const close = useCallback(() => {
     setActive(false)
@@ -61,7 +70,7 @@ export function useDialogue(): DialogueControls {
     scriptRef.current = null
   }, [])
 
-  const current = (scriptRef.current && currentId) ? scriptRef.current[currentId] ?? null : null
+  const current = scriptRef.current && currentId ? (scriptRef.current[currentId] ?? null) : null
 
   return { active, current, currentId, start, advance, close }
 }

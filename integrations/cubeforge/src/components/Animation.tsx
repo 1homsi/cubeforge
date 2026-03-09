@@ -45,7 +45,7 @@ export function Animation({ frames, fps = 12, loop = true, playing = true, onCom
     return () => {
       engine.ecs.removeComponent(entityId, 'AnimationState')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync playing state and animation params

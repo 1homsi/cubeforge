@@ -81,7 +81,9 @@ export function syncEntity(config: SyncConfig): {
         room.onMessage(handler)
         // Return an unsubscribe stub — Room doesn't expose removal yet, but we
         // track it so stop() can be extended later.
-        unsubscribe = () => { /* future: remove handler */ }
+        unsubscribe = () => {
+          /* future: remove handler */
+        }
       }
     },
 

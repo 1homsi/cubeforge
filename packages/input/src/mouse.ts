@@ -58,9 +58,15 @@ export class Mouse {
     this.target = null
   }
 
-  isDown(button = 0): boolean { return this.held.has(button) }
-  isPressed(button = 0): boolean { return this.justPressed.has(button) }
-  isReleased(button = 0): boolean { return this.justReleased.has(button) }
+  isDown(button = 0): boolean {
+    return this.held.has(button)
+  }
+  isPressed(button = 0): boolean {
+    return this.justPressed.has(button)
+  }
+  isReleased(button = 0): boolean {
+    return this.justReleased.has(button)
+  }
 
   flush(): void {
     this.justPressed.clear()

@@ -47,11 +47,14 @@ export function useInputMap(bindings: ActionBindings): BoundInputMap {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const map = useMemo(() => createInputMap(bindings), [JSON.stringify(bindings)]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return useMemo(() => ({
-    isActionDown:     (action: string) => map.isActionDown(input, action),
-    isActionPressed:  (action: string) => map.isActionPressed(input, action),
-    isActionReleased: (action: string) => map.isActionReleased(input, action),
-    getAxis:          (action: string) => map.getAxis(input, action),
-    getActionAxis:    (action: string) => map.getAxis(input, action),
-  }), [input, map])
+  return useMemo(
+    () => ({
+      isActionDown: (action: string) => map.isActionDown(input, action),
+      isActionPressed: (action: string) => map.isActionPressed(input, action),
+      isActionReleased: (action: string) => map.isActionReleased(input, action),
+      getAxis: (action: string) => map.getAxis(input, action),
+      getActionAxis: (action: string) => map.getAxis(input, action),
+    }),
+    [input, map],
+  )
 }
