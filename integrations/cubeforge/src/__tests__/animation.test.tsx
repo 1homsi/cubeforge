@@ -5,6 +5,7 @@ import { render, act } from '@testing-library/react'
 import { ECSWorld, EventBus, AssetManager } from '@cubeforge/core'
 import { EngineContext, EntityContext } from '../context'
 import { Animation } from '../components/Animation'
+import { AnimatedSprite, defineAnimations } from '../components/AnimatedSprite'
 import type { EngineState } from '../context'
 import type { AnimationStateComponent } from '@cubeforge/renderer'
 
@@ -161,5 +162,146 @@ describe('Animation component', () => {
     })
     const anim = engine.ecs.getComponent<AnimationStateComponent>(entityId, 'AnimationState')!
     expect(anim.onComplete).toBe(onComplete)
+  })
+})
+
+describe('AnimatedSprite simple mode', () => {
+  let engine: EngineState
+  let entityId: number
+
+  beforeEach(() => {
+    engine = makeEngine()
+    entityId = engine.ecs.createEntity()
+  })
+
+  it('mounts AnimationState with simple frames', async () => {
+    await act(async () => {
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <AnimatedSprite
+            src="/hero.png" width={32} height={32}
+            frameWidth={32} frameHeight={32}
+            frames={[0, 1, 2]} fps={10}
+          />
+        </Wrapper>,
+      )
+    })
+    const anim = engine.ecs.getComponent<AnimationStateComponent>(entityId, 'AnimationState')
+    expect(anim).toBeDefined()
+    expect(anim!.frames).toEqual([0, 1, 2])
+    expect(anim!.fps).toBe(10)
+    expect(anim!.playing).toBe(true)
+    expect(anim!.loop).toBe(true)
+    // Should NOT have clips in simple mode
+    expect(anim!.clips).toBeUndefined()
+  })
+})
+
+describe('AnimatedSprite multi-clip mode', () => {
+  let engine: EngineState
+  let entityId: number
+
+  const anims = defineAnimations({
+    idle: { frames: [0], fps: 1 },
+    walk: { frames: [1, 2, 3, 4], fps: 10 },
+    attack: { frames: [5, 6, 7], fps: 16, loop: false },
+  })
+
+  beforeEach(() => {
+    engine = makeEngine()
+    entityId = engine.ecs.createEntity()
+  })
+
+  it('mounts AnimationState with clips and currentClip', async () => {
+    await act(async () => {
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <AnimatedSprite
+            src="/hero.png" width={32} height={32}
+            frameWidth={32} frameHeight={32}
+            animations={anims} current="idle"
+          />
+        </Wrapper>,
+      )
+    })
+    const anim = engine.ecs.getComponent<AnimationStateComponent>(entityId, 'AnimationState')
+    expect(anim).toBeDefined()
+    expect(anim!.clips).toBeDefined()
+    expect(anim!.clips!.idle).toEqual(anims.idle)
+    expect(anim!.clips!.walk).toEqual(anims.walk)
+    expect(anim!.currentClip).toBe('idle')
+    expect(anim!._resolvedClip).toBe('idle')
+    expect(anim!.frames).toEqual([0])
+    expect(anim!.fps).toBe(1)
+  })
+
+  it('updates currentClip when current prop changes', async () => {
+    let rerender: (ui: React.ReactElement) => void
+    await act(async () => {
+      const result = render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <AnimatedSprite
+            src="/hero.png" width={32} height={32}
+            frameWidth={32} frameHeight={32}
+            animations={anims} current="idle"
+          />
+        </Wrapper>,
+      )
+      rerender = result.rerender
+    })
+
+    await act(async () => {
+      rerender(
+        <Wrapper engine={engine} entityId={entityId}>
+          <AnimatedSprite
+            src="/hero.png" width={32} height={32}
+            frameWidth={32} frameHeight={32}
+            animations={anims} current="walk"
+          />
+        </Wrapper>,
+      )
+    })
+
+    const anim = engine.ecs.getComponent<AnimationStateComponent>(entityId, 'AnimationState')!
+    expect(anim.currentClip).toBe('walk')
+    // clips map should still be present
+    expect(anim.clips).toBeDefined()
+  })
+
+  it('removes AnimationState on unmount', async () => {
+    let unmount: () => void
+    await act(async () => {
+      const result = render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <AnimatedSprite
+            src="/hero.png" width={32} height={32}
+            frameWidth={32} frameHeight={32}
+            animations={anims} current="idle"
+          />
+        </Wrapper>,
+      )
+      unmount = result.unmount
+    })
+    expect(engine.ecs.getComponent(entityId, 'AnimationState')).toBeDefined()
+    await act(async () => { unmount() })
+    expect(engine.ecs.getComponent(entityId, 'AnimationState')).toBeUndefined()
+  })
+
+  it('resolves initial clip frames/fps/loop from the animations map', async () => {
+    await act(async () => {
+      render(
+        <Wrapper engine={engine} entityId={entityId}>
+          <AnimatedSprite
+            src="/hero.png" width={32} height={32}
+            frameWidth={32} frameHeight={32}
+            animations={anims} current="attack"
+          />
+        </Wrapper>,
+      )
+    })
+    const anim = engine.ecs.getComponent<AnimationStateComponent>(entityId, 'AnimationState')!
+    expect(anim.frames).toEqual([5, 6, 7])
+    expect(anim.fps).toBe(16)
+    expect(anim.loop).toBe(false)
   })
 })

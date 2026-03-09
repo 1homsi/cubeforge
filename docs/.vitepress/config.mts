@@ -64,6 +64,7 @@ export default defineConfig({
             { text: 'CameraZone', link: '/api/camera-zone' },
             { text: 'Animation', link: '/api/animation' },
             { text: 'AnimatedSprite', link: '/api/animated-sprite' },
+            { text: 'Animator', link: '/api/animator' },
             { text: 'Trail', link: '/api/trail' },
             { text: 'ParticleEmitter', link: '/api/particle-emitter' },
             { text: 'SquashStretch', link: '/api/squash-stretch' },

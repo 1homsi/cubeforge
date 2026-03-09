@@ -2,7 +2,8 @@ import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import type { SpriteComponent } from './components/sprite'
 import type { Camera2DComponent } from './components/camera2d'
-import type { AnimationStateComponent } from './components/animationState'
+import type { AnimationStateComponent, AnimationClipDefinition } from './components/animationState'
+import type { AnimatorComponent, AnimatorCondition } from './components/animator'
 import type { SquashStretchComponent } from './components/squashStretch'
 import type { ParticlePoolComponent } from './components/particle'
 import type { ParallaxLayerComponent } from './components/parallaxLayer'
@@ -153,10 +154,63 @@ export class RenderSystem implements System {
       zoom = cam.zoom
     }
 
-    // --- Animation update pass ---
+    // --- Animator evaluation pass (runs before animation so clips are resolved) ---
+    for (const id of world.query('Animator', 'AnimationState')) {
+      const animator = world.getComponent<AnimatorComponent>(id, 'Animator')!
+      const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
+      if (!animator.playing) continue
+
+      // Ensure valid state
+      if (!animator.states[animator.currentState]) {
+        animator.currentState = animator.initialState
+        animator._entered = false
+      }
+
+      const stateDef = animator.states[animator.currentState]
+      if (!stateDef) continue
+
+      // Enter state: set clip and fire onEnter
+      if (!animator._entered) {
+        anim.currentClip = stateDef.clip
+        animator._entered = true
+        stateDef.onEnter?.()
+      }
+
+      // Evaluate transitions
+      if (stateDef.transitions && stateDef.transitions.length > 0) {
+        // Sort by priority descending (stable: declaration order for same priority)
+        const sorted = [...stateDef.transitions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+        for (const trans of sorted) {
+          // exitTime check
+          if (trans.exitTime != null && anim.frames.length > 0) {
+            const progress = anim.currentIndex / anim.frames.length
+            if (progress < trans.exitTime) continue
+          }
+          // Evaluate all conditions (AND)
+          if (evaluateConditions(trans.when, animator.params)) {
+            stateDef.onExit?.()
+            animator.currentState = trans.to
+            animator._entered = false
+            break
+          }
+        }
+      }
+    }
+
+    // --- Animation clip resolution + playback pass ---
     for (const id of world.query('AnimationState', 'Sprite')) {
       const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
+
+      // Resolve named clip if changed
+      if (anim.clips && anim.currentClip && anim._resolvedClip !== anim.currentClip) {
+        const clip = anim.clips[anim.currentClip]
+        if (clip) {
+          resolveClip(anim, clip)
+          anim._resolvedClip = anim.currentClip
+        }
+      }
+
       if (!anim.playing || anim.frames.length === 0) continue
       anim.timer += dt
       const frameDuration = 1 / anim.fps
@@ -172,6 +226,14 @@ export class RenderSystem implements System {
             if (anim.onComplete && !anim._completed) {
               anim._completed = true
               anim.onComplete()
+            }
+            // Auto-transition to next clip
+            if (anim.clips && anim.currentClip) {
+              const currentClipDef = anim.clips[anim.currentClip]
+              if (currentClipDef?.next && anim.clips[currentClipDef.next]) {
+                anim.currentClip = currentClipDef.next
+                // Will be resolved next frame (or this frame via _resolvedClip check above)
+              }
             }
           }
         }
@@ -600,4 +662,37 @@ export class RenderSystem implements System {
       ctx.restore()
     }
   }
+}
+
+// ── Animation helpers ──────────────────────────────────────────────────────
+
+export function resolveClip(anim: AnimationStateComponent, clip: AnimationClipDefinition): void {
+  anim.frames = clip.frames
+  anim.fps = clip.fps ?? 12
+  anim.loop = clip.loop ?? true
+  anim.onComplete = clip.onComplete
+  anim.frameEvents = clip.frameEvents
+  anim.currentIndex = 0
+  anim.timer = 0
+  anim._completed = false
+  anim.playing = true
+}
+
+export function evaluateConditions(
+  conditions: AnimatorCondition[],
+  params: Record<string, unknown>,
+): boolean {
+  for (const cond of conditions) {
+    const val = params[cond.param]
+    if (val === undefined) return false
+    switch (cond.op) {
+      case '==': if (val !== cond.value) return false; break
+      case '!=': if (val === cond.value) return false; break
+      case '>':  if ((val as number) <= (cond.value as number)) return false; break
+      case '>=': if ((val as number) < (cond.value as number)) return false; break
+      case '<':  if ((val as number) >= (cond.value as number)) return false; break
+      case '<=': if ((val as number) > (cond.value as number)) return false; break
+    }
+  }
+  return true
 }

@@ -15,6 +15,7 @@ export { Camera2D } from './components/Camera2D'
 export { Animation } from './components/Animation'
 export { AnimatedSprite, defineAnimations } from './components/AnimatedSprite'
 export type { AnimatedSpriteProps, AnimationSet } from './components/AnimatedSprite'
+export { Animator } from './components/Animator'
 export { SquashStretch } from './components/SquashStretch'
 export { ParticleEmitter } from './components/ParticleEmitter'
 export { VirtualJoystick } from './components/VirtualJoystick'
@@ -170,6 +171,11 @@ export { Ease, tween } from '@cubeforge/core'
 export { createTimeline } from '@cubeforge/core'
 export type { TweenTimeline, TimelineEntry } from '@cubeforge/core'
 export type { ParticlePreset } from './components/particlePresets'
+
+// Animation helpers
+export { playClip, setAnimationState, setAnimatorParam } from './utils/animationHelpers'
+export type { AnimatorComponent, AnimatorStateDefinition, AnimatorTransition, AnimatorCondition, AnimatorParamValue } from '@cubeforge/renderer'
+export type { AnimationClipDefinition } from '@cubeforge/renderer'
 
 // Prefab utility
 export { definePrefab } from './utils/prefab'

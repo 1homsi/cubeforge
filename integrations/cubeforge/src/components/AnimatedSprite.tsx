@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useEffect, useContext } from 'react'
 import type { ReactElement } from 'react'
 import { Sprite } from './Sprite'
 import { Animation } from './Animation'
 import type { AnimationClip } from '@cubeforge/gameplay'
+import type { AnimationStateComponent } from '@cubeforge/renderer'
 import type { SpriteAtlas } from './spriteAtlas'
 import type { Sampling, BlendMode } from '@cubeforge/renderer'
+import { EngineContext, EntityContext } from '../context'
 
 /** Shared sprite props used by both API forms */
 interface SpriteOptions {
@@ -122,56 +124,78 @@ export function AnimatedSprite<S extends string>(props: AnimatedSpriteProps<S>):
     tileX, tileY, tileSizeX, tileSizeY, sampling, blendMode,
   } = props
 
-  // Resolve animation props from either simple or multi-clip form
-  const animProps = useResolvedAnimation(props)
+  const spriteEl = (
+    <Sprite
+      width={width} height={height} src={src} color={color}
+      offsetX={offsetX} offsetY={offsetY} zIndex={zIndex} visible={visible}
+      flipX={flipX} flipY={flipY} anchorX={anchorX} anchorY={anchorY}
+      frameWidth={frameWidth} frameHeight={frameHeight} frameColumns={frameColumns}
+      atlas={atlas} frame={frame}
+      tileX={tileX} tileY={tileY} tileSizeX={tileSizeX} tileSizeY={tileSizeY}
+      sampling={sampling} blendMode={blendMode}
+    />
+  )
+
+  if (props.animations) {
+    return (
+      <>
+        {spriteEl}
+        <MultiClipAnimation
+          animations={props.animations as Record<string, AnimationClip>}
+          current={props.current as string}
+        />
+      </>
+    )
+  }
 
   return (
     <>
-      <Sprite
-        width={width} height={height} src={src} color={color}
-        offsetX={offsetX} offsetY={offsetY} zIndex={zIndex} visible={visible}
-        flipX={flipX} flipY={flipY} anchorX={anchorX} anchorY={anchorY}
-        frameWidth={frameWidth} frameHeight={frameHeight} frameColumns={frameColumns}
-        atlas={atlas} frame={frame}
-        tileX={tileX} tileY={tileY} tileSizeX={tileSizeX} tileSizeY={tileSizeY}
-        sampling={sampling} blendMode={blendMode}
+      {spriteEl}
+      <Animation
+        frames={props.frames!}
+        fps={props.fps}
+        loop={props.loop}
+        playing={props.playing}
+        onComplete={props.onComplete}
+        frameEvents={props.frameEvents}
       />
-      <Animation {...animProps} />
     </>
   )
 }
 
-function useResolvedAnimation<S extends string>(props: AnimatedSpriteProps<S>) {
-  // Multi-clip mode: resolve the current clip from the animations map
-  const clip = props.animations
-    ? (props.animations as Record<string, AnimationClip>)[props.current as string] ?? Object.values(props.animations as Record<string, AnimationClip>)[0]
-    : null
+/** Internal component: manages AnimationState ECS component directly for multi-clip mode. */
+function MultiClipAnimation({ animations, current }: { animations: Record<string, AnimationClip>; current: string }) {
+  const engine = useContext(EngineContext)!
+  const entityId = useContext(EntityContext)!
 
-  // Memoize frames array reference to avoid unnecessary animation resets
-  // (Animation resets currentIndex when frames reference changes)
-  const frames = useMemo(
-    () => clip ? clip.frames : props.frames!,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clip ? props.current : props.frames],
-  )
-
-  if (clip) {
-    return {
-      frames,
-      fps: clip.fps,
-      loop: clip.loop,
-      playing: true as const,
+  useEffect(() => {
+    const clip = animations[current] ?? Object.values(animations)[0]
+    const state: AnimationStateComponent = {
+      type: 'AnimationState',
+      clips: animations,
+      currentClip: current,
+      _resolvedClip: current,
+      frames: clip.frames,
+      fps: clip.fps ?? 12,
+      loop: clip.loop ?? true,
+      playing: true,
+      currentIndex: 0,
+      timer: 0,
+      _completed: false,
       onComplete: clip.onComplete,
-      frameEvents: undefined as Record<number, () => void> | undefined,
     }
-  }
+    engine.ecs.addComponent(entityId, state)
+    return () => engine.ecs.removeComponent(entityId, 'AnimationState')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  return {
-    frames,
-    fps: props.fps,
-    loop: props.loop,
-    playing: props.playing,
-    onComplete: props.onComplete,
-    frameEvents: props.frameEvents,
-  }
+  // Sync current clip and clips map
+  useEffect(() => {
+    const anim = engine.ecs.getComponent<AnimationStateComponent>(entityId, 'AnimationState')
+    if (!anim) return
+    anim.clips = animations
+    anim.currentClip = current
+  }, [current, animations, engine, entityId])
+
+  return null
 }
