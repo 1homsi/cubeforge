@@ -188,6 +188,15 @@ export type { CapsuleColliderComponent } from '@cubeforge/physics'
 export type { CompoundColliderComponent, ColliderShape } from '@cubeforge/physics'
 export type { CombineRule } from '@cubeforge/physics'
 export type { ContactManifold, ContactPoint } from '@cubeforge/physics'
+export { velocityAtPoint, kineticEnergy, potentialEnergy, predictPosition } from '@cubeforge/physics'
+export {
+  setAdditionalMass,
+  setMassProperties,
+  recomputeMassFromColliders,
+  boxArea,
+  circleArea,
+  capsuleArea,
+} from '@cubeforge/physics'
 export type {
   InputManager,
   ActionBindings,

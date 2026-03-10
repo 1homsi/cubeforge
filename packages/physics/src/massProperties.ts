@@ -87,3 +87,120 @@ export function capsuleMassProperties(
 export function parallelAxis(inertia: number, mass: number, offsetX: number, offsetY: number): number {
   return inertia + mass * (offsetX * offsetX + offsetY * offsetY)
 }
+
+// ── Area helpers ──────────────────────────────────────────────────────────
+
+/** Area of a box collider: width × height */
+export function boxArea(width: number, height: number): number {
+  return width * height
+}
+
+/** Area of a circle collider: π × r² */
+export function circleArea(radius: number): number {
+  return Math.PI * radius * radius
+}
+
+/** Area of a capsule collider: rectangle area + circle area (two semicircles) */
+export function capsuleArea(width: number, height: number): number {
+  const isVertical = height >= width
+  const radius = isVertical ? width / 2 : height / 2
+  const rectLength = isVertical ? height - width : width - height
+  if (rectLength <= 0) {
+    // Degenerate capsule — just a circle
+    return Math.PI * radius * radius
+  }
+  const rectW = isVertical ? width : rectLength
+  const rectH = isVertical ? rectLength : height
+  return rectW * rectH + Math.PI * radius * radius
+}
+
+// ── Mass property mutation helpers ────────────────────────────────────────
+
+import type { RigidBodyComponent } from './components/rigidbody'
+import type { BoxColliderComponent } from './components/boxCollider'
+import type { CircleColliderComponent } from './components/circleCollider'
+import type { CapsuleColliderComponent } from './components/capsuleCollider'
+
+/**
+ * Add extra mass on top of the current mass, recomputing invMass and invInertia.
+ * The inertia is scaled proportionally to maintain the same shape distribution.
+ */
+export function setAdditionalMass(rb: RigidBodyComponent, additionalMass: number): void {
+  const oldMass = rb.mass > 0 ? rb.mass : 1
+  const newMass = oldMass + additionalMass
+  if (newMass <= 0) return
+
+  // Scale inertia proportionally
+  rb.inertia = rb.inertia * (newMass / oldMass)
+  rb.mass = newMass
+  rb.invMass = 1 / newMass
+  rb.invInertia = rb.lockRotation || rb.inertia <= 0 ? 0 : 1 / rb.inertia
+}
+
+/**
+ * Override mass, inertia, and center of mass simultaneously.
+ * centerOfMassX/Y are accepted for API completeness but not stored
+ * (the engine uses collider offsets for center-of-mass shifting).
+ */
+export function setMassProperties(
+  rb: RigidBodyComponent,
+  mass: number,
+  inertia: number,
+  _centerOfMassX: number,
+  _centerOfMassY: number,
+): void {
+  rb.mass = mass
+  rb.inertia = inertia
+  rb.invMass = mass > 0 ? 1 / mass : 0
+  rb.invInertia = rb.lockRotation || inertia <= 0 ? 0 : 1 / inertia
+  rb._massPropertiesDirty = false
+}
+
+/**
+ * Recompute mass properties from attached colliders and mark the body's
+ * cached inverse values as up-to-date.
+ *
+ * At least one collider should be provided; if none are, mass defaults to 1.
+ */
+export function recomputeMassFromColliders(
+  rb: RigidBodyComponent,
+  boxCol?: BoxColliderComponent,
+  circleCol?: CircleColliderComponent,
+  capsuleCol?: CapsuleColliderComponent,
+): void {
+  const density = rb.density > 0 ? rb.density : 1
+  let mass: number
+  let inertia: number
+
+  if (boxCol) {
+    const props = boxMassProperties(boxCol.width, boxCol.height, density)
+    mass = props.mass
+    inertia = props.inertia
+    if (boxCol.offsetX !== 0 || boxCol.offsetY !== 0) {
+      inertia = parallelAxis(inertia, mass, boxCol.offsetX, boxCol.offsetY)
+    }
+  } else if (circleCol) {
+    const props = circleMassProperties(circleCol.radius, density)
+    mass = props.mass
+    inertia = props.inertia
+    if (circleCol.offsetX !== 0 || circleCol.offsetY !== 0) {
+      inertia = parallelAxis(inertia, mass, circleCol.offsetX, circleCol.offsetY)
+    }
+  } else if (capsuleCol) {
+    const props = capsuleMassProperties(capsuleCol.width, capsuleCol.height, density)
+    mass = props.mass
+    inertia = props.inertia
+    if (capsuleCol.offsetX !== 0 || capsuleCol.offsetY !== 0) {
+      inertia = parallelAxis(inertia, mass, capsuleCol.offsetX, capsuleCol.offsetY)
+    }
+  } else {
+    mass = 1
+    inertia = 1
+  }
+
+  rb.mass = mass
+  rb.inertia = inertia
+  rb.invMass = mass > 0 ? 1 / mass : 0
+  rb.invInertia = rb.lockRotation || inertia <= 0 ? 0 : 1 / inertia
+  rb._massPropertiesDirty = false
+}

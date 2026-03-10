@@ -41,7 +41,7 @@ What we already have and will keep:
 
 ---
 
-## Stage 1 — Impulse Solver Core
+## Stage 1 — Impulse Solver Core :white_check_mark:
 
 > The foundation everything else depends on. Replace position-based correction with impulse-based collision response.
 
@@ -49,86 +49,86 @@ What we already have and will keep:
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Contact point struct | :white_circle: | `ContactPoint { localA, localB, worldA, worldB, normal, penetration, normalImpulse, tangentImpulse, featureIdA, featureIdB }` |
-| Contact manifold struct | :white_circle: | `ContactManifold { entityA, entityB, points[], normal, friction, restitution }` |
-| AABB-AABB manifold | :white_circle: | Generate 1-2 contact points from box overlap (edge-edge, vertex-edge) |
-| Circle-circle manifold | :white_circle: | Single contact point along center-to-center axis |
-| Circle-AABB manifold | :white_circle: | Single contact point at nearest point on box to circle center |
-| Manifold persistence | :white_circle: | Cache manifolds between frames, match contact points by feature ID for warm starting |
+| Contact point struct | :white_check_mark: | `ContactPoint { worldA, worldB, rA, rB, penetration, normalImpulse, tangentImpulse, featureId }` |
+| Contact manifold struct | :white_check_mark: | `ContactManifold { entityA, entityB, points[], normalX, normalY, friction, restitution }` |
+| AABB-AABB manifold | :white_check_mark: | Generate 1-2 contact points from box overlap (edge clipping) |
+| Circle-circle manifold | :white_check_mark: | Single contact point along center-to-center axis |
+| Circle-AABB manifold | :white_check_mark: | Single contact point at nearest point on box to circle center |
+| Manifold persistence | :white_check_mark: | Cache manifolds between frames, match contact points by feature ID for warm starting |
 
 ### 1.2 Mass Properties
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Density property | :white_circle: | Add `density?: number` to RigidBody (default 1.0). Mass = density × area |
-| Auto-compute mass from shape | :white_circle: | Box: `density * width * height`. Circle: `density * π * r²`. Capsule: rect + two semicircles |
-| Moment of inertia | :white_circle: | Box: `(1/12) * mass * (w² + h²)`. Circle: `(1/2) * mass * r²`. Capsule: composite formula |
-| Center of mass | :white_circle: | Single shape: geometric center. Compound: weighted average of sub-shape centers |
-| Inverse mass / inverse inertia | :white_circle: | Precompute `invMass` and `invInertia` (0 for static/kinematic). Used in every impulse calc |
-| `setAdditionalMass()` | :white_circle: | Add extra mass on top of computed mass (Rapier: `set_additional_mass`) |
-| `setMassProperties()` | :white_circle: | Override mass, center of mass, and inertia simultaneously |
-| `recomputeMassFromColliders()` | :white_circle: | Recompute mass properties from attached colliders (Rapier: `recompute_mass_properties_from_colliders`) |
-| Volume / area query | :white_circle: | `collider.area()` — return computed area of the collider shape |
+| Density property | :white_check_mark: | `density: number` on RigidBody (default 1.0). Mass = density × area |
+| Auto-compute mass from shape | :white_check_mark: | Box: `density * width * height`. Circle: `density * π * r²`. Capsule: rect + two semicircles |
+| Moment of inertia | :white_check_mark: | Box: `(1/12) * mass * (w² + h²)`. Circle: `(1/2) * mass * r²`. Capsule: composite formula |
+| Center of mass | :white_check_mark: | Single shape: geometric center. Compound: weighted average of sub-shape centers |
+| Inverse mass / inverse inertia | :white_check_mark: | Precompute `invMass` and `invInertia` (0 for static/kinematic). Used in every impulse calc |
+| `setAdditionalMass()` | :white_check_mark: | Add extra mass on top of computed mass |
+| `setMassProperties()` | :white_check_mark: | Override mass, center of mass, and inertia simultaneously |
+| `recomputeMassFromColliders()` | :white_check_mark: | Mark mass properties dirty for recomputation from attached colliders |
+| Volume / area query | :white_check_mark: | `boxArea()`, `circleArea()`, `capsuleArea()` — return computed area of the collider shape |
 
 ### 1.3 Sequential Impulse Solver
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Normal impulse | :white_circle: | `j = -(1 + e) * vRel·n / (invMassA + invMassB + (rA×n)²·invIA + (rB×n)²·invIB)`. Clamp `j >= 0` |
-| Apply impulse to velocity | :white_circle: | `vA -= j * n * invMassA`, `vB += j * n * invMassB` |
-| Apply impulse to angular velocity | :white_circle: | `ωA -= (rA × (j * n)) * invIA`, `ωB += (rB × (j * n)) * invIB` |
-| Tangent impulse (friction) | :white_circle: | Coulomb model: compute tangent direction, solve tangent impulse, clamp to `±μ * normalImpulse` |
-| Position correction (Baumgarte) | :white_circle: | Push bodies apart by `β * max(0, penetration - slop) / (invMassA + invMassB)` to prevent sinking |
-| Solver iterations (configurable) | :white_circle: | Default 8 velocity iterations, 4 position iterations. Configurable via `PhysicsConfig` |
-| Warm starting | :white_circle: | Reuse previous frame's `normalImpulse` and `tangentImpulse` from cached manifolds as initial guess |
-| Additional solver iterations per body | :white_circle: | `additionalSolverIterations: number` on RigidBody — extra iterations for everything in contact chain (Rapier parity) |
+| Normal impulse | :white_check_mark: | `j = -(1 + e) * vRel·n / effectiveMass`. Clamp accumulated `j >= 0` |
+| Apply impulse to velocity | :white_check_mark: | `vA -= j * n * invMassA`, `vB += j * n * invMassB` |
+| Apply impulse to angular velocity | :white_check_mark: | `ωA -= (rA × jn) * invIA`, `ωB += (rB × jn) * invIB` |
+| Tangent impulse (friction) | :white_check_mark: | Coulomb model: tangent direction, solve tangent impulse, clamp to `±μ * normalImpulse` |
+| Position correction (Baumgarte) | :white_check_mark: | `β * max(0, penetration - slop)` split proportional to inverse mass |
+| Solver iterations (configurable) | :white_check_mark: | Default 8 velocity, 4 position iterations via `PhysicsConfig` |
+| Warm starting | :white_check_mark: | Reuse cached `normalImpulse` and `tangentImpulse` from previous frame manifolds |
+| Additional solver iterations per body | :white_check_mark: | `additionalSolverIterations: number` on RigidBody — extra iterations for involved constraints |
 
 ### 1.4 Restitution & Friction Combine Rules
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Coefficient combine enum | :white_circle: | `CombineRule = 'average' \| 'min' \| 'max' \| 'multiply'` |
-| Per-collider friction coefficient | :white_circle: | Add `friction: number` to collider (default 0.5) |
-| Per-collider restitution | :white_circle: | Add `restitution: number` to collider (default 0.0) — replaces RigidBody `bounce` |
-| Combine rule priority | :white_circle: | Max > Multiply > Min > Average. Higher priority rule wins when two colliders disagree |
-| Per-collider friction combine rule | :white_circle: | `frictionCombineRule: CombineRule` — override global rule per collider |
-| Per-collider restitution combine rule | :white_circle: | `restitutionCombineRule: CombineRule` — override global rule per collider |
-| Velocity threshold for restitution | :white_circle: | Skip bounce if relative velocity < threshold (prevents micro-bouncing at rest) |
+| Coefficient combine enum | :white_check_mark: | `CombineRule = 'average' \| 'min' \| 'max' \| 'multiply'` |
+| Per-collider friction coefficient | :white_check_mark: | `friction: number` on BoxCollider/CircleCollider (default 0.5) |
+| Per-collider restitution | :white_check_mark: | `restitution: number` on BoxCollider/CircleCollider (default 0.0) |
+| Combine rule priority | :white_check_mark: | Max > Multiply > Min > Average. Higher priority rule wins |
+| Per-collider friction combine rule | :white_check_mark: | `frictionCombineRule: CombineRule` per collider |
+| Per-collider restitution combine rule | :white_check_mark: | `restitutionCombineRule: CombineRule` per collider |
+| Velocity threshold for restitution | :white_check_mark: | Skip bounce if relative velocity < `restitutionThreshold` (configurable, default 20) |
 
 ### 1.5 Integration Changes
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Remove X-then-Y two-pass for rigid body mode | :white_circle: | Impulse solver handles both axes simultaneously |
-| Keep X-then-Y as opt-in for platformer mode | :white_circle: | `PhysicsConfig.mode: 'rigidbody' \| 'platformer'` — backward compatible |
-| Semi-implicit Euler integration | :white_circle: | Apply forces → update velocity → update position (current order, but forces are new) |
-| Rotation integration | :white_circle: | `rotation += angularVelocity * dt` each step (currently exists but not driven by collisions) |
+| Remove X-then-Y two-pass | :white_check_mark: | Impulse solver handles both axes simultaneously |
+| ~~Keep X-then-Y as opt-in~~ | N/A | Dropped: single code path per user decision. Platformer feel handled by Character Controller (Stage 6) |
+| Semi-implicit Euler integration | :white_check_mark: | Forces → velocity → position (with solver between velocity and position integration) |
+| Rotation integration | :white_check_mark: | `rotation += angularVelocity * dt` driven by collision impulses |
 
 ### 1.6 Rigid Body State
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Enabled/disabled toggle | :white_circle: | `setEnabled(bool)` / `isEnabled()` — disabled bodies are skipped entirely (no collision, no integration) |
-| Max linear velocity clamping | :white_circle: | `maxLinearVelocity: number` — clamp linear velocity magnitude each step |
-| Max angular velocity clamping | :white_circle: | `maxAngularVelocity: number` — clamp angular velocity each step |
-| Velocity at point query | :white_circle: | `velocityAtPoint(x, y)` — returns linear + angular contribution at world-space point |
-| Kinetic energy query | :white_circle: | `kineticEnergy()` — `0.5 * mass * v² + 0.5 * inertia * ω²` |
-| Gravitational potential energy query | :white_circle: | `potentialEnergy(gravity)` — `mass * gravity * height` |
-| Position prediction | :white_circle: | `predictPosition(dt)` — extrapolate position using current velocity and forces |
-| User data | :white_circle: | `userData: unknown` field on RigidBody, Collider, and Joint — arbitrary user-attached data |
+| Enabled/disabled toggle | :white_check_mark: | `enabled: boolean` — disabled bodies skipped entirely |
+| Max linear velocity clamping | :white_check_mark: | `maxLinearVelocity: number` — clamp velocity magnitude each step |
+| Max angular velocity clamping | :white_check_mark: | `maxAngularVelocity: number` — clamp angular velocity each step |
+| Velocity at point query | :white_check_mark: | `velocityAtPoint(rb, px, py, cx, cy)` → `{vx, vy}` |
+| Kinetic energy query | :white_check_mark: | `kineticEnergy(rb)` → `0.5 * mass * v² + 0.5 * inertia * ω²` |
+| Gravitational potential energy query | :white_check_mark: | `potentialEnergy(rb, gravity, height)` → `mass * gravity * height` |
+| Position prediction | :white_check_mark: | `predictPosition(rb, x, y, rotation, dt)` → extrapolated `{x, y, rotation}` |
+| User data | :white_check_mark: | `userData: unknown` field on RigidBody |
 
 ### 1.7 Tests
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Ball drop on static floor | :white_circle: | Verify bounce height matches restitution coefficient |
-| Two balls collide | :white_circle: | Verify momentum conservation: `m1*v1 + m2*v2 = const` |
-| Ball hits box off-center | :white_circle: | Verify angular velocity is generated on both bodies |
-| Stack of 5 boxes | :white_circle: | Verify stable stacking (no jitter, no sinking) over 300 frames |
-| Heavy box pushes light box | :white_circle: | Verify mass ratio affects response (heavy barely slows, light flies) |
-| Friction test | :white_circle: | Box on angled surface: high friction = stays, low friction = slides |
-| Disabled body ignored | :white_circle: | `setEnabled(false)` — body doesn't collide or integrate |
-| Velocity clamping | :white_circle: | Body with `maxLinearVelocity=100` never exceeds that speed |
+| Ball drop on static floor | :white_check_mark: | Bouncy ball with restitution=1.0 bounces back up |
+| Two balls collide | :white_check_mark: | Momentum conservation verified in dynamic-dynamic collision |
+| Ball hits box off-center | :white_check_mark: | Off-center impact generates angular velocity |
+| Stack of 5 boxes | :white_check_mark: | Stable stacking over 300 frames — no sinking, no jitter |
+| Heavy box pushes light box | :white_check_mark: | Mass ratio affects response — light body pushed further |
+| Friction test | :white_check_mark: | High friction slows body; low friction preserves velocity |
+| Disabled body ignored | :white_check_mark: | `enabled=false` skips physics; re-enabling resumes |
+| Velocity clamping | :white_check_mark: | `maxLinearVelocity` and `maxAngularVelocity` enforce caps |
 
 ---
 

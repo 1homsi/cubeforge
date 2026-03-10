@@ -41,6 +41,8 @@ interface RigidBodyProps {
   maxLinearVelocity?: number
   /** Max angular velocity magnitude. 0 = unlimited */
   maxAngularVelocity?: number
+  /** Extra velocity solver iterations for constraints involving this body. Default 0 */
+  additionalSolverIterations?: number
 }
 
 export function RigidBody({
@@ -65,6 +67,7 @@ export function RigidBody({
   enabled = true,
   maxLinearVelocity = 0,
   maxAngularVelocity = 0,
+  additionalSolverIterations = 0,
 }: RigidBodyProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
@@ -100,6 +103,7 @@ export function RigidBody({
         enabled,
         maxLinearVelocity,
         maxAngularVelocity,
+        additionalSolverIterations,
       }),
     )
     return () => engine.ecs.removeComponent(entityId, 'RigidBody')

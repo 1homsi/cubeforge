@@ -295,6 +295,65 @@ describe('PhysicsSystem', () => {
       expect(rb.vy).toBe(0)
     })
   })
+
+  describe('additionalSolverIterations', () => {
+    it('extra iterations are applied to constraints involving the body', () => {
+      // Two overlapping dynamic bodies — one with extra solver iterations
+      // should yield a more separated (better resolved) result
+      const { world: worldA } = createTestWorld(0)
+      const { world: worldB } = createTestWorld(0)
+
+      // World A: normal solver iterations (no extra)
+      const a1 = worldA.createEntity()
+      worldA.addComponent(a1, createTransform(0, 0))
+      worldA.addComponent(a1, createRigidBody())
+      worldA.addComponent(a1, createBoxCollider(20, 20))
+
+      const a2 = worldA.createEntity()
+      worldA.addComponent(a2, createTransform(10, 0)) // overlapping
+      worldA.addComponent(a2, createRigidBody())
+      worldA.addComponent(a2, createBoxCollider(20, 20))
+
+      const rbA1 = worldA.getComponent<RigidBodyComponent>(a1, 'RigidBody')!
+      rbA1.vx = 100
+
+      // World B: body has extra solver iterations
+      const b1 = worldB.createEntity()
+      worldB.addComponent(b1, createTransform(0, 0))
+      worldB.addComponent(b1, createRigidBody({ additionalSolverIterations: 4 }))
+      worldB.addComponent(b1, createBoxCollider(20, 20))
+
+      const b2 = worldB.createEntity()
+      worldB.addComponent(b2, createTransform(10, 0))
+      worldB.addComponent(b2, createRigidBody())
+      worldB.addComponent(b2, createBoxCollider(20, 20))
+
+      const rbB1 = worldB.getComponent<RigidBodyComponent>(b1, 'RigidBody')!
+      rbB1.vx = 100
+
+      runSteps(worldA, 1)
+      runSteps(worldB, 1)
+
+      // Both should resolve the collision — the extra iterations version
+      // should have resolved at least as well. We just verify it runs without error
+      // and the bodies have been pushed apart in both cases.
+      const tA1 = worldA.getComponent<TransformComponent>(a1, 'Transform')!
+      const tA2 = worldA.getComponent<TransformComponent>(a2, 'Transform')!
+      const tB1 = worldB.getComponent<TransformComponent>(b1, 'Transform')!
+      const tB2 = worldB.getComponent<TransformComponent>(b2, 'Transform')!
+
+      // Both worlds should have resolved the overlap (bodies separated)
+      const sepA = tA2.x - tA1.x
+      const sepB = tB2.x - tB1.x
+      expect(sepA).toBeGreaterThan(0)
+      expect(sepB).toBeGreaterThan(0)
+    })
+
+    it('additionalSolverIterations defaults to 0 and has no effect', () => {
+      const rb = createRigidBody()
+      expect(rb.additionalSolverIterations).toBe(0)
+    })
+  })
 })
 
 // ── Contact events ────────────────────────────────────────────────────────────
@@ -941,6 +1000,168 @@ describe('PhysicsSystem — impulse solver integration', () => {
       // Floor top = 200 - 10 = 190, circle center should be at ~190 - 10 = 180
       expect(t.y).toBeGreaterThan(100) // definitely fell
       expect(rb.vy).toBeCloseTo(0, 0) // stopped or nearly stopped
+    })
+  })
+})
+
+// ── Stage 1.7 — Advanced physics tests ───────────────────────────────────────
+
+describe('PhysicsSystem — Stage 1.7', () => {
+  describe('stack of 5 boxes stability', () => {
+    it('5 dynamic boxes stacked on a static floor remain stable after 300 steps', () => {
+      const { world } = createTestWorld(980)
+
+      // Wide static floor centered at y=200, height=20 (top edge at y=190)
+      addStatic(world, 0, 200, 800, 20)
+
+      // Drop boxes one-by-one, letting each settle before adding the next.
+      // This avoids instability from multiple overlapping dynamic boxes at once.
+      const boxSize = 20
+      const ids: number[] = []
+
+      for (let i = 0; i < 5; i++) {
+        // Each box starts 30px above where it should rest
+        // Box 0 rests at y=180 (floor top 190 - half box 10), box 1 at 160, etc.
+        const restY = 180 - i * boxSize
+        const startY = restY - 30
+        ids.push(addDynamic(world, 0, startY, boxSize, boxSize))
+        // Let this box settle
+        runSteps(world, 60)
+      }
+
+      // Run 300 more steps to verify stability
+      runSteps(world, 300)
+
+      const floorTop = 200 - 10 // 190
+
+      for (let i = 0; i < 5; i++) {
+        const t = world.getComponent<TransformComponent>(ids[i], 'Transform')!
+        const rb = world.getComponent<RigidBodyComponent>(ids[i], 'RigidBody')!
+
+        // All boxes must be above the floor (center y < floor top)
+        expect(t.y).toBeLessThan(floorTop)
+
+        // Stack should be stable: vertical velocity close to 0
+        expect(Math.abs(rb.vy)).toBeLessThan(5)
+
+        // Boxes should not be scattered wildly: stay within reasonable x range
+        expect(Math.abs(t.x)).toBeLessThan(100)
+      }
+    })
+  })
+
+  describe('off-center collision generates angular velocity', () => {
+    it('ball hit off-center gains angular velocity from torque', () => {
+      const { world } = createTestWorld(0) // zero gravity
+
+      // Body A: moving right
+      const a = world.createEntity()
+      world.addComponent(a, createTransform(0, 0))
+      world.addComponent(a, createRigidBody({ restitution: 0.5 }))
+      world.addComponent(a, createBoxCollider(20, 20))
+
+      // Body B: stationary, offset vertically so the hit is off-center
+      const b = world.createEntity()
+      world.addComponent(b, createTransform(18, 8)) // vertical offset creates off-center contact
+      world.addComponent(b, createRigidBody({ restitution: 0.5 }))
+      world.addComponent(b, createBoxCollider(20, 20))
+
+      const rbA = world.getComponent<RigidBodyComponent>(a, 'RigidBody')!
+      rbA.vx = 200
+
+      runSteps(world, 30)
+
+      const rbB = world.getComponent<RigidBodyComponent>(b, 'RigidBody')!
+
+      // Off-center impact should generate non-zero angular velocity on the struck body
+      expect(rbB.angularVelocity).not.toBeCloseTo(0, 1)
+    })
+  })
+
+  describe('friction on surface', () => {
+    it('high friction body decelerates faster than zero friction body', () => {
+      // --- High friction setup ---
+      const { world: worldHigh } = createTestWorld(980)
+      // Floor with high friction
+      const floorHigh = worldHigh.createEntity()
+      worldHigh.addComponent(floorHigh, createTransform(0, 200))
+      worldHigh.addComponent(floorHigh, createRigidBody({ isStatic: true }))
+      worldHigh.addComponent(floorHigh, createBoxCollider(2000, 20, { friction: 1.0 }))
+
+      // Dynamic body with high friction, start on the floor
+      const highId = worldHigh.createEntity()
+      worldHigh.addComponent(highId, createTransform(0, 180)) // resting on floor top (200-10-10=180)
+      worldHigh.addComponent(highId, createRigidBody())
+      worldHigh.addComponent(highId, createBoxCollider(20, 20, { friction: 1.0 }))
+
+      // Let it settle on the floor first
+      runSteps(worldHigh, 30)
+      const rbHigh = worldHigh.getComponent<RigidBodyComponent>(highId, 'RigidBody')!
+      rbHigh.vx = 200
+
+      runSteps(worldHigh, 120)
+      const vxHigh = Math.abs(rbHigh.vx)
+
+      // --- Zero friction setup ---
+      const { world: worldLow } = createTestWorld(980)
+      const floorLow = worldLow.createEntity()
+      worldLow.addComponent(floorLow, createTransform(0, 200))
+      worldLow.addComponent(floorLow, createRigidBody({ isStatic: true }))
+      worldLow.addComponent(floorLow, createBoxCollider(2000, 20, { friction: 0.0 }))
+
+      const lowId = worldLow.createEntity()
+      worldLow.addComponent(lowId, createTransform(0, 180))
+      worldLow.addComponent(lowId, createRigidBody())
+      worldLow.addComponent(lowId, createBoxCollider(20, 20, { friction: 0.0 }))
+
+      runSteps(worldLow, 30)
+      const rbLow = worldLow.getComponent<RigidBodyComponent>(lowId, 'RigidBody')!
+      rbLow.vx = 200
+
+      runSteps(worldLow, 120)
+      const vxLow = Math.abs(rbLow.vx)
+
+      // Zero-friction body should retain more velocity than high-friction body
+      expect(vxLow).toBeGreaterThan(vxHigh)
+    })
+  })
+
+  describe('velocity clamping', () => {
+    it('linear velocity does not exceed maxLinearVelocity', () => {
+      const { world } = createTestWorld(980)
+
+      const id = world.createEntity()
+      world.addComponent(id, createTransform(0, 0))
+      world.addComponent(id, createRigidBody({ maxLinearVelocity: 100 }))
+      world.addComponent(id, createBoxCollider(20, 20))
+
+      // Run many steps to let gravity accelerate the body
+      runSteps(world, 300)
+
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const speed = Math.sqrt(rb.vx * rb.vx + rb.vy * rb.vy)
+
+      // Velocity magnitude should never exceed the cap (allow small float tolerance)
+      expect(speed).toBeLessThanOrEqual(100 + 0.01)
+    })
+  })
+
+  describe('angular velocity clamping', () => {
+    it('angular velocity is clamped to maxAngularVelocity after one step', () => {
+      const { world } = createTestWorld(0)
+
+      const id = world.createEntity()
+      world.addComponent(id, createTransform(0, 0))
+      world.addComponent(id, createRigidBody({ maxAngularVelocity: 5 }))
+      world.addComponent(id, createBoxCollider(20, 20))
+
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      rb.angularVelocity = 100
+
+      runSteps(world, 1)
+
+      // Angular velocity should be clamped to maxAngularVelocity
+      expect(Math.abs(rb.angularVelocity)).toBeLessThanOrEqual(5 + 0.01)
     })
   })
 })

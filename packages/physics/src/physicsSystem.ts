@@ -1058,6 +1058,29 @@ export class PhysicsSystem implements System {
 
     solveVelocities(constraints, this.config.velocityIterations)
 
+    // ── Phase 5b: Additional solver iterations for bodies that request them ──
+    {
+      // Find the max additionalSolverIterations across all bodies
+      let maxExtra = 0
+      for (const [, body] of solverBodies) {
+        const rb = world.getComponent<RigidBodyComponent>(body.entityId, 'RigidBody')
+        if (rb && rb.additionalSolverIterations > maxExtra) {
+          maxExtra = rb.additionalSolverIterations
+        }
+      }
+      if (maxExtra > 0) {
+        // Filter constraints where at least one body has additionalSolverIterations > 0
+        const extraConstraints = constraints.filter((c) => {
+          const rbA = world.getComponent<RigidBodyComponent>(c.bodyA.entityId, 'RigidBody')
+          const rbB = world.getComponent<RigidBodyComponent>(c.bodyB.entityId, 'RigidBody')
+          return (rbA && rbA.additionalSolverIterations > 0) || (rbB && rbB.additionalSolverIterations > 0)
+        })
+        if (extraConstraints.length > 0) {
+          solveVelocities(extraConstraints, maxExtra)
+        }
+      }
+    }
+
     // ── Phase 6: Integrate positions ──────────────────────────────────────
 
     for (const id of allDynamics) {

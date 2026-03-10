@@ -78,6 +78,8 @@ export interface RigidBodyComponent extends Component {
   maxAngularVelocity: number
   /** Arbitrary user data */
   userData: unknown
+  /** Extra velocity solver iterations for constraints involving this body. Default 0 */
+  additionalSolverIterations: number
   /** Whether mass properties need recomputing (internal) */
   _massPropertiesDirty: boolean
 }
@@ -120,6 +122,7 @@ export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyCo
     maxLinearVelocity: 0,
     maxAngularVelocity: 0,
     userData: null,
+    additionalSolverIterations: 0,
     _massPropertiesDirty: true,
     ...opts,
   }
