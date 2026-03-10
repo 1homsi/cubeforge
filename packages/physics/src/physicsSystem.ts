@@ -554,6 +554,34 @@ export class PhysicsSystem implements System {
       }
     }
 
+    // ── Phase 0.5: Kinematic position-based mode ──────────────────────────
+    // Compute velocity from kinematic position/rotation targets so that
+    // kinematic bodies push dynamic bodies through the solver.
+
+    const allKinematics = [
+      ...world.query('Transform', 'RigidBody', 'BoxCollider'),
+      ...world.query('Transform', 'RigidBody', 'CircleCollider'),
+      ...world.query('Transform', 'RigidBody', 'CapsuleCollider'),
+    ].filter((id) => {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      return rb.isKinematic && rb.enabled
+    })
+
+    for (const id of allKinematics) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      if (rb._nextKinematicX !== null || rb._nextKinematicY !== null) {
+        rb.vx = rb._nextKinematicX !== null ? (rb._nextKinematicX - t.x) / dt : 0
+        rb.vy = rb._nextKinematicY !== null ? (rb._nextKinematicY - t.y) / dt : 0
+        rb._nextKinematicX = null
+        rb._nextKinematicY = null
+      }
+      if (rb._nextKinematicRotation !== null) {
+        rb.angularVelocity = (rb._nextKinematicRotation - t.rotation) / dt
+        rb._nextKinematicRotation = null
+      }
+    }
+
     // ── Phase 1: Force accumulation + velocity integration ────────────────
 
     // All dynamics: box, circle, capsule, polygon, triangle

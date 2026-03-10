@@ -41,7 +41,7 @@ What we already have and will keep:
 
 ---
 
-## Stage 1 — Impulse Solver Core :white_check_mark:
+## Stage 1 — Impulse Solver Core :white_check_mark: COMPLETE
 
 > The foundation everything else depends on. Replace position-based correction with impulse-based collision response.
 
@@ -132,7 +132,7 @@ What we already have and will keep:
 
 ---
 
-## Stage 2 — Shape Parity
+## Stage 2 — Shape Parity :white_check_mark: COMPLETE
 
 > Upgrade all collider shapes to participate in the impulse solver with proper contact generation. Match every shape Rapier supports.
 

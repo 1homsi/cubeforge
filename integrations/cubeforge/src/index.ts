@@ -132,6 +132,8 @@ export { useAISteering } from '@cubeforge/gameplay'
 export type { AISteering } from '@cubeforge/gameplay'
 export { useKinematicBody } from '@cubeforge/gameplay'
 export type { KinematicBodyControls } from '@cubeforge/gameplay'
+export { useForces } from '@cubeforge/gameplay'
+export type { ForceControls } from '@cubeforge/gameplay'
 export { useDropThrough } from '@cubeforge/gameplay'
 export { useDialogue } from '@cubeforge/gameplay'
 export type { DialogueLine, DialogueScript, DialogueControls } from '@cubeforge/gameplay'
@@ -201,6 +203,24 @@ export type { TriMeshColliderComponent } from '@cubeforge/physics'
 export type { CombineRule } from '@cubeforge/physics'
 export type { ContactManifold, ContactPoint } from '@cubeforge/physics'
 export { velocityAtPoint, kineticEnergy, potentialEnergy, predictPosition } from '@cubeforge/physics'
+export {
+  addForce,
+  addTorque,
+  addForceAtPoint,
+  applyImpulse,
+  applyTorqueImpulse,
+  applyImpulseAtPoint,
+  resetForces,
+  resetTorques,
+  setNextKinematicPosition,
+  setNextKinematicRotation,
+  COLLISION_DYNAMIC_DYNAMIC,
+  COLLISION_DYNAMIC_KINEMATIC,
+  COLLISION_DYNAMIC_STATIC,
+  COLLISION_KINEMATIC_KINEMATIC,
+  COLLISION_KINEMATIC_STATIC,
+  DEFAULT_ACTIVE_COLLISION_TYPES,
+} from '@cubeforge/physics'
 export {
   createConvexPolygonCollider,
   createTriangleCollider,
