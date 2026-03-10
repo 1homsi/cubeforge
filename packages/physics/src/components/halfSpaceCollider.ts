@@ -23,9 +23,7 @@ export interface HalfSpaceColliderComponent extends Component {
   enabled: boolean
 }
 
-export function createHalfSpaceCollider(
-  opts?: Partial<HalfSpaceColliderComponent>,
-): HalfSpaceColliderComponent {
+export function createHalfSpaceCollider(opts?: Partial<HalfSpaceColliderComponent>): HalfSpaceColliderComponent {
   return {
     type: 'HalfSpaceCollider',
     normalX: 0,

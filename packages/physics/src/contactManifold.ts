@@ -717,16 +717,7 @@ export function generateCapsuleCapsuleManifold(
   const segA = capsuleSegment(aCx, aCy, aHw, aHh)
   const segB = capsuleSegment(bCx, bCy, bHw, bHh)
 
-  const closest = closestPointsBetweenSegments(
-    segA.ax,
-    segA.ay,
-    segA.bx,
-    segA.by,
-    segB.ax,
-    segB.ay,
-    segB.bx,
-    segB.by,
-  )
+  const closest = closestPointsBetweenSegments(segA.ax, segA.ay, segA.bx, segA.by, segB.ax, segB.ay, segB.bx, segB.by)
 
   const dx = closest.p2x - closest.p1x
   const dy = closest.p2y - closest.p1y

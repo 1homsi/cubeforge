@@ -58,7 +58,14 @@ import {
 import { generateTriMeshCircleManifold, generateTriMeshBoxManifold } from './triMeshManifold'
 import { buildBVH } from './bvh'
 import type { BVH } from './bvh'
-import { boxMassProperties, circleMassProperties, capsuleMassProperties, polygonMassProperties, triangleMassProperties, parallelAxis } from './massProperties'
+import {
+  boxMassProperties,
+  circleMassProperties,
+  capsuleMassProperties,
+  polygonMassProperties,
+  triangleMassProperties,
+  parallelAxis,
+} from './massProperties'
 import { combineCoefficients } from './combineRules'
 import type { SolverBody } from './impulseSolver'
 import { initializeConstraints, solveVelocities, solvePositions } from './impulseSolver'
@@ -1104,8 +1111,18 @@ export class PhysicsSystem implements System {
           const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh)
           if (!result) continue
 
-          const combinedFriction = combineCoefficients(cc.friction, cc.frictionCombineRule, sc.friction, sc.frictionCombineRule)
-          const combinedRestitution = combineCoefficients(cc.restitution, cc.restitutionCombineRule, sc.restitution, sc.restitutionCombineRule)
+          const combinedFriction = combineCoefficients(
+            cc.friction,
+            cc.frictionCombineRule,
+            sc.friction,
+            sc.frictionCombineRule,
+          )
+          const combinedRestitution = combineCoefficients(
+            cc.restitution,
+            cc.restitutionCombineRule,
+            sc.restitution,
+            sc.restitutionCombineRule,
+          )
 
           const key = pairKey(cid, sid)
           const manifold: ContactManifold = {
@@ -1149,11 +1166,27 @@ export class PhysicsSystem implements System {
         const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
         if (!result) continue
 
-        if (crb.sleeping) { crb.sleeping = false; crb.sleepTimer = 0 }
-        if (brb.sleeping) { brb.sleeping = false; brb.sleepTimer = 0 }
+        if (crb.sleeping) {
+          crb.sleeping = false
+          crb.sleepTimer = 0
+        }
+        if (brb.sleeping) {
+          brb.sleeping = false
+          brb.sleepTimer = 0
+        }
 
-        const combinedFriction = combineCoefficients(cc.friction, cc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(cc.restitution, cc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          cc.friction,
+          cc.frictionCombineRule,
+          bc.friction,
+          bc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          cc.restitution,
+          cc.restitutionCombineRule,
+          bc.restitution,
+          bc.restitutionCombineRule,
+        )
 
         const key = pairKey(cid, bid)
         const manifold: ContactManifold = {
@@ -1187,16 +1220,38 @@ export class PhysicsSystem implements System {
         if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
 
         const result = generateCapsuleCapsuleManifold(
-          ta.x + ca.offsetX, ta.y + ca.offsetY, ca.width / 2, ca.height / 2,
-          tb.x + cb.offsetX, tb.y + cb.offsetY, cb.width / 2, cb.height / 2,
+          ta.x + ca.offsetX,
+          ta.y + ca.offsetY,
+          ca.width / 2,
+          ca.height / 2,
+          tb.x + cb.offsetX,
+          tb.y + cb.offsetY,
+          cb.width / 2,
+          cb.height / 2,
         )
         if (!result) continue
 
-        if (rba.sleeping) { rba.sleeping = false; rba.sleepTimer = 0 }
-        if (rbb.sleeping) { rbb.sleeping = false; rbb.sleepTimer = 0 }
+        if (rba.sleeping) {
+          rba.sleeping = false
+          rba.sleepTimer = 0
+        }
+        if (rbb.sleeping) {
+          rbb.sleeping = false
+          rbb.sleepTimer = 0
+        }
 
-        const combinedFriction = combineCoefficients(ca.friction, ca.frictionCombineRule, cb.friction, cb.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(ca.restitution, ca.restitutionCombineRule, cb.restitution, cb.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          ca.friction,
+          ca.frictionCombineRule,
+          cb.friction,
+          cb.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          ca.restitution,
+          ca.restitutionCombineRule,
+          cb.restitution,
+          cb.restitutionCombineRule,
+        )
 
         const key = pairKey(ia, ib)
         const manifold: ContactManifold = {
@@ -1236,16 +1291,37 @@ export class PhysicsSystem implements System {
         if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask)) continue
 
         const result = generateCapsuleCircleManifold(
-          capCx, capCy, capHw, capHh,
-          ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius,
+          capCx,
+          capCy,
+          capHw,
+          capHh,
+          ot.x + oc.offsetX,
+          ot.y + oc.offsetY,
+          oc.radius,
         )
         if (!result) continue
 
-        if (crb.sleeping) { crb.sleeping = false; crb.sleepTimer = 0 }
-        if (orb.sleeping) { orb.sleeping = false; orb.sleepTimer = 0 }
+        if (crb.sleeping) {
+          crb.sleeping = false
+          crb.sleepTimer = 0
+        }
+        if (orb.sleeping) {
+          orb.sleeping = false
+          orb.sleepTimer = 0
+        }
 
-        const combinedFriction = combineCoefficients(cc.friction, cc.frictionCombineRule, oc.friction, oc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(cc.restitution, cc.restitutionCombineRule, oc.restitution, oc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          cc.friction,
+          cc.frictionCombineRule,
+          oc.friction,
+          oc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          cc.restitution,
+          cc.restitutionCombineRule,
+          oc.restitution,
+          oc.restitutionCombineRule,
+        )
 
         const key = pairKey(cid, oid)
         const manifold: ContactManifold = {
@@ -1273,7 +1349,10 @@ export class PhysicsSystem implements System {
       if (!pc.enabled || pc.isTrigger) continue
 
       // Compute polygon AABB for spatial grid query
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity
       for (const v of pc.vertices) {
         const wx = v.x + pt.x + pc.offsetX
         const wy = v.y + pt.y + pc.offsetY
@@ -1302,11 +1381,31 @@ export class PhysicsSystem implements System {
           if (!canInteract(pc.layer, pc.mask, sc.layer, sc.mask)) continue
 
           const sAABB = getAABB(st, sc)
-          const result = generatePolygonBoxManifold(pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY, sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh)
+          const result = generatePolygonBoxManifold(
+            pc.vertices,
+            pt.x,
+            pt.y,
+            pc.offsetX,
+            pc.offsetY,
+            sAABB.cx,
+            sAABB.cy,
+            sAABB.hw,
+            sAABB.hh,
+          )
           if (!result) continue
 
-          const combinedFriction = combineCoefficients(pc.friction, pc.frictionCombineRule, sc.friction, sc.frictionCombineRule)
-          const combinedRestitution = combineCoefficients(pc.restitution, pc.restitutionCombineRule, sc.restitution, sc.restitutionCombineRule)
+          const combinedFriction = combineCoefficients(
+            pc.friction,
+            pc.frictionCombineRule,
+            sc.friction,
+            sc.frictionCombineRule,
+          )
+          const combinedRestitution = combineCoefficients(
+            pc.restitution,
+            pc.restitutionCombineRule,
+            sc.restitution,
+            sc.restitutionCombineRule,
+          )
 
           const key = pairKey(pid, sid)
           const manifold: ContactManifold = {
@@ -1342,14 +1441,40 @@ export class PhysicsSystem implements System {
         if (!canInteract(pc.layer, pc.mask, bc.layer, bc.mask)) continue
 
         const bAABB = getAABB(bt, bc)
-        const result = generatePolygonBoxManifold(pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        const result = generatePolygonBoxManifold(
+          pc.vertices,
+          pt.x,
+          pt.y,
+          pc.offsetX,
+          pc.offsetY,
+          bAABB.cx,
+          bAABB.cy,
+          bAABB.hw,
+          bAABB.hh,
+        )
         if (!result) continue
 
-        if (prb.sleeping) { prb.sleeping = false; prb.sleepTimer = 0 }
-        if (brb.sleeping) { brb.sleeping = false; brb.sleepTimer = 0 }
+        if (prb.sleeping) {
+          prb.sleeping = false
+          prb.sleepTimer = 0
+        }
+        if (brb.sleeping) {
+          brb.sleeping = false
+          brb.sleepTimer = 0
+        }
 
-        const combinedFriction = combineCoefficients(pc.friction, pc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(pc.restitution, pc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          pc.friction,
+          pc.frictionCombineRule,
+          bc.friction,
+          bc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          pc.restitution,
+          pc.restitutionCombineRule,
+          bc.restitution,
+          bc.restitutionCombineRule,
+        )
 
         const key = pairKey(pid, bid)
         const manifold: ContactManifold = {
@@ -1383,16 +1508,40 @@ export class PhysicsSystem implements System {
         if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
 
         const result = generatePolygonPolygonManifold(
-          ca.vertices, ta.x, ta.y, ca.offsetX, ca.offsetY,
-          cb.vertices, tb.x, tb.y, cb.offsetX, cb.offsetY,
+          ca.vertices,
+          ta.x,
+          ta.y,
+          ca.offsetX,
+          ca.offsetY,
+          cb.vertices,
+          tb.x,
+          tb.y,
+          cb.offsetX,
+          cb.offsetY,
         )
         if (!result) continue
 
-        if (rba.sleeping) { rba.sleeping = false; rba.sleepTimer = 0 }
-        if (rbb.sleeping) { rbb.sleeping = false; rbb.sleepTimer = 0 }
+        if (rba.sleeping) {
+          rba.sleeping = false
+          rba.sleepTimer = 0
+        }
+        if (rbb.sleeping) {
+          rbb.sleeping = false
+          rbb.sleepTimer = 0
+        }
 
-        const combinedFriction = combineCoefficients(ca.friction, ca.frictionCombineRule, cb.friction, cb.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(ca.restitution, ca.restitutionCombineRule, cb.restitution, cb.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          ca.friction,
+          ca.frictionCombineRule,
+          cb.friction,
+          cb.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          ca.restitution,
+          ca.restitutionCombineRule,
+          cb.restitution,
+          cb.restitutionCombineRule,
+        )
 
         const key = pairKey(ia, ib)
         const manifold: ContactManifold = {
@@ -1427,16 +1576,38 @@ export class PhysicsSystem implements System {
         if (!canInteract(pc.layer, pc.mask, oc.layer, oc.mask)) continue
 
         const result = generatePolygonCircleManifold(
-          pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY,
-          ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius,
+          pc.vertices,
+          pt.x,
+          pt.y,
+          pc.offsetX,
+          pc.offsetY,
+          ot.x + oc.offsetX,
+          ot.y + oc.offsetY,
+          oc.radius,
         )
         if (!result) continue
 
-        if (prb.sleeping) { prb.sleeping = false; prb.sleepTimer = 0 }
-        if (orb.sleeping) { orb.sleeping = false; orb.sleepTimer = 0 }
+        if (prb.sleeping) {
+          prb.sleeping = false
+          prb.sleepTimer = 0
+        }
+        if (orb.sleeping) {
+          orb.sleeping = false
+          orb.sleepTimer = 0
+        }
 
-        const combinedFriction = combineCoefficients(pc.friction, pc.frictionCombineRule, oc.friction, oc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(pc.restitution, pc.restitutionCombineRule, oc.restitution, oc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          pc.friction,
+          pc.frictionCombineRule,
+          oc.friction,
+          oc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          pc.restitution,
+          pc.restitutionCombineRule,
+          oc.restitution,
+          oc.restitutionCombineRule,
+        )
 
         const key = pairKey(pid, oid)
         const manifold: ContactManifold = {
@@ -1466,7 +1637,10 @@ export class PhysicsSystem implements System {
       const triVerts = [tc.a, tc.b, tc.c]
 
       // Compute triangle AABB for spatial grid query
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity
       for (const v of triVerts) {
         const wx = v.x + tt.x + tc.offsetX
         const wy = v.y + tt.y + tc.offsetY
@@ -1495,11 +1669,31 @@ export class PhysicsSystem implements System {
           if (!canInteract(tc.layer, tc.mask, sc.layer, sc.mask)) continue
 
           const sAABB = getAABB(st, sc)
-          const result = generatePolygonBoxManifold(triVerts, tt.x, tt.y, tc.offsetX, tc.offsetY, sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh)
+          const result = generatePolygonBoxManifold(
+            triVerts,
+            tt.x,
+            tt.y,
+            tc.offsetX,
+            tc.offsetY,
+            sAABB.cx,
+            sAABB.cy,
+            sAABB.hw,
+            sAABB.hh,
+          )
           if (!result) continue
 
-          const combinedFriction = combineCoefficients(tc.friction, tc.frictionCombineRule, sc.friction, sc.frictionCombineRule)
-          const combinedRestitution = combineCoefficients(tc.restitution, tc.restitutionCombineRule, sc.restitution, sc.restitutionCombineRule)
+          const combinedFriction = combineCoefficients(
+            tc.friction,
+            tc.frictionCombineRule,
+            sc.friction,
+            sc.frictionCombineRule,
+          )
+          const combinedRestitution = combineCoefficients(
+            tc.restitution,
+            tc.restitutionCombineRule,
+            sc.restitution,
+            sc.restitutionCombineRule,
+          )
 
           const key = pairKey(tid, sid)
           const manifold: ContactManifold = {
@@ -1537,16 +1731,38 @@ export class PhysicsSystem implements System {
         if (!canInteract(tc.layer, tc.mask, oc.layer, oc.mask)) continue
 
         const result = generatePolygonCircleManifold(
-          triVerts, tt.x, tt.y, tc.offsetX, tc.offsetY,
-          ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius,
+          triVerts,
+          tt.x,
+          tt.y,
+          tc.offsetX,
+          tc.offsetY,
+          ot.x + oc.offsetX,
+          ot.y + oc.offsetY,
+          oc.radius,
         )
         if (!result) continue
 
-        if (trb.sleeping) { trb.sleeping = false; trb.sleepTimer = 0 }
-        if (orb.sleeping) { orb.sleeping = false; orb.sleepTimer = 0 }
+        if (trb.sleeping) {
+          trb.sleeping = false
+          trb.sleepTimer = 0
+        }
+        if (orb.sleeping) {
+          orb.sleeping = false
+          orb.sleepTimer = 0
+        }
 
-        const combinedFriction = combineCoefficients(tc.friction, tc.frictionCombineRule, oc.friction, oc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(tc.restitution, tc.restitutionCombineRule, oc.restitution, oc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          tc.friction,
+          tc.frictionCombineRule,
+          oc.friction,
+          oc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          tc.restitution,
+          tc.restitutionCombineRule,
+          oc.restitution,
+          oc.restitutionCombineRule,
+        )
 
         const key = pairKey(tid, oid)
         const manifold: ContactManifold = {
@@ -1588,8 +1804,18 @@ export class PhysicsSystem implements System {
         const result = generateSegmentBoxManifold(segAx, segAy, segBx, segBy, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(sc.friction, sc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(sc.restitution, sc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          sc.friction,
+          sc.frictionCombineRule,
+          bc.friction,
+          bc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          sc.restitution,
+          sc.restitutionCombineRule,
+          bc.restitution,
+          bc.restitutionCombineRule,
+        )
 
         const key = pairKey(sid, bid)
         const manifold: ContactManifold = {
@@ -1616,13 +1842,28 @@ export class PhysicsSystem implements System {
         if (!canInteract(sc.layer, sc.mask, cc.layer, cc.mask)) continue
 
         const result = generateSegmentCircleManifold(
-          segAx, segAy, segBx, segBy,
-          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
+          segAx,
+          segAy,
+          segBx,
+          segBy,
+          ct.x + cc.offsetX,
+          ct.y + cc.offsetY,
+          cc.radius,
         )
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(sc.friction, sc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(sc.restitution, sc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          sc.friction,
+          sc.frictionCombineRule,
+          cc.friction,
+          cc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          sc.restitution,
+          sc.restitutionCombineRule,
+          cc.restitution,
+          cc.restitutionCombineRule,
+        )
 
         const key = pairKey(sid, cid)
         const manifold: ContactManifold = {
@@ -1656,11 +1897,31 @@ export class PhysicsSystem implements System {
         if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask)) continue
 
         const bAABB = getAABB(bt, bc)
-        const result = generateHeightFieldBoxManifold(ht.x, ht.y, hc.heights, hc.scaleX, hc.scaleY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        const result = generateHeightFieldBoxManifold(
+          ht.x,
+          ht.y,
+          hc.heights,
+          hc.scaleX,
+          hc.scaleY,
+          bAABB.cx,
+          bAABB.cy,
+          bAABB.hw,
+          bAABB.hh,
+        )
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          hc.friction,
+          hc.frictionCombineRule,
+          bc.friction,
+          bc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          hc.restitution,
+          hc.restitutionCombineRule,
+          bc.restitution,
+          bc.restitutionCombineRule,
+        )
 
         const key = pairKey(hid, bid)
         const manifold: ContactManifold = {
@@ -1687,13 +1948,29 @@ export class PhysicsSystem implements System {
         if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask)) continue
 
         const result = generateHeightFieldCircleManifold(
-          ht.x, ht.y, hc.heights, hc.scaleX, hc.scaleY,
-          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
+          ht.x,
+          ht.y,
+          hc.heights,
+          hc.scaleX,
+          hc.scaleY,
+          ct.x + cc.offsetX,
+          ct.y + cc.offsetY,
+          cc.radius,
         )
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          hc.friction,
+          hc.frictionCombineRule,
+          cc.friction,
+          cc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          hc.restitution,
+          hc.restitutionCombineRule,
+          cc.restitution,
+          cc.restitutionCombineRule,
+        )
 
         const key = pairKey(hid, cid)
         const manifold: ContactManifold = {
@@ -1727,11 +2004,30 @@ export class PhysicsSystem implements System {
         if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask)) continue
 
         const bAABB = getAABB(bt, bc)
-        const result = generateHalfSpaceBoxManifold(ht.x, ht.y, hc.normalX, hc.normalY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        const result = generateHalfSpaceBoxManifold(
+          ht.x,
+          ht.y,
+          hc.normalX,
+          hc.normalY,
+          bAABB.cx,
+          bAABB.cy,
+          bAABB.hw,
+          bAABB.hh,
+        )
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          hc.friction,
+          hc.frictionCombineRule,
+          bc.friction,
+          bc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          hc.restitution,
+          hc.restitutionCombineRule,
+          bc.restitution,
+          bc.restitutionCombineRule,
+        )
 
         const key = pairKey(hid, bid)
         const manifold: ContactManifold = {
@@ -1758,13 +2054,28 @@ export class PhysicsSystem implements System {
         if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask)) continue
 
         const result = generateHalfSpaceCircleManifold(
-          ht.x, ht.y, hc.normalX, hc.normalY,
-          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
+          ht.x,
+          ht.y,
+          hc.normalX,
+          hc.normalY,
+          ct.x + cc.offsetX,
+          ct.y + cc.offsetY,
+          cc.radius,
         )
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          hc.friction,
+          hc.frictionCombineRule,
+          cc.friction,
+          cc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          hc.restitution,
+          hc.restitutionCombineRule,
+          cc.restitution,
+          cc.restitutionCombineRule,
+        )
 
         const key = pairKey(hid, cid)
         const manifold: ContactManifold = {
@@ -1808,8 +2119,18 @@ export class PhysicsSystem implements System {
         const result = generateTriMeshBoxManifold(bvh, mt.x, mt.y, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(mc.friction, mc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(mc.restitution, mc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          mc.friction,
+          mc.frictionCombineRule,
+          bc.friction,
+          bc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          mc.restitution,
+          mc.restitutionCombineRule,
+          bc.restitution,
+          bc.restitutionCombineRule,
+        )
 
         const key = pairKey(mid, bid)
         const manifold: ContactManifold = {
@@ -1835,14 +2156,21 @@ export class PhysicsSystem implements System {
         if (!cc.enabled || cc.isTrigger) continue
         if (!canInteract(mc.layer, mc.mask, cc.layer, cc.mask)) continue
 
-        const result = generateTriMeshCircleManifold(
-          bvh, mt.x, mt.y,
-          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
-        )
+        const result = generateTriMeshCircleManifold(bvh, mt.x, mt.y, ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius)
         if (!result) continue
 
-        const combinedFriction = combineCoefficients(mc.friction, mc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
-        const combinedRestitution = combineCoefficients(mc.restitution, mc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+        const combinedFriction = combineCoefficients(
+          mc.friction,
+          mc.frictionCombineRule,
+          cc.friction,
+          cc.frictionCombineRule,
+        )
+        const combinedRestitution = combineCoefficients(
+          mc.restitution,
+          mc.restitutionCombineRule,
+          cc.restitution,
+          cc.restitutionCombineRule,
+        )
 
         const key = pairKey(mid, cid)
         const manifold: ContactManifold = {
@@ -2703,7 +3031,17 @@ export class PhysicsSystem implements System {
           if (!canInteract(polyLayer, polyMask, bc.layer, bc.mask)) continue
           const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
           const bAABB = getAABB(bt, bc)
-          const result = generatePolygonBoxManifold(verts, pt.x, pt.y, offX, offY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+          const result = generatePolygonBoxManifold(
+            verts,
+            pt.x,
+            pt.y,
+            offX,
+            offY,
+            bAABB.cx,
+            bAABB.cy,
+            bAABB.hw,
+            bAABB.hh,
+          )
           if (result) currentPolyPairs.set(pairKey(pid, bid), [pid, bid])
         }
       }
@@ -2730,7 +3068,18 @@ export class PhysicsSystem implements System {
           const offAy = pa ? pa.offsetY : ta_tri ? ta_tri.offsetY : 0
           const offBx = pb ? pb.offsetX : tb_tri ? tb_tri.offsetX : 0
           const offBy = pb ? pb.offsetY : tb_tri ? tb_tri.offsetY : 0
-          const result = generatePolygonPolygonManifold(vertsA, ta2.x, ta2.y, offAx, offAy, vertsB, tb2.x, tb2.y, offBx, offBy)
+          const result = generatePolygonPolygonManifold(
+            vertsA,
+            ta2.x,
+            ta2.y,
+            offAx,
+            offAy,
+            vertsB,
+            tb2.x,
+            tb2.y,
+            offBx,
+            offBy,
+          )
           if (result) currentPolyPairs.set(pairKey(ia, ib), [ia, ib])
         }
       }

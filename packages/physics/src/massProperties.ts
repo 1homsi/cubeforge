@@ -204,13 +204,27 @@ export function polygonMassProperties(
     // Moment of inertia of triangle about its own centroid:
     // I = (mass/18) * (dot(a,a) + dot(b,b) + dot(c,c) - a·b - a·c - b·c)
     // where a, b, c are vertex positions relative to the triangle
-    const ax = p0.x - tcx, ay = p0.y - tcy
-    const bx = p1.x - tcx, by = p1.y - tcy
-    const cxx = p2.x - tcx, cyy = p2.y - tcy
+    const ax = p0.x - tcx,
+      ay = p0.y - tcy
+    const bx = p1.x - tcx,
+      by = p1.y - tcy
+    const cxx = p2.x - tcx,
+      cyy = p2.y - tcy
     const triInertia =
-      (triMass / 6) *
-      (ax * ax + ay * ay + bx * bx + by * by + cxx * cxx + cyy * cyy +
-        ax * bx + ay * by + ax * cxx + ay * cyy + bx * cxx + by * cyy) / 6
+      ((triMass / 6) *
+        (ax * ax +
+          ay * ay +
+          bx * bx +
+          by * by +
+          cxx * cxx +
+          cyy * cyy +
+          ax * bx +
+          ay * by +
+          ax * cxx +
+          ay * cyy +
+          bx * cxx +
+          by * cyy)) /
+      6
 
     // Shift to polygon centroid via parallel axis theorem
     const dx = tcx - cx
@@ -248,9 +262,12 @@ export function triangleMassProperties(
   const cy = (a.y + b.y + c.y) / 3
 
   // Vertices relative to centroid
-  const ax = a.x - cx, ay = a.y - cy
-  const bx = b.x - cx, by = b.y - cy
-  const ccx = c.x - cx, ccy = c.y - cy
+  const ax = a.x - cx,
+    ay = a.y - cy
+  const bx = b.x - cx,
+    by = b.y - cy
+  const ccx = c.x - cx,
+    ccy = c.y - cy
 
   // Inertia about centroid:
   // I = (mass / 6) × (a'² + b'² + c'² + a'·b' + a'·c' + b'·c') / 6
@@ -262,7 +279,7 @@ export function triangleMassProperties(
   const dotAC = ax * ccx + ay * ccy
   const dotBC = bx * ccx + by * ccy
 
-  const inertia = (mass / 6) * (dotAA + dotBB + dotCC + dotAB + dotAC + dotBC) / 6
+  const inertia = ((mass / 6) * (dotAA + dotBB + dotCC + dotAB + dotAC + dotBC)) / 6
 
   return { mass, inertia }
 }

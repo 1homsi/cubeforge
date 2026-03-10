@@ -266,10 +266,7 @@ describe('Triangle collider physics', () => {
     const tri = world.createEntity()
     world.addComponent(tri, createTransform(0, 150))
     world.addComponent(tri, createRigidBody())
-    world.addComponent(
-      tri,
-      createTriangleCollider({ x: 0, y: -20 }, { x: 17, y: 10 }, { x: -17, y: 10 }),
-    )
+    world.addComponent(tri, createTriangleCollider({ x: 0, y: -20 }, { x: 17, y: 10 }, { x: -17, y: 10 }))
 
     stepN(physics, world, 120)
 
@@ -370,10 +367,7 @@ describe('HeightField collider', () => {
     const terrain = world.createEntity()
     world.addComponent(terrain, createTransform(0, 200))
     world.addComponent(terrain, createRigidBody({ isStatic: true }))
-    world.addComponent(
-      terrain,
-      createHeightFieldCollider([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], { scaleX: 40 }),
-    )
+    world.addComponent(terrain, createHeightFieldCollider([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], { scaleX: 40 }))
 
     const circle = world.createEntity()
     world.addComponent(circle, createTransform(80, 170))

@@ -12,11 +12,7 @@ import { closestPointOnSegment } from './satManifold'
 
 // ── Triangle-Circle contact ──────────────────────────────────────────────────
 
-function closestPointOnTriangle(
-  px: number,
-  py: number,
-  tri: Triangle2D,
-): { x: number; y: number } {
+function closestPointOnTriangle(px: number, py: number, tri: Triangle2D): { x: number; y: number } {
   // Check each edge and the interior
   const p1 = closestPointOnSegment(px, py, tri.ax, tri.ay, tri.bx, tri.by)
   const p2 = closestPointOnSegment(px, py, tri.bx, tri.by, tri.cx, tri.cy)

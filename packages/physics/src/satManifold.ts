@@ -139,13 +139,7 @@ interface ClipVertex {
  * Clip segment (v0, v1) against a line defined by normal and offset.
  * Keeps vertices on the positive side (or on the line).
  */
-function clipSegmentToLine(
-  v0: ClipVertex,
-  v1: ClipVertex,
-  nx: number,
-  ny: number,
-  offset: number,
-): ClipVertex[] {
+function clipSegmentToLine(v0: ClipVertex, v1: ClipVertex, nx: number, ny: number, offset: number): ClipVertex[] {
   const result: ClipVertex[] = []
   const d0 = dot(v0.x, v0.y, nx, ny) - offset
   const d1 = dot(v1.x, v1.y, nx, ny) - offset
