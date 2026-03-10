@@ -27,6 +27,8 @@ export interface SegmentColliderComponent extends Component {
   frictionCombineRule: CombineRule
   restitutionCombineRule: CombineRule
   enabled: boolean
+  /** Collision group — entities in the same non-empty group do NOT collide with each other */
+  group: string
 }
 
 export function createSegmentCollider(
@@ -49,6 +51,7 @@ export function createSegmentCollider(
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',
     enabled: true,
+    group: '',
     ...opts,
   }
 }

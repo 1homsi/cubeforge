@@ -21,6 +21,8 @@ export interface HalfSpaceColliderComponent extends Component {
   frictionCombineRule: CombineRule
   restitutionCombineRule: CombineRule
   enabled: boolean
+  /** Collision group — entities in the same non-empty group do NOT collide with each other */
+  group: string
 }
 
 export function createHalfSpaceCollider(opts?: Partial<HalfSpaceColliderComponent>): HalfSpaceColliderComponent {
@@ -35,6 +37,7 @@ export function createHalfSpaceCollider(opts?: Partial<HalfSpaceColliderComponen
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',
     enabled: true,
+    group: '',
     ...opts,
   }
 }

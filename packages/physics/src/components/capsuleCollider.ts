@@ -25,6 +25,8 @@ export interface CapsuleColliderComponent extends Component {
   restitutionCombineRule: CombineRule
   /** Whether this collider is enabled. Disabled colliders skip all detection */
   enabled: boolean
+  /** Collision group — entities in the same non-empty group do NOT collide with each other */
+  group: string
 }
 
 export function createCapsuleCollider(
@@ -46,6 +48,7 @@ export function createCapsuleCollider(
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',
     enabled: true,
+    group: '',
     ...opts,
   }
 }

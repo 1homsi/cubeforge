@@ -162,7 +162,16 @@ function maskAllows(mask: string | string[], layer: string): boolean {
   return mask === layer
 }
 
-function canInteract(aLayer: string, aMask: string | string[], bLayer: string, bMask: string | string[]): boolean {
+function canInteract(
+  aLayer: string,
+  aMask: string | string[],
+  bLayer: string,
+  bMask: string | string[],
+  aGroup?: string,
+  bGroup?: string,
+): boolean {
+  // Same non-empty group → skip (e.g. parts of the same character)
+  if (aGroup && bGroup && aGroup === bGroup) return false
   return maskAllows(aMask, bLayer) && maskAllows(bMask, aLayer)
 }
 
@@ -673,7 +682,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (!sc.enabled || sc.isTrigger) continue
-          if (!canInteract(col.layer, col.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(col.layer, col.mask, sc.layer, sc.mask, col.group, sc.group)) continue
 
           // One-way platform check
           if (sc.oneWay) {
@@ -810,7 +819,7 @@ export class PhysicsSystem implements System {
         const cb = world.getComponent<BoxColliderComponent>(ib, 'BoxCollider')!
         if (!ca.enabled || !cb.enabled) continue
         if (ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
 
         const aabbA = getAABB(ta, ca)
         const aabbB = getAABB(tb, cb)
@@ -893,7 +902,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (!sc.enabled || sc.isTrigger) continue
-          if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask, cc.group, sc.group)) continue
 
           const sAABB = getAABB(st, sc)
           const result = generateCircleBoxManifold(
@@ -955,7 +964,7 @@ export class PhysicsSystem implements System {
         const ca = world.getComponent<CircleColliderComponent>(ia, 'CircleCollider')!
         const cb = world.getComponent<CircleColliderComponent>(ib, 'CircleCollider')!
         if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
 
         const result = generateCircleCircleManifold(
           ta.x + ca.offsetX,
@@ -1024,7 +1033,7 @@ export class PhysicsSystem implements System {
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
         if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask)) continue
+        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) continue
 
         const bAABB = getAABB(bt, bc)
         const result = generateCircleBoxManifold(
@@ -1105,7 +1114,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (!sc.enabled || sc.isTrigger) continue
-          if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask, cc.group, sc.group)) continue
 
           const sAABB = getAABB(st, sc)
           const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh)
@@ -1160,7 +1169,7 @@ export class PhysicsSystem implements System {
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
         if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask)) continue
+        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) continue
 
         const bAABB = getAABB(bt, bc)
         const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
@@ -1217,7 +1226,7 @@ export class PhysicsSystem implements System {
         const ca = world.getComponent<CapsuleColliderComponent>(ia, 'CapsuleCollider')!
         const cb = world.getComponent<CapsuleColliderComponent>(ib, 'CapsuleCollider')!
         if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
 
         const result = generateCapsuleCapsuleManifold(
           ta.x + ca.offsetX,
@@ -1288,7 +1297,7 @@ export class PhysicsSystem implements System {
         const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
         const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
         if (!oc.enabled || oc.isTrigger) continue
-        if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask)) continue
+        if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask, cc.group, oc.group)) continue
 
         const result = generateCapsuleCircleManifold(
           capCx,
@@ -1378,7 +1387,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (!sc.enabled || sc.isTrigger) continue
-          if (!canInteract(pc.layer, pc.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(pc.layer, pc.mask, sc.layer, sc.mask, pc.group, sc.group)) continue
 
           const sAABB = getAABB(st, sc)
           const result = generatePolygonBoxManifold(
@@ -1438,7 +1447,7 @@ export class PhysicsSystem implements System {
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
         if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(pc.layer, pc.mask, bc.layer, bc.mask)) continue
+        if (!canInteract(pc.layer, pc.mask, bc.layer, bc.mask, pc.group, bc.group)) continue
 
         const bAABB = getAABB(bt, bc)
         const result = generatePolygonBoxManifold(
@@ -1505,7 +1514,7 @@ export class PhysicsSystem implements System {
         const ca = world.getComponent<ConvexPolygonColliderComponent>(ia, 'ConvexPolygonCollider')!
         const cb = world.getComponent<ConvexPolygonColliderComponent>(ib, 'ConvexPolygonCollider')!
         if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
 
         const result = generatePolygonPolygonManifold(
           ca.vertices,
@@ -1573,7 +1582,7 @@ export class PhysicsSystem implements System {
         const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
         const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
         if (!oc.enabled || oc.isTrigger) continue
-        if (!canInteract(pc.layer, pc.mask, oc.layer, oc.mask)) continue
+        if (!canInteract(pc.layer, pc.mask, oc.layer, oc.mask, pc.group, oc.group)) continue
 
         const result = generatePolygonCircleManifold(
           pc.vertices,
@@ -1666,7 +1675,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (!sc.enabled || sc.isTrigger) continue
-          if (!canInteract(tc.layer, tc.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(tc.layer, tc.mask, sc.layer, sc.mask, tc.group, sc.group)) continue
 
           const sAABB = getAABB(st, sc)
           const result = generatePolygonBoxManifold(
@@ -1728,7 +1737,7 @@ export class PhysicsSystem implements System {
         const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
         const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
         if (!oc.enabled || oc.isTrigger) continue
-        if (!canInteract(tc.layer, tc.mask, oc.layer, oc.mask)) continue
+        if (!canInteract(tc.layer, tc.mask, oc.layer, oc.mask, tc.group, oc.group)) continue
 
         const result = generatePolygonCircleManifold(
           triVerts,
@@ -1798,7 +1807,7 @@ export class PhysicsSystem implements System {
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
         if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(sc.layer, sc.mask, bc.layer, bc.mask)) continue
+        if (!canInteract(sc.layer, sc.mask, bc.layer, bc.mask, sc.group, bc.group)) continue
 
         const bAABB = getAABB(bt, bc)
         const result = generateSegmentBoxManifold(segAx, segAy, segBx, segBy, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
@@ -1839,7 +1848,7 @@ export class PhysicsSystem implements System {
         const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
         const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
         if (!cc.enabled || cc.isTrigger) continue
-        if (!canInteract(sc.layer, sc.mask, cc.layer, cc.mask)) continue
+        if (!canInteract(sc.layer, sc.mask, cc.layer, cc.mask, sc.group, cc.group)) continue
 
         const result = generateSegmentCircleManifold(
           segAx,
@@ -1894,7 +1903,7 @@ export class PhysicsSystem implements System {
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
         if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask)) continue
+        if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask, hc.group, bc.group)) continue
 
         const bAABB = getAABB(bt, bc)
         const result = generateHeightFieldBoxManifold(
@@ -1945,7 +1954,7 @@ export class PhysicsSystem implements System {
         const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
         const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
         if (!cc.enabled || cc.isTrigger) continue
-        if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask)) continue
+        if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask, hc.group, cc.group)) continue
 
         const result = generateHeightFieldCircleManifold(
           ht.x,
@@ -2001,7 +2010,7 @@ export class PhysicsSystem implements System {
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
         if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask)) continue
+        if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask, hc.group, bc.group)) continue
 
         const bAABB = getAABB(bt, bc)
         const result = generateHalfSpaceBoxManifold(
@@ -2051,7 +2060,7 @@ export class PhysicsSystem implements System {
         const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
         const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
         if (!cc.enabled || cc.isTrigger) continue
-        if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask)) continue
+        if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask, hc.group, cc.group)) continue
 
         const result = generateHalfSpaceCircleManifold(
           ht.x,
@@ -2113,7 +2122,7 @@ export class PhysicsSystem implements System {
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
         if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(mc.layer, mc.mask, bc.layer, bc.mask)) continue
+        if (!canInteract(mc.layer, mc.mask, bc.layer, bc.mask, mc.group, bc.group)) continue
 
         const bAABB = getAABB(bt, bc)
         const result = generateTriMeshBoxManifold(bvh, mt.x, mt.y, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
@@ -2154,7 +2163,7 @@ export class PhysicsSystem implements System {
         const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
         const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
         if (!cc.enabled || cc.isTrigger) continue
-        if (!canInteract(mc.layer, mc.mask, cc.layer, cc.mask)) continue
+        if (!canInteract(mc.layer, mc.mask, cc.layer, cc.mask, mc.group, cc.group)) continue
 
         const result = generateTriMeshCircleManifold(bvh, mt.x, mt.y, ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius)
         if (!result) continue
@@ -2496,7 +2505,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (sc.isTrigger || !sc.enabled) continue
-          if (!canInteract(col.layer, col.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(col.layer, col.mask, sc.layer, sc.mask, col.group, sc.group)) continue
 
           const t = sweepAABB(startCx, startCy, hw, hh, totalDx, totalDy, getAABB(st, sc))
           if (t !== null && t < earliestT) {
@@ -2592,7 +2601,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (sc.isTrigger || !sc.enabled) continue
-          if (!canInteract(col.layer, col.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(col.layer, col.mask, sc.layer, sc.mask, col.group, sc.group)) continue
           const ov = getOverlap(probeAABB, getAABB(st, sc))
           if (ov && Math.abs(ov.y) <= Math.abs(ov.x) && ov.y < 0) {
             rb.isNearGround = true
@@ -2629,7 +2638,7 @@ export class PhysicsSystem implements System {
           const st = world.getComponent<TransformComponent>(sid, 'Transform')!
           const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
           if (sc.isTrigger || !sc.enabled) continue
-          if (!canInteract(cap.layer, cap.mask, sc.layer, sc.mask)) continue
+          if (!canInteract(cap.layer, cap.mask, sc.layer, sc.mask, cap.group, sc.group)) continue
           const ov = getOverlap(probeAABB, getAABB(st, sc))
           if (ov && Math.abs(ov.y) <= Math.abs(ov.x) && ov.y < 0) {
             rb.isNearGround = true
@@ -2782,7 +2791,7 @@ export class PhysicsSystem implements System {
         const cb = world.getComponent<BoxColliderComponent>(ib, 'BoxCollider')!
         if (!ca.isTrigger && !cb.isTrigger) continue
         if (!ca.enabled || !cb.enabled) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
         const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
         const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
         if (!getOverlap(getAABB(ta, ca), getAABB(tb, cb))) continue
@@ -2876,7 +2885,7 @@ export class PhysicsSystem implements System {
         for (const bid of allBoxEntities) {
           if (bid === cid) continue
           const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
-          if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask)) continue
+          if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) continue
           const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
           const boxAABB = getAABB(bt, bc)
           for (const shape of cc.shapes) {
@@ -2894,7 +2903,7 @@ export class PhysicsSystem implements System {
         for (const oid of allCircle) {
           if (oid === cid) continue
           const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
-          if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask)) continue
+          if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask, cc.group, oc.group)) continue
           const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
           for (const shape of cc.shapes) {
             if (shapeOverlapsCircle(ct.x, ct.y, shape, ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius)) {
@@ -2911,7 +2920,7 @@ export class PhysicsSystem implements System {
           const ib = allCompound[j]
           const ca = world.getComponent<CompoundColliderComponent>(ia, 'CompoundCollider')!
           const cb = world.getComponent<CompoundColliderComponent>(ib, 'CompoundCollider')!
-          if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+          if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
           const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
           const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
           const boundsA = getCompoundBounds(ta.x, ta.y, ca.shapes)
@@ -2965,7 +2974,7 @@ export class PhysicsSystem implements System {
         for (const bid of allBoxForCapsule) {
           if (bid === cid) continue
           const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
-          if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask)) continue
+          if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) continue
           const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
           if (getOverlap(capsuleAABB, getAABB(bt, bc))) {
             currentCapsulePairs.set(pairKey(cid, bid), [cid, bid])
@@ -2979,7 +2988,7 @@ export class PhysicsSystem implements System {
           const ib = allCapsule[j]
           const ca = world.getComponent<CapsuleColliderComponent>(ia, 'CapsuleCollider')!
           const cb = world.getComponent<CapsuleColliderComponent>(ib, 'CapsuleCollider')!
-          if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+          if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
           const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
           const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
           if (getOverlap(getCapsuleAABB(ta, ca), getCapsuleAABB(tb, cb))) {
@@ -3015,6 +3024,7 @@ export class PhysicsSystem implements System {
         const isTri = world.getComponent<TriangleColliderComponent>(pid, 'TriangleCollider')
         const polyLayer = isPoly ? isPoly.layer : isTri ? isTri.layer : 'default'
         const polyMask = isPoly ? isPoly.mask : isTri ? isTri.mask : '*'
+        const polyGroup = isPoly ? isPoly.group : isTri ? isTri.group : ''
         const polyEnabled = isPoly ? isPoly.enabled : isTri ? isTri.enabled : true
 
         if (!polyEnabled) continue
@@ -3028,7 +3038,7 @@ export class PhysicsSystem implements System {
           if (bid === pid) continue
           const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
           if (!bc.enabled) continue
-          if (!canInteract(polyLayer, polyMask, bc.layer, bc.mask)) continue
+          if (!canInteract(polyLayer, polyMask, bc.layer, bc.mask, polyGroup, bc.group)) continue
           const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
           const bAABB = getAABB(bt, bc)
           const result = generatePolygonBoxManifold(
@@ -3059,9 +3069,11 @@ export class PhysicsSystem implements System {
           const vertsB = pb ? pb.vertices : tb_tri ? [tb_tri.a, tb_tri.b, tb_tri.c] : []
           const layerA = pa ? pa.layer : ta_tri ? ta_tri.layer : 'default'
           const maskA = pa ? pa.mask : ta_tri ? ta_tri.mask : '*'
+          const groupA = pa ? pa.group : ta_tri ? ta_tri.group : ''
           const layerB = pb ? pb.layer : tb_tri ? tb_tri.layer : 'default'
           const maskB = pb ? pb.mask : tb_tri ? tb_tri.mask : '*'
-          if (!canInteract(layerA, maskA, layerB, maskB)) continue
+          const groupB = pb ? pb.group : tb_tri ? tb_tri.group : ''
+          if (!canInteract(layerA, maskA, layerB, maskB, groupA, groupB)) continue
           const ta2 = world.getComponent<TransformComponent>(ia, 'Transform')!
           const tb2 = world.getComponent<TransformComponent>(ib, 'Transform')!
           const offAx = pa ? pa.offsetX : ta_tri ? ta_tri.offsetX : 0

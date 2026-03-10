@@ -21,6 +21,8 @@ export interface TriMeshColliderComponent extends Component {
   frictionCombineRule: CombineRule
   restitutionCombineRule: CombineRule
   enabled: boolean
+  /** Collision group — entities in the same non-empty group do NOT collide with each other */
+  group: string
 }
 
 export function createTriMeshCollider(
@@ -39,6 +41,7 @@ export function createTriMeshCollider(
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',
     enabled: true,
+    group: '',
     ...opts,
   }
 }

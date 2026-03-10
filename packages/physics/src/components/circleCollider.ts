@@ -23,6 +23,11 @@ export interface CircleColliderComponent extends Component {
   restitutionCombineRule: CombineRule
   /** Whether this collider is enabled. Disabled colliders skip all detection */
   enabled: boolean
+  /**
+   * Collision group — entities in the same non-empty group do NOT collide
+   * with each other. Useful for parts of the same character, linked chains, etc.
+   */
+  group: string
 }
 
 export function createCircleCollider(radius: number, opts?: Partial<CircleColliderComponent>): CircleColliderComponent {
@@ -39,6 +44,7 @@ export function createCircleCollider(radius: number, opts?: Partial<CircleCollid
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',
     enabled: true,
+    group: '',
     ...opts,
   }
 }

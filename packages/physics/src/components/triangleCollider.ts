@@ -19,6 +19,8 @@ export interface TriangleColliderComponent extends Component {
   frictionCombineRule: CombineRule
   restitutionCombineRule: CombineRule
   enabled: boolean
+  /** Collision group — entities in the same non-empty group do NOT collide with each other */
+  group: string
 }
 
 export function createTriangleCollider(
@@ -42,6 +44,7 @@ export function createTriangleCollider(
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',
     enabled: true,
+    group: '',
     ...opts,
   }
 }
