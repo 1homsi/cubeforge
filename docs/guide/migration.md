@@ -94,7 +94,7 @@ Sprite tiling (`tileX`, `tileY`) now works correctly in the WebGL renderer. If y
 
 | Version | Features |
 |---|---|
-| 0.3.0 | WebGL2 default renderer, Canvas2D opt-in |
+| 0.3.0 | WebGL2 default renderer |
 | 0.3.4 | Single-string mask fix, `tileX`/`tileY` WebGL tiling |
 | 0.3.5–0.3.7 | Package export fixes, `type: module` for Vite compatibility |
 | 0.3.8 | Sprite discoloration fix, `:repeat` URL fix, camera teleport snap |

@@ -46,7 +46,7 @@ Under the hood, Cubeforge runs a traditional game loop:
 
 1. **Script system** — calls every entity's `update` function
 2. **Physics system** — AABB collision detection and resolution at fixed 60 Hz
-3. **Render system** — Canvas 2D draw calls sorted by `zIndex`
+3. **Render system** — WebGL2 instanced draw calls sorted by `zIndex`
 
 The React component tree is a declarative control surface over this loop. When you add a `<Sprite>` inside an `<Entity>`, it registers a `Sprite` component on the ECS entity in a `useEffect`. When you remove it, the `useEffect` cleanup removes the component.
 
