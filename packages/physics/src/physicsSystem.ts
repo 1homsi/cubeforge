@@ -684,6 +684,19 @@ export class PhysicsSystem implements System {
       }
     }
 
+    // ── Phase 2.5: Build joint contact exclusion set ─────────────────────
+    // Joints with contactsEnabled=false prevent contact generation between
+    // the two connected bodies.
+    const jointExcludedPairs = new Set<string>()
+    for (const jid of world.query('Joint')) {
+      const j = world.getComponent<JointComponent>(jid, 'Joint')!
+      if (!j.enabled || j.broken) continue
+      if (!j.contactsEnabled) {
+        const ka = j.entityA < j.entityB ? `${j.entityA}:${j.entityB}` : `${j.entityB}:${j.entityA}`
+        jointExcludedPairs.add(ka)
+      }
+    }
+
     // ── Phase 3: Narrow phase — generate contact manifolds ────────────────
 
     const manifolds: ContactManifold[] = []
@@ -2226,6 +2239,18 @@ export class PhysicsSystem implements System {
       }
     }
 
+    // ── Phase 3.5: Filter manifolds for joint contact exclusions ─────────
+    // Remove manifolds between bodies connected by joints with contactsEnabled=false
+    if (jointExcludedPairs.size > 0) {
+      for (let i = manifolds.length - 1; i >= 0; i--) {
+        const m = manifolds[i]
+        const ka = m.entityA < m.entityB ? `${m.entityA}:${m.entityB}` : `${m.entityB}:${m.entityA}`
+        if (jointExcludedPairs.has(ka)) {
+          manifolds.splice(i, 1)
+        }
+      }
+    }
+
     // ── Phase 4: Build solver bodies ──────────────────────────────────────
 
     const solverBodies = new Map<number, SolverBody>()
@@ -2684,30 +2709,36 @@ export class PhysicsSystem implements System {
       for (let iter = 0; iter < JOINT_ITERATIONS; iter++) {
         for (const jid of jointEntities) {
           const joint = world.getComponent<JointComponent>(jid, 'Joint')!
+          if (!joint.enabled || joint.broken) continue
+
           const tA = world.getComponent<TransformComponent>(joint.entityA, 'Transform')
           const tB = world.getComponent<TransformComponent>(joint.entityB, 'Transform')
           if (!tA || !tB) continue
           const rbA = world.getComponent<RigidBodyComponent>(joint.entityA, 'RigidBody')
           const rbB = world.getComponent<RigidBodyComponent>(joint.entityB, 'RigidBody')
 
+          const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
+          const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
+
           const ax = tA.x + joint.anchorA.x
           const ay = tA.y + joint.anchorA.y
           const bx = tB.x + joint.anchorB.x
           const by = tB.y + joint.anchorB.y
 
-          const dx = bx - ax
-          const dy = by - ay
-          const currentLength = Math.sqrt(dx * dx + dy * dy)
+          const dxAB = bx - ax
+          const dyAB = by - ay
+          const currentLength = Math.sqrt(dxAB * dxAB + dyAB * dyAB)
+
+          let impulseAccum = 0
 
           if (joint.jointType === 'distance') {
             if (currentLength < 0.0001) continue
-            const nx = dx / currentLength
-            const ny = dy / currentLength
+            const nx = dxAB / currentLength
+            const ny = dyAB / currentLength
             const diff = currentLength - joint.length
+            impulseAccum = Math.abs(diff)
             const correctionX = nx * diff * 0.5
             const correctionY = ny * diff * 0.5
-            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
-            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
             if (!aStatic && !bStatic) {
               tA.x += correctionX
               tA.y += correctionY
@@ -2722,8 +2753,8 @@ export class PhysicsSystem implements System {
             }
           } else if (joint.jointType === 'spring') {
             if (currentLength < 0.0001) continue
-            const nx = dx / currentLength
-            const ny = dy / currentLength
+            const nx = dxAB / currentLength
+            const ny = dyAB / currentLength
             const displacement = currentLength - joint.length
             let fx = joint.stiffness * displacement * nx
             let fy = joint.stiffness * displacement * ny
@@ -2734,8 +2765,7 @@ export class PhysicsSystem implements System {
               fx += joint.damping * relVDot * nx
               fy += joint.damping * relVDot * ny
             }
-            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
-            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
+            impulseAccum = Math.sqrt(fx * fx + fy * fy) * dt
             if (!aStatic && rbA) {
               rbA.vx += fx * dt
               rbA.vy += fy * dt
@@ -2745,10 +2775,10 @@ export class PhysicsSystem implements System {
               rbB.vy -= fy * dt
             }
           } else if (joint.jointType === 'revolute') {
+            // Position constraint: anchor points must coincide
             const midX = (ax + bx) / 2
             const midY = (ay + by) / 2
-            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
-            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
+            impulseAccum = currentLength
             if (!aStatic && !bStatic) {
               tA.x += midX - ax
               tA.y += midY - ay
@@ -2761,17 +2791,66 @@ export class PhysicsSystem implements System {
               tB.x += ax - bx
               tB.y += ay - by
             }
+
+            // Angle limits
+            if (joint.minAngle !== null || joint.maxAngle !== null) {
+              const relAngle = tB.rotation - tA.rotation
+              const minA = joint.minAngle ?? -Infinity
+              const maxA = joint.maxAngle ?? Infinity
+              if (relAngle < minA) {
+                const correction = minA - relAngle
+                if (!aStatic && !bStatic) {
+                  tA.rotation -= correction * 0.5
+                  tB.rotation += correction * 0.5
+                } else if (!aStatic) {
+                  tA.rotation -= correction
+                } else if (!bStatic) {
+                  tB.rotation += correction
+                }
+              } else if (relAngle > maxA) {
+                const correction = relAngle - maxA
+                if (!aStatic && !bStatic) {
+                  tA.rotation += correction * 0.5
+                  tB.rotation -= correction * 0.5
+                } else if (!aStatic) {
+                  tA.rotation += correction
+                } else if (!bStatic) {
+                  tB.rotation -= correction
+                }
+              }
+            }
+
+            // Motor
+            if (joint.motor && rbA && rbB) {
+              const m = joint.motor
+              let motorImpulse = 0
+              if (m.mode === 'velocity') {
+                // Target angular velocity difference
+                const relAngVel = (rbB.angularVelocity ?? 0) - (rbA.angularVelocity ?? 0)
+                motorImpulse = m.stiffness * (m.target - relAngVel) * dt
+              } else {
+                // Position mode: PD controller toward target angle
+                const relAngle = tB.rotation - tA.rotation
+                const relAngVel = (rbB.angularVelocity ?? 0) - (rbA.angularVelocity ?? 0)
+                motorImpulse = (m.stiffness * (m.target - relAngle) - m.damping * relAngVel) * dt
+              }
+              // Clamp to maxForce
+              if (m.maxForce > 0) {
+                motorImpulse = Math.max(-m.maxForce * dt, Math.min(m.maxForce * dt, motorImpulse))
+              }
+              if (!aStatic) rbA.angularVelocity -= motorImpulse * (rbA.invInertia > 0 ? 1 : 0)
+              if (!bStatic) rbB.angularVelocity += motorImpulse * (rbB.invInertia > 0 ? 1 : 0)
+            }
           } else if (joint.jointType === 'rope') {
             const maxLen = joint.maxLength ?? joint.length
             if (currentLength <= maxLen) continue
             if (currentLength < 0.0001) continue
-            const nx = dx / currentLength
-            const ny = dy / currentLength
+            const nx = dxAB / currentLength
+            const ny = dyAB / currentLength
             const diff = currentLength - maxLen
+            impulseAccum = diff
             const correctionX = nx * diff * 0.5
             const correctionY = ny * diff * 0.5
-            const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
-            const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
             if (!aStatic && !bStatic) {
               tA.x += correctionX
               tA.y += correctionY
@@ -2784,6 +2863,185 @@ export class PhysicsSystem implements System {
               tB.x -= correctionX * 2
               tB.y -= correctionY * 2
             }
+          } else if (joint.jointType === 'fixed' || joint.jointType === 'weld') {
+            // Lock relative position: both anchors must coincide
+            impulseAccum = currentLength
+            if (currentLength > 0.0001) {
+              const correctionX = dxAB * 0.5
+              const correctionY = dyAB * 0.5
+              if (!aStatic && !bStatic) {
+                tA.x += correctionX
+                tA.y += correctionY
+                tB.x -= correctionX
+                tB.y -= correctionY
+              } else if (!aStatic) {
+                tA.x += correctionX * 2
+                tA.y += correctionY * 2
+              } else if (!bStatic) {
+                tB.x -= correctionX * 2
+                tB.y -= correctionY * 2
+              }
+            }
+            // Lock relative rotation: maintain initial rotation difference (0 for fixed)
+            const relAngle = tB.rotation - tA.rotation
+            if (Math.abs(relAngle) > 0.0001) {
+              if (!aStatic && !bStatic) {
+                tA.rotation += relAngle * 0.5
+                tB.rotation -= relAngle * 0.5
+              } else if (!aStatic) {
+                tA.rotation += relAngle
+              } else if (!bStatic) {
+                tB.rotation -= relAngle
+              }
+            }
+          } else if (joint.jointType === 'prismatic') {
+            // Movement constrained to localAxisA direction only
+            const axisX = joint.localAxisA.x
+            const axisY = joint.localAxisA.y
+            // Perpendicular axis
+            const perpX = -axisY
+            const perpY = axisX
+
+            // Project displacement onto perpendicular — this is the error
+            const perpError = dxAB * perpX + dyAB * perpY
+            impulseAccum = Math.abs(perpError)
+
+            // Correct perpendicular drift
+            if (Math.abs(perpError) > 0.0001) {
+              const cx = perpX * perpError * 0.5
+              const cy = perpY * perpError * 0.5
+              if (!aStatic && !bStatic) {
+                tA.x += cx
+                tA.y += cy
+                tB.x -= cx
+                tB.y -= cy
+              } else if (!aStatic) {
+                tA.x += cx * 2
+                tA.y += cy * 2
+              } else if (!bStatic) {
+                tB.x -= cx * 2
+                tB.y -= cy * 2
+              }
+            }
+
+            // Distance limits along axis
+            const axisDist = dxAB * axisX + dyAB * axisY
+            if (joint.minDistance !== null && axisDist < joint.minDistance) {
+              const diff = joint.minDistance - axisDist
+              const cx = axisX * diff * 0.5
+              const cy = axisY * diff * 0.5
+              if (!aStatic && !bStatic) {
+                tA.x -= cx
+                tA.y -= cy
+                tB.x += cx
+                tB.y += cy
+              } else if (!aStatic) {
+                tA.x -= cx * 2
+                tA.y -= cy * 2
+              } else if (!bStatic) {
+                tB.x += cx * 2
+                tB.y += cy * 2
+              }
+            } else if (joint.maxDistance !== null && axisDist > joint.maxDistance) {
+              const diff = axisDist - joint.maxDistance
+              const cx = axisX * diff * 0.5
+              const cy = axisY * diff * 0.5
+              if (!aStatic && !bStatic) {
+                tA.x += cx
+                tA.y += cy
+                tB.x -= cx
+                tB.y -= cy
+              } else if (!aStatic) {
+                tA.x += cx * 2
+                tA.y += cy * 2
+              } else if (!bStatic) {
+                tB.x -= cx * 2
+                tB.y -= cy * 2
+              }
+            }
+
+            // Motor along axis
+            if (joint.motor && rbA && rbB) {
+              const m = joint.motor
+              let motorImpulse = 0
+              if (m.mode === 'velocity') {
+                const relVelAxis = (rbB.vx - rbA.vx) * axisX + (rbB.vy - rbA.vy) * axisY
+                motorImpulse = m.stiffness * (m.target - relVelAxis) * dt
+              } else {
+                const relVelAxis = (rbB.vx - rbA.vx) * axisX + (rbB.vy - rbA.vy) * axisY
+                motorImpulse = (m.stiffness * (m.target - axisDist) - m.damping * relVelAxis) * dt
+              }
+              if (m.maxForce > 0) {
+                motorImpulse = Math.max(-m.maxForce * dt, Math.min(m.maxForce * dt, motorImpulse))
+              }
+              const invMassA = rbA.invMass || 0
+              const invMassB = rbB.invMass || 0
+              if (!aStatic && invMassA > 0) {
+                rbA.vx -= motorImpulse * axisX * invMassA
+                rbA.vy -= motorImpulse * axisY * invMassA
+              }
+              if (!bStatic && invMassB > 0) {
+                rbB.vx += motorImpulse * axisX * invMassB
+                rbB.vy += motorImpulse * axisY * invMassB
+              }
+            }
+          } else if (joint.jointType === 'generic') {
+            // Configurable per-axis locks
+            // X-axis lock
+            if (joint.axisLockX === 'locked') {
+              const cx = dxAB * 0.5
+              if (Math.abs(cx) > 0.0001) {
+                if (!aStatic && !bStatic) {
+                  tA.x += cx
+                  tB.x -= cx
+                } else if (!aStatic) {
+                  tA.x += cx * 2
+                } else if (!bStatic) {
+                  tB.x -= cx * 2
+                }
+              }
+            }
+            // Y-axis lock
+            if (joint.axisLockY === 'locked') {
+              const cy = dyAB * 0.5
+              if (Math.abs(cy) > 0.0001) {
+                if (!aStatic && !bStatic) {
+                  tA.y += cy
+                  tB.y -= cy
+                } else if (!aStatic) {
+                  tA.y += cy * 2
+                } else if (!bStatic) {
+                  tB.y -= cy * 2
+                }
+              }
+            }
+            // Rotation lock
+            if (joint.axisLockRotation === 'locked') {
+              const relAngle = tB.rotation - tA.rotation
+              if (Math.abs(relAngle) > 0.0001) {
+                if (!aStatic && !bStatic) {
+                  tA.rotation += relAngle * 0.5
+                  tB.rotation -= relAngle * 0.5
+                } else if (!aStatic) {
+                  tA.rotation += relAngle
+                } else if (!bStatic) {
+                  tB.rotation -= relAngle
+                }
+              }
+            }
+            impulseAccum = currentLength
+          }
+
+          // Track accumulated impulse for break detection
+          joint._accumulatedImpulse += impulseAccum
+
+          // Break detection (check after last iteration)
+          if (iter === JOINT_ITERATIONS - 1 && joint.breakForce > 0) {
+            if (joint._accumulatedImpulse > joint.breakForce) {
+              joint.broken = true
+              this.events?.emit('jointBreak', { entityId: jid, joint, force: joint._accumulatedImpulse })
+            }
+            joint._accumulatedImpulse = 0 // reset for next frame
           }
         }
       }
