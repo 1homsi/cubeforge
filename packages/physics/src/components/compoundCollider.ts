@@ -17,6 +17,11 @@ export interface CompoundColliderComponent extends Component {
   isTrigger: boolean
   layer: string
   mask: string | string[]
+  /**
+   * Collision group — entities in the same non-empty group do NOT collide
+   * with each other. Useful for parts of the same character, linked chains, etc.
+   */
+  group: string
 }
 
 export function createCompoundCollider(
@@ -29,6 +34,7 @@ export function createCompoundCollider(
     isTrigger: false,
     layer: 'default',
     mask: '*',
+    group: '',
     ...opts,
   }
 }

@@ -6,6 +6,7 @@ import { EngineContext, EntityContext } from '@cubeforge/context'
 export interface KinematicBodyControls {
   moveAndCollide(dx: number, dy: number): { dx: number; dy: number }
   setVelocity(vx: number, vy: number): void
+  setAngularVelocity(w: number): void
 }
 
 export function useKinematicBody(): KinematicBodyControls {
@@ -78,5 +79,13 @@ export function useKinematicBody(): KinematicBodyControls {
     [engine.ecs, entityId],
   )
 
-  return { moveAndCollide, setVelocity }
+  const setAngularVelocity = useCallback(
+    (w: number): void => {
+      const rb = engine.ecs.getComponent<RigidBodyComponent>(entityId, 'RigidBody')
+      if (rb) rb.angularVelocity = w
+    },
+    [engine.ecs, entityId],
+  )
+
+  return { moveAndCollide, setVelocity, setAngularVelocity }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useContext } from 'react'
 import { createBoxCollider } from '@cubeforge/physics'
+import type { CombineRule } from '@cubeforge/physics'
 import { EngineContext, EntityContext } from '../context'
 
 interface BoxColliderProps {
@@ -16,6 +17,16 @@ interface BoxColliderProps {
    * Entities below pass through freely (useful for jump-through ledges).
    */
   oneWay?: boolean
+  /** Per-collider friction coefficient (0–1). Default 0.5 */
+  friction?: number
+  /** Per-collider restitution (bounciness) coefficient (0–1). Default 0.0 */
+  restitution?: number
+  /** How to combine friction with the other collider. Default 'average' */
+  frictionCombineRule?: CombineRule
+  /** How to combine restitution with the other collider. Default 'average' */
+  restitutionCombineRule?: CombineRule
+  /** Whether this collider is enabled. Disabled colliders skip all detection */
+  enabled?: boolean
 }
 
 export function BoxCollider({
@@ -27,6 +38,11 @@ export function BoxCollider({
   layer = 'default',
   mask = '*',
   oneWay = false,
+  friction = 0.5,
+  restitution = 0,
+  frictionCombineRule = 'average',
+  restitutionCombineRule = 'average',
+  enabled = true,
 }: BoxColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
@@ -34,7 +50,19 @@ export function BoxCollider({
   useEffect(() => {
     engine.ecs.addComponent(
       entityId,
-      createBoxCollider(width, height, { offsetX, offsetY, isTrigger, layer, mask, oneWay }),
+      createBoxCollider(width, height, {
+        offsetX,
+        offsetY,
+        isTrigger,
+        layer,
+        mask,
+        oneWay,
+        friction,
+        restitution,
+        frictionCombineRule,
+        restitutionCombineRule,
+        enabled,
+      }),
     )
 
     // Defer check so sibling components have had a chance to add their components

@@ -35,6 +35,12 @@ export { Polygon } from './components/Polygon'
 export { Gradient } from './components/Gradient'
 export { Mask } from './components/Mask'
 export { Joint } from './components/Joint'
+export { ConvexCollider } from './components/ConvexCollider'
+export { TriangleCollider } from './components/TriangleCollider'
+export { SegmentCollider } from './components/SegmentCollider'
+export { HeightFieldCollider } from './components/HeightFieldCollider'
+export { HalfSpaceCollider } from './components/HalfSpaceCollider'
+export { TriMeshCollider } from './components/TriMeshCollider'
 export type { ScreenFlashHandle } from './components/ScreenFlash'
 export type { TiledObject, TiledLayer } from './components/Tilemap'
 
@@ -126,6 +132,12 @@ export { useAISteering } from '@cubeforge/gameplay'
 export type { AISteering } from '@cubeforge/gameplay'
 export { useKinematicBody } from '@cubeforge/gameplay'
 export type { KinematicBodyControls } from '@cubeforge/gameplay'
+export { useForces } from '@cubeforge/gameplay'
+export type { ForceControls } from '@cubeforge/gameplay'
+export { useCharacterController } from '@cubeforge/gameplay'
+export type { CharacterControls } from '@cubeforge/gameplay'
+export { CharacterController } from '@cubeforge/physics'
+export type { CharacterControllerConfig, CharacterCollision, MoveResult } from '@cubeforge/physics'
 export { useDropThrough } from '@cubeforge/gameplay'
 export { useDialogue } from '@cubeforge/gameplay'
 export type { DialogueLine, DialogueScript, DialogueControls } from '@cubeforge/gameplay'
@@ -180,12 +192,121 @@ export { createTimer } from '@cubeforge/core'
 export type { GameTimer } from '@cubeforge/core'
 export { mergeTileColliders } from '@cubeforge/core'
 export type { MergedRect } from '@cubeforge/core'
-export { overlapBox, raycast, raycastAll, overlapCircle, sweepBox, createCompoundCollider } from '@cubeforge/physics'
-export type { RaycastHit } from '@cubeforge/physics'
+export {
+  overlapBox,
+  raycast,
+  raycastAll,
+  overlapCircle,
+  sweepBox,
+  projectPoint,
+  containsPoint,
+  shapeCast,
+  intersectShape,
+  intersectAABB,
+  intersectRay,
+  createCompoundCollider,
+} from '@cubeforge/physics'
+export type { RaycastHit, PointProjection, QueryShape, QueryOpts } from '@cubeforge/physics'
+export type { PhysicsHooks } from '@cubeforge/physics'
 export { createJoint } from '@cubeforge/physics'
-export type { JointComponent, JointType } from '@cubeforge/physics'
+export type { JointComponent, JointType, JointMotor, MotorMode, AxisLock } from '@cubeforge/physics'
 export type { CapsuleColliderComponent } from '@cubeforge/physics'
 export type { CompoundColliderComponent, ColliderShape } from '@cubeforge/physics'
+export type { ConvexPolygonColliderComponent } from '@cubeforge/physics'
+export type { TriangleColliderComponent } from '@cubeforge/physics'
+export type { SegmentColliderComponent } from '@cubeforge/physics'
+export type { HeightFieldColliderComponent } from '@cubeforge/physics'
+export type { HalfSpaceColliderComponent } from '@cubeforge/physics'
+export type { TriMeshColliderComponent } from '@cubeforge/physics'
+export type { CombineRule } from '@cubeforge/physics'
+export type { ContactManifold, ContactPoint } from '@cubeforge/physics'
+export { velocityAtPoint, kineticEnergy, potentialEnergy, predictPosition } from '@cubeforge/physics'
+export {
+  addForce,
+  addTorque,
+  addForceAtPoint,
+  applyImpulse,
+  applyTorqueImpulse,
+  applyImpulseAtPoint,
+  resetForces,
+  resetTorques,
+  setNextKinematicPosition,
+  setNextKinematicRotation,
+  COLLISION_DYNAMIC_DYNAMIC,
+  COLLISION_DYNAMIC_KINEMATIC,
+  COLLISION_DYNAMIC_STATIC,
+  COLLISION_KINEMATIC_KINEMATIC,
+  COLLISION_KINEMATIC_STATIC,
+  DEFAULT_ACTIVE_COLLISION_TYPES,
+} from '@cubeforge/physics'
+export {
+  createConvexPolygonCollider,
+  createTriangleCollider,
+  createSegmentCollider,
+  createHeightFieldCollider,
+  createHalfSpaceCollider,
+  createTriMeshCollider,
+} from '@cubeforge/physics'
+export { buildBVH, queryBVH, queryBVHCircle } from '@cubeforge/physics'
+export type { BVH, Triangle2D } from '@cubeforge/physics'
+export {
+  setAdditionalMass,
+  setMassProperties,
+  recomputeMassFromColliders,
+  boxArea,
+  circleArea,
+  capsuleArea,
+  polygonArea,
+  triangleArea,
+  polygonMassProperties,
+  triangleMassProperties,
+} from '@cubeforge/physics'
+export { CollisionPipeline } from '@cubeforge/physics'
+export type { CollisionPair, CollisionPipelineResult } from '@cubeforge/physics'
+export {
+  takeSnapshot,
+  restoreSnapshot,
+  snapshotToJSON,
+  snapshotFromJSON,
+  snapshotToBytes,
+  snapshotFromBytes,
+  snapshotHash,
+} from '@cubeforge/physics'
+export type { PhysicsSnapshot, PhysicsBodySnapshot, JointSnapshot } from '@cubeforge/physics'
+export { DebugRenderPipeline } from '@cubeforge/physics'
+export type {
+  DebugLine,
+  DebugCircle,
+  DebugPoint,
+  DebugRenderOutput,
+  DebugRenderFlags,
+  DebugRenderColors,
+  DebugRenderBackend,
+} from '@cubeforge/physics'
+export {
+  sortEntities,
+  generateDeterministicPairs,
+  pairKey,
+  deterministicAtan2,
+  deterministicSqrt,
+  deterministicSin,
+  deterministicCos,
+  setDeterministicMode,
+  isDeterministicMode,
+  dMath,
+  KahanSum,
+} from '@cubeforge/physics'
+export { gjk, epa, gjkEpaQuery, circleShape, boxShape, capsuleShape, polygonShape } from '@cubeforge/physics'
+export type { ConvexShape, GJKResult, EPAResult, GJKContactManifold } from '@cubeforge/physics'
+export { SweepAndPrune } from '@cubeforge/physics'
+export type { BroadPhaseAABB, BroadPhasePair } from '@cubeforge/physics'
+export { IslandDetector } from '@cubeforge/physics'
+export type { Island } from '@cubeforge/physics'
+export { computeTOI, resolveTOI } from '@cubeforge/physics'
+export type { TOIBody, TOIResult } from '@cubeforge/physics'
+export { ObjectPool as PhysicsObjectPool, Float64Pool, resetAllPools } from '@cubeforge/physics'
+export { MultibodyArticulation, createMultibody, createLink } from '@cubeforge/physics'
+export type { MultibodyLink, Spatial3, SpatialInertia3 } from '@cubeforge/physics'
 export type {
   InputManager,
   ActionBindings,
