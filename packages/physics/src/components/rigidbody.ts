@@ -80,6 +80,33 @@ export interface RigidBodyComponent extends Component {
   userData: unknown
   /** Extra velocity solver iterations for constraints involving this body. Default 0 */
   additionalSolverIterations: number
+  /**
+   * Kinematic position target (X). When set (!== null), the physics system
+   * computes velocity from position delta: vx = (nextX - x) / dt
+   * Cleared after each step.
+   */
+  _nextKinematicX: number | null
+  /**
+   * Kinematic position target (Y). When set (!== null), the physics system
+   * computes velocity from position delta: vy = (nextY - y) / dt
+   * Cleared after each step.
+   */
+  _nextKinematicY: number | null
+  /**
+   * Kinematic rotation target. When set (!== null), the physics system
+   * computes angular velocity from rotation delta: ω = (nextRot - rot) / dt
+   * Cleared after each step.
+   */
+  _nextKinematicRotation: number | null
+  /**
+   * Active collision types — flags controlling which body-type pairs generate contacts.
+   * Bit 0: dynamic-dynamic (default on)
+   * Bit 1: dynamic-kinematic (default on)
+   * Bit 2: dynamic-static (default on)
+   * Bit 3: kinematic-kinematic (default off)
+   * Bit 4: kinematic-static (default off)
+   */
+  activeCollisionTypes: number
   /** Whether mass properties need recomputing (internal) */
   _massPropertiesDirty: boolean
 }
@@ -123,6 +150,10 @@ export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyCo
     maxAngularVelocity: 0,
     userData: null,
     additionalSolverIterations: 0,
+    _nextKinematicX: null,
+    _nextKinematicY: null,
+    _nextKinematicRotation: null,
+    activeCollisionTypes: 0b00111, // dynamic-dynamic | dynamic-kinematic | dynamic-static
     _massPropertiesDirty: true,
     ...opts,
   }

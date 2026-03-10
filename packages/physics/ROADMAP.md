@@ -260,7 +260,7 @@ What we already have and will keep:
 
 ---
 
-## Stage 3 — Forces & Impulses API
+## Stage 3 — Forces & Impulses API :white_check_mark: COMPLETE
 
 > Give users a proper API for applying forces, impulses, and torques from gameplay code.
 
@@ -268,56 +268,56 @@ What we already have and will keep:
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `forceX`, `forceY` fields on RigidBody | :white_circle: | Accumulated forces, cleared after each step |
-| `torque` field on RigidBody | :white_circle: | Accumulated torque, cleared after each step |
-| Integration: `velocity += (force * invMass) * dt` | :white_circle: | Apply accumulated force during velocity integration |
-| Integration: `angVel += (torque * invInertia) * dt` | :white_circle: | Apply accumulated torque during angular integration |
+| `forceX`, `forceY` fields on RigidBody | :white_check_mark: | Accumulated forces, cleared after each step |
+| `torque` field on RigidBody | :white_check_mark: | Accumulated torque, cleared after each step |
+| Integration: `velocity += (force * invMass) * dt` | :white_check_mark: | Apply accumulated force during velocity integration |
+| Integration: `angVel += (torque * invInertia) * dt` | :white_check_mark: | Apply accumulated torque during angular integration |
 
 ### 3.2 API Methods
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `addForce(fx, fy)` | :white_circle: | Add to force accumulator. Continuous force (call every frame) |
-| `addTorque(t)` | :white_circle: | Add to torque accumulator |
-| `addForceAtPoint(fx, fy, px, py)` | :white_circle: | Decomposes into force + torque: `torque += (p - com) × f` |
-| `applyImpulse(ix, iy)` | :white_circle: | Instant velocity change: `velocity += impulse * invMass` |
-| `applyTorqueImpulse(t)` | :white_circle: | Instant angular change: `angVel += t * invInertia` |
-| `applyImpulseAtPoint(ix, iy, px, py)` | :white_circle: | Impulse + angular impulse from off-center point |
-| `resetForces()` | :white_circle: | Zero force accumulator |
-| `resetTorques()` | :white_circle: | Zero torque accumulator |
+| `addForce(fx, fy)` | :white_check_mark: | Add to force accumulator. Continuous force (call every frame) |
+| `addTorque(t)` | :white_check_mark: | Add to torque accumulator |
+| `addForceAtPoint(fx, fy, px, py)` | :white_check_mark: | Decomposes into force + torque: `torque += (p - com) × f` |
+| `applyImpulse(ix, iy)` | :white_check_mark: | Instant velocity change: `velocity += impulse * invMass` |
+| `applyTorqueImpulse(t)` | :white_check_mark: | Instant angular change: `angVel += t * invInertia` |
+| `applyImpulseAtPoint(ix, iy, px, py)` | :white_check_mark: | Impulse + angular impulse from off-center point |
+| `resetForces()` | :white_check_mark: | Zero force accumulator |
+| `resetTorques()` | :white_check_mark: | Zero torque accumulator |
 
 ### 3.3 React Hooks
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `useForces(entityId)` hook | :white_circle: | Returns `{ addForce, addTorque, addForceAtPoint, applyImpulse, applyTorqueImpulse, applyImpulseAtPoint }` |
-| Update `useKinematicBody` | :white_circle: | Add `setVelocity(vx, vy)`, `setAngularVelocity(w)` |
+| `useForces(entityId)` hook | :white_check_mark: | Returns `{ addForce, addTorque, addForceAtPoint, applyImpulse, applyTorqueImpulse, applyImpulseAtPoint }` |
+| Update `useKinematicBody` | :white_check_mark: | Add `setVelocity(vx, vy)`, `setAngularVelocity(w)` |
 
 ### 3.4 Body Type Improvements
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `lockRotation` prop | :white_circle: | Prevents angular velocity changes (invInertia = 0 in solver) |
-| Enabled translations / rotations | :white_circle: | `enabledTranslationsX`, `enabledTranslationsY` — per-axis lock (Rapier: `set_enabled_translations`) |
-| Kinematic position-based mode | :white_circle: | `setNextPosition(x, y)` — engine computes velocity from position delta |
-| Kinematic velocity-based mode | :white_circle: | Current behavior — user sets velocity, engine integrates position |
-| `setNextRotation(angle)` | :white_circle: | Kinematic rotation target — engine computes angular velocity from rotation delta |
-| Dominance groups | :white_circle: | `dominance: number` (-127 to 127). Higher dominance body treated as infinite mass in contacts |
-| Active collision types | :white_circle: | Flags controlling which body-type pairs generate contacts (e.g. kinematic-fixed, kinematic-kinematic) |
+| `lockRotation` prop | :white_check_mark: | Prevents angular velocity changes (invInertia = 0 in solver) |
+| Enabled translations / rotations | :white_check_mark: | `enabledTranslationsX`, `enabledTranslationsY` — per-axis lock (Rapier: `set_enabled_translations`) |
+| Kinematic position-based mode | :white_check_mark: | `setNextPosition(x, y)` — engine computes velocity from position delta |
+| Kinematic velocity-based mode | :white_check_mark: | Current behavior — user sets velocity, engine integrates position |
+| `setNextRotation(angle)` | :white_check_mark: | Kinematic rotation target — engine computes angular velocity from rotation delta |
+| Dominance groups | :white_check_mark: | `dominance: number` (-127 to 127). Higher dominance body treated as infinite mass in contacts |
+| Active collision types | :white_check_mark: | Flags controlling which body-type pairs generate contacts (e.g. kinematic-fixed, kinematic-kinematic) |
 
 ### 3.5 Tests
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Rocket thrust (continuous force) | :white_circle: | Body accelerates upward against gravity with `addForce(0, -1000)` |
-| Explosion (radial impulse) | :white_circle: | `applyImpulseAtPoint` on nearby bodies — verify correct angular + linear response |
-| Spinning top (torque) | :white_circle: | `addTorque()` spins a body, angular damping slows it |
-| Dominance: player pushes crate | :white_circle: | High-dominance body moves low-dominance body without being affected |
-| Kinematic position-based | :white_circle: | `setNextPosition` moves body and computes correct velocity for contacts |
+| Rocket thrust (continuous force) | :white_check_mark: | Body accelerates upward against gravity with `addForce(0, -1000)` |
+| Explosion (radial impulse) | :white_check_mark: | `applyImpulseAtPoint` on nearby bodies — verify correct angular + linear response |
+| Spinning top (torque) | :white_check_mark: | `addTorque()` spins a body, angular damping slows it |
+| Dominance: player pushes crate | :white_check_mark: | High-dominance body moves low-dominance body without being affected |
+| Kinematic position-based | :white_check_mark: | `setNextPosition` moves body and computes correct velocity for contacts |
 
 ---
 
-## Stage 4 — Joints & Constraints Upgrade
+## Stage 4 — Joints & Constraints Upgrade :white_check_mark: COMPLETE
 
 > Expand the joint system with new types, motors, limits, and full Rapier joint parity.
 
@@ -325,26 +325,26 @@ What we already have and will keep:
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Fixed joint | :white_circle: | Lock relative position AND rotation between two bodies. Like welding |
-| Prismatic joint (slider) | :white_circle: | Allow movement along one axis only. Two anchor points + axis direction |
-| Weld joint | :white_circle: | Alias for fixed joint with break threshold |
-| Generic joint | :white_circle: | Configurable per-axis locks — can represent revolute, prismatic, fixed, or any custom constraint |
+| Fixed joint | :white_check_mark: | Lock relative position AND rotation between two bodies. Like welding |
+| Prismatic joint (slider) | :white_check_mark: | Allow movement along one axis only. Two anchor points + axis direction |
+| Weld joint | :white_check_mark: | Alias for fixed joint with break threshold |
+| Generic joint | :white_check_mark: | Configurable per-axis locks — can represent revolute, prismatic, fixed, or any custom constraint |
 
 ### 4.2 Joint Motors
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Motor on revolute joint | :white_circle: | Target angular velocity OR target angle, with stiffness + damping (PD controller) |
-| Motor on prismatic joint | :white_circle: | Target linear velocity OR target position along axis |
-| `maxForce` limit | :white_circle: | Clamp motor impulse to prevent infinite force |
-| Spring-like motor model | :white_circle: | Motor equation with stiffness + damping coefficients (Rapier: `MotorModel::ForceBased`) |
+| Motor on revolute joint | :white_check_mark: | Target angular velocity OR target angle, with stiffness + damping (PD controller) |
+| Motor on prismatic joint | :white_check_mark: | Target linear velocity OR target position along axis |
+| `maxForce` limit | :white_check_mark: | Clamp motor impulse to prevent infinite force |
+| Spring-like motor model | :white_check_mark: | Motor equation with stiffness + damping coefficients (Rapier: `MotorModel::ForceBased`) |
 
 ### 4.3 Joint Limits
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Revolute angle limits | :white_circle: | `minAngle`, `maxAngle` — clamp relative rotation |
-| Prismatic distance limits | :white_circle: | `minDistance`, `maxDistance` — clamp translation along axis |
+| Revolute angle limits | :white_check_mark: | `minAngle`, `maxAngle` — clamp relative rotation |
+| Prismatic distance limits | :white_check_mark: | `minDistance`, `maxDistance` — clamp translation along axis |
 | Rope joint max length | :white_check_mark: | Already implemented — only enforces max, allows slack |
 | Spring rest length | :white_check_mark: | Already implemented — Hooke's law with damping |
 
@@ -352,45 +352,45 @@ What we already have and will keep:
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Break force threshold | :white_circle: | If constraint impulse exceeds threshold, remove the joint |
-| Break event | :white_circle: | Emit `jointBreak` event with joint ID and break force |
+| Break force threshold | :white_check_mark: | If constraint impulse exceeds threshold, remove the joint |
+| Break event | :white_check_mark: | Emit `jointBreak` event with joint ID and break force |
 
 ### 4.5 Joint State & Properties
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Joint enabled/disabled toggle | :white_circle: | `setEnabled(bool)` / `isEnabled()` — disabled joints are skipped in solver |
-| Contacts enabled per joint | :white_circle: | `contactsEnabled: bool` — control whether colliders on joined bodies generate contacts with each other |
-| Local anchors | :white_circle: | `localAnchorA: Vec2`, `localAnchorB: Vec2` — attach points in body-local space |
-| Local axes | :white_circle: | `localAxisA: Vec2` — orientation reference for prismatic/generic joints |
-| User data on joints | :white_circle: | `userData: unknown` — arbitrary user-attached data |
+| Joint enabled/disabled toggle | :white_check_mark: | `setEnabled(bool)` / `isEnabled()` — disabled joints are skipped in solver |
+| Contacts enabled per joint | :white_check_mark: | `contactsEnabled: bool` — control whether colliders on joined bodies generate contacts with each other |
+| Local anchors | :white_check_mark: | `localAnchorA: Vec2`, `localAnchorB: Vec2` — attach points in body-local space |
+| Local axes | :white_check_mark: | `localAxisA: Vec2` — orientation reference for prismatic/generic joints |
+| User data on joints | :white_check_mark: | `userData: unknown` — arbitrary user-attached data |
 
 ### 4.6 Multibody Joints
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Multibody joint set | :white_circle: | Reduced-coordinate articulated bodies — tree structure of bodies connected by joints |
-| Multibody revolute | :white_circle: | Revolute joint in reduced coordinates — ragdolls, robotic arms |
-| Multibody prismatic | :white_circle: | Prismatic joint in reduced coordinates — pistons, telescoping arms |
-| Multibody fixed | :white_circle: | Fixed joint in reduced coordinates — rigid sub-assemblies |
-| Forward kinematics | :white_circle: | Compute world-space transforms from joint angles |
-| React component | :white_circle: | `<MultibodyJoint type="revolute" parent="bodyA" />` |
+| Multibody joint set | :white_check_mark: | Reduced-coordinate articulated bodies — tree structure of bodies connected by joints |
+| Multibody revolute | :white_check_mark: | Revolute joint in reduced coordinates — ragdolls, robotic arms |
+| Multibody prismatic | :white_check_mark: | Prismatic joint in reduced coordinates — pistons, telescoping arms |
+| Multibody fixed | :white_check_mark: | Fixed joint in reduced coordinates — rigid sub-assemblies |
+| Forward kinematics | :white_check_mark: | Compute world-space transforms from joint angles |
+| React component | :white_check_mark: | `<MultibodyJoint type="revolute" parent="bodyA" />` |
 
 ### 4.7 Tests
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Revolute door hinge | :white_circle: | Door swings open when pushed, stops at angle limits |
-| Prismatic elevator | :white_circle: | Platform moves along vertical axis only, motor drives it |
-| Wrecking ball (rope + motor) | :white_circle: | Rope joint with revolute motor — ball swings and hits wall |
-| Breakable bridge | :white_circle: | Fixed joints connecting planks, break under heavy load |
-| Joint enabled toggle | :white_circle: | Disabling joint lets bodies move freely, re-enabling reconnects |
-| Generic joint configs | :white_circle: | Generic joint replicates revolute, prismatic, and fixed behavior |
-| Multibody ragdoll | :white_circle: | Chain of bodies connected by revolute multibody joints — stable articulation |
+| Revolute door hinge | :white_check_mark: | Door swings open when pushed, stops at angle limits |
+| Prismatic elevator | :white_check_mark: | Platform moves along vertical axis only, motor drives it |
+| Wrecking ball (rope + motor) | :white_check_mark: | Rope joint with revolute motor — ball swings and hits wall |
+| Breakable bridge | :white_check_mark: | Fixed joints connecting planks, break under heavy load |
+| Joint enabled toggle | :white_check_mark: | Disabling joint lets bodies move freely, re-enabling reconnects |
+| Generic joint configs | :white_check_mark: | Generic joint replicates revolute, prismatic, and fixed behavior |
+| Multibody ragdoll | :white_check_mark: | Chain of bodies connected by revolute multibody joints — stable articulation |
 
 ---
 
-## Stage 5 — Queries, Filtering & Solver Polish
+## Stage 5 — Queries, Filtering & Solver Polish :white_check_mark: COMPLETE
 
 > Fill remaining gaps in spatial queries, collision filtering, and solver stability. Full Rapier query parity.
 
@@ -398,75 +398,75 @@ What we already have and will keep:
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `projectPoint(x, y)` | :white_circle: | Find nearest collider to a point + distance + projected point on surface |
-| `projectPointWithFeature(x, y)` | :white_circle: | Same as `projectPoint` but also returns geometric feature ID (which edge/vertex was closest) |
-| `containsPoint(x, y)` | :white_circle: | Return all colliders whose shape contains the given point |
-| `shapeCast(shape, origin, direction, maxDist)` | :white_circle: | Sweep any shape (circle, box, capsule) along a ray — returns first hit |
-| `shapeCastNonlinear(shape, motion)` | :white_circle: | Sweep shape with arbitrary continuous motion (rotation + translation) — returns first hit |
-| `intersectShape(shape, position)` | :white_circle: | Return all colliders overlapping a given shape at a position |
-| `intersectAABB(min, max)` | :white_circle: | Return all colliders whose AABBs overlap a given AABB (conservative, broad-phase only) |
-| `intersectRay(origin, dir, maxDist, callback)` | :white_circle: | Enumerate all colliders hit by ray via callback (not just first or sorted) |
-| Ray `solid` flag | :white_circle: | When `solid=true` and ray origin is inside a shape, report TOI=0 instead of passing through |
-| Query filter predicates | :white_circle: | `filter: (entityId) => boolean` callback on all query functions |
-| Query filter by body type | :white_circle: | Exclude static, kinematic, or sleeping bodies from query results |
-| Query filter by collision group | :white_circle: | Filter by numeric collision group membership/filter masks |
-| Query exclude specific entity | :white_circle: | `excludeEntity: EntityId` — skip one specific entity in query results |
-| Query exclude specific collider | :white_circle: | `excludeCollider: ColliderId` — skip one specific collider in query results |
+| `projectPoint(x, y)` | :white_check_mark: | Find nearest collider to a point + distance + projected point on surface |
+| `projectPointWithFeature(x, y)` | :white_check_mark: | Same as `projectPoint` but also returns geometric feature ID (which edge/vertex was closest) |
+| `containsPoint(x, y)` | :white_check_mark: | Return all colliders whose shape contains the given point |
+| `shapeCast(shape, origin, direction, maxDist)` | :white_check_mark: | Sweep any shape (circle, box, capsule) along a ray — returns first hit |
+| `shapeCastNonlinear(shape, motion)` | :white_check_mark: | Sweep shape with arbitrary continuous motion (rotation + translation) — returns first hit |
+| `intersectShape(shape, position)` | :white_check_mark: | Return all colliders overlapping a given shape at a position |
+| `intersectAABB(min, max)` | :white_check_mark: | Return all colliders whose AABBs overlap a given AABB (conservative, broad-phase only) |
+| `intersectRay(origin, dir, maxDist, callback)` | :white_check_mark: | Enumerate all colliders hit by ray via callback (not just first or sorted) |
+| Ray `solid` flag | :white_check_mark: | When `solid=true` and ray origin is inside a shape, report TOI=0 instead of passing through |
+| Query filter predicates | :white_check_mark: | `filter: (entityId) => boolean` callback on all query functions |
+| Query filter by body type | :white_check_mark: | Exclude static, kinematic, or sleeping bodies from query results |
+| Query filter by collision group | :white_check_mark: | Filter by numeric collision group membership/filter masks |
+| Query exclude specific entity | :white_check_mark: | `excludeEntity: EntityId` — skip one specific entity in query results |
+| Query exclude specific collider | :white_check_mark: | `excludeCollider: ColliderId` — skip one specific collider in query results |
 
 ### 5.2 Collision Filtering
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Solver groups | :white_circle: | Separate from collision groups: detect overlap + fire events, but skip impulse response |
-| Numeric collision groups (32-bit) | :white_circle: | `membership: number, filter: number` (bitwise AND). 32-bit masks (Rapier parity) |
-| Numeric solver groups (32-bit) | :white_circle: | Same bitmask system for solver groups — controls force generation independently from detection |
-| Active collision types | :white_circle: | Flags enabling interactions between specific body-type pairs (e.g. kinematic-fixed) |
-| Active events per collider | :white_circle: | Flags controlling which events fire for this collider (collision events, contact force events) |
-| Active hooks per collider | :white_circle: | Flags controlling which hooks apply to this collider (contact filtering, contact modification) |
-| Physics hooks: filter contact pair | :white_circle: | `onContactFilter(a, b) => boolean` — user decides if contact should be processed |
-| Physics hooks: filter intersection pair | :white_circle: | `onIntersectionFilter(a, b) => boolean` — user decides if sensor intersection fires |
-| Physics hooks: modify solver contacts | :white_circle: | `onContactModify(manifold) => void` — user can change friction, restitution, normal, tangent velocity per contact |
-| Conveyor belt tangent velocity | :white_circle: | Set tangent surface velocity via contact modification — objects slide along surface (Rapier parity) |
-| One-way platforms via hooks | :white_circle: | Implement one-way platforms by selectively deleting contacts in `onContactModify` |
+| Solver groups | :white_check_mark: | Separate from collision groups: detect overlap + fire events, but skip impulse response |
+| Numeric collision groups (32-bit) | :white_check_mark: | `membership: number, filter: number` (bitwise AND). 32-bit masks (Rapier parity) |
+| Numeric solver groups (32-bit) | :white_check_mark: | Same bitmask system for solver groups — controls force generation independently from detection |
+| Active collision types | :white_check_mark: | Flags enabling interactions between specific body-type pairs (e.g. kinematic-fixed) |
+| Active events per collider | :white_check_mark: | Flags controlling which events fire for this collider (collision events, contact force events) |
+| Active hooks per collider | :white_check_mark: | Flags controlling which hooks apply to this collider (contact filtering, contact modification) |
+| Physics hooks: filter contact pair | :white_check_mark: | `onContactFilter(a, b) => boolean` — user decides if contact should be processed |
+| Physics hooks: filter intersection pair | :white_check_mark: | `onIntersectionFilter(a, b) => boolean` — user decides if sensor intersection fires |
+| Physics hooks: modify solver contacts | :white_check_mark: | `onContactModify(manifold) => void` — user can change friction, restitution, normal, tangent velocity per contact |
+| Conveyor belt tangent velocity | :white_check_mark: | Set tangent surface velocity via contact modification — objects slide along surface (Rapier parity) |
+| One-way platforms via hooks | :white_check_mark: | Implement one-way platforms by selectively deleting contacts in `onContactModify` |
 
 ### 5.3 Contact Force Events
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Contact impulse reporting | :white_circle: | After solver: emit `contactForce` event with total normal + tangent impulse magnitude |
-| `useContactForce(entityId, handler)` hook | :white_circle: | `handler(other, totalImpulse, normal)` — gameplay can react to impact strength |
-| Impact threshold | :white_circle: | Only emit contact force events above a configurable impulse threshold |
+| Contact impulse reporting | :white_check_mark: | After solver: emit `contactForce` event with total normal + tangent impulse magnitude |
+| `useContactForce(entityId, handler)` hook | :white_check_mark: | `handler(other, totalImpulse, normal)` — gameplay can react to impact strength |
+| Impact threshold | :white_check_mark: | Only emit contact force events above a configurable impulse threshold |
 
 ### 5.4 Solver Stability
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Warm starting | :white_circle: | Persist impulses across frames, apply 85% of previous impulse as initial guess |
-| Contact point matching | :white_circle: | Match current frame's contact points to previous frame's by feature ID (edge index, vertex index) |
-| Split impulse for position correction | :white_circle: | Separate velocity solver from position solver to prevent energy gain from penetration correction |
-| Island detection | :white_circle: | Group connected bodies into islands. Solve islands independently. Sleep entire islands when idle |
-| Sub-stepping | :white_circle: | Optional 2x or 4x sub-steps per fixed step (configurable via `PhysicsConfig.substeps`) |
-| CCD sub-step count | :white_circle: | Configurable CCD substeps for nonlinear motion (Rapier: integration parameters) |
+| Warm starting | :white_check_mark: | Persist impulses across frames, apply 85% of previous impulse as initial guess |
+| Contact point matching | :white_check_mark: | Match current frame's contact points to previous frame's by feature ID (edge index, vertex index) |
+| Split impulse for position correction | :white_check_mark: | Separate velocity solver from position solver to prevent energy gain from penetration correction |
+| Island detection | :white_check_mark: | Group connected bodies into islands. Solve islands independently. Sleep entire islands when idle |
+| Sub-stepping | :white_check_mark: | Optional 2x or 4x sub-steps per fixed step (configurable via `PhysicsConfig.substeps`) |
+| CCD sub-step count | :white_check_mark: | Configurable CCD substeps for nonlinear motion (Rapier: integration parameters) |
 
 ### 5.5 Tests
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `projectPoint` nearest surface | :white_circle: | Point near box corner returns correct nearest point |
-| `projectPointWithFeature` edge ID | :white_circle: | Returns correct feature ID (edge index) for nearest surface |
-| `shapeCast` circle through gap | :white_circle: | Circle sweep correctly detects gap too narrow to pass |
-| `shapeCastNonlinear` spinning shape | :white_circle: | Rotating shape sweep detects collision missed by linear sweep |
-| `intersectShape` overlap query | :white_circle: | Returns all overlapping colliders for a given shape |
-| `intersectAABB` broad query | :white_circle: | Returns all colliders in an AABB region |
-| Solver groups: ghost platforms | :white_circle: | Player detects platform (events fire) but passes through (no impulse) |
-| Contact force: breakable objects | :white_circle: | Object breaks when contact impulse exceeds threshold |
-| Conveyor belt | :white_circle: | Object slides along surface with tangent velocity |
-| 20-box stack stability | :white_circle: | Stack remains stable for 600+ frames with warm starting |
-| Island sleeping | :white_circle: | Two separate stacks — disturbing one doesn't wake the other |
+| `projectPoint` nearest surface | :white_check_mark: | Point near box corner returns correct nearest point |
+| `projectPointWithFeature` edge ID | :white_check_mark: | Returns correct feature ID (edge index) for nearest surface |
+| `shapeCast` circle through gap | :white_check_mark: | Circle sweep correctly detects gap too narrow to pass |
+| `shapeCastNonlinear` spinning shape | :white_check_mark: | Rotating shape sweep detects collision missed by linear sweep |
+| `intersectShape` overlap query | :white_check_mark: | Returns all overlapping colliders for a given shape |
+| `intersectAABB` broad query | :white_check_mark: | Returns all colliders in an AABB region |
+| Solver groups: ghost platforms | :white_check_mark: | Player detects platform (events fire) but passes through (no impulse) |
+| Contact force: breakable objects | :white_check_mark: | Object breaks when contact impulse exceeds threshold |
+| Conveyor belt | :white_check_mark: | Object slides along surface with tangent velocity |
+| 20-box stack stability | :white_check_mark: | Stack remains stable for 600+ frames with warm starting |
+| Island sleeping | :white_check_mark: | Two separate stacks — disturbing one doesn't wake the other |
 
 ---
 
-## Stage 6 — Character Controller
+## Stage 6 — Character Controller :white_check_mark: COMPLETE
 
 > Built-in character controller that handles slopes, stairs, snapping, and interaction with dynamic bodies.
 
@@ -474,73 +474,73 @@ What we already have and will keep:
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `CharacterController` class | :white_circle: | Manages desired movement → actual movement with collision resolution |
-| `move(desiredTranslation)` | :white_circle: | Apply translation, resolve collisions, return actual movement + grounded state |
-| Collision callback | :white_circle: | Report each collision hit during movement: `{ entity, normal, penetration }` — chronological order |
-| Up vector configuration | :white_circle: | Define which direction is "up" for slope/ground calculations (default `{0, -1}`) |
-| Character offset | :white_circle: | `offset: number` — small gap maintained around character for numerical stability |
-| Works with any collider shape | :white_circle: | Ball, cuboid, capsule — any shape can be used as character collider |
-| Translation only | :white_circle: | Character controller only handles translation, not rotation |
+| `CharacterController` class | :white_check_mark: | Manages desired movement → actual movement with collision resolution |
+| `move(desiredTranslation)` | :white_check_mark: | Apply translation, resolve collisions, return actual movement + grounded state |
+| Collision callback | :white_check_mark: | Report each collision hit during movement: `{ entity, normal, penetration }` — chronological order |
+| Up vector configuration | :white_check_mark: | Define which direction is "up" for slope/ground calculations (default `{0, -1}`) |
+| Character offset | :white_check_mark: | `offset: number` — small gap maintained around character for numerical stability |
+| Works with any collider shape | :white_check_mark: | Ball, cuboid, capsule — any shape can be used as character collider |
+| Translation only | :white_check_mark: | Character controller only handles translation, not rotation |
 
 ### 6.2 Slope Handling
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Max climb angle | :white_circle: | `maxSlopeClimbAngle: number` (radians). Slopes steeper than this block movement |
-| Min slide angle | :white_circle: | `minSlopeSlideAngle: number`. Slopes between climb and slide angles cause sliding |
-| Slope force | :white_circle: | On slopes steeper than slide angle, apply downhill force proportional to angle |
+| Max climb angle | :white_check_mark: | `maxSlopeClimbAngle: number` (radians). Slopes steeper than this block movement |
+| Min slide angle | :white_check_mark: | `minSlopeSlideAngle: number`. Slopes between climb and slide angles cause sliding |
+| Slope force | :white_check_mark: | On slopes steeper than slide angle, apply downhill force proportional to angle |
 
 ### 6.3 Auto-Step (Stairs)
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Step height | :white_circle: | `maxStepHeight: number`. Obstacles shorter than this are climbed automatically |
-| Step width | :white_circle: | `minStepWidth: number`. Step must be at least this wide to climb (prevents climbing walls) |
-| Include dynamic bodies | :white_circle: | Option to auto-step onto dynamic bodies or only statics |
+| Step height | :white_check_mark: | `maxStepHeight: number`. Obstacles shorter than this are climbed automatically |
+| Step width | :white_check_mark: | `minStepWidth: number`. Step must be at least this wide to climb (prevents climbing walls) |
+| Include dynamic bodies | :white_check_mark: | Option to auto-step onto dynamic bodies or only statics |
 
 ### 6.4 Snap to Ground
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Snap distance | :white_circle: | `snapToGroundDistance: number`. When slightly above ground, teleport down |
-| Disable on jump | :white_circle: | Disable snap when character is moving upward (jumping) |
+| Snap distance | :white_check_mark: | `snapToGroundDistance: number`. When slightly above ground, teleport down |
+| Disable on jump | :white_check_mark: | Disable snap when character is moving upward (jumping) |
 
 ### 6.5 Dynamic Body Interaction
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Push dynamic bodies | :white_circle: | When character collides with dynamic body, apply impulse proportional to character velocity |
-| Push force multiplier | :white_circle: | `pushForce: number` — scale the impulse applied to pushed bodies |
-| Ride dynamic platforms | :white_circle: | Inherit velocity from dynamic body the character is standing on |
+| Push dynamic bodies | :white_check_mark: | When character collides with dynamic body, apply impulse proportional to character velocity |
+| Push force multiplier | :white_check_mark: | `pushForce: number` — scale the impulse applied to pushed bodies |
+| Ride dynamic platforms | :white_check_mark: | Inherit velocity from dynamic body the character is standing on |
 
 ### 6.6 Filtering
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Filter by flags | :white_circle: | Exclude sensors, exclude fixed bodies, etc. |
-| Filter by collision groups | :white_circle: | Use collision group masks to filter character interactions |
-| Custom filter predicate | :white_circle: | `filter: (entityId) => boolean` — user decides if character collides with entity |
+| Filter by flags | :white_check_mark: | Exclude sensors, exclude fixed bodies, etc. |
+| Filter by collision groups | :white_check_mark: | Use collision group masks to filter character interactions |
+| Custom filter predicate | :white_check_mark: | `filter: (entityId) => boolean` — user decides if character collides with entity |
 
 ### 6.7 React Integration
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `useCharacterController(entityId, config)` | :white_circle: | Hook that creates and returns controller bound to an entity |
-| `<CharacterController>` component | :white_circle: | Declarative component wrapping the hook |
-| Migrate `usePlatformerController` | :white_circle: | Rewrite to use CharacterController internally |
-| Migrate `useTopDownMovement` | :white_circle: | Rewrite to use CharacterController internally |
+| `useCharacterController(entityId, config)` | :white_check_mark: | Hook that creates and returns controller bound to an entity |
+| `<CharacterController>` component | :white_check_mark: | Declarative component wrapping the hook |
+| Migrate `usePlatformerController` | :white_check_mark: | Rewrite to use CharacterController internally |
+| Migrate `useTopDownMovement` | :white_check_mark: | Rewrite to use CharacterController internally |
 
 ### 6.8 Tests
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Walk up 30° slope | :white_circle: | Character climbs gentle slope normally |
-| Blocked by 60° slope | :white_circle: | Character cannot climb steep slope (maxClimbAngle = 45°) |
-| Climb stairs | :white_circle: | Character walks up sequence of 16px steps smoothly |
-| Snap downhill | :white_circle: | Character stays grounded when walking down slope |
-| Push crate | :white_circle: | Character pushes dynamic box by walking into it |
-| Capsule character controller | :white_circle: | Character controller works correctly with capsule collider |
-| Circle character controller | :white_circle: | Character controller works correctly with ball collider |
+| Walk up 30° slope | :white_check_mark: | Character climbs gentle slope normally |
+| Blocked by 60° slope | :white_check_mark: | Character cannot climb steep slope (maxClimbAngle = 45°) |
+| Climb stairs | :white_check_mark: | Character walks up sequence of 16px steps smoothly |
+| Snap downhill | :white_check_mark: | Character stays grounded when walking down slope |
+| Push crate | :white_check_mark: | Character pushes dynamic box by walking into it |
+| Capsule character controller | :white_check_mark: | Character controller works correctly with capsule collider |
+| Circle character controller | :white_check_mark: | Character controller works correctly with ball collider |
 
 ---
 
