@@ -1,4 +1,5 @@
 import type { Component } from '@cubeforge/core'
+import type { CombineRule } from '../combineRules'
 
 export interface CircleColliderComponent extends Component {
   readonly type: 'CircleCollider'
@@ -12,6 +13,16 @@ export interface CircleColliderComponent extends Component {
   layer: string
   /** Collision mask — '*' interacts with everything */
   mask: string | string[]
+  /** Per-collider friction coefficient (0–1). Default 0.5 */
+  friction: number
+  /** Per-collider restitution (bounciness) coefficient (0–1). Default 0.0 */
+  restitution: number
+  /** How to combine friction with the other collider. Default 'average' */
+  frictionCombineRule: CombineRule
+  /** How to combine restitution with the other collider. Default 'average' */
+  restitutionCombineRule: CombineRule
+  /** Whether this collider is enabled. Disabled colliders skip all detection */
+  enabled: boolean
 }
 
 export function createCircleCollider(radius: number, opts?: Partial<CircleColliderComponent>): CircleColliderComponent {
@@ -23,6 +34,11 @@ export function createCircleCollider(radius: number, opts?: Partial<CircleCollid
     isTrigger: false,
     layer: 'default',
     mask: '*',
+    friction: 0.5,
+    restitution: 0,
+    frictionCombineRule: 'average',
+    restitutionCombineRule: 'average',
+    enabled: true,
     ...opts,
   }
 }

@@ -186,6 +186,8 @@ export { createJoint } from '@cubeforge/physics'
 export type { JointComponent, JointType } from '@cubeforge/physics'
 export type { CapsuleColliderComponent } from '@cubeforge/physics'
 export type { CompoundColliderComponent, ColliderShape } from '@cubeforge/physics'
+export type { CombineRule } from '@cubeforge/physics'
+export type { ContactManifold, ContactPoint } from '@cubeforge/physics'
 export type {
   InputManager,
   ActionBindings,

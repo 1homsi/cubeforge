@@ -3,10 +3,13 @@ import { createRigidBody } from '@cubeforge/physics'
 import { EngineContext, EntityContext } from '../context'
 
 interface RigidBodyProps {
+  /** Explicit mass. 0 (default) auto-computes from density × collider area */
   mass?: number
   gravityScale?: number
   isStatic?: boolean
+  /** @deprecated Use restitution on BoxCollider/CircleCollider instead */
   bounce?: number
+  /** @deprecated Use friction on BoxCollider/CircleCollider instead */
   friction?: number
   vx?: number
   vy?: number
@@ -14,6 +17,8 @@ interface RigidBodyProps {
   lockX?: boolean
   /** Prevent any vertical movement — velocity.y is zeroed every frame (disables gravity) */
   lockY?: boolean
+  /** Lock rotation — angular velocity stays 0 */
+  lockRotation?: boolean
   /** Enable continuous collision detection to prevent tunneling through thin colliders */
   ccd?: boolean
   /** Angular velocity in radians per second */
@@ -22,10 +27,24 @@ interface RigidBodyProps {
   angularDamping?: number
   /** Linear damping (0–1): velocity reduction applied every fixed step (air resistance) */
   linearDamping?: number
+  /** Density for auto-computing mass (mass = density × area). Default 1.0 */
+  density?: number
+  /** Coefficient of restitution for this body (0 = no bounce, 1 = full bounce) */
+  restitution?: number
+  /** Dominance group (-127 to 127). Higher dominance acts as infinite mass in contacts */
+  dominance?: number
+  /** Kinematic bodies skip gravity/integration but resolve collisions without impulse response */
+  isKinematic?: boolean
+  /** Whether this body is enabled. Disabled bodies are completely skipped */
+  enabled?: boolean
+  /** Max linear velocity magnitude. 0 = unlimited */
+  maxLinearVelocity?: number
+  /** Max angular velocity magnitude. 0 = unlimited */
+  maxAngularVelocity?: number
 }
 
 export function RigidBody({
-  mass = 1,
+  mass = 0,
   gravityScale = 1,
   isStatic = false,
   bounce = 0,
@@ -34,10 +53,18 @@ export function RigidBody({
   vy = 0,
   lockX = false,
   lockY = false,
+  lockRotation = false,
   ccd = false,
   angularVelocity = 0,
   angularDamping = 0,
   linearDamping = 0,
+  density = 1,
+  restitution = 0,
+  dominance = 0,
+  isKinematic = false,
+  enabled = true,
+  maxLinearVelocity = 0,
+  maxAngularVelocity = 0,
 }: RigidBodyProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
@@ -61,10 +88,18 @@ export function RigidBody({
         vy,
         lockX,
         lockY,
+        lockRotation,
         ccd,
         angularVelocity,
         angularDamping,
         linearDamping,
+        density,
+        restitution,
+        dominance,
+        isKinematic,
+        enabled,
+        maxLinearVelocity,
+        maxAngularVelocity,
       }),
     )
     return () => engine.ecs.removeComponent(entityId, 'RigidBody')
