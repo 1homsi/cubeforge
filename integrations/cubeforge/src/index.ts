@@ -188,8 +188,22 @@ export { createTimer } from '@cubeforge/core'
 export type { GameTimer } from '@cubeforge/core'
 export { mergeTileColliders } from '@cubeforge/core'
 export type { MergedRect } from '@cubeforge/core'
-export { overlapBox, raycast, raycastAll, overlapCircle, sweepBox, createCompoundCollider } from '@cubeforge/physics'
-export type { RaycastHit } from '@cubeforge/physics'
+export {
+  overlapBox,
+  raycast,
+  raycastAll,
+  overlapCircle,
+  sweepBox,
+  projectPoint,
+  containsPoint,
+  shapeCast,
+  intersectShape,
+  intersectAABB,
+  intersectRay,
+  createCompoundCollider,
+} from '@cubeforge/physics'
+export type { RaycastHit, PointProjection, QueryShape, QueryOpts } from '@cubeforge/physics'
+export type { PhysicsHooks } from '@cubeforge/physics'
 export { createJoint } from '@cubeforge/physics'
 export type { JointComponent, JointType, JointMotor, MotorMode, AxisLock } from '@cubeforge/physics'
 export type { CapsuleColliderComponent } from '@cubeforge/physics'

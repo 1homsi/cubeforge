@@ -1,5 +1,6 @@
 import type { ECSWorld, EntityId } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
+import type { RigidBodyComponent } from './components/rigidbody'
 import type { BoxColliderComponent } from './components/boxCollider'
 import type { CircleColliderComponent } from './components/circleCollider'
 import type { CapsuleColliderComponent } from './components/capsuleCollider'
@@ -9,23 +10,43 @@ interface TagComponent {
   tags: string[]
 }
 
-interface QueryOpts {
+export interface QueryOpts {
   /** Only include entities with this tag. */
   tag?: string
   /** Only include entities whose collider is on this layer. */
   layer?: string
   /** Exclude these entity IDs (e.g. the querying entity itself). */
   exclude?: EntityId[]
+  /** Exclude a single entity by ID. */
+  excludeEntity?: EntityId
+  /** Custom filter predicate — return false to skip an entity. */
+  filter?: (entityId: EntityId) => boolean
+  /** Exclude static bodies. */
+  excludeStatic?: boolean
+  /** Exclude kinematic bodies. */
+  excludeKinematic?: boolean
+  /** Exclude sleeping bodies. */
+  excludeSleeping?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function passesTagAndExclude(world: ECSWorld, id: EntityId, layer: string, opts: QueryOpts): boolean {
   if (opts.exclude?.includes(id)) return false
+  if (opts.excludeEntity !== undefined && id === opts.excludeEntity) return false
   if (opts.layer && layer !== opts.layer) return false
   if (opts.tag) {
     const t = world.getComponent<TagComponent>(id, 'Tag')
     if (!t?.tags.includes(opts.tag)) return false
+  }
+  if (opts.filter && !opts.filter(id)) return false
+  if (opts.excludeStatic || opts.excludeKinematic || opts.excludeSleeping) {
+    const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
+    if (rb) {
+      if (opts.excludeStatic && rb.isStatic) return false
+      if (opts.excludeKinematic && rb.isKinematic) return false
+      if (opts.excludeSleeping && rb.sleeping) return false
+    }
   }
   return true
 }
@@ -458,4 +479,309 @@ export function sweepBox(
   }
 
   return closest
+}
+
+// ── projectPoint ──────────────────────────────────────────────────────────────
+
+export interface PointProjection {
+  /** The entity whose collider is nearest. */
+  entityId: EntityId
+  /** Distance from the query point to the nearest surface. */
+  distance: number
+  /** Projected point on the collider surface. */
+  point: { x: number; y: number }
+  /** Surface normal at the projected point. */
+  normal: { x: number; y: number }
+  /** Feature ID: 0-3 for box edges (top/right/bottom/left), -1 for circle. */
+  featureId: number
+}
+
+/**
+ * Find the nearest collider surface to a point.
+ * Returns the closest projected point, distance, and surface normal.
+ */
+export function projectPoint(world: ECSWorld, px: number, py: number, opts: QueryOpts = {}): PointProjection | null {
+  let closest: PointProjection | null = null
+
+  for (const { id, aabb, isCircle, circleR } of allColliderAABBs(world)) {
+    if (!passesTagAndExclude(world, id, aabb.layer, opts)) continue
+
+    let dist: number
+    let projX: number
+    let projY: number
+    let nx: number
+    let ny: number
+    let featureId: number
+
+    if (isCircle) {
+      const dx = px - aabb.cx
+      const dy = py - aabb.cy
+      const d = Math.sqrt(dx * dx + dy * dy)
+      if (d < 0.0001) {
+        projX = aabb.cx + circleR
+        projY = aabb.cy
+        nx = 1
+        ny = 0
+      } else {
+        nx = dx / d
+        ny = dy / d
+        projX = aabb.cx + nx * circleR
+        projY = aabb.cy + ny * circleR
+      }
+      dist = Math.abs(d - circleR)
+      featureId = -1
+    } else {
+      const left = aabb.cx - aabb.hw
+      const right = aabb.cx + aabb.hw
+      const top = aabb.cy - aabb.hh
+      const bottom = aabb.cy + aabb.hh
+      const clampX = Math.max(left, Math.min(px, right))
+      const clampY = Math.max(top, Math.min(py, bottom))
+      const inside = px >= left && px <= right && py >= top && py <= bottom
+
+      if (inside) {
+        const dLeft = px - left
+        const dRight = right - px
+        const dTop = py - top
+        const dBottom = bottom - py
+        const minD = Math.min(dLeft, dRight, dTop, dBottom)
+        if (minD === dTop) {
+          projX = px
+          projY = top
+          nx = 0
+          ny = -1
+          featureId = 0
+        } else if (minD === dRight) {
+          projX = right
+          projY = py
+          nx = 1
+          ny = 0
+          featureId = 1
+        } else if (minD === dBottom) {
+          projX = px
+          projY = bottom
+          nx = 0
+          ny = 1
+          featureId = 2
+        } else {
+          projX = left
+          projY = py
+          nx = -1
+          ny = 0
+          featureId = 3
+        }
+        dist = minD
+      } else {
+        projX = clampX
+        projY = clampY
+        const ddx = px - clampX
+        const ddy = py - clampY
+        dist = Math.sqrt(ddx * ddx + ddy * ddy)
+        if (dist > 0) {
+          nx = ddx / dist
+          ny = ddy / dist
+        } else {
+          nx = 0
+          ny = -1
+        }
+        if (clampY === top) featureId = 0
+        else if (clampX === right) featureId = 1
+        else if (clampY === bottom) featureId = 2
+        else featureId = 3
+      }
+    }
+
+    if (!closest || dist < closest.distance) {
+      closest = { entityId: id, distance: dist, point: { x: projX, y: projY }, normal: { x: nx, y: ny }, featureId }
+    }
+  }
+
+  return closest
+}
+
+// ── containsPoint ─────────────────────────────────────────────────────────────
+
+/**
+ * Return all entities whose collider contains the given point.
+ */
+export function containsPoint(world: ECSWorld, px: number, py: number, opts: QueryOpts = {}): EntityId[] {
+  const results: EntityId[] = []
+  for (const { id, aabb, isCircle, circleR } of allColliderAABBs(world)) {
+    if (!passesTagAndExclude(world, id, aabb.layer, opts)) continue
+    if (isCircle) {
+      const dx = px - aabb.cx
+      const dy = py - aabb.cy
+      if (dx * dx + dy * dy <= circleR * circleR) results.push(id)
+    } else {
+      if (px >= aabb.cx - aabb.hw && px <= aabb.cx + aabb.hw && py >= aabb.cy - aabb.hh && py <= aabb.cy + aabb.hh) {
+        results.push(id)
+      }
+    }
+  }
+  return results
+}
+
+// ── shapeCast ─────────────────────────────────────────────────────────────────
+
+export type QueryShape = { type: 'circle'; radius: number } | { type: 'box'; halfWidth: number; halfHeight: number }
+
+/**
+ * Sweep a shape along a direction and return the first hit.
+ */
+export function shapeCast(
+  world: ECSWorld,
+  shape: QueryShape,
+  originX: number,
+  originY: number,
+  dirX: number,
+  dirY: number,
+  maxDist: number,
+  opts: RaycastOpts = {},
+): RaycastHit | null {
+  if (shape.type === 'circle') {
+    const len = Math.hypot(dirX, dirY)
+    if (len === 0) return null
+    const ndx = dirX / len
+    const ndy = dirY / len
+
+    let best: RaycastHit | null = null
+    for (const { id, aabb, isCircle, circleR } of allColliderAABBs(world)) {
+      if (!opts.includeTriggers && aabb.isTrigger) continue
+      if (!passesTagAndExclude(world, id, aabb.layer, opts)) continue
+
+      let hit: { tmin: number; nx: number; ny: number } | null = null
+      if (isCircle) {
+        hit = rayCircle(originX, originY, ndx, ndy, aabb.cx, aabb.cy, circleR + shape.radius, maxDist)
+      } else {
+        hit = rayAABB(
+          originX,
+          originY,
+          ndx,
+          ndy,
+          aabb.cx - aabb.hw - shape.radius,
+          aabb.cx + aabb.hw + shape.radius,
+          aabb.cy - aabb.hh - shape.radius,
+          aabb.cy + aabb.hh + shape.radius,
+          maxDist,
+        )
+      }
+      if (!hit) continue
+      if (best && hit.tmin >= best.distance) continue
+      best = {
+        entityId: id,
+        distance: hit.tmin,
+        point: { x: originX + ndx * hit.tmin, y: originY + ndy * hit.tmin },
+        normal: { x: hit.nx, y: hit.ny },
+      }
+    }
+    return best
+  } else {
+    // sweepBox expects total displacement (dx, dy), not direction + maxDist
+    return sweepBox(
+      world,
+      originX,
+      originY,
+      shape.halfWidth * 2,
+      shape.halfHeight * 2,
+      dirX * maxDist,
+      dirY * maxDist,
+      opts,
+    )
+  }
+}
+
+// ── intersectShape ────────────────────────────────────────────────────────────
+
+/**
+ * Return all entities overlapping a given shape at a position.
+ */
+export function intersectShape(
+  world: ECSWorld,
+  shape: QueryShape,
+  posX: number,
+  posY: number,
+  opts: QueryOpts = {},
+): EntityId[] {
+  if (shape.type === 'circle') {
+    return overlapCircle(world, posX, posY, shape.radius, opts)
+  } else {
+    return overlapBox(world, posX, posY, shape.halfWidth, shape.halfHeight, opts)
+  }
+}
+
+// ── intersectAABB ─────────────────────────────────────────────────────────────
+
+/**
+ * Return all entities whose collider AABBs overlap a given AABB.
+ * Conservative broad-phase query.
+ */
+export function intersectAABB(
+  world: ECSWorld,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+  opts: QueryOpts = {},
+): EntityId[] {
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  const hw = (maxX - minX) / 2
+  const hh = (maxY - minY) / 2
+
+  const results: EntityId[] = []
+  for (const { id, aabb } of allColliderAABBs(world)) {
+    if (!passesTagAndExclude(world, id, aabb.layer, opts)) continue
+    if (Math.abs(aabb.cx - cx) < hw + aabb.hw && Math.abs(aabb.cy - cy) < hh + aabb.hh) {
+      results.push(id)
+    }
+  }
+  return results
+}
+
+// ── intersectRay ──────────────────────────────────────────────────────────────
+
+/**
+ * Enumerate all colliders hit by a ray via callback (unordered).
+ */
+export function intersectRay(
+  world: ECSWorld,
+  origin: { x: number; y: number },
+  direction: { x: number; y: number },
+  maxDistance: number,
+  callback: (hit: RaycastHit) => void,
+  opts: RaycastOpts = {},
+): void {
+  const len = Math.hypot(direction.x, direction.y)
+  if (len === 0) return
+  const dx = direction.x / len
+  const dy = direction.y / len
+
+  for (const { id, aabb, isCircle, circleR } of allColliderAABBs(world)) {
+    if (!opts.includeTriggers && aabb.isTrigger) continue
+    if (!passesTagAndExclude(world, id, aabb.layer, opts)) continue
+
+    let hit: { tmin: number; nx: number; ny: number } | null = null
+    if (isCircle) {
+      hit = rayCircle(origin.x, origin.y, dx, dy, aabb.cx, aabb.cy, circleR, maxDistance)
+    } else {
+      hit = rayAABB(
+        origin.x,
+        origin.y,
+        dx,
+        dy,
+        aabb.cx - aabb.hw,
+        aabb.cx + aabb.hw,
+        aabb.cy - aabb.hh,
+        aabb.cy + aabb.hh,
+        maxDistance,
+      )
+    }
+    if (!hit) continue
+    callback({
+      entityId: id,
+      distance: hit.tmin,
+      point: { x: origin.x + dx * hit.tmin, y: origin.y + dy * hit.tmin },
+      normal: { x: hit.nx, y: hit.ny },
+    })
+  }
 }

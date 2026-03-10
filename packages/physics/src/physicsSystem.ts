@@ -72,6 +72,18 @@ import { initializeConstraints, solveVelocities, solvePositions } from './impuls
 
 // ── Physics configuration ───────────────────────────────────────────────────
 
+/**
+ * Physics hooks — user-provided callbacks for filtering and modifying contacts.
+ */
+export interface PhysicsHooks {
+  /** Return false to skip contact generation between a pair. */
+  onContactFilter?: (entityA: EntityId, entityB: EntityId) => boolean
+  /** Return false to skip sensor intersection events for a pair. */
+  onIntersectionFilter?: (entityA: EntityId, entityB: EntityId) => boolean
+  /** Modify solver contacts — can change friction, restitution, normal, or set tangent velocity. */
+  onContactModify?: (manifold: ContactManifold) => void
+}
+
 export interface PhysicsConfig {
   /** Number of velocity constraint solver iterations. Default: 8 */
   velocityIterations: number
@@ -89,6 +101,10 @@ export interface PhysicsConfig {
   warmStartingFactor: number
   /** Default density for auto mass computation. Default: 1.0 */
   defaultDensity: number
+  /** Number of sub-steps per fixed step. Default: 1 (no sub-stepping) */
+  substeps: number
+  /** Minimum contact force impulse to emit contactForce events. Default: 0 (emit all) */
+  contactForceThreshold: number
 }
 
 const DEFAULT_CONFIG: PhysicsConfig = {
@@ -100,6 +116,8 @@ const DEFAULT_CONFIG: PhysicsConfig = {
   warmStarting: true,
   warmStartingFactor: 0.85,
   defaultDensity: 1,
+  substeps: 1,
+  contactForceThreshold: 0,
 }
 
 // ── AABB helpers ────────────────────────────────────────────────────────────
@@ -293,12 +311,20 @@ export class PhysicsSystem implements System {
   // BVH cache for TriMesh colliders
   private bvhCache = new Map<number, BVH>()
 
+  // Physics hooks for filtering and modifying contacts
+  private hooks: PhysicsHooks = {}
+
   constructor(
     private gravity: number,
     private readonly events?: EventBus,
     config?: Partial<PhysicsConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+  }
+
+  /** Set physics hooks for contact filtering and modification. */
+  setHooks(hooks: PhysicsHooks): void {
+    this.hooks = hooks
   }
 
   setGravity(g: number): void {
@@ -309,7 +335,11 @@ export class PhysicsSystem implements System {
     this.accumulator += dt
     if (this.accumulator > this.MAX_ACCUMULATOR) this.accumulator = this.MAX_ACCUMULATOR
     while (this.accumulator >= this.FIXED_DT) {
-      this.step(world, this.FIXED_DT)
+      const substeps = Math.max(1, this.config.substeps)
+      const subDt = this.FIXED_DT / substeps
+      for (let s = 0; s < substeps; s++) {
+        this.step(world, subDt)
+      }
       this.accumulator -= this.FIXED_DT
     }
   }
@@ -2239,8 +2269,8 @@ export class PhysicsSystem implements System {
       }
     }
 
-    // ── Phase 3.5: Filter manifolds for joint contact exclusions ─────────
-    // Remove manifolds between bodies connected by joints with contactsEnabled=false
+    // ── Phase 3.5: Filter and modify manifolds ───────────────────────────
+    // Remove manifolds for joint contact exclusions
     if (jointExcludedPairs.size > 0) {
       for (let i = manifolds.length - 1; i >= 0; i--) {
         const m = manifolds[i]
@@ -2248,6 +2278,20 @@ export class PhysicsSystem implements System {
         if (jointExcludedPairs.has(ka)) {
           manifolds.splice(i, 1)
         }
+      }
+    }
+    // Apply onContactFilter hook — user can reject contact pairs
+    if (this.hooks.onContactFilter) {
+      for (let i = manifolds.length - 1; i >= 0; i--) {
+        if (!this.hooks.onContactFilter(manifolds[i].entityA, manifolds[i].entityB)) {
+          manifolds.splice(i, 1)
+        }
+      }
+    }
+    // Apply onContactModify hook — user can change friction, restitution, normal
+    if (this.hooks.onContactModify) {
+      for (const m of manifolds) {
+        this.hooks.onContactModify(m)
       }
     }
 
@@ -2462,6 +2506,32 @@ export class PhysicsSystem implements System {
         })
         if (extraConstraints.length > 0) {
           solveVelocities(extraConstraints, maxExtra)
+        }
+      }
+    }
+
+    // ── Phase 5c: Contact force events ──────────────────────────────────
+    // Emit contactForce events with total impulse magnitude per contact pair
+    if (this.events) {
+      const threshold = this.config.contactForceThreshold
+      for (const m of manifolds) {
+        let totalNormal = 0
+        let totalTangent = 0
+        for (const pt of m.points) {
+          totalNormal += Math.abs(pt.normalImpulse)
+          totalTangent += Math.abs(pt.tangentImpulse)
+        }
+        const totalImpulse = totalNormal + totalTangent
+        if (totalImpulse > threshold) {
+          this.events.emit('contactForce', {
+            entityA: m.entityA,
+            entityB: m.entityB,
+            totalNormalImpulse: totalNormal,
+            totalTangentImpulse: totalTangent,
+            totalImpulse,
+            normalX: m.normalX,
+            normalY: m.normalY,
+          })
         }
       }
     }
