@@ -1,14 +1,11 @@
 import { useEffect, useContext } from 'react'
-import { createCapsuleCollider } from '@cubeforge/physics'
+import { createHalfSpaceCollider } from '@cubeforge/physics'
 import type { CombineRule } from '@cubeforge/physics'
 import { EngineContext, EntityContext } from '../context'
 
-interface CapsuleColliderProps {
-  width: number
-  height: number
-  offsetX?: number
-  offsetY?: number
-  isTrigger?: boolean
+interface HalfSpaceColliderProps {
+  normalX?: number
+  normalY?: number
   layer?: string
   mask?: string | string[]
   friction?: number
@@ -18,12 +15,9 @@ interface CapsuleColliderProps {
   enabled?: boolean
 }
 
-export function CapsuleCollider({
-  width,
-  height,
-  offsetX = 0,
-  offsetY = 0,
-  isTrigger = false,
+export function HalfSpaceCollider({
+  normalX = 0,
+  normalY = -1,
   layer = 'default',
   mask = '*',
   friction = 0.5,
@@ -31,17 +25,16 @@ export function CapsuleCollider({
   frictionCombineRule = 'average',
   restitutionCombineRule = 'average',
   enabled = true,
-}: CapsuleColliderProps) {
+}: HalfSpaceColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
     engine.ecs.addComponent(
       entityId,
-      createCapsuleCollider(width, height, {
-        offsetX,
-        offsetY,
-        isTrigger,
+      createHalfSpaceCollider({
+        normalX,
+        normalY,
         layer,
         mask,
         friction,
@@ -51,7 +44,7 @@ export function CapsuleCollider({
         enabled,
       }),
     )
-    return () => engine.ecs.removeComponent(entityId, 'CapsuleCollider')
+    return () => engine.ecs.removeComponent(entityId, 'HalfSpaceCollider')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null

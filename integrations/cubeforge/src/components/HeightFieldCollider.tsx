@@ -1,14 +1,12 @@
 import { useEffect, useContext } from 'react'
-import { createCapsuleCollider } from '@cubeforge/physics'
+import { createHeightFieldCollider } from '@cubeforge/physics'
 import type { CombineRule } from '@cubeforge/physics'
 import { EngineContext, EntityContext } from '../context'
 
-interface CapsuleColliderProps {
-  width: number
-  height: number
-  offsetX?: number
-  offsetY?: number
-  isTrigger?: boolean
+interface HeightFieldColliderProps {
+  heights: number[]
+  scaleX?: number
+  scaleY?: number
   layer?: string
   mask?: string | string[]
   friction?: number
@@ -18,12 +16,10 @@ interface CapsuleColliderProps {
   enabled?: boolean
 }
 
-export function CapsuleCollider({
-  width,
-  height,
-  offsetX = 0,
-  offsetY = 0,
-  isTrigger = false,
+export function HeightFieldCollider({
+  heights,
+  scaleX = 1,
+  scaleY = 1,
   layer = 'default',
   mask = '*',
   friction = 0.5,
@@ -31,17 +27,16 @@ export function CapsuleCollider({
   frictionCombineRule = 'average',
   restitutionCombineRule = 'average',
   enabled = true,
-}: CapsuleColliderProps) {
+}: HeightFieldColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
     engine.ecs.addComponent(
       entityId,
-      createCapsuleCollider(width, height, {
-        offsetX,
-        offsetY,
-        isTrigger,
+      createHeightFieldCollider(heights, {
+        scaleX,
+        scaleY,
         layer,
         mask,
         friction,
@@ -51,7 +46,7 @@ export function CapsuleCollider({
         enabled,
       }),
     )
-    return () => engine.ecs.removeComponent(entityId, 'CapsuleCollider')
+    return () => engine.ecs.removeComponent(entityId, 'HeightFieldCollider')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null

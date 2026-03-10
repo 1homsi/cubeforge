@@ -27,15 +27,38 @@ import type { BoxColliderComponent } from './components/boxCollider'
 import type { CircleColliderComponent } from './components/circleCollider'
 import type { CapsuleColliderComponent } from './components/capsuleCollider'
 import type { CompoundColliderComponent, ColliderShape } from './components/compoundCollider'
+import type { ConvexPolygonColliderComponent } from './components/convexPolygonCollider'
+import type { TriangleColliderComponent } from './components/triangleCollider'
+import type { SegmentColliderComponent } from './components/segmentCollider'
+import type { HeightFieldColliderComponent } from './components/heightFieldCollider'
+import type { HalfSpaceColliderComponent } from './components/halfSpaceCollider'
+import type { TriMeshColliderComponent } from './components/triMeshCollider'
 import type { JointComponent } from './components/joint'
 import type { ContactManifold } from './contactManifold'
 import {
   generateBoxBoxManifold,
   generateCircleCircleManifold,
   generateCircleBoxManifold,
+  generateCapsuleBoxManifold,
+  generateCapsuleCircleManifold,
+  generateCapsuleCapsuleManifold,
   warmStartManifold,
 } from './contactManifold'
-import { boxMassProperties, circleMassProperties, capsuleMassProperties, parallelAxis } from './massProperties'
+import {
+  generatePolygonPolygonManifold,
+  generatePolygonCircleManifold,
+  generatePolygonBoxManifold,
+  generateSegmentCircleManifold,
+  generateSegmentBoxManifold,
+  generateHalfSpaceCircleManifold,
+  generateHalfSpaceBoxManifold,
+  generateHeightFieldCircleManifold,
+  generateHeightFieldBoxManifold,
+} from './satManifold'
+import { generateTriMeshCircleManifold, generateTriMeshBoxManifold } from './triMeshManifold'
+import { buildBVH } from './bvh'
+import type { BVH } from './bvh'
+import { boxMassProperties, circleMassProperties, capsuleMassProperties, polygonMassProperties, triangleMassProperties, parallelAxis } from './massProperties'
 import { combineCoefficients } from './combineRules'
 import type { SolverBody } from './impulseSolver'
 import { initializeConstraints, solveVelocities, solvePositions } from './impulseSolver'
@@ -243,12 +266,16 @@ export class PhysicsSystem implements System {
   private activeCirclePairs = new Map<string, [EntityId, EntityId]>()
   private activeCompoundPairs = new Map<string, [EntityId, EntityId]>()
   private activeCapsulePairs = new Map<string, [EntityId, EntityId]>()
+  private activePolygonPairs = new Map<string, [EntityId, EntityId]>()
 
   // Platform carry tracking
   private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
 
   // Manifold cache for warm starting
   private manifoldCache = new Map<string, ContactManifold>()
+
+  // BVH cache for TriMesh colliders
+  private bvhCache = new Map<number, BVH>()
 
   constructor(
     private gravity: number,
@@ -291,6 +318,8 @@ export class PhysicsSystem implements System {
     boxCol?: BoxColliderComponent,
     circleCol?: CircleColliderComponent,
     capsuleCol?: CapsuleColliderComponent,
+    polygonCol?: ConvexPolygonColliderComponent,
+    triangleCol?: TriangleColliderComponent,
   ): void {
     if (!rb._massPropertiesDirty) return
     rb._massPropertiesDirty = false
@@ -318,6 +347,12 @@ export class PhysicsSystem implements System {
       } else if (capsuleCol) {
         const props = capsuleMassProperties(capsuleCol.width, capsuleCol.height, density)
         inertia = props.inertia * (mass / props.mass)
+      } else if (polygonCol) {
+        const props = polygonMassProperties(polygonCol.vertices, density)
+        inertia = props.mass > 0 ? props.inertia * (mass / props.mass) : mass
+      } else if (triangleCol) {
+        const props = triangleMassProperties(triangleCol.a, triangleCol.b, triangleCol.c, density)
+        inertia = props.mass > 0 ? props.inertia * (mass / props.mass) : mass
       } else {
         inertia = mass // fallback
       }
@@ -344,6 +379,20 @@ export class PhysicsSystem implements System {
         inertia = props.inertia
         if (capsuleCol.offsetX !== 0 || capsuleCol.offsetY !== 0) {
           inertia = parallelAxis(inertia, mass, capsuleCol.offsetX, capsuleCol.offsetY)
+        }
+      } else if (polygonCol) {
+        const props = polygonMassProperties(polygonCol.vertices, density)
+        mass = props.mass
+        inertia = props.inertia
+        if (polygonCol.offsetX !== 0 || polygonCol.offsetY !== 0) {
+          inertia = parallelAxis(inertia, mass, polygonCol.offsetX, polygonCol.offsetY)
+        }
+      } else if (triangleCol) {
+        const props = triangleMassProperties(triangleCol.a, triangleCol.b, triangleCol.c, density)
+        mass = props.mass
+        inertia = props.inertia
+        if (triangleCol.offsetX !== 0 || triangleCol.offsetY !== 0) {
+          inertia = parallelAxis(inertia, mass, triangleCol.offsetX, triangleCol.offsetY)
         }
       } else {
         mass = 1
@@ -392,6 +441,31 @@ export class PhysicsSystem implements System {
       if (!rb.isStatic) capsuleDynamics.push(id)
     }
 
+    const allPolygon = world.query('Transform', 'RigidBody', 'ConvexPolygonCollider')
+    const allTriangle = world.query('Transform', 'RigidBody', 'TriangleCollider')
+    const allSegment = world.query('Transform', 'SegmentCollider')
+    const allHeightField = world.query('Transform', 'HeightFieldCollider')
+    const allHalfSpace = world.query('Transform', 'HalfSpaceCollider')
+    const allTriMesh = world.query('Transform', 'TriMeshCollider')
+
+    const dynamicPolygon: EntityId[] = []
+    const staticPolygon: EntityId[] = []
+    for (const id of allPolygon) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (!rb.enabled) continue
+      if (rb.isStatic || rb.isKinematic) staticPolygon.push(id)
+      else dynamicPolygon.push(id)
+    }
+
+    const dynamicTriangle: EntityId[] = []
+    const staticTriangle: EntityId[] = []
+    for (const id of allTriangle) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (!rb.enabled) continue
+      if (rb.isStatic || rb.isKinematic) staticTriangle.push(id)
+      else dynamicTriangle.push(id)
+    }
+
     // All static-like entities for spatial grid (statics + kinematics)
     const nonDynamic = [...staticBox, ...kinematicBox]
 
@@ -430,6 +504,16 @@ export class PhysicsSystem implements System {
       const col = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
       this.computeMassProperties(rb, undefined, undefined, col)
     }
+    for (const id of allPolygon) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const col = world.getComponent<ConvexPolygonColliderComponent>(id, 'ConvexPolygonCollider')!
+      this.computeMassProperties(rb, undefined, undefined, undefined, col)
+    }
+    for (const id of allTriangle) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const col = world.getComponent<TriangleColliderComponent>(id, 'TriangleCollider')!
+      this.computeMassProperties(rb, undefined, undefined, undefined, undefined, col)
+    }
 
     // ── Wake sleeping bodies on moving platforms ──────────────────────────
 
@@ -456,8 +540,8 @@ export class PhysicsSystem implements System {
 
     // ── Phase 1: Force accumulation + velocity integration ────────────────
 
-    // All dynamics: box, circle, capsule
-    const allDynamics = [...dynamicBox, ...dynamicCircle, ...capsuleDynamics]
+    // All dynamics: box, circle, capsule, polygon, triangle
+    const allDynamics = [...dynamicBox, ...dynamicCircle, ...capsuleDynamics, ...dynamicPolygon, ...dynamicTriangle]
 
     for (const id of allDynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -990,6 +1074,793 @@ export class PhysicsSystem implements System {
       }
     }
 
+    // ── Capsule vs static box (upgraded from AABB to proper manifold) ──────
+    for (const cid of capsuleDynamics) {
+      const rb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+      if (rb.sleeping) continue
+      const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+      const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
+      if (!cc.enabled || cc.isTrigger) continue
+
+      const capCx = ct.x + cc.offsetX
+      const capCy = ct.y + cc.offsetY
+      const capHw = cc.width / 2
+      const capHh = cc.height / 2
+      const candidateCells = this.getCells(capCx, capCy, capHw, capHh)
+      const checked = new Set<EntityId>()
+
+      for (const cell of candidateCells) {
+        const bucket = spatialGrid.get(cell)
+        if (!bucket) continue
+        for (const sid of bucket) {
+          if (checked.has(sid)) continue
+          checked.add(sid)
+          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+          if (!sc.enabled || sc.isTrigger) continue
+          if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask)) continue
+
+          const sAABB = getAABB(st, sc)
+          const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh)
+          if (!result) continue
+
+          const combinedFriction = combineCoefficients(cc.friction, cc.frictionCombineRule, sc.friction, sc.frictionCombineRule)
+          const combinedRestitution = combineCoefficients(cc.restitution, cc.restitutionCombineRule, sc.restitution, sc.restitutionCombineRule)
+
+          const key = pairKey(cid, sid)
+          const manifold: ContactManifold = {
+            entityA: cid,
+            entityB: sid,
+            normalX: result.normalX,
+            normalY: result.normalY,
+            points: result.points,
+            friction: combinedFriction,
+            restitution: combinedRestitution,
+          }
+          const cached = this.manifoldCache.get(key)
+          if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+          manifolds.push(manifold)
+          currentCollisionPairs.set(key, [cid, sid])
+        }
+      }
+    }
+
+    // ── Capsule vs dynamic box ───────────────────────────────────────────
+    for (const cid of capsuleDynamics) {
+      const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+      if (crb.sleeping) continue
+      const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+      const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
+      if (!cc.enabled || cc.isTrigger) continue
+
+      const capCx = ct.x + cc.offsetX
+      const capCy = ct.y + cc.offsetY
+      const capHw = cc.width / 2
+      const capHh = cc.height / 2
+
+      for (const bid of dynamicBox) {
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (!result) continue
+
+        if (crb.sleeping) { crb.sleeping = false; crb.sleepTimer = 0 }
+        if (brb.sleeping) { brb.sleeping = false; brb.sleepTimer = 0 }
+
+        const combinedFriction = combineCoefficients(cc.friction, cc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(cc.restitution, cc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+
+        const key = pairKey(cid, bid)
+        const manifold: ContactManifold = {
+          entityA: cid,
+          entityB: bid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [cid, bid])
+      }
+    }
+
+    // ── Capsule vs capsule ───────────────────────────────────────────────
+    for (let i = 0; i < capsuleDynamics.length; i++) {
+      for (let j = i + 1; j < capsuleDynamics.length; j++) {
+        const ia = capsuleDynamics[i]
+        const ib = capsuleDynamics[j]
+        const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
+        const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
+        const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
+        const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
+        const ca = world.getComponent<CapsuleColliderComponent>(ia, 'CapsuleCollider')!
+        const cb = world.getComponent<CapsuleColliderComponent>(ib, 'CapsuleCollider')!
+        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+
+        const result = generateCapsuleCapsuleManifold(
+          ta.x + ca.offsetX, ta.y + ca.offsetY, ca.width / 2, ca.height / 2,
+          tb.x + cb.offsetX, tb.y + cb.offsetY, cb.width / 2, cb.height / 2,
+        )
+        if (!result) continue
+
+        if (rba.sleeping) { rba.sleeping = false; rba.sleepTimer = 0 }
+        if (rbb.sleeping) { rbb.sleeping = false; rbb.sleepTimer = 0 }
+
+        const combinedFriction = combineCoefficients(ca.friction, ca.frictionCombineRule, cb.friction, cb.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(ca.restitution, ca.restitutionCombineRule, cb.restitution, cb.restitutionCombineRule)
+
+        const key = pairKey(ia, ib)
+        const manifold: ContactManifold = {
+          entityA: ia,
+          entityB: ib,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [ia, ib])
+      }
+    }
+
+    // ── Capsule vs dynamic circle ────────────────────────────────────────
+    for (const cid of capsuleDynamics) {
+      const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+      if (crb.sleeping) continue
+      const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+      const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
+      if (!cc.enabled || cc.isTrigger) continue
+
+      const capCx = ct.x + cc.offsetX
+      const capCy = ct.y + cc.offsetY
+      const capHw = cc.width / 2
+      const capHh = cc.height / 2
+
+      for (const oid of dynamicCircle) {
+        const orb = world.getComponent<RigidBodyComponent>(oid, 'RigidBody')!
+        const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
+        const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
+        if (!oc.enabled || oc.isTrigger) continue
+        if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask)) continue
+
+        const result = generateCapsuleCircleManifold(
+          capCx, capCy, capHw, capHh,
+          ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius,
+        )
+        if (!result) continue
+
+        if (crb.sleeping) { crb.sleeping = false; crb.sleepTimer = 0 }
+        if (orb.sleeping) { orb.sleeping = false; orb.sleepTimer = 0 }
+
+        const combinedFriction = combineCoefficients(cc.friction, cc.frictionCombineRule, oc.friction, oc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(cc.restitution, cc.restitutionCombineRule, oc.restitution, oc.restitutionCombineRule)
+
+        const key = pairKey(cid, oid)
+        const manifold: ContactManifold = {
+          entityA: cid,
+          entityB: oid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [cid, oid])
+      }
+    }
+
+    // ── Polygon vs static box ────────────────────────────────────────────
+    for (const pid of dynamicPolygon) {
+      const rb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
+      if (rb.sleeping) continue
+      const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+      const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
+      if (!pc.enabled || pc.isTrigger) continue
+
+      // Compute polygon AABB for spatial grid query
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (const v of pc.vertices) {
+        const wx = v.x + pt.x + pc.offsetX
+        const wy = v.y + pt.y + pc.offsetY
+        if (wx < minX) minX = wx
+        if (wx > maxX) maxX = wx
+        if (wy < minY) minY = wy
+        if (wy > maxY) maxY = wy
+      }
+      const polyHw = (maxX - minX) / 2
+      const polyHh = (maxY - minY) / 2
+      const polyCx = (minX + maxX) / 2
+      const polyCy = (minY + maxY) / 2
+
+      const candidateCells = this.getCells(polyCx, polyCy, polyHw, polyHh)
+      const checked = new Set<EntityId>()
+
+      for (const cell of candidateCells) {
+        const bucket = spatialGrid.get(cell)
+        if (!bucket) continue
+        for (const sid of bucket) {
+          if (checked.has(sid)) continue
+          checked.add(sid)
+          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+          if (!sc.enabled || sc.isTrigger) continue
+          if (!canInteract(pc.layer, pc.mask, sc.layer, sc.mask)) continue
+
+          const sAABB = getAABB(st, sc)
+          const result = generatePolygonBoxManifold(pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY, sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh)
+          if (!result) continue
+
+          const combinedFriction = combineCoefficients(pc.friction, pc.frictionCombineRule, sc.friction, sc.frictionCombineRule)
+          const combinedRestitution = combineCoefficients(pc.restitution, pc.restitutionCombineRule, sc.restitution, sc.restitutionCombineRule)
+
+          const key = pairKey(pid, sid)
+          const manifold: ContactManifold = {
+            entityA: pid,
+            entityB: sid,
+            normalX: result.normalX,
+            normalY: result.normalY,
+            points: result.points,
+            friction: combinedFriction,
+            restitution: combinedRestitution,
+          }
+          const cached = this.manifoldCache.get(key)
+          if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+          manifolds.push(manifold)
+          currentCollisionPairs.set(key, [pid, sid])
+        }
+      }
+    }
+
+    // ── Polygon vs dynamic box ───────────────────────────────────────────
+    for (const pid of dynamicPolygon) {
+      const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
+      if (prb.sleeping) continue
+      const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+      const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
+      if (!pc.enabled || pc.isTrigger) continue
+
+      for (const bid of dynamicBox) {
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(pc.layer, pc.mask, bc.layer, bc.mask)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generatePolygonBoxManifold(pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (!result) continue
+
+        if (prb.sleeping) { prb.sleeping = false; prb.sleepTimer = 0 }
+        if (brb.sleeping) { brb.sleeping = false; brb.sleepTimer = 0 }
+
+        const combinedFriction = combineCoefficients(pc.friction, pc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(pc.restitution, pc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+
+        const key = pairKey(pid, bid)
+        const manifold: ContactManifold = {
+          entityA: pid,
+          entityB: bid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [pid, bid])
+      }
+    }
+
+    // ── Polygon vs polygon ───────────────────────────────────────────────
+    for (let i = 0; i < dynamicPolygon.length; i++) {
+      for (let j = i + 1; j < dynamicPolygon.length; j++) {
+        const ia = dynamicPolygon[i]
+        const ib = dynamicPolygon[j]
+        const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
+        const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
+        const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
+        const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
+        const ca = world.getComponent<ConvexPolygonColliderComponent>(ia, 'ConvexPolygonCollider')!
+        const cb = world.getComponent<ConvexPolygonColliderComponent>(ib, 'ConvexPolygonCollider')!
+        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
+
+        const result = generatePolygonPolygonManifold(
+          ca.vertices, ta.x, ta.y, ca.offsetX, ca.offsetY,
+          cb.vertices, tb.x, tb.y, cb.offsetX, cb.offsetY,
+        )
+        if (!result) continue
+
+        if (rba.sleeping) { rba.sleeping = false; rba.sleepTimer = 0 }
+        if (rbb.sleeping) { rbb.sleeping = false; rbb.sleepTimer = 0 }
+
+        const combinedFriction = combineCoefficients(ca.friction, ca.frictionCombineRule, cb.friction, cb.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(ca.restitution, ca.restitutionCombineRule, cb.restitution, cb.restitutionCombineRule)
+
+        const key = pairKey(ia, ib)
+        const manifold: ContactManifold = {
+          entityA: ia,
+          entityB: ib,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [ia, ib])
+      }
+    }
+
+    // ── Polygon vs dynamic circle ────────────────────────────────────────
+    for (const pid of dynamicPolygon) {
+      const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
+      if (prb.sleeping) continue
+      const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+      const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
+      if (!pc.enabled || pc.isTrigger) continue
+
+      for (const oid of dynamicCircle) {
+        const orb = world.getComponent<RigidBodyComponent>(oid, 'RigidBody')!
+        const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
+        const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
+        if (!oc.enabled || oc.isTrigger) continue
+        if (!canInteract(pc.layer, pc.mask, oc.layer, oc.mask)) continue
+
+        const result = generatePolygonCircleManifold(
+          pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY,
+          ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius,
+        )
+        if (!result) continue
+
+        if (prb.sleeping) { prb.sleeping = false; prb.sleepTimer = 0 }
+        if (orb.sleeping) { orb.sleeping = false; orb.sleepTimer = 0 }
+
+        const combinedFriction = combineCoefficients(pc.friction, pc.frictionCombineRule, oc.friction, oc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(pc.restitution, pc.restitutionCombineRule, oc.restitution, oc.restitutionCombineRule)
+
+        const key = pairKey(pid, oid)
+        const manifold: ContactManifold = {
+          entityA: pid,
+          entityB: oid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [pid, oid])
+      }
+    }
+
+    // ── Triangle vs static box (treat as 3-vertex polygon) ───────────────
+    for (const tid of dynamicTriangle) {
+      const rb = world.getComponent<RigidBodyComponent>(tid, 'RigidBody')!
+      if (rb.sleeping) continue
+      const tt = world.getComponent<TransformComponent>(tid, 'Transform')!
+      const tc = world.getComponent<TriangleColliderComponent>(tid, 'TriangleCollider')!
+      if (!tc.enabled || tc.isTrigger) continue
+
+      const triVerts = [tc.a, tc.b, tc.c]
+
+      // Compute triangle AABB for spatial grid query
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (const v of triVerts) {
+        const wx = v.x + tt.x + tc.offsetX
+        const wy = v.y + tt.y + tc.offsetY
+        if (wx < minX) minX = wx
+        if (wx > maxX) maxX = wx
+        if (wy < minY) minY = wy
+        if (wy > maxY) maxY = wy
+      }
+      const triHw = (maxX - minX) / 2
+      const triHh = (maxY - minY) / 2
+      const triCx = (minX + maxX) / 2
+      const triCy = (minY + maxY) / 2
+
+      const candidateCells = this.getCells(triCx, triCy, triHw, triHh)
+      const checked = new Set<EntityId>()
+
+      for (const cell of candidateCells) {
+        const bucket = spatialGrid.get(cell)
+        if (!bucket) continue
+        for (const sid of bucket) {
+          if (checked.has(sid)) continue
+          checked.add(sid)
+          const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+          const sc = world.getComponent<BoxColliderComponent>(sid, 'BoxCollider')!
+          if (!sc.enabled || sc.isTrigger) continue
+          if (!canInteract(tc.layer, tc.mask, sc.layer, sc.mask)) continue
+
+          const sAABB = getAABB(st, sc)
+          const result = generatePolygonBoxManifold(triVerts, tt.x, tt.y, tc.offsetX, tc.offsetY, sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh)
+          if (!result) continue
+
+          const combinedFriction = combineCoefficients(tc.friction, tc.frictionCombineRule, sc.friction, sc.frictionCombineRule)
+          const combinedRestitution = combineCoefficients(tc.restitution, tc.restitutionCombineRule, sc.restitution, sc.restitutionCombineRule)
+
+          const key = pairKey(tid, sid)
+          const manifold: ContactManifold = {
+            entityA: tid,
+            entityB: sid,
+            normalX: result.normalX,
+            normalY: result.normalY,
+            points: result.points,
+            friction: combinedFriction,
+            restitution: combinedRestitution,
+          }
+          const cached = this.manifoldCache.get(key)
+          if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+          manifolds.push(manifold)
+          currentCollisionPairs.set(key, [tid, sid])
+        }
+      }
+    }
+
+    // ── Triangle vs dynamic circle (treat as 3-vertex polygon) ───────────
+    for (const tid of dynamicTriangle) {
+      const trb = world.getComponent<RigidBodyComponent>(tid, 'RigidBody')!
+      if (trb.sleeping) continue
+      const tt = world.getComponent<TransformComponent>(tid, 'Transform')!
+      const tc = world.getComponent<TriangleColliderComponent>(tid, 'TriangleCollider')!
+      if (!tc.enabled || tc.isTrigger) continue
+
+      const triVerts = [tc.a, tc.b, tc.c]
+
+      for (const oid of dynamicCircle) {
+        const orb = world.getComponent<RigidBodyComponent>(oid, 'RigidBody')!
+        const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
+        const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
+        if (!oc.enabled || oc.isTrigger) continue
+        if (!canInteract(tc.layer, tc.mask, oc.layer, oc.mask)) continue
+
+        const result = generatePolygonCircleManifold(
+          triVerts, tt.x, tt.y, tc.offsetX, tc.offsetY,
+          ot.x + oc.offsetX, ot.y + oc.offsetY, oc.radius,
+        )
+        if (!result) continue
+
+        if (trb.sleeping) { trb.sleeping = false; trb.sleepTimer = 0 }
+        if (orb.sleeping) { orb.sleeping = false; orb.sleepTimer = 0 }
+
+        const combinedFriction = combineCoefficients(tc.friction, tc.frictionCombineRule, oc.friction, oc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(tc.restitution, tc.restitutionCombineRule, oc.restitution, oc.restitutionCombineRule)
+
+        const key = pairKey(tid, oid)
+        const manifold: ContactManifold = {
+          entityA: tid,
+          entityB: oid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [tid, oid])
+      }
+    }
+
+    // ── Segment vs dynamic box & circle (segments are always static) ─────
+    for (const sid of allSegment) {
+      const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+      const sc = world.getComponent<SegmentColliderComponent>(sid, 'SegmentCollider')!
+      if (!sc.enabled || sc.isTrigger) continue
+
+      const segAx = st.x + sc.offsetX + sc.start.x
+      const segAy = st.y + sc.offsetY + sc.start.y
+      const segBx = st.x + sc.offsetX + sc.end.x
+      const segBy = st.y + sc.offsetY + sc.end.y
+
+      for (const bid of dynamicBox) {
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        if (brb.sleeping) continue
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(sc.layer, sc.mask, bc.layer, bc.mask)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generateSegmentBoxManifold(segAx, segAy, segBx, segBy, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(sc.friction, sc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(sc.restitution, sc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+
+        const key = pairKey(sid, bid)
+        const manifold: ContactManifold = {
+          entityA: sid,
+          entityB: bid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [sid, bid])
+      }
+
+      for (const cid of dynamicCircle) {
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+        if (crb.sleeping) continue
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) continue
+        if (!canInteract(sc.layer, sc.mask, cc.layer, cc.mask)) continue
+
+        const result = generateSegmentCircleManifold(
+          segAx, segAy, segBx, segBy,
+          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
+        )
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(sc.friction, sc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(sc.restitution, sc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+
+        const key = pairKey(sid, cid)
+        const manifold: ContactManifold = {
+          entityA: sid,
+          entityB: cid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [sid, cid])
+      }
+    }
+
+    // ── HeightField vs dynamic box & circle (heightfields are static) ────
+    for (const hid of allHeightField) {
+      const ht = world.getComponent<TransformComponent>(hid, 'Transform')!
+      const hc = world.getComponent<HeightFieldColliderComponent>(hid, 'HeightFieldCollider')!
+      if (!hc.enabled) continue
+
+      for (const bid of dynamicBox) {
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        if (brb.sleeping) continue
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generateHeightFieldBoxManifold(ht.x, ht.y, hc.heights, hc.scaleX, hc.scaleY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+
+        const key = pairKey(hid, bid)
+        const manifold: ContactManifold = {
+          entityA: hid,
+          entityB: bid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [hid, bid])
+      }
+
+      for (const cid of dynamicCircle) {
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+        if (crb.sleeping) continue
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) continue
+        if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask)) continue
+
+        const result = generateHeightFieldCircleManifold(
+          ht.x, ht.y, hc.heights, hc.scaleX, hc.scaleY,
+          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
+        )
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+
+        const key = pairKey(hid, cid)
+        const manifold: ContactManifold = {
+          entityA: hid,
+          entityB: cid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [hid, cid])
+      }
+    }
+
+    // ── HalfSpace vs dynamic box & circle (infinite, test all dynamics) ──
+    for (const hid of allHalfSpace) {
+      const ht = world.getComponent<TransformComponent>(hid, 'Transform')!
+      const hc = world.getComponent<HalfSpaceColliderComponent>(hid, 'HalfSpaceCollider')!
+      if (!hc.enabled) continue
+
+      for (const bid of dynamicBox) {
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        if (brb.sleeping) continue
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(hc.layer, hc.mask, bc.layer, bc.mask)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generateHalfSpaceBoxManifold(ht.x, ht.y, hc.normalX, hc.normalY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+
+        const key = pairKey(hid, bid)
+        const manifold: ContactManifold = {
+          entityA: hid,
+          entityB: bid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [hid, bid])
+      }
+
+      for (const cid of dynamicCircle) {
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+        if (crb.sleeping) continue
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) continue
+        if (!canInteract(hc.layer, hc.mask, cc.layer, cc.mask)) continue
+
+        const result = generateHalfSpaceCircleManifold(
+          ht.x, ht.y, hc.normalX, hc.normalY,
+          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
+        )
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(hc.friction, hc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(hc.restitution, hc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+
+        const key = pairKey(hid, cid)
+        const manifold: ContactManifold = {
+          entityA: hid,
+          entityB: cid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [hid, cid])
+      }
+    }
+
+    // ── TriMesh vs dynamic box & circle (with BVH acceleration) ──────────
+    for (const mid of allTriMesh) {
+      const mt = world.getComponent<TransformComponent>(mid, 'Transform')!
+      const mc = world.getComponent<TriMeshColliderComponent>(mid, 'TriMeshCollider')!
+      if (!mc.enabled) continue
+
+      // Build or retrieve cached BVH
+      let bvh = this.bvhCache.get(mid)
+      if (!bvh) {
+        bvh = buildBVH(mc.vertices, mc.indices, mt.x, mt.y)
+        this.bvhCache.set(mid, bvh)
+      }
+
+      for (const bid of dynamicBox) {
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        if (brb.sleeping) continue
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(mc.layer, mc.mask, bc.layer, bc.mask)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generateTriMeshBoxManifold(bvh, mt.x, mt.y, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(mc.friction, mc.frictionCombineRule, bc.friction, bc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(mc.restitution, mc.restitutionCombineRule, bc.restitution, bc.restitutionCombineRule)
+
+        const key = pairKey(mid, bid)
+        const manifold: ContactManifold = {
+          entityA: mid,
+          entityB: bid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [mid, bid])
+      }
+
+      for (const cid of dynamicCircle) {
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+        if (crb.sleeping) continue
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) continue
+        if (!canInteract(mc.layer, mc.mask, cc.layer, cc.mask)) continue
+
+        const result = generateTriMeshCircleManifold(
+          bvh, mt.x, mt.y,
+          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
+        )
+        if (!result) continue
+
+        const combinedFriction = combineCoefficients(mc.friction, mc.frictionCombineRule, cc.friction, cc.frictionCombineRule)
+        const combinedRestitution = combineCoefficients(mc.restitution, mc.restitutionCombineRule, cc.restitution, cc.restitutionCombineRule)
+
+        const key = pairKey(mid, cid)
+        const manifold: ContactManifold = {
+          entityA: mid,
+          entityB: cid,
+          normalX: result.normalX,
+          normalY: result.normalY,
+          points: result.points,
+          friction: combinedFriction,
+          restitution: combinedRestitution,
+        }
+        const cached = this.manifoldCache.get(key)
+        if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+        manifolds.push(manifold)
+        currentCollisionPairs.set(key, [mid, cid])
+      }
+    }
+
     // ── Phase 4: Build solver bodies ──────────────────────────────────────
 
     const solverBodies = new Map<number, SolverBody>()
@@ -1043,6 +1914,130 @@ export class PhysicsSystem implements System {
         invMass: rb.invMass,
         invInertia: rb.invInertia,
         dominance: rb.dominance,
+      })
+    }
+
+    // Add capsule solver bodies
+    for (const id of allCapsule) {
+      if (solverBodies.has(id)) continue
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      solverBodies.set(id, {
+        entityId: id,
+        x: t.x,
+        y: t.y,
+        rotation: t.rotation,
+        vx: rb.vx,
+        vy: rb.vy,
+        angVel: rb.angularVelocity,
+        invMass: rb.invMass,
+        invInertia: rb.invInertia,
+        dominance: rb.dominance,
+      })
+    }
+
+    // Add polygon dynamic/static solver bodies
+    for (const id of allPolygon) {
+      if (solverBodies.has(id)) continue
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      solverBodies.set(id, {
+        entityId: id,
+        x: t.x,
+        y: t.y,
+        rotation: t.rotation,
+        vx: rb.vx,
+        vy: rb.vy,
+        angVel: rb.angularVelocity,
+        invMass: rb.invMass,
+        invInertia: rb.invInertia,
+        dominance: rb.dominance,
+      })
+    }
+
+    // Add triangle dynamic/static solver bodies
+    for (const id of allTriangle) {
+      if (solverBodies.has(id)) continue
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      solverBodies.set(id, {
+        entityId: id,
+        x: t.x,
+        y: t.y,
+        rotation: t.rotation,
+        vx: rb.vx,
+        vy: rb.vy,
+        angVel: rb.angularVelocity,
+        invMass: rb.invMass,
+        invInertia: rb.invInertia,
+        dominance: rb.dominance,
+      })
+    }
+
+    // Add static-only solver bodies for segments, heightfields, halfspaces, trimeshes
+    // (they appear in manifolds as entityA but have invMass=0, invInertia=0)
+    for (const id of allSegment) {
+      if (solverBodies.has(id)) continue
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      solverBodies.set(id, {
+        entityId: id,
+        x: t.x,
+        y: t.y,
+        rotation: t.rotation,
+        vx: 0,
+        vy: 0,
+        angVel: 0,
+        invMass: 0,
+        invInertia: 0,
+        dominance: 0,
+      })
+    }
+    for (const id of allHeightField) {
+      if (solverBodies.has(id)) continue
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      solverBodies.set(id, {
+        entityId: id,
+        x: t.x,
+        y: t.y,
+        rotation: t.rotation,
+        vx: 0,
+        vy: 0,
+        angVel: 0,
+        invMass: 0,
+        invInertia: 0,
+        dominance: 0,
+      })
+    }
+    for (const id of allHalfSpace) {
+      if (solverBodies.has(id)) continue
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      solverBodies.set(id, {
+        entityId: id,
+        x: t.x,
+        y: t.y,
+        rotation: t.rotation,
+        vx: 0,
+        vy: 0,
+        angVel: 0,
+        invMass: 0,
+        invInertia: 0,
+        dominance: 0,
+      })
+    }
+    for (const id of allTriMesh) {
+      if (solverBodies.has(id)) continue
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      solverBodies.set(id, {
+        entityId: id,
+        x: t.x,
+        y: t.y,
+        rotation: t.rotation,
+        vx: 0,
+        vy: 0,
+        angVel: 0,
+        invMass: 0,
+        invInertia: 0,
+        dominance: 0,
       })
     }
 
@@ -1678,6 +2673,81 @@ export class PhysicsSystem implements System {
       for (const [, [a, b]] of this.activeCapsulePairs) this.events?.emit('capsuleExit', { a, b })
       this.activeCapsulePairs = new Map()
     }
+
+    // ── Phase 17: Polygon/Triangle contact events ─────────────────────────
+
+    const allPolygonEntities = [...allPolygon, ...allTriangle]
+    if (allPolygonEntities.length > 0) {
+      const currentPolyPairs = new Map<string, [EntityId, EntityId]>()
+
+      // Polygon/Triangle vs box
+      const allBoxForPoly = world.query('Transform', 'BoxCollider')
+      for (const pid of allPolygonEntities) {
+        const isPoly = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')
+        const isTri = world.getComponent<TriangleColliderComponent>(pid, 'TriangleCollider')
+        const polyLayer = isPoly ? isPoly.layer : isTri ? isTri.layer : 'default'
+        const polyMask = isPoly ? isPoly.mask : isTri ? isTri.mask : '*'
+        const polyEnabled = isPoly ? isPoly.enabled : isTri ? isTri.enabled : true
+
+        if (!polyEnabled) continue
+
+        const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+        const verts = isPoly ? isPoly.vertices : isTri ? [isTri.a, isTri.b, isTri.c] : []
+        const offX = isPoly ? isPoly.offsetX : isTri ? isTri.offsetX : 0
+        const offY = isPoly ? isPoly.offsetY : isTri ? isTri.offsetY : 0
+
+        for (const bid of allBoxForPoly) {
+          if (bid === pid) continue
+          const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+          if (!bc.enabled) continue
+          if (!canInteract(polyLayer, polyMask, bc.layer, bc.mask)) continue
+          const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+          const bAABB = getAABB(bt, bc)
+          const result = generatePolygonBoxManifold(verts, pt.x, pt.y, offX, offY, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+          if (result) currentPolyPairs.set(pairKey(pid, bid), [pid, bid])
+        }
+      }
+
+      // Polygon vs polygon
+      for (let i = 0; i < allPolygonEntities.length; i++) {
+        for (let j = i + 1; j < allPolygonEntities.length; j++) {
+          const ia = allPolygonEntities[i]
+          const ib = allPolygonEntities[j]
+          const pa = world.getComponent<ConvexPolygonColliderComponent>(ia, 'ConvexPolygonCollider')
+          const ta_tri = world.getComponent<TriangleColliderComponent>(ia, 'TriangleCollider')
+          const pb = world.getComponent<ConvexPolygonColliderComponent>(ib, 'ConvexPolygonCollider')
+          const tb_tri = world.getComponent<TriangleColliderComponent>(ib, 'TriangleCollider')
+          const vertsA = pa ? pa.vertices : ta_tri ? [ta_tri.a, ta_tri.b, ta_tri.c] : []
+          const vertsB = pb ? pb.vertices : tb_tri ? [tb_tri.a, tb_tri.b, tb_tri.c] : []
+          const layerA = pa ? pa.layer : ta_tri ? ta_tri.layer : 'default'
+          const maskA = pa ? pa.mask : ta_tri ? ta_tri.mask : '*'
+          const layerB = pb ? pb.layer : tb_tri ? tb_tri.layer : 'default'
+          const maskB = pb ? pb.mask : tb_tri ? tb_tri.mask : '*'
+          if (!canInteract(layerA, maskA, layerB, maskB)) continue
+          const ta2 = world.getComponent<TransformComponent>(ia, 'Transform')!
+          const tb2 = world.getComponent<TransformComponent>(ib, 'Transform')!
+          const offAx = pa ? pa.offsetX : ta_tri ? ta_tri.offsetX : 0
+          const offAy = pa ? pa.offsetY : ta_tri ? ta_tri.offsetY : 0
+          const offBx = pb ? pb.offsetX : tb_tri ? tb_tri.offsetX : 0
+          const offBy = pb ? pb.offsetY : tb_tri ? tb_tri.offsetY : 0
+          const result = generatePolygonPolygonManifold(vertsA, ta2.x, ta2.y, offAx, offAy, vertsB, tb2.x, tb2.y, offBx, offBy)
+          if (result) currentPolyPairs.set(pairKey(ia, ib), [ia, ib])
+        }
+      }
+
+      for (const [key, [a, b]] of currentPolyPairs) {
+        if (!this.activePolygonPairs.has(key)) this.events?.emit('polygonEnter', { a, b })
+        else this.events?.emit('polygonStay', { a, b })
+        this.events?.emit('polygon', { a, b })
+      }
+      for (const [key, [a, b]] of this.activePolygonPairs) {
+        if (!currentPolyPairs.has(key)) this.events?.emit('polygonExit', { a, b })
+      }
+      this.activePolygonPairs = currentPolyPairs
+    } else if (this.activePolygonPairs.size > 0) {
+      for (const [, [a, b]] of this.activePolygonPairs) this.events?.emit('polygonExit', { a, b })
+      this.activePolygonPairs = new Map()
+    }
   }
 
   // ── Pair pruning ────────────────────────────────────────────────────────
@@ -1711,6 +2781,12 @@ export class PhysicsSystem implements System {
       if (!world.hasEntity(a) || !world.hasEntity(b)) {
         this.events?.emit('capsuleExit', { a, b })
         this.activeCapsulePairs.delete(key)
+      }
+    }
+    for (const [key, [a, b]] of this.activePolygonPairs) {
+      if (!world.hasEntity(a) || !world.hasEntity(b)) {
+        this.events?.emit('polygonExit', { a, b })
+        this.activePolygonPairs.delete(key)
       }
     }
   }

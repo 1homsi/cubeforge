@@ -114,6 +114,159 @@ export function capsuleArea(width: number, height: number): number {
   return rectW * rectH + Math.PI * radius * radius
 }
 
+// ── Polygon & triangle area helpers ───────────────────────────────────────
+
+/**
+ * Signed area of a simple polygon using the shoelace formula.
+ * Returns the absolute (unsigned) area.
+ */
+export function polygonArea(vertices: { x: number; y: number }[]): number {
+  const n = vertices.length
+  if (n < 3) return 0
+  let sum = 0
+  for (let i = 0; i < n; i++) {
+    const curr = vertices[i]
+    const next = vertices[(i + 1) % n]
+    sum += curr.x * next.y - next.x * curr.y
+  }
+  return Math.abs(sum) / 2
+}
+
+/**
+ * Area of a triangle from three vertices.
+ * Uses 0.5 × |cross(b - a, c - a)|.
+ */
+export function triangleArea(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number },
+): number {
+  return Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2
+}
+
+// ── Polygon & triangle mass properties ───────────────────────────────────
+
+/**
+ * Mass and moment of inertia for a convex polygon.
+ *
+ * Uses the shoelace formula for area and a fan-triangulation from
+ * vertex 0 to compute the second moment of area, then converts to
+ * moment of inertia about the polygon centroid.
+ *
+ * Reference: https://en.wikipedia.org/wiki/Second_moment_of_area#Any_polygon
+ */
+export function polygonMassProperties(
+  vertices: { x: number; y: number }[],
+  density: number,
+): { mass: number; inertia: number } {
+  const n = vertices.length
+  if (n < 3) return { mass: 0, inertia: 0 }
+
+  // Compute area and centroid using shoelace
+  let signedArea2 = 0
+  let cx = 0
+  let cy = 0
+  for (let i = 0; i < n; i++) {
+    const v0 = vertices[i]
+    const v1 = vertices[(i + 1) % n]
+    const cross = v0.x * v1.y - v1.x * v0.y
+    signedArea2 += cross
+    cx += (v0.x + v1.x) * cross
+    cy += (v0.y + v1.y) * cross
+  }
+
+  const area = Math.abs(signedArea2) / 2
+  if (area === 0) return { mass: 0, inertia: 0 }
+
+  const mass = density * area
+
+  cx /= 3 * signedArea2
+  cy /= 3 * signedArea2
+
+  // Moment of inertia about the centroid via fan-triangulation from vertex 0.
+  // For each triangle (v0, vi, vi+1), accumulate using the triangle inertia
+  // formula about the centroid and the parallel axis theorem.
+  let totalInertia = 0
+  const p0 = vertices[0]
+  for (let i = 1; i < n - 1; i++) {
+    const p1 = vertices[i]
+    const p2 = vertices[i + 1]
+
+    // Triangle area (signed)
+    const triArea = ((p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y)) / 2
+    const triMass = density * Math.abs(triArea)
+    if (triMass === 0) continue
+
+    // Triangle centroid
+    const tcx = (p0.x + p1.x + p2.x) / 3
+    const tcy = (p0.y + p1.y + p2.y) / 3
+
+    // Moment of inertia of triangle about its own centroid:
+    // I = (mass/18) * (dot(a,a) + dot(b,b) + dot(c,c) - a·b - a·c - b·c)
+    // where a, b, c are vertex positions relative to the triangle
+    const ax = p0.x - tcx, ay = p0.y - tcy
+    const bx = p1.x - tcx, by = p1.y - tcy
+    const cxx = p2.x - tcx, cyy = p2.y - tcy
+    const triInertia =
+      (triMass / 6) *
+      (ax * ax + ay * ay + bx * bx + by * by + cxx * cxx + cyy * cyy +
+        ax * bx + ay * by + ax * cxx + ay * cyy + bx * cxx + by * cyy) / 6
+
+    // Shift to polygon centroid via parallel axis theorem
+    const dx = tcx - cx
+    const dy = tcy - cy
+    totalInertia += triInertia + triMass * (dx * dx + dy * dy)
+  }
+
+  return { mass, inertia: totalInertia }
+}
+
+/**
+ * Mass and moment of inertia for a triangle collider.
+ *
+ * Area = 0.5 × |cross(b - a, c - a)|
+ * Inertia about centroid = (mass / 18) × (|a'|² + |b'|² + |c'|² + a'·b' + a'·c' + b'·c')
+ * where a', b', c' are positions relative to the triangle centroid.
+ *
+ * Simplified standard form:
+ * I = (mass / 6) × (a'·a' + b'·b' + c'·c') / 6, but using the full formula:
+ * I = (mass / 18) × Σ(vi · vi + vi · vi+1) summed cyclically.
+ */
+export function triangleMassProperties(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number },
+  density: number,
+): { mass: number; inertia: number } {
+  const area = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2
+  if (area === 0) return { mass: 0, inertia: 0 }
+
+  const mass = density * area
+
+  // Centroid
+  const cx = (a.x + b.x + c.x) / 3
+  const cy = (a.y + b.y + c.y) / 3
+
+  // Vertices relative to centroid
+  const ax = a.x - cx, ay = a.y - cy
+  const bx = b.x - cx, by = b.y - cy
+  const ccx = c.x - cx, ccy = c.y - cy
+
+  // Inertia about centroid:
+  // I = (mass / 6) × (a'² + b'² + c'² + a'·b' + a'·c' + b'·c') / 6
+  // This is the standard triangle inertia formula.
+  const dotAA = ax * ax + ay * ay
+  const dotBB = bx * bx + by * by
+  const dotCC = ccx * ccx + ccy * ccy
+  const dotAB = ax * bx + ay * by
+  const dotAC = ax * ccx + ay * ccy
+  const dotBC = bx * ccx + by * ccy
+
+  const inertia = (mass / 6) * (dotAA + dotBB + dotCC + dotAB + dotAC + dotBC) / 6
+
+  return { mass, inertia }
+}
+
 // ── Mass property mutation helpers ────────────────────────────────────────
 
 import type { RigidBodyComponent } from './components/rigidbody'

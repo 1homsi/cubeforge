@@ -381,6 +381,400 @@ export function generateCircleBoxManifold(
   }
 }
 
+// ── Capsule helpers ────────────────────────────────────────────────────────
+
+/**
+ * Extract capsule segment endpoints and radius from center + half-extents.
+ * Vertical if height >= width, horizontal otherwise.
+ */
+function capsuleSegment(
+  cx: number,
+  cy: number,
+  hw: number,
+  hh: number,
+): { ax: number; ay: number; bx: number; by: number; radius: number } {
+  const width = hw * 2
+  const height = hh * 2
+  if (height >= width) {
+    // Vertical capsule
+    const radius = hw // half the smaller dim (width/2)
+    return {
+      ax: cx,
+      ay: cy - hh + radius,
+      bx: cx,
+      by: cy + hh - radius,
+      radius,
+    }
+  } else {
+    // Horizontal capsule
+    const radius = hh // half the smaller dim (height/2)
+    return {
+      ax: cx - hw + radius,
+      ay: cy,
+      bx: cx + hw - radius,
+      by: cy,
+      radius,
+    }
+  }
+}
+
+/**
+ * Project point (px, py) onto segment (ax, ay)-(bx, by).
+ * Returns the closest point on the segment.
+ */
+function closestPointOnSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): { x: number; y: number } {
+  const abx = bx - ax
+  const aby = by - ay
+  const lengthSq = abx * abx + aby * aby
+  if (lengthSq < 0.00001) {
+    // Degenerate segment (a == b)
+    return { x: ax, y: ay }
+  }
+  let t = ((px - ax) * abx + (py - ay) * aby) / lengthSq
+  if (t < 0) t = 0
+  if (t > 1) t = 1
+  return { x: ax + t * abx, y: ay + t * aby }
+}
+
+/**
+ * Find the closest point on an AABB to a given point.
+ */
+function closestPointOnAABB(
+  px: number,
+  py: number,
+  boxCx: number,
+  boxCy: number,
+  boxHw: number,
+  boxHh: number,
+): { x: number; y: number } {
+  return {
+    x: Math.max(boxCx - boxHw, Math.min(px, boxCx + boxHw)),
+    y: Math.max(boxCy - boxHh, Math.min(py, boxCy + boxHh)),
+  }
+}
+
+/**
+ * Find the closest points between two line segments.
+ * Returns points on segment 1 and segment 2 respectively.
+ */
+function closestPointsBetweenSegments(
+  a1x: number,
+  a1y: number,
+  a2x: number,
+  a2y: number,
+  b1x: number,
+  b1y: number,
+  b2x: number,
+  b2y: number,
+): { p1x: number; p1y: number; p2x: number; p2y: number } {
+  const d1x = a2x - a1x
+  const d1y = a2y - a1y
+  const d2x = b2x - b1x
+  const d2y = b2y - b1y
+  const rx = a1x - b1x
+  const ry = a1y - b1y
+
+  const a = d1x * d1x + d1y * d1y // |d1|^2
+  const e = d2x * d2x + d2y * d2y // |d2|^2
+  const f = d2x * rx + d2y * ry
+
+  let s: number
+  let t: number
+
+  if (a < 0.00001 && e < 0.00001) {
+    // Both segments degenerate to points
+    return { p1x: a1x, p1y: a1y, p2x: b1x, p2y: b1y }
+  }
+
+  if (a < 0.00001) {
+    // First segment degenerates to a point
+    s = 0
+    t = Math.max(0, Math.min(f / e, 1))
+  } else {
+    const c = d1x * rx + d1y * ry
+    if (e < 0.00001) {
+      // Second segment degenerates to a point
+      t = 0
+      s = Math.max(0, Math.min(-c / a, 1))
+    } else {
+      const b = d1x * d2x + d1y * d2y
+      const denom = a * e - b * b
+      if (denom > 0.00001) {
+        s = Math.max(0, Math.min((b * f - c * e) / denom, 1))
+      } else {
+        s = 0
+      }
+      t = (b * s + f) / e
+      if (t < 0) {
+        t = 0
+        s = Math.max(0, Math.min(-c / a, 1))
+      } else if (t > 1) {
+        t = 1
+        s = Math.max(0, Math.min((b - c) / a, 1))
+      }
+    }
+  }
+
+  return {
+    p1x: a1x + s * d1x,
+    p1y: a1y + s * d1y,
+    p2x: b1x + t * d2x,
+    p2y: b1y + t * d2y,
+  }
+}
+
+// ── Capsule-AABB manifold ──────────────────────────────────────────────────
+
+/**
+ * Generate a contact manifold between a capsule and an AABB.
+ *
+ * Strategy: find the point on the capsule segment closest to the box,
+ * then treat it as a circle-box test with the capsule radius.
+ * Normal points from capsule (A) toward box (B).
+ */
+export function generateCapsuleBoxManifold(
+  capCx: number,
+  capCy: number,
+  capHw: number,
+  capHh: number,
+  boxCx: number,
+  boxCy: number,
+  boxHw: number,
+  boxHh: number,
+): { normalX: number; normalY: number; points: ContactPoint[] } | null {
+  const seg = capsuleSegment(capCx, capCy, capHw, capHh)
+  const { ax, ay, bx, by, radius } = seg
+
+  // For each endpoint of the capsule segment, find the closest point on the box,
+  // then pick the segment point that is closest to the box overall.
+  // More accurate: iterate — find closest on segment to box center, then closest
+  // on box to that, then closest on segment to that box point, converging quickly.
+  // Two iterations suffice for AABBs.
+  let segPt = closestPointOnSegment(boxCx, boxCy, ax, ay, bx, by)
+  let boxPt = closestPointOnAABB(segPt.x, segPt.y, boxCx, boxCy, boxHw, boxHh)
+  segPt = closestPointOnSegment(boxPt.x, boxPt.y, ax, ay, bx, by)
+  boxPt = closestPointOnAABB(segPt.x, segPt.y, boxCx, boxCy, boxHw, boxHh)
+
+  const dx = boxPt.x - segPt.x
+  const dy = boxPt.y - segPt.y
+  const distSq = dx * dx + dy * dy
+
+  if (distSq >= radius * radius) return null
+
+  const dist = Math.sqrt(distSq)
+  let normalX: number
+  let normalY: number
+
+  if (dist < 0.0001) {
+    // Segment point is inside the box — find closest edge to push out
+    const left = segPt.x - (boxCx - boxHw)
+    const right = boxCx + boxHw - segPt.x
+    const top = segPt.y - (boxCy - boxHh)
+    const bottom = boxCy + boxHh - segPt.y
+    const minDist = Math.min(left, right, top, bottom)
+
+    if (minDist === left) {
+      normalX = -1
+      normalY = 0
+    } else if (minDist === right) {
+      normalX = 1
+      normalY = 0
+    } else if (minDist === top) {
+      normalX = 0
+      normalY = -1
+    } else {
+      normalX = 0
+      normalY = 1
+    }
+  } else {
+    // Normal from segment point toward box surface point
+    normalX = dx / dist
+    normalY = dy / dist
+  }
+
+  const penetration = radius - dist
+
+  // Contact on capsule surface (A side)
+  const worldAx = segPt.x + normalX * radius
+  const worldAy = segPt.y + normalY * radius
+
+  return {
+    normalX,
+    normalY,
+    points: [
+      {
+        worldAx,
+        worldAy,
+        worldBx: boxPt.x,
+        worldBy: boxPt.y,
+        rAx: worldAx - capCx,
+        rAy: worldAy - capCy,
+        rBx: boxPt.x - boxCx,
+        rBy: boxPt.y - boxCy,
+        penetration,
+        normalImpulse: 0,
+        tangentImpulse: 0,
+        featureId: 200,
+      },
+    ],
+  }
+}
+
+// ── Capsule-Circle manifold ────────────────────────────────────────────────
+
+/**
+ * Generate a contact manifold between a capsule and a circle.
+ *
+ * Strategy: find the closest point on the capsule segment to the circle center,
+ * then do a circle-circle test between that point (with capsule radius) and the
+ * circle. Normal points from capsule (A) toward circle (B).
+ */
+export function generateCapsuleCircleManifold(
+  capCx: number,
+  capCy: number,
+  capHw: number,
+  capHh: number,
+  circleCx: number,
+  circleCy: number,
+  circleR: number,
+): { normalX: number; normalY: number; points: ContactPoint[] } | null {
+  const seg = capsuleSegment(capCx, capCy, capHw, capHh)
+  const segPt = closestPointOnSegment(circleCx, circleCy, seg.ax, seg.ay, seg.bx, seg.by)
+
+  const dx = circleCx - segPt.x
+  const dy = circleCy - segPt.y
+  const distSq = dx * dx + dy * dy
+  const totalR = seg.radius + circleR
+
+  if (distSq >= totalR * totalR) return null
+
+  const dist = Math.sqrt(distSq)
+  let normalX: number
+  let normalY: number
+
+  if (dist < 0.0001) {
+    normalX = 0
+    normalY = 1
+  } else {
+    normalX = dx / dist
+    normalY = dy / dist
+  }
+
+  const penetration = totalR - dist
+  const worldAx = segPt.x + normalX * seg.radius
+  const worldAy = segPt.y + normalY * seg.radius
+  const worldBx = circleCx - normalX * circleR
+  const worldBy = circleCy - normalY * circleR
+
+  return {
+    normalX,
+    normalY,
+    points: [
+      {
+        worldAx,
+        worldAy,
+        worldBx,
+        worldBy,
+        rAx: worldAx - capCx,
+        rAy: worldAy - capCy,
+        rBx: worldBx - circleCx,
+        rBy: worldBy - circleCy,
+        penetration,
+        normalImpulse: 0,
+        tangentImpulse: 0,
+        featureId: 201,
+      },
+    ],
+  }
+}
+
+// ── Capsule-Capsule manifold ───────────────────────────────────────────────
+
+/**
+ * Generate a contact manifold between two capsules.
+ *
+ * Strategy: find the closest points between the two capsule segments,
+ * then do a circle-circle test with the two capsule radii.
+ * Normal points from capsule A toward capsule B.
+ */
+export function generateCapsuleCapsuleManifold(
+  aCx: number,
+  aCy: number,
+  aHw: number,
+  aHh: number,
+  bCx: number,
+  bCy: number,
+  bHw: number,
+  bHh: number,
+): { normalX: number; normalY: number; points: ContactPoint[] } | null {
+  const segA = capsuleSegment(aCx, aCy, aHw, aHh)
+  const segB = capsuleSegment(bCx, bCy, bHw, bHh)
+
+  const closest = closestPointsBetweenSegments(
+    segA.ax,
+    segA.ay,
+    segA.bx,
+    segA.by,
+    segB.ax,
+    segB.ay,
+    segB.bx,
+    segB.by,
+  )
+
+  const dx = closest.p2x - closest.p1x
+  const dy = closest.p2y - closest.p1y
+  const distSq = dx * dx + dy * dy
+  const totalR = segA.radius + segB.radius
+
+  if (distSq >= totalR * totalR) return null
+
+  const dist = Math.sqrt(distSq)
+  let normalX: number
+  let normalY: number
+
+  if (dist < 0.0001) {
+    normalX = 0
+    normalY = 1
+  } else {
+    normalX = dx / dist
+    normalY = dy / dist
+  }
+
+  const penetration = totalR - dist
+  const worldAx = closest.p1x + normalX * segA.radius
+  const worldAy = closest.p1y + normalY * segA.radius
+  const worldBx = closest.p2x - normalX * segB.radius
+  const worldBy = closest.p2y - normalY * segB.radius
+
+  return {
+    normalX,
+    normalY,
+    points: [
+      {
+        worldAx,
+        worldAy,
+        worldBx,
+        worldBy,
+        rAx: worldAx - aCx,
+        rAy: worldAy - aCy,
+        rBx: worldBx - bCx,
+        rBy: worldBy - bCy,
+        penetration,
+        normalImpulse: 0,
+        tangentImpulse: 0,
+        featureId: 202,
+      },
+    ],
+  }
+}
+
 // ── Manifold warm-start matching ────────────────────────────────────────────
 
 /**

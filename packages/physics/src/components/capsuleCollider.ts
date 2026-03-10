@@ -1,4 +1,5 @@
 import type { Component } from '@cubeforge/core'
+import type { CombineRule } from '../combineRules'
 
 /**
  * Capsule (pill) shaped collider — two circles connected by a rectangle.
@@ -14,6 +15,16 @@ export interface CapsuleColliderComponent extends Component {
   isTrigger: boolean
   layer: string
   mask: string | string[]
+  /** Per-collider friction coefficient (0–1). Default 0.5 */
+  friction: number
+  /** Per-collider restitution (bounciness) coefficient (0–1). Default 0.0 */
+  restitution: number
+  /** How to combine friction with the other collider. Default 'average' */
+  frictionCombineRule: CombineRule
+  /** How to combine restitution with the other collider. Default 'average' */
+  restitutionCombineRule: CombineRule
+  /** Whether this collider is enabled. Disabled colliders skip all detection */
+  enabled: boolean
 }
 
 export function createCapsuleCollider(
@@ -30,6 +41,11 @@ export function createCapsuleCollider(
     isTrigger: false,
     layer: 'default',
     mask: '*',
+    friction: 0.5,
+    restitution: 0,
+    frictionCombineRule: 'average',
+    restitutionCombineRule: 'average',
+    enabled: true,
     ...opts,
   }
 }

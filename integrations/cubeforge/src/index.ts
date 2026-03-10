@@ -35,6 +35,12 @@ export { Polygon } from './components/Polygon'
 export { Gradient } from './components/Gradient'
 export { Mask } from './components/Mask'
 export { Joint } from './components/Joint'
+export { ConvexCollider } from './components/ConvexCollider'
+export { TriangleCollider } from './components/TriangleCollider'
+export { SegmentCollider } from './components/SegmentCollider'
+export { HeightFieldCollider } from './components/HeightFieldCollider'
+export { HalfSpaceCollider } from './components/HalfSpaceCollider'
+export { TriMeshCollider } from './components/TriMeshCollider'
 export type { ScreenFlashHandle } from './components/ScreenFlash'
 export type { TiledObject, TiledLayer } from './components/Tilemap'
 
@@ -186,9 +192,25 @@ export { createJoint } from '@cubeforge/physics'
 export type { JointComponent, JointType } from '@cubeforge/physics'
 export type { CapsuleColliderComponent } from '@cubeforge/physics'
 export type { CompoundColliderComponent, ColliderShape } from '@cubeforge/physics'
+export type { ConvexPolygonColliderComponent } from '@cubeforge/physics'
+export type { TriangleColliderComponent } from '@cubeforge/physics'
+export type { SegmentColliderComponent } from '@cubeforge/physics'
+export type { HeightFieldColliderComponent } from '@cubeforge/physics'
+export type { HalfSpaceColliderComponent } from '@cubeforge/physics'
+export type { TriMeshColliderComponent } from '@cubeforge/physics'
 export type { CombineRule } from '@cubeforge/physics'
 export type { ContactManifold, ContactPoint } from '@cubeforge/physics'
 export { velocityAtPoint, kineticEnergy, potentialEnergy, predictPosition } from '@cubeforge/physics'
+export {
+  createConvexPolygonCollider,
+  createTriangleCollider,
+  createSegmentCollider,
+  createHeightFieldCollider,
+  createHalfSpaceCollider,
+  createTriMeshCollider,
+} from '@cubeforge/physics'
+export { buildBVH, queryBVH, queryBVHCircle } from '@cubeforge/physics'
+export type { BVH, Triangle2D } from '@cubeforge/physics'
 export {
   setAdditionalMass,
   setMassProperties,
@@ -196,6 +218,10 @@ export {
   boxArea,
   circleArea,
   capsuleArea,
+  polygonArea,
+  triangleArea,
+  polygonMassProperties,
+  triangleMassProperties,
 } from '@cubeforge/physics'
 export type {
   InputManager,

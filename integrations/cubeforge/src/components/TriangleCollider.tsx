@@ -1,11 +1,12 @@
 import { useEffect, useContext } from 'react'
-import { createCapsuleCollider } from '@cubeforge/physics'
+import { createTriangleCollider } from '@cubeforge/physics'
 import type { CombineRule } from '@cubeforge/physics'
 import { EngineContext, EntityContext } from '../context'
 
-interface CapsuleColliderProps {
-  width: number
-  height: number
+interface TriangleColliderProps {
+  a: { x: number; y: number }
+  b: { x: number; y: number }
+  c: { x: number; y: number }
   offsetX?: number
   offsetY?: number
   isTrigger?: boolean
@@ -18,9 +19,10 @@ interface CapsuleColliderProps {
   enabled?: boolean
 }
 
-export function CapsuleCollider({
-  width,
-  height,
+export function TriangleCollider({
+  a,
+  b,
+  c,
   offsetX = 0,
   offsetY = 0,
   isTrigger = false,
@@ -31,14 +33,14 @@ export function CapsuleCollider({
   frictionCombineRule = 'average',
   restitutionCombineRule = 'average',
   enabled = true,
-}: CapsuleColliderProps) {
+}: TriangleColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
     engine.ecs.addComponent(
       entityId,
-      createCapsuleCollider(width, height, {
+      createTriangleCollider(a, b, c, {
         offsetX,
         offsetY,
         isTrigger,
@@ -51,7 +53,7 @@ export function CapsuleCollider({
         enabled,
       }),
     )
-    return () => engine.ecs.removeComponent(entityId, 'CapsuleCollider')
+    return () => engine.ecs.removeComponent(entityId, 'TriangleCollider')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null

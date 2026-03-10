@@ -1,11 +1,11 @@
 import { useEffect, useContext } from 'react'
-import { createCapsuleCollider } from '@cubeforge/physics'
+import { createConvexPolygonCollider } from '@cubeforge/physics'
 import type { CombineRule } from '@cubeforge/physics'
 import { EngineContext, EntityContext } from '../context'
 
-interface CapsuleColliderProps {
-  width: number
-  height: number
+interface ConvexColliderProps {
+  /** Vertices in CCW order (max 8 for performance). Positions relative to entity center. */
+  vertices: { x: number; y: number }[]
   offsetX?: number
   offsetY?: number
   isTrigger?: boolean
@@ -18,9 +18,8 @@ interface CapsuleColliderProps {
   enabled?: boolean
 }
 
-export function CapsuleCollider({
-  width,
-  height,
+export function ConvexCollider({
+  vertices,
   offsetX = 0,
   offsetY = 0,
   isTrigger = false,
@@ -31,14 +30,14 @@ export function CapsuleCollider({
   frictionCombineRule = 'average',
   restitutionCombineRule = 'average',
   enabled = true,
-}: CapsuleColliderProps) {
+}: ConvexColliderProps) {
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
     engine.ecs.addComponent(
       entityId,
-      createCapsuleCollider(width, height, {
+      createConvexPolygonCollider(vertices, {
         offsetX,
         offsetY,
         isTrigger,
@@ -51,7 +50,7 @@ export function CapsuleCollider({
         enabled,
       }),
     )
-    return () => engine.ecs.removeComponent(entityId, 'CapsuleCollider')
+    return () => engine.ecs.removeComponent(entityId, 'ConvexPolygonCollider')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return null
