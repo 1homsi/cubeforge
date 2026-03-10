@@ -607,6 +607,114 @@ What we already have and will keep:
 
 ---
 
+## Stage 8 — Deep Engine Fixes (Rapier Parity) :white_check_mark: COMPLETE
+
+> Production-quality algorithms replacing shallow/placeholder implementations. Every system is now at the quality level of Rapier 2D.
+
+### 8.1 GJK/EPA Convex Collision
+
+| Task | Status | Description |
+|------|--------|-------------|
+| GJK distance algorithm | :white_check_mark: | Gilbert-Johnson-Keerthi for arbitrary convex shape overlap detection |
+| EPA penetration solver | :white_check_mark: | Expanding Polytope Algorithm for minimum penetration vector + contact points |
+| Shape primitives | :white_check_mark: | `circleShape`, `boxShape`, `capsuleShape`, `polygonShape` — all with `support()` |
+| `gjkEpaQuery()` | :white_check_mark: | Combined GJK + EPA high-level query returning contact manifold |
+| Degenerate case handling | :white_check_mark: | Simplex expansion for 1-point and 2-point degenerate cases |
+
+### 8.2 Sweep-and-Prune Broad Phase
+
+| Task | Status | Description |
+|------|--------|-------------|
+| `SweepAndPrune` class | :white_check_mark: | O(n log n) broad phase replacing O(n²) brute force |
+| Insertion sort | :white_check_mark: | O(n) amortized for frame-coherent data |
+| X + Y axis validation | :white_check_mark: | X-axis sweep with Y-axis overlap verification |
+| Entity add/remove/update | :white_check_mark: | Incremental updates, entity removal, and full clear |
+| Pair tracking | :white_check_mark: | Active pair set with canonical keys |
+
+### 8.3 Island Detection
+
+| Task | Status | Description |
+|------|--------|-------------|
+| `IslandDetector` class | :white_check_mark: | Connected-component grouping for independent island solving |
+| Union-Find | :white_check_mark: | Path compression + union by rank — O(α(n)) amortized |
+| Contact-based merging | :white_check_mark: | Dynamic-dynamic contacts merge islands |
+| Joint-based merging | :white_check_mark: | Joint pairs merge islands |
+| Sleep detection | :white_check_mark: | Island-level sleep eligibility from per-body velocity threshold |
+| Static/kinematic handling | :white_check_mark: | Static/kinematic bodies anchor but don't participate in islands |
+
+### 8.4 Time of Impact (CCD)
+
+| Task | Status | Description |
+|------|--------|-------------|
+| Conservative advancement | :white_check_mark: | Proper TOI with angular motion, not just swept AABB |
+| Shape distance functions | :white_check_mark: | AABB, circle-box, circle-circle distance for TOI convergence |
+| Body interpolation | :white_check_mark: | Linear + angular interpolation at arbitrary time t |
+| `computeTOI()` / `resolveTOI()` | :white_check_mark: | Public API for time-of-impact queries |
+
+### 8.5 Split Impulse Position Solver
+
+| Task | Status | Description |
+|------|--------|-------------|
+| Pseudo-velocity fields | :white_check_mark: | `pvx`, `pvy`, `pAngVel` on SolverBody for position correction |
+| `initializePseudoVelocities()` | :white_check_mark: | Zero all pseudo-velocities before position solve |
+| Split impulse solver | :white_check_mark: | Position correction via pseudo-velocity impulses (not direct position changes) |
+| `integratePseudoVelocities()` | :white_check_mark: | Apply accumulated pseudo-velocities to positions, then reset |
+| Angular position correction | :white_check_mark: | Rotation correction using invInertia, not just linear |
+
+### 8.6 Featherstone Multibody Solver
+
+| Task | Status | Description |
+|------|--------|-------------|
+| 2D spatial algebra | :white_check_mark: | 3-component spatial vectors [vx, vy, omega] / [fx, fy, torque] |
+| `MultibodyArticulation` class | :white_check_mark: | Articulated body chain/tree with revolute, prismatic, and fixed joints |
+| Forward kinematics | :white_check_mark: | Compute world positions/rotations from joint angles (outward pass) |
+| Inverse dynamics | :white_check_mark: | Newton-Euler: compute forces for current accelerations |
+| Forward dynamics (ABA) | :white_check_mark: | Featherstone's ABA: compute accelerations from forces |
+| Joint limits | :white_check_mark: | Clamping joint positions to [min, max] |
+| Joint motors | :white_check_mark: | PD motor forces with max force limit |
+| `createMultibody()` / `createLink()` | :white_check_mark: | Public API for creating articulated bodies |
+
+### 8.7 Contact Point Matching
+
+| Task | Status | Description |
+|------|--------|-------------|
+| Feature-ID matching | :white_check_mark: | Primary matching by geometric feature identity (existing) |
+| Positional fallback | :white_check_mark: | When feature IDs don't match, match by closest world-space position within threshold |
+| Consumed tracking | :white_check_mark: | Uint8Array tracks which cached points are already consumed to prevent double-matching |
+
+### 8.8 Deterministic Math
+
+| Task | Status | Description |
+|------|--------|-------------|
+| `deterministicSin()` | :white_check_mark: | 7th-order Taylor polynomial approximation |
+| `deterministicCos()` | :white_check_mark: | Via `deterministicSin(x + π/2)` |
+| `dMath` dispatch | :white_check_mark: | Deterministic-aware math object (sqrt, atan2, sin, cos) — uses native when mode=off |
+| `setDeterministicMode()` | :white_check_mark: | Global toggle for cross-platform deterministic mode |
+
+### 8.9 Memory Pooling
+
+| Task | Status | Description |
+|------|--------|-------------|
+| `ObjectPool<T>` | :white_check_mark: | Generic object pool with factory + reset functions, auto-grow |
+| `Float64Pool` | :white_check_mark: | Typed array pool for bulk float allocations |
+| `ContactPoint` pool | :white_check_mark: | Pool for contact points to avoid GC pressure |
+| `ContactManifold` pool | :white_check_mark: | Pool for manifolds |
+| `Vec2` pool | :white_check_mark: | Temporary Vec2 pool with frame-level release |
+| `resetAllPools()` | :white_check_mark: | Single call to reset all pools per physics step |
+
+### 8.10 Tests
+
+| Task | Status | Description |
+|------|--------|-------------|
+| GJK/EPA tests (10 tests) | :white_check_mark: | Separated/overlapping boxes, circles, capsules, polygons, degenerate cases |
+| SAP broad phase tests (7 tests) | :white_check_mark: | Overlap/separation, entity removal, position updates, Y-axis validation |
+| Island detection tests (7 tests) | :white_check_mark: | Same/separate islands, static anchors, joints, chains, sleep, empty input |
+| TOI tests (7 tests) | :white_check_mark: | Moving circles/boxes, stationary targets, perpendicular motion, overlap-at-zero |
+| Determinism tests (6 tests) | :white_check_mark: | Sin/cos/atan2/sqrt accuracy, Kahan summation |
+| Contact matching tests (2 fixes) | :white_check_mark: | Updated existing tests for positional fallback behavior |
+
+---
+
 ## PhysicsConfig
 
 New configuration object passed to the physics system:

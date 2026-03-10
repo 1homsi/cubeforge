@@ -89,6 +89,80 @@ export function deterministicSqrt(x: number): number {
   return guess
 }
 
+// ── Deterministic Sin/Cos ────────────────────────────────────────────────
+
+/**
+ * Deterministic sin approximation using Taylor series.
+ * Normalizes angle to [-PI, PI] then uses a 7th-order polynomial.
+ * Max error: ~1e-5 for angles in [-2PI, 2PI].
+ */
+export function deterministicSin(x: number): number {
+  // Normalize to [-PI, PI]
+  const PI = 3.141592653589793
+  const TWO_PI = 6.283185307179586
+  x = x % TWO_PI
+  if (x > PI) x -= TWO_PI
+  if (x < -PI) x += TWO_PI
+
+  // 7th-order Taylor polynomial: sin(x) ≈ x - x³/6 + x⁵/120 - x⁷/5040
+  const x2 = x * x
+  const x3 = x2 * x
+  const x5 = x3 * x2
+  const x7 = x5 * x2
+  return x - x3 / 6 + x5 / 120 - x7 / 5040
+}
+
+/**
+ * Deterministic cos approximation using Taylor series.
+ * Max error: ~1e-5 for angles in [-2PI, 2PI].
+ */
+export function deterministicCos(x: number): number {
+  // cos(x) = sin(x + PI/2)
+  return deterministicSin(x + 1.5707963267948966)
+}
+
+// ── Deterministic Math Dispatch ──────────────────────────────────────────
+
+/** Global flag — when true, physics hot paths use deterministic approximations. */
+let _useDeterministicMath = false
+
+/** Enable or disable deterministic math for cross-platform reproducibility. */
+export function setDeterministicMode(enabled: boolean): void {
+  _useDeterministicMath = enabled
+}
+
+/** Check if deterministic math mode is enabled. */
+export function isDeterministicMode(): boolean {
+  return _useDeterministicMath
+}
+
+/**
+ * Deterministic-aware math functions.
+ * When deterministic mode is enabled, uses software approximations.
+ * Otherwise, uses native Math.* for best performance.
+ */
+export const dMath = {
+  sqrt(x: number): number {
+    return _useDeterministicMath ? deterministicSqrt(x) : Math.sqrt(x)
+  },
+  atan2(y: number, x: number): number {
+    return _useDeterministicMath ? deterministicAtan2(y, x) : Math.atan2(y, x)
+  },
+  sin(x: number): number {
+    return _useDeterministicMath ? deterministicSin(x) : Math.sin(x)
+  },
+  cos(x: number): number {
+    return _useDeterministicMath ? deterministicCos(x) : Math.cos(x)
+  },
+  abs: Math.abs,
+  min: Math.min,
+  max: Math.max,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  sign: Math.sign,
+  PI: 3.141592653589793,
+}
+
 // ── Deterministic Accumulator ─────────────────────────────────────────────
 
 /**

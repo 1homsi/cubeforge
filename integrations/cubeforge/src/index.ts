@@ -289,8 +289,24 @@ export {
   pairKey,
   deterministicAtan2,
   deterministicSqrt,
+  deterministicSin,
+  deterministicCos,
+  setDeterministicMode,
+  isDeterministicMode,
+  dMath,
   KahanSum,
 } from '@cubeforge/physics'
+export { gjk, epa, gjkEpaQuery, circleShape, boxShape, capsuleShape, polygonShape } from '@cubeforge/physics'
+export type { ConvexShape, GJKResult, EPAResult, GJKContactManifold } from '@cubeforge/physics'
+export { SweepAndPrune } from '@cubeforge/physics'
+export type { BroadPhaseAABB, BroadPhasePair } from '@cubeforge/physics'
+export { IslandDetector } from '@cubeforge/physics'
+export type { Island } from '@cubeforge/physics'
+export { computeTOI, resolveTOI } from '@cubeforge/physics'
+export type { TOIBody, TOIResult } from '@cubeforge/physics'
+export { ObjectPool as PhysicsObjectPool, Float64Pool, resetAllPools } from '@cubeforge/physics'
+export { MultibodyArticulation, createMultibody, createLink } from '@cubeforge/physics'
+export type { MultibodyLink, Spatial3, SpatialInertia3 } from '@cubeforge/physics'
 export type {
   InputManager,
   ActionBindings,

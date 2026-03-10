@@ -370,12 +370,12 @@ describe('warmStartManifold', () => {
     expect(manifold.points[0].tangentImpulse).toBeCloseTo(40) // 50 * 0.8
   })
 
-  it('does not copy impulses when featureIds do not match', () => {
+  it('does not copy impulses when featureIds do not match and positions are far apart', () => {
     const manifold = {
-      points: [makePoint({ featureId: 1, normalImpulse: 0, tangentImpulse: 0 })],
+      points: [makePoint({ featureId: 1, normalImpulse: 0, tangentImpulse: 0, worldAx: 0, worldAy: 0 })],
     }
     const cached = {
-      points: [makePoint({ featureId: 99, normalImpulse: 100, tangentImpulse: 50 })],
+      points: [makePoint({ featureId: 99, normalImpulse: 100, tangentImpulse: 50, worldAx: 100, worldAy: 100 })],
     }
 
     warmStartManifold(manifold, cached, 0.8)
@@ -425,17 +425,17 @@ describe('warmStartManifold', () => {
   it('leaves unmatched points at their original impulse values', () => {
     const manifold = {
       points: [
-        makePoint({ featureId: 1, normalImpulse: 5, tangentImpulse: 3 }),
-        makePoint({ featureId: 2, normalImpulse: 0, tangentImpulse: 0 }),
+        makePoint({ featureId: 1, normalImpulse: 5, tangentImpulse: 3, worldAx: 500, worldAy: 500 }),
+        makePoint({ featureId: 2, normalImpulse: 0, tangentImpulse: 0, worldAx: 10, worldAy: 10 }),
       ],
     }
     const cached = {
-      points: [makePoint({ featureId: 2, normalImpulse: 100, tangentImpulse: 50 })],
+      points: [makePoint({ featureId: 2, normalImpulse: 100, tangentImpulse: 50, worldAx: 10, worldAy: 10 })],
     }
 
     warmStartManifold(manifold, cached, 0.9)
 
-    // featureId 1 has no match → stays as-is
+    // featureId 1 has no match and position is far away → stays as-is
     expect(manifold.points[0].normalImpulse).toBe(5)
     expect(manifold.points[0].tangentImpulse).toBe(3)
     // featureId 2 matched → gets warm-started

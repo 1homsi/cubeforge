@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { initializeConstraints, solveVelocities, solvePositions, type SolverBody } from '../impulseSolver'
+import {
+  initializeConstraints,
+  solveVelocities,
+  solvePositions,
+  initializePseudoVelocities,
+  integratePseudoVelocities,
+  type SolverBody,
+} from '../impulseSolver'
 import type { ContactManifold, ContactPoint } from '../contactManifold'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -16,6 +23,9 @@ function makeSolverBody(overrides: Partial<SolverBody> = {}): SolverBody {
     invMass: 1,
     invInertia: 0,
     dominance: 0,
+    pvx: 0,
+    pvy: 0,
+    pAngVel: 0,
     ...overrides,
   }
 }
@@ -442,7 +452,9 @@ describe('solvePositions', () => {
     const xABefore = bodyA.x
     const xBBefore = bodyB.x
 
+    initializePseudoVelocities(bodies)
     solvePositions(constraints, 10, 0.2, 0.01)
+    integratePseudoVelocities(bodies)
 
     // Bodies should have been pushed apart
     expect(bodyA.x).toBeLessThan(xABefore)
@@ -478,7 +490,9 @@ describe('solvePositions', () => {
     })
 
     const constraints = initializeConstraints([manifold], bodies, false, 0, 0)
+    initializePseudoVelocities(bodies)
     solvePositions(constraints, 10, 0.2, 1.0) // large slop
+    integratePseudoVelocities(bodies)
 
     // No correction should happen
     expect(bodyA.x).toBeCloseTo(0)
@@ -515,7 +529,9 @@ describe('solvePositions', () => {
     })
 
     const constraints = initializeConstraints([manifold], bodies, false, 0, 0)
+    initializePseudoVelocities(bodies)
     solvePositions(constraints, 10, 0.2, 0)
+    integratePseudoVelocities(bodies)
 
     // A (lighter) should move more than B (heavier)
     const aMoved = Math.abs(bodyA.x - 0)
@@ -552,7 +568,9 @@ describe('solvePositions', () => {
     })
 
     const constraints = initializeConstraints([manifold], bodies, false, 0, 0)
+    initializePseudoVelocities(bodies)
     solvePositions(constraints, 10, 0.2, 0)
+    integratePseudoVelocities(bodies)
 
     expect(bodyB.x).toBeCloseTo(1)
     // Only bodyA should be pushed

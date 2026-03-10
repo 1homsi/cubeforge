@@ -768,22 +768,62 @@ export function generateCapsuleCapsuleManifold(
 
 // ── Manifold warm-start matching ────────────────────────────────────────────
 
+/** Distance squared threshold for positional contact matching fallback. */
+const POSITION_MATCH_THRESHOLD_SQ = 4.0 // 2 px
+
 /**
- * Match contact points from a previous manifold to a new one by feature ID.
- * Copies cached impulses for warm starting.
+ * Match contact points from a previous manifold to a new one.
+ *
+ * Uses a two-tier matching strategy:
+ * 1. **Feature ID match** — exact geometric feature identity (most robust).
+ * 2. **Positional fallback** — if no feature ID match, find the closest
+ *    previous contact point within a distance threshold. This handles cases
+ *    where feature IDs change due to rounding or edge-case geometry while
+ *    the contact point hasn't moved significantly.
+ *
+ * Copies cached impulses scaled by `warmFactor` for warm starting.
  */
 export function warmStartManifold(
   manifold: { points: ContactPoint[] },
   cached: { points: ContactPoint[] },
   warmFactor: number,
 ): void {
+  // Track which cached points have already been consumed.
+  const used = new Uint8Array(cached.points.length)
+
   for (const pt of manifold.points) {
-    for (const prev of cached.points) {
-      if (pt.featureId === prev.featureId) {
-        pt.normalImpulse = prev.normalImpulse * warmFactor
-        pt.tangentImpulse = prev.tangentImpulse * warmFactor
+    let matched = false
+
+    // Tier 1: Feature ID match (preferred).
+    for (let i = 0; i < cached.points.length; i++) {
+      if (used[i]) continue
+      if (pt.featureId === cached.points[i].featureId) {
+        pt.normalImpulse = cached.points[i].normalImpulse * warmFactor
+        pt.tangentImpulse = cached.points[i].tangentImpulse * warmFactor
+        used[i] = 1
+        matched = true
         break
       }
+    }
+    if (matched) continue
+
+    // Tier 2: Positional proximity fallback.
+    let bestIdx = -1
+    let bestDistSq = POSITION_MATCH_THRESHOLD_SQ
+    for (let i = 0; i < cached.points.length; i++) {
+      if (used[i]) continue
+      const dxA = pt.worldAx - cached.points[i].worldAx
+      const dyA = pt.worldAy - cached.points[i].worldAy
+      const distSq = dxA * dxA + dyA * dyA
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq
+        bestIdx = i
+      }
+    }
+    if (bestIdx >= 0) {
+      pt.normalImpulse = cached.points[bestIdx].normalImpulse * warmFactor
+      pt.tangentImpulse = cached.points[bestIdx].tangentImpulse * warmFactor
+      used[bestIdx] = 1
     }
   }
 }

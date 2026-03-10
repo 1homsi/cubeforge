@@ -68,7 +68,13 @@ import {
 } from './massProperties'
 import { combineCoefficients } from './combineRules'
 import type { SolverBody } from './impulseSolver'
-import { initializeConstraints, solveVelocities, solvePositions } from './impulseSolver'
+import {
+  initializeConstraints,
+  solveVelocities,
+  solvePositions,
+  initializePseudoVelocities,
+  integratePseudoVelocities,
+} from './impulseSolver'
 
 // ── Physics configuration ───────────────────────────────────────────────────
 
@@ -2313,6 +2319,9 @@ export class PhysicsSystem implements System {
         invMass: rb.invMass,
         invInertia: rb.invInertia,
         dominance: rb.dominance,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
     for (const id of dynamicCircle) {
@@ -2329,6 +2338,9 @@ export class PhysicsSystem implements System {
         invMass: rb.invMass,
         invInertia: rb.invInertia,
         dominance: rb.dominance,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
     // Also add static circle entities that are referenced in manifolds
@@ -2348,6 +2360,9 @@ export class PhysicsSystem implements System {
         invMass: rb.invMass,
         invInertia: rb.invInertia,
         dominance: rb.dominance,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
 
@@ -2367,6 +2382,9 @@ export class PhysicsSystem implements System {
         invMass: rb.invMass,
         invInertia: rb.invInertia,
         dominance: rb.dominance,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
 
@@ -2386,6 +2404,9 @@ export class PhysicsSystem implements System {
         invMass: rb.invMass,
         invInertia: rb.invInertia,
         dominance: rb.dominance,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
 
@@ -2405,6 +2426,9 @@ export class PhysicsSystem implements System {
         invMass: rb.invMass,
         invInertia: rb.invInertia,
         dominance: rb.dominance,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
 
@@ -2424,6 +2448,9 @@ export class PhysicsSystem implements System {
         invMass: 0,
         invInertia: 0,
         dominance: 0,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
     for (const id of allHeightField) {
@@ -2440,6 +2467,9 @@ export class PhysicsSystem implements System {
         invMass: 0,
         invInertia: 0,
         dominance: 0,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
     for (const id of allHalfSpace) {
@@ -2456,6 +2486,9 @@ export class PhysicsSystem implements System {
         invMass: 0,
         invInertia: 0,
         dominance: 0,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
     for (const id of allTriMesh) {
@@ -2472,6 +2505,9 @@ export class PhysicsSystem implements System {
         invMass: 0,
         invInertia: 0,
         dominance: 0,
+        pvx: 0,
+        pvy: 0,
+        pAngVel: 0,
       })
     }
 
@@ -2561,7 +2597,9 @@ export class PhysicsSystem implements System {
       body.rotation = transform.rotation
     }
 
-    // ── Phase 7: Solve position constraints ───────────────────────────────
+    // ── Phase 7: Solve position constraints (split impulse) ──────────────
+
+    initializePseudoVelocities(solverBodies)
 
     solvePositions(
       constraints,
@@ -2569,6 +2607,8 @@ export class PhysicsSystem implements System {
       this.config.positionCorrectionBeta,
       this.config.penetrationSlop,
     )
+
+    integratePseudoVelocities(solverBodies)
 
     // Write corrected positions back to transforms
     for (const id of allDynamics) {
@@ -2579,6 +2619,7 @@ export class PhysicsSystem implements System {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       transform.x = body.x
       transform.y = body.y
+      transform.rotation = body.rotation
     }
 
     // ── Cache manifolds for warm starting ─────────────────────────────────

@@ -43,6 +43,12 @@ export interface SolverBody {
   invInertia: number
   /** Dominance group (-127 to 127). Higher dominance = infinite mass in contacts */
   dominance: number
+  /** Pseudo-velocity for split impulse position correction (linear X) */
+  pvx: number
+  /** Pseudo-velocity for split impulse position correction (linear Y) */
+  pvy: number
+  /** Pseudo angular velocity for split impulse position correction */
+  pAngVel: number
 }
 
 // ── Pre-computed constraint data ────────────────────────────────────────────
@@ -262,11 +268,30 @@ export function solveVelocities(constraints: VelocityConstraint[], iterations: n
 }
 
 /**
- * Run position solver iterations (Baumgarte stabilization).
+ * Zero all pseudo-velocities on solver bodies.
  *
- * Pushes overlapping bodies apart to correct penetration that the
- * velocity solver couldn't fully resolve. Uses a fraction (beta) of
- * the remaining penetration to avoid over-correction.
+ * Must be called before position solver iterations so that
+ * pseudo-velocity impulses accumulate from a clean slate each frame.
+ */
+export function initializePseudoVelocities(bodies: Map<number, SolverBody>): void {
+  for (const body of bodies.values()) {
+    body.pvx = 0
+    body.pvy = 0
+    body.pAngVel = 0
+  }
+}
+
+/**
+ * Run position solver iterations using split impulse.
+ *
+ * Instead of directly moving bodies (basic Baumgarte), this computes
+ * pseudo-velocity impulses that correct penetration through a separate
+ * velocity channel. This avoids injecting energy into the main velocity
+ * solve, producing more stable stacking and fewer jitter artifacts.
+ *
+ * The pseudo-velocity impulses use the same effective mass (including
+ * angular terms via invInertia) as the velocity solver, ensuring
+ * physically consistent mass-weighted corrections.
  */
 export function solvePositions(
   constraints: VelocityConstraint[],
@@ -280,18 +305,21 @@ export function solvePositions(
 
       let invMA = bodyA.invMass
       let invMB = bodyB.invMass
+      let invIA = bodyA.invInertia
+      let invIB = bodyB.invInertia
 
       if (bodyA.dominance !== bodyB.dominance) {
         if (bodyA.dominance > bodyB.dominance) {
           invMA = 0
+          invIA = 0
         } else {
           invMB = 0
+          invIB = 0
         }
       }
 
       for (const pd of c.pointData) {
-        // Recompute penetration from current positions
-        // Using the contact normal and the body positions
+        // Recompute contact arms from current positions
         const rAx = pd.point.worldAx - bodyA.x
         const rAy = pd.point.worldAy - bodyA.y
         const rBx = pd.point.worldBx - bodyB.x
@@ -303,21 +331,51 @@ export function solvePositions(
           (bodyB.y + rBy - (bodyA.y + rAy)) * manifold.normalY -
           pd.point.penetration
 
-        // Only correct if penetrating beyond slop
-        const correction = beta * Math.max(0, -separation - slop)
-        if (correction <= 0) continue
+        // Position error: only correct if penetrating beyond slop
+        const posError = Math.max(0, -separation - slop)
+        if (posError <= 0) continue
 
-        const totalInvMass = invMA + invMB
-        if (totalInvMass <= 0) continue
+        // Effective mass for normal direction (same formula as velocity solver)
+        const rAxN = cross(rAx, rAy, manifold.normalX, manifold.normalY)
+        const rBxN = cross(rBx, rBy, manifold.normalX, manifold.normalY)
+        const effectiveMassInv = invMA + invMB + rAxN * rAxN * invIA + rBxN * rBxN * invIB
+        if (effectiveMassInv <= 0) continue
 
-        const corrX = manifold.normalX * correction
-        const corrY = manifold.normalY * correction
+        // Pseudo-velocity impulse magnitude
+        const lambda = (beta * posError) / effectiveMassInv
 
-        bodyA.x -= corrX * (invMA / totalInvMass)
-        bodyA.y -= corrY * (invMA / totalInvMass)
-        bodyB.x += corrX * (invMB / totalInvMass)
-        bodyB.y += corrY * (invMB / totalInvMass)
+        // Apply pseudo-velocity impulse along normal
+        const px = manifold.normalX * lambda
+        const py = manifold.normalY * lambda
+
+        bodyA.pvx -= px * invMA
+        bodyA.pvy -= py * invMA
+        bodyA.pAngVel -= cross(rAx, rAy, px, py) * invIA
+
+        bodyB.pvx += px * invMB
+        bodyB.pvy += py * invMB
+        bodyB.pAngVel += cross(rBx, rBy, px, py) * invIB
       }
     }
+  }
+}
+
+/**
+ * Integrate accumulated pseudo-velocities into body positions and reset them.
+ *
+ * Call this once after all position solver iterations are complete.
+ * Uses a unit time step (dt = 1.0) since pseudo-velocities represent
+ * the exact position correction needed this frame.
+ */
+export function integratePseudoVelocities(bodies: Map<number, SolverBody>): void {
+  for (const body of bodies.values()) {
+    body.x += body.pvx * 1.0
+    body.y += body.pvy * 1.0
+    body.rotation += body.pAngVel * 1.0
+
+    // Reset pseudo-velocities for next frame
+    body.pvx = 0
+    body.pvy = 0
+    body.pAngVel = 0
   }
 }
