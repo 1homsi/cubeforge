@@ -269,7 +269,7 @@ describe('setAdditionalMass', () => {
   })
 
   it('scales inertia proportionally', () => {
-    const rb = createRigidBody({ mass: 10, inertia: 100 })
+    const rb = createRigidBody({ mass: 10, inertia: 100, lockRotation: false })
     rb.invMass = 1 / 10
     rb.invInertia = 1 / 100
     setAdditionalMass(rb, 10) // mass doubles
@@ -297,7 +297,7 @@ describe('setAdditionalMass', () => {
 
 describe('setMassProperties', () => {
   it('overrides mass, inertia, and derived inverses', () => {
-    const rb = createRigidBody()
+    const rb = createRigidBody({ lockRotation: false })
     setMassProperties(rb, 20, 100, 0, 0)
     expect(rb.mass).toBe(20)
     expect(rb.inertia).toBe(100)

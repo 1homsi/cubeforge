@@ -28,7 +28,7 @@ export interface BoxColliderComponent extends Component {
    * top surface. Entities below the platform pass through freely.
    */
   oneWay: boolean
-  /** Per-collider friction coefficient (0–1). Default 0.5 */
+  /** Per-collider friction coefficient (0–1). Default 0 */
   friction: number
   /** Per-collider restitution (bounciness) coefficient (0–1). Default 0.0 */
   restitution: number
@@ -61,7 +61,7 @@ export function createBoxCollider(
     mask: '*',
     slope: 0,
     oneWay: false,
-    friction: 0.5,
+    friction: 0,
     restitution: 0,
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',

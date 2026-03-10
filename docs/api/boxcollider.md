@@ -15,6 +15,12 @@ Adds an axis-aligned bounding box (AABB) collider to an entity. The physics syst
 | `mask` | `string \| string[]` | `'*'` | Which layers this collider interacts with. `'*'` = all. Both colliders must allow the other's layer (AND semantics). |
 | `oneWay` | boolean | `false` | One-way platform: only blocks entities falling onto the top surface. Entities approaching from below pass through freely. |
 | `slope` | number | `0` | Slope angle in degrees. `0` = flat box. Positive = surface rises left→right. The sloped top face is used for collision; entities riding it are pushed up along the slope. |
+| `friction` | number | `0` | Per-collider friction coefficient (0–1). Controls how much sliding velocity is reduced on contact. Default `0` = no solver friction (characters control movement via scripts). Set higher values on floors/walls for physics-based deceleration. |
+| `restitution` | number | `0` | Per-collider bounciness (0–1). `0` = no bounce, `1` = full bounce. |
+| `frictionCombineRule` | string | `'average'` | How to combine friction with the other collider: `'average'`, `'min'`, `'max'`, or `'multiply'`. |
+| `restitutionCombineRule` | string | `'average'` | How to combine restitution with the other collider. |
+| `enabled` | boolean | `true` | Whether this collider is active. Disabled colliders skip all detection. |
+| `group` | string | `''` | Collision group — entities in the same non-empty group do not collide with each other. |
 
 ## Example
 
@@ -90,4 +96,4 @@ Slope colliders are skipped in the X-pass; only the Y-pass pushes entities up th
 
 - A BoxCollider without a `RigidBody` on a non-static entity will not move but will still participate in collision events.
 - The physics system merges adjacent static tiles into single wide colliders when loading tilemaps, reducing entity count significantly.
-- Colliders are AABB only — no circles, capsules, or rotated rectangles.
+- The engine also supports CircleCollider, CapsuleCollider, ConvexCollider, TriangleCollider, SegmentCollider, HeightFieldCollider, HalfSpaceCollider, and TriMeshCollider.

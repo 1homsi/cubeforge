@@ -154,7 +154,7 @@ describe('Circle physics response', () => {
 
     const circle = world.createEntity()
     world.addComponent(circle, createTransform(0, 180))
-    world.addComponent(circle, createRigidBody({ vx: 100 }))
+    world.addComponent(circle, createRigidBody({ vx: 100, lockRotation: false }))
     world.addComponent(circle, createCircleCollider(15, { friction: 1 }))
 
     stepN(physics, world, 60)

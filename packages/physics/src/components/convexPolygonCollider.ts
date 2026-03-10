@@ -31,7 +31,7 @@ export function createConvexPolygonCollider(
     isTrigger: false,
     layer: 'default',
     mask: '*',
-    friction: 0.5,
+    friction: 0,
     restitution: 0,
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',

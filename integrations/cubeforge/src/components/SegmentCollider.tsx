@@ -24,7 +24,7 @@ export function SegmentCollider({
   layer = 'default',
   mask = '*',
   oneWay = false,
-  friction = 0.5,
+  friction = 0,
   restitution = 0,
   frictionCombineRule = 'average',
   restitutionCombineRule = 'average',

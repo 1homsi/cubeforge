@@ -311,6 +311,7 @@ describe('revolute joint with motor', () => {
     const { world } = createTestWorld(0)
     const idA = addStatic(world, 0, 0, 20, 20)
     const idB = addDynamic(world, 0, 0)
+    world.getComponent<RigidBodyComponent>(idB, 'RigidBody')!.lockRotation = false
 
     const jid = world.createEntity()
     world.addComponent(
@@ -340,6 +341,7 @@ describe('revolute joint with motor', () => {
     const { world } = createTestWorld(0)
     const idA = addStatic(world, 0, 0, 20, 20)
     const idB = addDynamic(world, 0, 0)
+    world.getComponent<RigidBodyComponent>(idB, 'RigidBody')!.lockRotation = false
 
     const jid = world.createEntity()
     world.addComponent(
@@ -369,6 +371,7 @@ describe('revolute joint with motor', () => {
     const { world } = createTestWorld(0)
     const idA = addStatic(world, 0, 0, 20, 20)
     const idB = addDynamic(world, 0, 0)
+    world.getComponent<RigidBodyComponent>(idB, 'RigidBody')!.lockRotation = false
 
     // Strong motor with low maxForce
     const jid = world.createEntity()

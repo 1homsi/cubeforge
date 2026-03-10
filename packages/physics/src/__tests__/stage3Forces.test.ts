@@ -87,7 +87,7 @@ describe('addTorque — continuous torque', () => {
 
     const id = world.createEntity()
     world.addComponent(id, createTransform(100, 100))
-    world.addComponent(id, createRigidBody({ mass: 1, angularDamping: 0.1 }))
+    world.addComponent(id, createRigidBody({ mass: 1, angularDamping: 0.1, lockRotation: false }))
     world.addComponent(id, createBoxCollider(40, 40))
 
     const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -114,7 +114,7 @@ describe('addForceAtPoint — force + torque decomposition', () => {
 
     const id = world.createEntity()
     world.addComponent(id, createTransform(100, 100))
-    world.addComponent(id, createRigidBody({ mass: 1 }))
+    world.addComponent(id, createRigidBody({ mass: 1, lockRotation: false }))
     world.addComponent(id, createBoxCollider(40, 40))
 
     const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -183,7 +183,7 @@ describe('applyImpulseAtPoint — impulse with angular response', () => {
 
     const id = world.createEntity()
     world.addComponent(id, createTransform(200, 200))
-    world.addComponent(id, createRigidBody({ mass: 1 }))
+    world.addComponent(id, createRigidBody({ mass: 1, lockRotation: false }))
     world.addComponent(id, createBoxCollider(40, 40))
 
     // Step once to compute mass properties

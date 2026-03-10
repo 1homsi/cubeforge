@@ -13,7 +13,7 @@ export interface CircleColliderComponent extends Component {
   layer: string
   /** Collision mask — '*' interacts with everything */
   mask: string | string[]
-  /** Per-collider friction coefficient (0–1). Default 0.5 */
+  /** Per-collider friction coefficient (0–1). Default 0 */
   friction: number
   /** Per-collider restitution (bounciness) coefficient (0–1). Default 0.0 */
   restitution: number
@@ -39,7 +39,7 @@ export function createCircleCollider(radius: number, opts?: Partial<CircleCollid
     isTrigger: false,
     layer: 'default',
     mask: '*',
-    friction: 0.5,
+    friction: 0,
     restitution: 0,
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',

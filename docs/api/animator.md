@@ -160,7 +160,7 @@ function Player({ x, y }: { x: number; y: number }) {
         states={animatorStates}
         params={{ speed: 0, grounded: true }}
       />
-      <RigidBody friction={0.65} />
+      <RigidBody />
       <BoxCollider width={28} height={48} />
       <Script update={update} />
     </Entity>

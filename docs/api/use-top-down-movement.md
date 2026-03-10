@@ -43,7 +43,7 @@ function TopDownPlayer({ x, y }: { x: number; y: number }) {
     <Entity id="player" tags={['player']}>
       <Transform x={x} y={y} />
       <Sprite width={24} height={24} color="#4fc3f7" />
-      <RigidBody gravityScale={0} friction={0} />
+      <RigidBody gravityScale={0} />
       <BoxCollider width={22} height={22} />
       <PlayerController />
     </Entity>

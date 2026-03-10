@@ -218,6 +218,8 @@ describe('Body Sleeping', () => {
 
     const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
     rb.sleeping = true // force asleep
+    rb.sleepThreshold = 5
+    rb.sleepDelay = 1
 
     const t = world.getComponent<TransformComponent>(id, 'Transform')!
     const initialY = t.y

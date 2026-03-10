@@ -38,7 +38,7 @@ export function createHeightFieldCollider(
     scaleY: 1,
     layer: 'default',
     mask: '*',
-    friction: 0.5,
+    friction: 0,
     restitution: 0,
     frictionCombineRule: 'average',
     restitutionCombineRule: 'average',

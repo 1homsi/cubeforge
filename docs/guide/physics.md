@@ -1,6 +1,6 @@
 # Physics
 
-Cubeforge uses a custom AABB (axis-aligned bounding box) physics system. It runs at a fixed 60 Hz timestep regardless of render frame rate, with a spatial broadphase grid for performance.
+Cubeforge uses a custom impulse-based 2D physics system with a sequential impulse constraint solver. It runs at a fixed 60 Hz timestep regardless of render frame rate, with a spatial broadphase grid for performance.
 
 ## RigidBody
 
@@ -9,7 +9,7 @@ Add `<RigidBody>` to an entity to make it participate in physics:
 ```tsx
 <Entity id="player">
   <Transform x={100} y={300} />
-  <RigidBody gravityScale={1} friction={0.85} bounce={0} />
+  <RigidBody />
   <BoxCollider width={32} height={48} />
 </Entity>
 ```
@@ -19,12 +19,35 @@ Add `<RigidBody>` to an entity to make it participate in physics:
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `isStatic` | boolean | `false` | Immovable body — platforms, walls, floors |
+| `isKinematic` | boolean | `false` | Kinematic body — moves via velocity, not affected by impulses |
 | `gravityScale` | number | `1` | Multiplier on world gravity. Use `0` for top-down games. |
-| `mass` | number | `1` | Affects collision response |
-| `friction` | number | `0.85` | Horizontal velocity damping when on the ground (0–1) |
-| `bounce` | number | `0` | Coefficient of restitution — 0 is no bounce, 1 is full |
+| `mass` | number | `0` | `0` = auto-compute from density × collider area |
+| `density` | number | `1` | Used for auto mass computation |
+| `lockRotation` | boolean | `true` | Lock angular velocity. Most 2D characters want this. |
+| `restitution` | number | `0` | Bounciness (0–1) |
 | `vx` | number | `0` | Initial horizontal velocity |
 | `vy` | number | `0` | Initial vertical velocity |
+
+## Collider friction and restitution
+
+Friction and restitution are per-collider properties, not per-body:
+
+```tsx
+// Icy floor — low friction
+<BoxCollider width={200} height={20} friction={0.1} />
+
+// Bouncy wall
+<BoxCollider width={20} height={200} restitution={0.8} />
+```
+
+Collider friction defaults to `0`. This means no solver friction is applied unless you explicitly set it. Most platformer characters control movement via Script (`rb.vx = SPEED`), so solver friction would fight that.
+
+Set friction on surfaces (floors, walls) when you want physics-based deceleration:
+
+```tsx
+// Sticky floor that slows sliding objects
+<BoxCollider width={800} height={32} friction={0.8} />
+```
 
 ## Static bodies
 
@@ -83,11 +106,6 @@ Add a `slope` prop to `<BoxCollider>` to create a ramp. The value is the surface
 </Entity>
 ```
 
-Slope colliders:
-- Are skipped during the X-pass so entities can smoothly walk up/down them
-- Push the riding entity up to the surface line in the Y-pass
-- Set `onGround = true` on the riding entity, applying normal friction
-
 ## Top-down movement
 
 For top-down games, disable gravity per-entity with `gravityScale={0}`:
@@ -95,7 +113,7 @@ For top-down games, disable gravity per-entity with `gravityScale={0}`:
 ```tsx
 <Entity id="player">
   <Transform x={100} y={100} />
-  <RigidBody gravityScale={0} friction={0} />
+  <RigidBody gravityScale={0} />
   <BoxCollider width={24} height={24} />
 </Entity>
 ```
@@ -138,7 +156,15 @@ The physics system runs at exactly 60 steps per second, regardless of render FPS
 
 ## Collision layers
 
-`<BoxCollider layer="...">` groups colliders into named layers. By default all colliders are in the `"default"` layer. The current physics system resolves all colliders — layer-based filtering is reserved for trigger event identification and tilemap generation.
+`<BoxCollider layer="...">` groups colliders into named layers. Use `mask` to control which layers a collider interacts with:
+
+```tsx
+// Player collides with everything
+<BoxCollider width={32} height={48} layer="player" />
+
+// Enemy only collides with player and world layers
+<BoxCollider width={32} height={32} layer="enemy" mask={['player', 'world']} />
+```
 
 ## Broadphase grid
 
