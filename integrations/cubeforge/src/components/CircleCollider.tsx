@@ -40,10 +40,21 @@ export function CircleCollider({
   const entityId = useContext(EntityContext)!
 
   useEffect(() => {
-    engine.ecs.addComponent(entityId, createCircleCollider(radius, {
-      offsetX, offsetY, isTrigger, layer, mask,
-      friction, restitution, frictionCombineRule, restitutionCombineRule, enabled,
-    }))
+    engine.ecs.addComponent(
+      entityId,
+      createCircleCollider(radius, {
+        offsetX,
+        offsetY,
+        isTrigger,
+        layer,
+        mask,
+        friction,
+        restitution,
+        frictionCombineRule,
+        restitutionCombineRule,
+        enabled,
+      }),
+    )
     return () => engine.ecs.removeComponent(entityId, 'CircleCollider')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

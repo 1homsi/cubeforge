@@ -12,11 +12,7 @@
  * Box area = width × height
  * Box inertia about center = (1/12) × mass × (width² + height²)
  */
-export function boxMassProperties(
-  width: number,
-  height: number,
-  density: number,
-): { mass: number; inertia: number } {
+export function boxMassProperties(width: number, height: number, density: number): { mass: number; inertia: number } {
   const area = width * height
   const mass = density * area
   const inertia = (mass / 12) * (width * width + height * height)
@@ -29,10 +25,7 @@ export function boxMassProperties(
  * Circle area = π × r²
  * Circle inertia about center = (1/2) × mass × r²
  */
-export function circleMassProperties(
-  radius: number,
-  density: number,
-): { mass: number; inertia: number } {
+export function circleMassProperties(radius: number, density: number): { mass: number; inertia: number } {
   const area = Math.PI * radius * radius
   const mass = density * area
   const inertia = (mass / 2) * radius * radius

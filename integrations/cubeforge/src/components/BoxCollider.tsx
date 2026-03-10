@@ -51,8 +51,17 @@ export function BoxCollider({
     engine.ecs.addComponent(
       entityId,
       createBoxCollider(width, height, {
-        offsetX, offsetY, isTrigger, layer, mask, oneWay,
-        friction, restitution, frictionCombineRule, restitutionCombineRule, enabled,
+        offsetX,
+        offsetY,
+        isTrigger,
+        layer,
+        mask,
+        oneWay,
+        friction,
+        restitution,
+        frictionCombineRule,
+        restitutionCombineRule,
+        enabled,
       }),
     )
 

@@ -132,12 +132,7 @@ function maskAllows(mask: string | string[], layer: string): boolean {
   return mask === layer
 }
 
-function canInteract(
-  aLayer: string,
-  aMask: string | string[],
-  bLayer: string,
-  bMask: string | string[],
-): boolean {
+function canInteract(aLayer: string, aMask: string | string[], bLayer: string, bMask: string | string[]): boolean {
   return maskAllows(aMask, bLayer) && maskAllows(bMask, aLayer)
 }
 
@@ -163,7 +158,14 @@ function shapeOverlapsAABB(tx: number, ty: number, shape: ColliderShape, other: 
   return dx * dx + dy * dy < r * r
 }
 
-function shapeOverlapsCircle(tx: number, ty: number, shape: ColliderShape, cx: number, cy: number, cr: number): boolean {
+function shapeOverlapsCircle(
+  tx: number,
+  ty: number,
+  shape: ColliderShape,
+  cx: number,
+  cy: number,
+  cr: number,
+): boolean {
   if (shape.type === 'circle') {
     const r = shape.radius ?? 0
     const dx = tx + shape.offsetX - cx
@@ -546,7 +548,10 @@ export class PhysicsSystem implements System {
       const aabb = getAABB(st, sc)
       for (const cell of this.getCells(aabb.cx, aabb.cy, aabb.hw, aabb.hh)) {
         let bucket = spatialGrid.get(cell)
-        if (!bucket) { bucket = []; spatialGrid.set(cell, bucket) }
+        if (!bucket) {
+          bucket = []
+          spatialGrid.set(cell, bucket)
+        }
         bucket.push(sid)
       }
     }
@@ -607,12 +612,16 @@ export class PhysicsSystem implements System {
             const contactX = entityCenterX
 
             const combinedFriction = combineCoefficients(
-              col.friction, col.frictionCombineRule,
-              sc.friction, sc.frictionCombineRule,
+              col.friction,
+              col.frictionCombineRule,
+              sc.friction,
+              sc.frictionCombineRule,
             )
             const combinedRestitution = combineCoefficients(
-              col.restitution, col.restitutionCombineRule,
-              sc.restitution, sc.restitutionCombineRule,
+              col.restitution,
+              col.restitutionCombineRule,
+              sc.restitution,
+              sc.restitutionCombineRule,
             )
 
             manifolds.push({
@@ -620,20 +629,22 @@ export class PhysicsSystem implements System {
               entityB: sid,
               normalX: slopeNx,
               normalY: slopeNy,
-              points: [{
-                worldAx: contactX,
-                worldAy: entityBottom,
-                worldBx: contactX,
-                worldBy: surfaceY,
-                rAx: contactX - transform.x,
-                rAy: entityBottom - transform.y,
-                rBx: contactX - st.x,
-                rBy: surfaceY - st.y,
-                penetration,
-                normalImpulse: 0,
-                tangentImpulse: 0,
-                featureId: 100, // slope feature
-              }],
+              points: [
+                {
+                  worldAx: contactX,
+                  worldAy: entityBottom,
+                  worldBx: contactX,
+                  worldBy: surfaceY,
+                  rAx: contactX - transform.x,
+                  rAy: entityBottom - transform.y,
+                  rBx: contactX - st.x,
+                  rBy: surfaceY - st.y,
+                  penetration,
+                  normalImpulse: 0,
+                  tangentImpulse: 0,
+                  featureId: 100, // slope feature
+                },
+              ],
               friction: combinedFriction,
               restitution: combinedRestitution,
             })
@@ -647,18 +658,28 @@ export class PhysicsSystem implements System {
           const aabb = getAABB(transform, col)
           const sAABB = getAABB(st, sc)
           const result = generateBoxBoxManifold(
-            aabb.cx, aabb.cy, aabb.hw, aabb.hh,
-            sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh,
+            aabb.cx,
+            aabb.cy,
+            aabb.hw,
+            aabb.hh,
+            sAABB.cx,
+            sAABB.cy,
+            sAABB.hw,
+            sAABB.hh,
           )
           if (!result) continue
 
           const combinedFriction = combineCoefficients(
-            col.friction, col.frictionCombineRule,
-            sc.friction, sc.frictionCombineRule,
+            col.friction,
+            col.frictionCombineRule,
+            sc.friction,
+            sc.frictionCombineRule,
           )
           const combinedRestitution = combineCoefficients(
-            col.restitution, col.restitutionCombineRule,
-            sc.restitution, sc.restitutionCombineRule,
+            col.restitution,
+            col.restitutionCombineRule,
+            sc.restitution,
+            sc.restitutionCombineRule,
           )
 
           const key = pairKey(id, sid)
@@ -703,22 +724,38 @@ export class PhysicsSystem implements System {
         const aabbA = getAABB(ta, ca)
         const aabbB = getAABB(tb, cb)
         const result = generateBoxBoxManifold(
-          aabbA.cx, aabbA.cy, aabbA.hw, aabbA.hh,
-          aabbB.cx, aabbB.cy, aabbB.hw, aabbB.hh,
+          aabbA.cx,
+          aabbA.cy,
+          aabbA.hw,
+          aabbA.hh,
+          aabbB.cx,
+          aabbB.cy,
+          aabbB.hw,
+          aabbB.hh,
         )
         if (!result) continue
 
         // Wake sleeping bodies on contact
-        if (rba.sleeping) { rba.sleeping = false; rba.sleepTimer = 0 }
-        if (rbb.sleeping) { rbb.sleeping = false; rbb.sleepTimer = 0 }
+        if (rba.sleeping) {
+          rba.sleeping = false
+          rba.sleepTimer = 0
+        }
+        if (rbb.sleeping) {
+          rbb.sleeping = false
+          rbb.sleepTimer = 0
+        }
 
         const combinedFriction = combineCoefficients(
-          ca.friction, ca.frictionCombineRule,
-          cb.friction, cb.frictionCombineRule,
+          ca.friction,
+          ca.frictionCombineRule,
+          cb.friction,
+          cb.frictionCombineRule,
         )
         const combinedRestitution = combineCoefficients(
-          ca.restitution, ca.restitutionCombineRule,
-          cb.restitution, cb.restitutionCombineRule,
+          ca.restitution,
+          ca.restitutionCombineRule,
+          cb.restitution,
+          cb.restitutionCombineRule,
         )
 
         const key = pairKey(ia, ib)
@@ -769,18 +806,27 @@ export class PhysicsSystem implements System {
 
           const sAABB = getAABB(st, sc)
           const result = generateCircleBoxManifold(
-            circleCx, circleCy, cc.radius,
-            sAABB.cx, sAABB.cy, sAABB.hw, sAABB.hh,
+            circleCx,
+            circleCy,
+            cc.radius,
+            sAABB.cx,
+            sAABB.cy,
+            sAABB.hw,
+            sAABB.hh,
           )
           if (!result) continue
 
           const combinedFriction = combineCoefficients(
-            cc.friction, cc.frictionCombineRule,
-            sc.friction, sc.frictionCombineRule,
+            cc.friction,
+            cc.frictionCombineRule,
+            sc.friction,
+            sc.frictionCombineRule,
           )
           const combinedRestitution = combineCoefficients(
-            cc.restitution, cc.restitutionCombineRule,
-            sc.restitution, sc.restitutionCombineRule,
+            cc.restitution,
+            cc.restitutionCombineRule,
+            sc.restitution,
+            sc.restitutionCombineRule,
           )
 
           const key = pairKey(cid, sid)
@@ -821,21 +867,35 @@ export class PhysicsSystem implements System {
         if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask)) continue
 
         const result = generateCircleCircleManifold(
-          ta.x + ca.offsetX, ta.y + ca.offsetY, ca.radius,
-          tb.x + cb.offsetX, tb.y + cb.offsetY, cb.radius,
+          ta.x + ca.offsetX,
+          ta.y + ca.offsetY,
+          ca.radius,
+          tb.x + cb.offsetX,
+          tb.y + cb.offsetY,
+          cb.radius,
         )
         if (!result) continue
 
-        if (rba.sleeping) { rba.sleeping = false; rba.sleepTimer = 0 }
-        if (rbb.sleeping) { rbb.sleeping = false; rbb.sleepTimer = 0 }
+        if (rba.sleeping) {
+          rba.sleeping = false
+          rba.sleepTimer = 0
+        }
+        if (rbb.sleeping) {
+          rbb.sleeping = false
+          rbb.sleepTimer = 0
+        }
 
         const combinedFriction = combineCoefficients(
-          ca.friction, ca.frictionCombineRule,
-          cb.friction, cb.frictionCombineRule,
+          ca.friction,
+          ca.frictionCombineRule,
+          cb.friction,
+          cb.frictionCombineRule,
         )
         const combinedRestitution = combineCoefficients(
-          ca.restitution, ca.restitutionCombineRule,
-          cb.restitution, cb.restitutionCombineRule,
+          ca.restitution,
+          ca.restitutionCombineRule,
+          cb.restitution,
+          cb.restitutionCombineRule,
         )
 
         const key = pairKey(ia, ib)
@@ -877,21 +937,36 @@ export class PhysicsSystem implements System {
 
         const bAABB = getAABB(bt, bc)
         const result = generateCircleBoxManifold(
-          ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius,
-          bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh,
+          ct.x + cc.offsetX,
+          ct.y + cc.offsetY,
+          cc.radius,
+          bAABB.cx,
+          bAABB.cy,
+          bAABB.hw,
+          bAABB.hh,
         )
         if (!result) continue
 
-        if (crb.sleeping) { crb.sleeping = false; crb.sleepTimer = 0 }
-        if (brb.sleeping) { brb.sleeping = false; brb.sleepTimer = 0 }
+        if (crb.sleeping) {
+          crb.sleeping = false
+          crb.sleepTimer = 0
+        }
+        if (brb.sleeping) {
+          brb.sleeping = false
+          brb.sleepTimer = 0
+        }
 
         const combinedFriction = combineCoefficients(
-          cc.friction, cc.frictionCombineRule,
-          bc.friction, bc.frictionCombineRule,
+          cc.friction,
+          cc.frictionCombineRule,
+          bc.friction,
+          bc.frictionCombineRule,
         )
         const combinedRestitution = combineCoefficients(
-          cc.restitution, cc.restitutionCombineRule,
-          bc.restitution, bc.restitutionCombineRule,
+          cc.restitution,
+          cc.restitutionCombineRule,
+          bc.restitution,
+          bc.restitutionCombineRule,
         )
 
         const key = pairKey(cid, bid)
@@ -924,9 +999,11 @@ export class PhysicsSystem implements System {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       solverBodies.set(id, {
         entityId: id,
-        x: t.x, y: t.y,
+        x: t.x,
+        y: t.y,
         rotation: t.rotation,
-        vx: rb.vx, vy: rb.vy,
+        vx: rb.vx,
+        vy: rb.vy,
         angVel: rb.angularVelocity,
         invMass: rb.invMass,
         invInertia: rb.invInertia,
@@ -938,9 +1015,11 @@ export class PhysicsSystem implements System {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       solverBodies.set(id, {
         entityId: id,
-        x: t.x, y: t.y,
+        x: t.x,
+        y: t.y,
         rotation: t.rotation,
-        vx: rb.vx, vy: rb.vy,
+        vx: rb.vx,
+        vy: rb.vy,
         angVel: rb.angularVelocity,
         invMass: rb.invMass,
         invInertia: rb.invInertia,
@@ -955,9 +1034,11 @@ export class PhysicsSystem implements System {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       solverBodies.set(id, {
         entityId: id,
-        x: t.x, y: t.y,
+        x: t.x,
+        y: t.y,
         rotation: t.rotation,
-        vx: rb.vx, vy: rb.vy,
+        vx: rb.vx,
+        vy: rb.vy,
         angVel: rb.angularVelocity,
         invMass: rb.invMass,
         invInertia: rb.invInertia,
@@ -1072,7 +1153,10 @@ export class PhysicsSystem implements System {
           if (!canInteract(col.layer, col.mask, sc.layer, sc.mask)) continue
 
           const t = sweepAABB(startCx, startCy, hw, hh, totalDx, totalDy, getAABB(st, sc))
-          if (t !== null && t < earliestT) { earliestT = t; hitSid = sid }
+          if (t !== null && t < earliestT) {
+            earliestT = t
+            hitSid = sid
+          }
         }
       }
 
@@ -1138,11 +1222,19 @@ export class PhysicsSystem implements System {
 
     for (const id of dynamicBox) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      if (rb.onGround) { rb.isNearGround = true; continue }
+      if (rb.onGround) {
+        rb.isNearGround = true
+        continue
+      }
       if (rb.sleeping) continue
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const col = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
-      const probeAABB: AABB = { cx: transform.x + col.offsetX, cy: transform.y + col.offsetY + 2, hw: col.width / 2, hh: col.height / 2 }
+      const probeAABB: AABB = {
+        cx: transform.x + col.offsetX,
+        cy: transform.y + col.offsetY + 2,
+        hw: col.width / 2,
+        hh: col.height / 2,
+      }
       const candidateCells = this.getCells(probeAABB.cx, probeAABB.cy, probeAABB.hw, probeAABB.hh)
       const checked = new Set<EntityId>()
       outer: for (const cell of candidateCells) {
@@ -1168,10 +1260,18 @@ export class PhysicsSystem implements System {
 
     for (const id of capsuleDynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      if (rb.onGround) { rb.isNearGround = true; continue }
+      if (rb.onGround) {
+        rb.isNearGround = true
+        continue
+      }
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const cap = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
-      const probeAABB: AABB = { cx: transform.x + cap.offsetX, cy: transform.y + cap.offsetY + 2, hw: cap.width / 2, hh: cap.height / 2 }
+      const probeAABB: AABB = {
+        cx: transform.x + cap.offsetX,
+        cy: transform.y + cap.offsetY + 2,
+        hw: cap.width / 2,
+        hh: cap.height / 2,
+      }
       const candidateCells = this.getCells(probeAABB.cx, probeAABB.cy, probeAABB.hw, probeAABB.hh)
       const checked = new Set<EntityId>()
       outerCap: for (const cell of candidateCells) {
@@ -1226,12 +1326,16 @@ export class PhysicsSystem implements System {
             const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
             const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
             if (!aStatic && !bStatic) {
-              tA.x += correctionX; tA.y += correctionY
-              tB.x -= correctionX; tB.y -= correctionY
+              tA.x += correctionX
+              tA.y += correctionY
+              tB.x -= correctionX
+              tB.y -= correctionY
             } else if (!aStatic) {
-              tA.x += correctionX * 2; tA.y += correctionY * 2
+              tA.x += correctionX * 2
+              tA.y += correctionY * 2
             } else if (!bStatic) {
-              tB.x -= correctionX * 2; tB.y -= correctionY * 2
+              tB.x -= correctionX * 2
+              tB.y -= correctionY * 2
             }
           } else if (joint.jointType === 'spring') {
             if (currentLength < 0.0001) continue
@@ -1249,20 +1353,30 @@ export class PhysicsSystem implements System {
             }
             const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
             const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
-            if (!aStatic && rbA) { rbA.vx += fx * dt; rbA.vy += fy * dt }
-            if (!bStatic && rbB) { rbB.vx -= fx * dt; rbB.vy -= fy * dt }
+            if (!aStatic && rbA) {
+              rbA.vx += fx * dt
+              rbA.vy += fy * dt
+            }
+            if (!bStatic && rbB) {
+              rbB.vx -= fx * dt
+              rbB.vy -= fy * dt
+            }
           } else if (joint.jointType === 'revolute') {
             const midX = (ax + bx) / 2
             const midY = (ay + by) / 2
             const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
             const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
             if (!aStatic && !bStatic) {
-              tA.x += midX - ax; tA.y += midY - ay
-              tB.x += midX - bx; tB.y += midY - by
+              tA.x += midX - ax
+              tA.y += midY - ay
+              tB.x += midX - bx
+              tB.y += midY - by
             } else if (!aStatic) {
-              tA.x += bx - ax; tA.y += by - ay
+              tA.x += bx - ax
+              tA.y += by - ay
             } else if (!bStatic) {
-              tB.x += ax - bx; tB.y += ay - by
+              tB.x += ax - bx
+              tB.y += ay - by
             }
           } else if (joint.jointType === 'rope') {
             const maxLen = joint.maxLength ?? joint.length
@@ -1276,12 +1390,16 @@ export class PhysicsSystem implements System {
             const aStatic = !rbA || rbA.isStatic || rbA.isKinematic
             const bStatic = !rbB || rbB.isStatic || rbB.isKinematic
             if (!aStatic && !bStatic) {
-              tA.x += correctionX; tA.y += correctionY
-              tB.x -= correctionX; tB.y -= correctionY
+              tA.x += correctionX
+              tA.y += correctionY
+              tB.x -= correctionX
+              tB.y -= correctionY
             } else if (!aStatic) {
-              tA.x += correctionX * 2; tA.y += correctionY * 2
+              tA.x += correctionX * 2
+              tA.y += correctionY * 2
             } else if (!bStatic) {
-              tB.x -= correctionX * 2; tB.y -= correctionY * 2
+              tB.x -= correctionX * 2
+              tB.y -= correctionY * 2
             }
           }
         }
@@ -1458,9 +1576,15 @@ export class PhysicsSystem implements System {
             const aabb = shapeToAABB(ta.x, ta.y, sa)
             for (const sb of cb.shapes) {
               if (sb.type === 'circle') {
-                if (shapeOverlapsCircle(ta.x, ta.y, sa, tb.x + sb.offsetX, tb.y + sb.offsetY, sb.radius ?? 0)) { hit = true; break outer2 }
+                if (shapeOverlapsCircle(ta.x, ta.y, sa, tb.x + sb.offsetX, tb.y + sb.offsetY, sb.radius ?? 0)) {
+                  hit = true
+                  break outer2
+                }
               } else {
-                if (getOverlap(aabb, shapeToAABB(tb.x, tb.y, sb))) { hit = true; break outer2 }
+                if (getOverlap(aabb, shapeToAABB(tb.x, tb.y, sb))) {
+                  hit = true
+                  break outer2
+                }
               }
             }
           }

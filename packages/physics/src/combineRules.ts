@@ -21,12 +21,7 @@ const RULE_PRIORITY: Record<CombineRule, number> = {
  * If both colliders specify the same rule, that rule is used.
  * If they differ, the higher-priority rule wins (Max > Multiply > Min > Average).
  */
-export function combineCoefficients(
-  a: number,
-  aRule: CombineRule,
-  b: number,
-  bRule: CombineRule,
-): number {
+export function combineCoefficients(a: number, aRule: CombineRule, b: number, bRule: CombineRule): number {
   const rule = RULE_PRIORITY[aRule] >= RULE_PRIORITY[bRule] ? aRule : bRule
   switch (rule) {
     case 'average':

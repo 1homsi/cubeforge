@@ -133,8 +133,8 @@ export function initializeConstraints(
       const tangentMass = tangentMassInv > 0 ? 1 / tangentMassInv : 0
 
       // Relative velocity at contact point along normal (for restitution bias)
-      const relVx = bodyB.vx + (-bodyB.angVel * rBy) - (bodyA.vx + (-bodyA.angVel * rAy))
-      const relVy = bodyB.vy + (bodyB.angVel * rBx) - (bodyA.vy + (bodyA.angVel * rAx))
+      const relVx = bodyB.vx + -bodyB.angVel * rBy - (bodyA.vx + -bodyA.angVel * rAy)
+      const relVy = bodyB.vy + bodyB.angVel * rBx - (bodyA.vy + bodyA.angVel * rAx)
       const relVelNormal = relVx * manifold.normalX + relVy * manifold.normalY
 
       // Restitution bias: only apply bounce if closing velocity exceeds threshold
@@ -208,8 +208,8 @@ export function solveVelocities(constraints: VelocityConstraint[], iterations: n
 
         // ── Normal impulse ────────────────────────────────────────────────
         // Compute relative velocity at contact point
-        const relVx = bodyB.vx + (-bodyB.angVel * rBy) - (bodyA.vx + (-bodyA.angVel * rAy))
-        const relVy = bodyB.vy + (bodyB.angVel * rBx) - (bodyA.vy + (bodyA.angVel * rAx))
+        const relVx = bodyB.vx + -bodyB.angVel * rBy - (bodyA.vx + -bodyA.angVel * rAy)
+        const relVy = bodyB.vy + bodyB.angVel * rBx - (bodyA.vy + bodyA.angVel * rAx)
         const relVelNormal = relVx * manifold.normalX + relVy * manifold.normalY
 
         // Impulse magnitude: j = -(1 + e) * vRel·n / effectiveMass
@@ -234,8 +234,8 @@ export function solveVelocities(constraints: VelocityConstraint[], iterations: n
         bodyB.angVel += cross(rBx, rBy, pnx, pny) * invIB
 
         // ── Tangent impulse (friction) ────────────────────────────────────
-        const relVx2 = bodyB.vx + (-bodyB.angVel * rBy) - (bodyA.vx + (-bodyA.angVel * rAy))
-        const relVy2 = bodyB.vy + (bodyB.angVel * rBx) - (bodyA.vy + (bodyA.angVel * rAx))
+        const relVx2 = bodyB.vx + -bodyB.angVel * rBy - (bodyA.vx + -bodyA.angVel * rAy)
+        const relVy2 = bodyB.vy + bodyB.angVel * rBx - (bodyA.vy + bodyA.angVel * rAx)
         const relVelTangent = relVx2 * tangentX + relVy2 * tangentY
 
         let jt = -relVelTangent * pd.tangentMass

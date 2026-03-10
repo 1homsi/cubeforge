@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  initializeConstraints,
-  solveVelocities,
-  solvePositions,
-  type SolverBody,
-} from '../impulseSolver'
+import { initializeConstraints, solveVelocities, solvePositions, type SolverBody } from '../impulseSolver'
 import type { ContactManifold, ContactPoint } from '../contactManifold'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -115,8 +110,8 @@ describe('initializeConstraints + solveVelocities', () => {
   })
 
   it('momentum is conserved: sum of momentum before = after', () => {
-    const bodyA = makeSolverBody({ entityId: 1, vx: 20, invMass: 1 })    // mass 1
-    const bodyB = makeSolverBody({ entityId: 2, vx: -5, invMass: 0.5 })  // mass 2
+    const bodyA = makeSolverBody({ entityId: 1, vx: 20, invMass: 1 }) // mass 1
+    const bodyB = makeSolverBody({ entityId: 2, vx: -5, invMass: 0.5 }) // mass 2
 
     const bodies = new Map<number, SolverBody>()
     bodies.set(1, bodyA)
