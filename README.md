@@ -146,7 +146,6 @@ Most browser game engines are imperative — you create objects, call methods, a
 | `@cubeforge/renderer` | Camera, sprites, animations, particles, trails, parallax |
 | `@cubeforge/physics` | AABB collision, rigid bodies, kinematic mode, one-way platforms, fixed 60 Hz, spatial broadphase |
 | `@cubeforge/audio` | Web Audio API — useSound, volume groups, fade, duck, crossfade |
-| `@cubeforge/webgl-renderer` | WebGL2 instanced renderer — the default renderer used by `<Game>` |
 | `@cubeforge/net` | Multiplayer — Room, syncEntity, useNetworkInput, ClientPrediction |
 | `create-cubeforge-game` | CLI scaffolder |
 

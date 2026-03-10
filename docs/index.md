@@ -26,8 +26,8 @@ features:
     details: Drop a game into any existing React app with a single component. No separate build pipeline, no iframe.
   - title: Debug-ready
     details: Add debug for collider wireframes and FPS. Add devtools for a full time-travel debugger — scrub frames, inspect entities, step forward/back.
-  - title: WebGL renderer
-    details: "@cubeforge/webgl-renderer drops in as a replacement render system using WebGL2 instanced draw calls — one GPU call per texture group."
+  - title: WebGL2 renderer
+    details: "The default renderer uses WebGL2 instanced draw calls — one GPU call per texture group. No configuration needed."
   - title: Multiplayer
     details: "@cubeforge/net provides transport-agnostic helpers — Room, syncEntity, useNetworkInput, and ClientPrediction — for building real-time multiplayer games."
 ---

@@ -37,7 +37,7 @@ export default defineConfig({
           text: 'Advanced',
           items: [
             { text: 'DevTools & Deterministic Mode', link: '/guide/devtools' },
-            { text: 'Renderer (WebGL2)', link: '/guide/webgl-renderer' },
+            { text: 'Renderer (WebGL2)', link: '/guide/renderer' },
             { text: 'Performance', link: '/guide/performance' },
             { text: 'Migration Guide', link: '/guide/migration' },
             { text: 'Multiplayer', link: '/guide/multiplayer' },

@@ -178,7 +178,7 @@ You can override any preset value with explicit props:
 
 ## Performance
 
-Sprites sharing the same texture are batched into a single GPU draw call (up to 8192 instances per batch). See the [Renderer guide](/guide/webgl-renderer) for details on how batching works.
+Sprites sharing the same texture are batched into a single GPU draw call (up to 8192 instances per batch). See the [Renderer guide](/guide/renderer) for details on how batching works.
 
 ## zIndex and draw order
 
