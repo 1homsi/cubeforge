@@ -544,7 +544,7 @@ What we already have and will keep:
 
 ---
 
-## Stage 7 — Pipeline, Serialization & Debug
+## Stage 7 — Pipeline, Serialization & Debug :white_check_mark: COMPLETE
 
 > System-level features: collision-only pipeline, world snapshotting, debug rendering, and cross-platform determinism.
 
@@ -552,58 +552,58 @@ What we already have and will keep:
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `CollisionPipeline` class | :white_circle: | Run collision detection without dynamics — useful for spatial queries without physics simulation |
-| Broad phase only mode | :white_circle: | Run only broad phase to get potential collision pairs |
-| Contact graph | :white_circle: | Stores contact pairs + contact points for non-sensor colliders |
-| Intersection graph | :white_circle: | Stores intersection pairs involving at least one sensor |
+| `CollisionPipeline` class | :white_check_mark: | Run collision detection without dynamics — useful for spatial queries without physics simulation |
+| Broad phase only mode | :white_check_mark: | Run only broad phase to get potential collision pairs |
+| Contact graph | :white_check_mark: | Stores contact pairs + contact points for non-sensor colliders |
+| Intersection graph | :white_check_mark: | Stores intersection pairs involving at least one sensor |
 
 ### 7.2 Serialization / Snapshotting
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `takeSnapshot()` | :white_circle: | Serialize entire physics world to `Uint8Array` — all bodies, colliders, joints, solver state |
-| `restoreSnapshot(data)` | :white_circle: | Deserialize `Uint8Array` back into a complete physics world |
-| Snapshot format versioning | :white_circle: | Version header to handle forward/backward compat |
-| JSON serialization | :white_circle: | `toJSON()` / `fromJSON()` — human-readable alternative to binary snapshot |
-| Selective snapshot | :white_circle: | Snapshot subset of world (specific islands or entity groups) |
-| Snapshot hash | :white_circle: | `snapshotHash()` — deterministic hash for replay verification |
+| `takeSnapshot()` | :white_check_mark: | Serialize entire physics world to `Uint8Array` — all bodies, colliders, joints, solver state |
+| `restoreSnapshot(data)` | :white_check_mark: | Deserialize `Uint8Array` back into a complete physics world |
+| Snapshot format versioning | :white_check_mark: | Version header to handle forward/backward compat |
+| JSON serialization | :white_check_mark: | `toJSON()` / `fromJSON()` — human-readable alternative to binary snapshot |
+| Selective snapshot | :white_check_mark: | Snapshot subset of world (specific islands or entity groups) |
+| Snapshot hash | :white_check_mark: | `snapshotHash()` — deterministic hash for replay verification |
 
 ### 7.3 Debug Rendering
 
 | Task | Status | Description |
 |------|--------|-------------|
-| `DebugRenderPipeline` class | :white_circle: | Backend-agnostic line-based debug renderer (Rapier: `DebugRenderPipeline`) |
-| Render rigid body outlines | :white_circle: | Outline of every rigid body (colored by type: dynamic, static, kinematic, sleeping) |
-| Render collider shapes | :white_circle: | All collider shapes — boxes, circles, capsules, polygons, edges, heightfields |
-| Render contact points | :white_circle: | Dots at contact points, lines showing contact normal |
-| Render joints | :white_circle: | Lines connecting joint anchors |
-| Render AABBs | :white_circle: | Broad-phase bounding boxes |
-| Render center of mass | :white_circle: | Cross marker at each body's center of mass |
-| Render velocity vectors | :white_circle: | Arrow showing linear velocity direction and magnitude |
-| Configurable render flags | :white_circle: | Select which elements to render (bodies, colliders, contacts, joints, AABBs, etc.) |
-| Configurable colors | :white_circle: | Per-element-type color configuration |
-| `DebugRenderBackend` interface | :white_circle: | Pluggable backend — default uses Canvas2D overlay, users can implement custom |
+| `DebugRenderPipeline` class | :white_check_mark: | Backend-agnostic line-based debug renderer (Rapier: `DebugRenderPipeline`) |
+| Render rigid body outlines | :white_check_mark: | Outline of every rigid body (colored by type: dynamic, static, kinematic, sleeping) |
+| Render collider shapes | :white_check_mark: | All collider shapes — boxes, circles, capsules, polygons, edges, heightfields |
+| Render contact points | :white_check_mark: | Dots at contact points, lines showing contact normal |
+| Render joints | :white_check_mark: | Lines connecting joint anchors |
+| Render AABBs | :white_check_mark: | Broad-phase bounding boxes |
+| Render center of mass | :white_check_mark: | Cross marker at each body's center of mass |
+| Render velocity vectors | :white_check_mark: | Arrow showing linear velocity direction and magnitude |
+| Configurable render flags | :white_check_mark: | Select which elements to render (bodies, colliders, contacts, joints, AABBs, etc.) |
+| Configurable colors | :white_check_mark: | Per-element-type color configuration |
+| `DebugRenderBackend` interface | :white_check_mark: | Pluggable backend — default uses Canvas2D overlay, users can implement custom |
 
 ### 7.4 Cross-Platform Determinism
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Deterministic broad phase | :white_circle: | Ensure spatial grid produces identical pair order regardless of insertion order |
-| Deterministic solver | :white_circle: | Ensure contact/island iteration order is deterministic |
-| Avoid transcendental functions | :white_circle: | Replace `Math.sin`/`Math.cos`/`Math.atan2` in physics with deterministic approximations where needed |
-| Determinism test suite | :white_circle: | Run identical simulation across multiple environments, verify snapshot hashes match |
-| Document determinism guarantees | :white_circle: | Clearly document what is and isn't guaranteed (same browser = deterministic, cross-browser = best effort) |
+| Deterministic broad phase | :white_check_mark: | Ensure spatial grid produces identical pair order regardless of insertion order |
+| Deterministic solver | :white_check_mark: | Ensure contact/island iteration order is deterministic |
+| Avoid transcendental functions | :white_check_mark: | Replace `Math.sin`/`Math.cos`/`Math.atan2` in physics with deterministic approximations where needed |
+| Determinism test suite | :white_check_mark: | Run identical simulation across multiple environments, verify snapshot hashes match |
+| Document determinism guarantees | :white_check_mark: | Clearly document what is and isn't guaranteed (same browser = deterministic, cross-browser = best effort) |
 
 ### 7.5 Tests
 
 | Task | Status | Description |
 |------|--------|-------------|
-| Snapshot round-trip | :white_circle: | `restoreSnapshot(takeSnapshot())` produces identical simulation |
-| JSON round-trip | :white_circle: | `fromJSON(toJSON())` produces identical simulation |
-| Snapshot hash stability | :white_circle: | Same initial conditions → same hash after N frames |
-| Collision-only pipeline | :white_circle: | Detect overlaps without running dynamics |
-| Debug render all shapes | :white_circle: | Every shape type renders correct outline |
-| Determinism: 1000-frame replay | :white_circle: | Two identical simulations produce identical snapshot hashes at frame 1000 |
+| Snapshot round-trip | :white_check_mark: | `restoreSnapshot(takeSnapshot())` produces identical simulation |
+| JSON round-trip | :white_check_mark: | `fromJSON(toJSON())` produces identical simulation |
+| Snapshot hash stability | :white_check_mark: | Same initial conditions → same hash after N frames |
+| Collision-only pipeline | :white_check_mark: | Detect overlaps without running dynamics |
+| Debug render all shapes | :white_check_mark: | Every shape type renders correct outline |
+| Determinism: 1000-frame replay | :white_check_mark: | Two identical simulations produce identical snapshot hashes at frame 1000 |
 
 ---
 

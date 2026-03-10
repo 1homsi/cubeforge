@@ -261,6 +261,36 @@ export {
   polygonMassProperties,
   triangleMassProperties,
 } from '@cubeforge/physics'
+export { CollisionPipeline } from '@cubeforge/physics'
+export type { CollisionPair, CollisionPipelineResult } from '@cubeforge/physics'
+export {
+  takeSnapshot,
+  restoreSnapshot,
+  snapshotToJSON,
+  snapshotFromJSON,
+  snapshotToBytes,
+  snapshotFromBytes,
+  snapshotHash,
+} from '@cubeforge/physics'
+export type { PhysicsSnapshot, PhysicsBodySnapshot, JointSnapshot } from '@cubeforge/physics'
+export { DebugRenderPipeline } from '@cubeforge/physics'
+export type {
+  DebugLine,
+  DebugCircle,
+  DebugPoint,
+  DebugRenderOutput,
+  DebugRenderFlags,
+  DebugRenderColors,
+  DebugRenderBackend,
+} from '@cubeforge/physics'
+export {
+  sortEntities,
+  generateDeterministicPairs,
+  pairKey,
+  deterministicAtan2,
+  deterministicSqrt,
+  KahanSum,
+} from '@cubeforge/physics'
 export type {
   InputManager,
   ActionBindings,
