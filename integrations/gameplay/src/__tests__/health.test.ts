@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import React, { useRef } from 'react'
+import React from 'react'
 import { renderHook, act } from '@testing-library/react'
 import { ECSWorld, EventBus, AssetManager } from '@cubeforge/core'
 import { EngineContext, EntityContext } from '@cubeforge/context'
