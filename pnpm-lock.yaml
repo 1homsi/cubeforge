@@ -99,6 +99,9 @@ importers:
 
   integrations/devtools:
     dependencies:
+      '@cubeforge/audio':
+        specifier: workspace:*
+        version: link:../../packages/audio
       '@cubeforge/context':
         specifier: workspace:*
         version: link:../context

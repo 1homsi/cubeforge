@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { WorldSnapshot } from '@cubeforge/core'
 import type { ECSWorld, GameLoop } from '@cubeforge/core'
 import type { EngineState } from '@cubeforge/context'
+import { globalInputContext } from '@cubeforge/input'
+import { _getBufferCache } from '@cubeforge/audio'
 
 export const MAX_DEVTOOLS_FRAMES = 600 // 10s at 60fps
 
@@ -197,7 +199,19 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
   const [contactLog, setContactLog] = useState<ContactLogEntry[]>([])
   const [showNavGrid, setShowNavGrid] = useState(false)
   const [showContactFlash, setShowContactFlash] = useState(false)
+  const [hidden, setHidden] = useState(false)
   const frameRef = useRef(0)
+
+  // Keyboard shortcut: backtick toggles the overlay visibility
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === '`' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        setHidden((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Subscribe to new frame notifications
   useEffect(() => {
@@ -355,17 +369,35 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
 
   // Input state
   const activeKeys = engine ? getActiveKeys(engine) : []
-  const inputCtx = (() => {
-    try {
-      // Access globalInputContext from input package via engine if available
-      return 'gameplay'
-    } catch {
-      return '—'
-    }
-  })()
+  const inputCtx = globalInputContext.active
 
   // Asset list
   const assetCache: ReadonlyMap<string, HTMLImageElement> = engine?.assets ? engine.assets.getLoadedImages() : new Map()
+  const audioCache = _getBufferCache()
+
+  if (hidden) {
+    return createPortal(
+      <div
+        style={{ ...s.overlay, cursor: 'pointer' }}
+        title="Press ` to show DevTools"
+        onClick={() => setHidden(false)}
+      >
+        <div
+          style={{
+            ...s.bar,
+            justifyContent: 'center',
+            opacity: 0.4,
+            fontSize: 9,
+            letterSpacing: '0.1em',
+            color: C.muted,
+          }}
+        >
+          DEV TOOLS HIDDEN — press ` to show
+        </div>
+      </div>,
+      document.body,
+    )
+  }
 
   return createPortal(
     <div style={s.overlay}>
@@ -401,7 +433,7 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
               onToggleFlash={() => setShowContactFlash((v) => !v)}
             />
           )}
-          {activeTab === 'assets' && <AssetsTab assetCache={assetCache} />}
+          {activeTab === 'assets' && <AssetsTab assetCache={assetCache} audioCache={audioCache} />}
           {activeTab === 'animation' && <AnimationTab entities={entities} />}
         </div>
       )}
@@ -522,21 +554,44 @@ function EntitiesTab({
       </div>
       <div style={{ maxHeight: 140, overflowY: 'auto' }}>
         {entities.length === 0 && <div style={{ padding: '4px 14px', color: '#3d4666' }}>No entities</div>}
-        {entities.map((e) => (
-          <div key={e.id} style={s.row(selectedEntity === e.id)} onClick={() => onSelectEntity(e.id)}>
-            <span style={{ color: C.accent, minWidth: 28, fontSize: 10 }}>#{e.id}</span>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
-              {e.components.map((c) => (
-                <span key={c.type} style={s.pill}>
-                  {c.type}
-                </span>
-              ))}
+        {entities.map((e) => {
+          const tagComp = e.components.find((c) => c.type === 'Tag') as
+            | { tags?: string[]; tag?: string }
+            | undefined
+          const tagLabel = tagComp
+            ? (tagComp.tags ?? (tagComp.tag ? [tagComp.tag] : [])).join(', ')
+            : null
+          return (
+            <div key={e.id} style={s.row(selectedEntity === e.id)} onClick={() => onSelectEntity(e.id)}>
+              <span style={{ color: C.accent, minWidth: 28, fontSize: 10 }}>#{e.id}</span>
+              {tagLabel && (
+                <span style={{ color: C.text, fontSize: 10, fontWeight: 600 }}>{tagLabel}</span>
+              )}
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+                {e.components.map((c) => (
+                  <span key={c.type} style={s.pill}>
+                    {c.type}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
       {selectedEntityData && (
         <div style={s.detailPanel}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+            <button
+              style={s.btn()}
+              onClick={() => {
+                navigator.clipboard
+                  ?.writeText(JSON.stringify({ id: selectedEntityData.id, components: selectedEntityData.components }, null, 2))
+                  .catch(() => {})
+              }}
+            >
+              Copy JSON
+            </button>
+          </div>
           {selectedEntityData.components.map((comp) => (
             <div key={comp.type} style={{ marginBottom: 10 }}>
               <div style={{ color: C.accent, fontSize: 10, fontWeight: 700, marginBottom: 4 }}>{comp.type}</div>
@@ -725,19 +780,55 @@ function ContactsTab({
   )
 }
 
-function AssetsTab({ assetCache }: { assetCache: ReadonlyMap<string, HTMLImageElement> }) {
-  const entries = Array.from(assetCache.entries())
+function AssetsTab({
+  assetCache,
+  audioCache,
+}: {
+  assetCache: ReadonlyMap<string, HTMLImageElement>
+  audioCache: ReadonlyMap<string, AudioBuffer>
+}) {
+  const imageEntries = Array.from(assetCache.entries())
+  const audioEntries = Array.from(audioCache.entries())
+  const total = imageEntries.length + audioEntries.length
+
   return (
     <div style={{ padding: '8px 0' }}>
-      <div style={{ padding: '0 14px 8px', color: C.muted, fontSize: 9 }}>{entries.length} loaded images</div>
-      {entries.length === 0 ? (
+      <div style={{ padding: '0 14px 8px', color: C.muted, fontSize: 9 }}>
+        {total} loaded assets — {imageEntries.length} images, {audioEntries.length} audio
+      </div>
+      {total === 0 ? (
         <div style={{ padding: '4px 14px', color: C.muted }}>No assets loaded</div>
       ) : (
-        entries.map(([src, img]) => {
-          const loaded = img.complete && img.naturalWidth > 0
-          return (
+        <>
+          {imageEntries.map(([src, img]) => {
+            const loaded = img.complete && img.naturalWidth > 0
+            return (
+              <div key={src} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span style={{ color: C.muted, fontSize: 9, minWidth: 16 }}>IMG</span>
+                <span style={{ color: loaded ? C.ok : C.warn, fontSize: 9, minWidth: 10 }}>{loaded ? '✓' : '✗'}</span>
+                <span
+                  style={{
+                    color: C.text,
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap' as const,
+                  }}
+                >
+                  {src.split('/').pop()}
+                </span>
+                {loaded && (
+                  <span style={{ color: C.muted, fontSize: 9 }}>
+                    {img.naturalWidth}×{img.naturalHeight}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+          {audioEntries.map(([src, buf]) => (
             <div key={src} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
-              <span style={{ color: loaded ? C.ok : C.warn, fontSize: 9, minWidth: 10 }}>{loaded ? '✓' : '✗'}</span>
+              <span style={{ color: C.accent, fontSize: 9, minWidth: 16 }}>SFX</span>
+              <span style={{ color: C.ok, fontSize: 9, minWidth: 10 }}>✓</span>
               <span
                 style={{
                   color: C.text,
@@ -749,14 +840,10 @@ function AssetsTab({ assetCache }: { assetCache: ReadonlyMap<string, HTMLImageEl
               >
                 {src.split('/').pop()}
               </span>
-              {loaded && (
-                <span style={{ color: C.muted, fontSize: 9 }}>
-                  {img.naturalWidth}×{img.naturalHeight}
-                </span>
-              )}
+              <span style={{ color: C.muted, fontSize: 9 }}>{buf.duration.toFixed(2)}s</span>
             </div>
-          )
-        })
+          ))}
+        </>
       )}
     </div>
   )

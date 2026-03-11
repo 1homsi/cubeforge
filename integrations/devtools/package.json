@@ -19,6 +19,7 @@
   },
   "files": ["dist"],
   "dependencies": {
+    "@cubeforge/audio": "workspace:*",
     "@cubeforge/context": "workspace:*",
     "@cubeforge/core": "workspace:*",
     "@cubeforge/input": "workspace:*",

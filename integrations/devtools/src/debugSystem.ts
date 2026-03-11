@@ -88,6 +88,56 @@ export class DebugSystem implements System {
       }
     }
 
+    // CapsuleCollider debug wireframes
+    for (const id of world.query('Transform', 'CapsuleCollider')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const c = world.getComponent<{
+        type: string
+        width: number
+        height: number
+        offsetX: number
+        offsetY: number
+        isTrigger?: boolean
+        layer?: string
+      }>(id, 'CapsuleCollider')!
+
+      if (c.layer) {
+        ctx.strokeStyle = debugLayerColor(c.layer, c.isTrigger ? 0.6 : 0.85)
+      } else {
+        ctx.strokeStyle = c.isTrigger ? 'rgba(255,200,0,0.85)' : 'rgba(0,255,120,0.85)'
+      }
+      ctx.lineWidth = lw
+
+      const cx = t.x + c.offsetX
+      const cy = t.y + c.offsetY
+      const hw = c.width / 2
+      const hh = c.height / 2
+      const r = hw // capsule radius = half width
+
+      // Two vertical side lines
+      ctx.beginPath()
+      ctx.moveTo(cx - hw, cy - hh + r)
+      ctx.lineTo(cx - hw, cy + hh - r)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(cx + hw, cy - hh + r)
+      ctx.lineTo(cx + hw, cy + hh - r)
+      ctx.stroke()
+      // Top semicircle
+      ctx.beginPath()
+      ctx.arc(cx, cy - hh + r, r, Math.PI, 0)
+      ctx.stroke()
+      // Bottom semicircle
+      ctx.beginPath()
+      ctx.arc(cx, cy + hh - r, r, 0, Math.PI)
+      ctx.stroke()
+
+      // Entity ID label
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'
+      ctx.font = `${10 / zoom}px monospace`
+      ctx.fillText(String(id), cx - hw + lw, cy - hh - lw * 2)
+    }
+
     // CircleCollider debug wireframes
     for (const id of world.query('Transform', 'CircleCollider')) {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
@@ -128,6 +178,41 @@ export class DebugSystem implements System {
         ctx.strokeRect(b.x, b.y, b.width, b.height)
         ctx.setLineDash([])
       }
+    }
+
+    // Velocity arrows for dynamic RigidBody entities
+    for (const id of world.query('Transform', 'RigidBody')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const rb = world.getComponent<{ type: string; vx: number; vy: number; isStatic?: boolean }>(id, 'RigidBody')!
+      if (rb.isStatic) continue
+
+      const speed = Math.sqrt(rb.vx * rb.vx + rb.vy * rb.vy)
+      if (speed < 1) continue
+
+      const scale = 0.05 // pixels of arrow per unit of velocity
+      const ax = t.x
+      const ay = t.y
+      const bx = ax + rb.vx * scale
+      const by = ay + rb.vy * scale
+
+      // Arrow shaft
+      const alpha = Math.min(1, speed / 200)
+      ctx.strokeStyle = `rgba(79,195,247,${alpha.toFixed(2)})`
+      ctx.lineWidth = lw
+      ctx.beginPath()
+      ctx.moveTo(ax, ay)
+      ctx.lineTo(bx, by)
+      ctx.stroke()
+
+      // Arrowhead
+      const angle = Math.atan2(rb.vy, rb.vx)
+      const headLen = 6 / zoom
+      ctx.beginPath()
+      ctx.moveTo(bx, by)
+      ctx.lineTo(bx - headLen * Math.cos(angle - 0.4), by - headLen * Math.sin(angle - 0.4))
+      ctx.moveTo(bx, by)
+      ctx.lineTo(bx - headLen * Math.cos(angle + 0.4), by - headLen * Math.sin(angle + 0.4))
+      ctx.stroke()
     }
 
     ctx.restore()
