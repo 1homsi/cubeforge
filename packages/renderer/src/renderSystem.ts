@@ -43,99 +43,6 @@ interface RigidBodyShape {
   vy: number
 }
 
-function drawShape(
-  ctx: CanvasRenderingContext2D,
-  shape: string,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  borderRadius: number,
-  starPoints: number,
-  starInnerRadius: number,
-): void {
-  const cx = x + w / 2
-  const cy = y + h / 2
-  switch (shape) {
-    case 'circle': {
-      const r = Math.min(w, h) / 2
-      ctx.beginPath()
-      ctx.arc(cx, cy, r, 0, Math.PI * 2)
-      break
-    }
-    case 'ellipse': {
-      ctx.beginPath()
-      ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2)
-      break
-    }
-    case 'roundedRect': {
-      const r = Math.min(borderRadius, w / 2, h / 2)
-      ctx.beginPath()
-      ctx.roundRect(x, y, w, h, r)
-      break
-    }
-    case 'triangle': {
-      ctx.beginPath()
-      ctx.moveTo(cx, y)
-      ctx.lineTo(x + w, y + h)
-      ctx.lineTo(x, y + h)
-      ctx.closePath()
-      break
-    }
-    case 'pentagon': {
-      drawRegularPolygon(ctx, cx, cy, Math.min(w, h) / 2, 5)
-      break
-    }
-    case 'hexagon': {
-      drawRegularPolygon(ctx, cx, cy, Math.min(w, h) / 2, 6)
-      break
-    }
-    case 'star': {
-      drawStar(ctx, cx, cy, Math.min(w, h) / 2, starPoints, starInnerRadius)
-      break
-    }
-    default: {
-      // 'rect' fallback
-      ctx.beginPath()
-      ctx.rect(x, y, w, h)
-      break
-    }
-  }
-}
-
-function drawRegularPolygon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, sides: number): void {
-  ctx.beginPath()
-  for (let i = 0; i < sides; i++) {
-    const angle = (i * 2 * Math.PI) / sides - Math.PI / 2
-    const px = cx + r * Math.cos(angle)
-    const py = cy + r * Math.sin(angle)
-    if (i === 0) ctx.moveTo(px, py)
-    else ctx.lineTo(px, py)
-  }
-  ctx.closePath()
-}
-
-function drawStar(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  r: number,
-  points: number,
-  innerRatio: number,
-): void {
-  const inner = r * innerRatio
-  ctx.beginPath()
-  for (let i = 0; i < points * 2; i++) {
-    const angle = (i * Math.PI) / points - Math.PI / 2
-    const radius = i % 2 === 0 ? r : inner
-    const px = cx + radius * Math.cos(angle)
-    const py = cy + radius * Math.sin(angle)
-    if (i === 0) ctx.moveTo(px, py)
-    else ctx.lineTo(px, py)
-  }
-  ctx.closePath()
-}
-
 export class RenderSystem implements System {
   /** Default background used when no Camera2D component exists */
   defaultBackground = '#1a1a2e'
@@ -531,30 +438,9 @@ export class RenderSystem implements System {
         } else {
           ctx.drawImage(sprite.image, drawX, drawY, sprite.width, sprite.height)
         }
-      } else if (sprite.customDraw) {
-        ctx.save()
-        ctx.translate(drawX, drawY)
-        sprite.customDraw(ctx, sprite.width, sprite.height)
-        ctx.restore()
       } else {
         ctx.fillStyle = sprite.color
-        drawShape(
-          ctx,
-          sprite.shape,
-          drawX,
-          drawY,
-          sprite.width,
-          sprite.height,
-          sprite.borderRadius,
-          sprite.starPoints,
-          sprite.starInnerRadius,
-        )
-        ctx.fill()
-        if (sprite.strokeColor && sprite.strokeWidth > 0) {
-          ctx.strokeStyle = sprite.strokeColor
-          ctx.lineWidth = sprite.strokeWidth
-          ctx.stroke()
-        }
+        ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
       }
 
       // Tint overlay

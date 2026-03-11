@@ -41,6 +41,15 @@ interface SpriteComponent {
   sampling?: Sampling
   blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
   layer: string
+  shape?: string
+  borderRadius?: number
+  strokeColor?: string
+  strokeWidth?: number
+  starPoints?: number
+  starInnerRadius?: number
+  opacity?: number
+  tint?: string
+  tintOpacity?: number
 }
 
 interface Camera2DComponent {
@@ -238,6 +247,112 @@ function createWhiteTexture(gl: WebGL2RenderingContext): WebGLTexture {
   return tex
 }
 
+// ── Shape texture helpers ─────────────────────────────────────────────────────
+
+const SHAPE_TEX_SIZE = 128 // resolution of generated shape textures
+
+function drawShapeOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  shape: string,
+  w: number,
+  h: number,
+  borderRadius: number,
+  starPoints: number,
+  starInnerRadius: number,
+): void {
+  const cx = w / 2
+  const cy = h / 2
+  switch (shape) {
+    case 'circle': {
+      const r = Math.min(w, h) / 2
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      break
+    }
+    case 'ellipse': {
+      ctx.beginPath()
+      ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2)
+      break
+    }
+    case 'roundedRect': {
+      const r = Math.min(borderRadius, w / 2, h / 2)
+      ctx.beginPath()
+      ctx.roundRect(0, 0, w, h, r)
+      break
+    }
+    case 'triangle': {
+      ctx.beginPath()
+      ctx.moveTo(cx, 0)
+      ctx.lineTo(w, h)
+      ctx.lineTo(0, h)
+      ctx.closePath()
+      break
+    }
+    case 'pentagon': {
+      drawRegularPolygonPath(ctx, cx, cy, Math.min(w, h) / 2, 5)
+      break
+    }
+    case 'hexagon': {
+      drawRegularPolygonPath(ctx, cx, cy, Math.min(w, h) / 2, 6)
+      break
+    }
+    case 'star': {
+      drawStarPath(ctx, cx, cy, Math.min(w, h) / 2, starPoints, starInnerRadius)
+      break
+    }
+    default: {
+      ctx.beginPath()
+      ctx.rect(0, 0, w, h)
+      break
+    }
+  }
+}
+
+function drawRegularPolygonPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, sides: number): void {
+  ctx.beginPath()
+  for (let i = 0; i < sides; i++) {
+    const angle = (i * 2 * Math.PI) / sides - Math.PI / 2
+    const px = cx + r * Math.cos(angle)
+    const py = cy + r * Math.sin(angle)
+    if (i === 0) ctx.moveTo(px, py)
+    else ctx.lineTo(px, py)
+  }
+  ctx.closePath()
+}
+
+function drawStarPath(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  points: number,
+  innerRatio: number,
+): void {
+  const inner = r * innerRatio
+  ctx.beginPath()
+  for (let i = 0; i < points * 2; i++) {
+    const angle = (i * Math.PI) / points - Math.PI / 2
+    const radius = i % 2 === 0 ? r : inner
+    const px = cx + radius * Math.cos(angle)
+    const py = cy + radius * Math.sin(angle)
+    if (i === 0) ctx.moveTo(px, py)
+    else ctx.lineTo(px, py)
+  }
+  ctx.closePath()
+}
+
+/** Cache key for a shape texture */
+function getShapeKey(sprite: SpriteComponent): string {
+  const shape = sprite.shape ?? 'rect'
+  if (shape === 'rect' && !sprite.borderRadius && !sprite.strokeColor) return ''
+  const br = shape === 'roundedRect' ? (sprite.borderRadius ?? 0) : 0
+  const sp = shape === 'star' ? (sprite.starPoints ?? 5) : 0
+  const sir = shape === 'star' ? (sprite.starInnerRadius ?? 0.4) : 0
+  const stroke =
+    sprite.strokeColor && (sprite.strokeWidth ?? 0) > 0 ? `|s:${sprite.strokeColor}:${sprite.strokeWidth}` : ''
+  return `__shape__:${shape}:${br}:${sp}:${sir}${stroke}`
+}
+
 // ── Sprite helpers ────────────────────────────────────────────────────────────
 
 function getSamplingKey(sampling?: Sampling): string {
@@ -251,6 +366,9 @@ function getTextureKey(sprite: SpriteComponent): string {
   const samplingKey = getSamplingKey(sprite.sampling)
   const suffix = samplingKey ? `:s=${samplingKey}` : ''
   if (src) return sprite.tileX || sprite.tileY ? `${src}:repeat${suffix}` : `${src}${suffix}`
+  // Non-rect shapes get their own texture key
+  const shapeKey = getShapeKey(sprite)
+  if (shapeKey) return shapeKey
   return `__color__:${sprite.color}${suffix}`
 }
 
@@ -327,6 +445,9 @@ export class RenderSystem implements System {
   private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number }>()
   /** Insertion-order key list for LRU-style eviction. */
   private readonly textureCacheKeys: string[] = []
+
+  // ── Shape texture cache ─────────────────────────────────────────────────
+  private readonly shapeTextures = new Map<string, WebGLTexture>()
 
   // ── Render layer manager ────────────────────────────────────────────────
   readonly layers: RenderLayerManager = createRenderLayerManager()
@@ -615,6 +736,51 @@ export class RenderSystem implements System {
     return entry
   }
 
+  // ── Shape texture generation ──────────────────────────────────────────────
+
+  private getOrCreateShapeTexture(sprite: SpriteComponent): WebGLTexture {
+    const key = getShapeKey(sprite)
+    const cached = this.shapeTextures.get(key)
+    if (cached) return cached
+
+    const size = SHAPE_TEX_SIZE
+    const offscreen = document.createElement('canvas')
+    offscreen.width = size
+    offscreen.height = size
+    const ctx2d = offscreen.getContext('2d')!
+
+    // Draw white shape — color tinting is handled by the instance color in the shader
+    drawShapeOnCanvas(
+      ctx2d,
+      sprite.shape ?? 'rect',
+      size,
+      size,
+      ((sprite.borderRadius ?? 0) / Math.max(sprite.width, sprite.height)) * size,
+      sprite.starPoints ?? 5,
+      sprite.starInnerRadius ?? 0.4,
+    )
+    ctx2d.fillStyle = '#ffffff'
+    ctx2d.fill()
+
+    if (sprite.strokeColor && (sprite.strokeWidth ?? 0) > 0) {
+      ctx2d.strokeStyle = '#ffffff'
+      ctx2d.lineWidth = ((sprite.strokeWidth ?? 0) / Math.max(sprite.width, sprite.height)) * size
+      ctx2d.stroke()
+    }
+
+    const gl = this.gl
+    const tex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+    this.shapeTextures.set(key, tex)
+    return tex
+  }
+
   // ── Texture sampling helper ────────────────────────────────────────────────
 
   /** Apply min/mag filter params to the currently bound texture. */
@@ -648,14 +814,29 @@ export class RenderSystem implements System {
 
   // ── Instanced draw call ────────────────────────────────────────────────────
 
-  private flush(count: number, textureKey: string, sampling?: Sampling, blendMode?: string): void {
+  private flush(
+    count: number,
+    textureKey: string,
+    sampling?: Sampling,
+    blendMode?: string,
+    shapeSpriteRef?: SpriteComponent,
+  ): void {
     if (count === 0) return
     const { gl } = this
     if (blendMode && blendMode !== 'normal') this.applyBlendMode(blendMode)
     const isColor = textureKey.startsWith('__color__')
-    const tex = isColor ? this.whiteTexture : this.loadTexture(textureKey)
+    const isShape = textureKey.startsWith('__shape__')
+    let tex: WebGLTexture
+    if (isShape && shapeSpriteRef) {
+      tex = this.getOrCreateShapeTexture(shapeSpriteRef)
+    } else if (isColor) {
+      tex = this.whiteTexture
+    } else {
+      tex = this.loadTexture(textureKey)
+    }
     gl.bindTexture(gl.TEXTURE_2D, tex)
     this.applySampling(sampling)
+    // Shape textures need useTexture=1 so the alpha mask is applied via texture * color
     gl.uniform1i(this.uUseTexture, isColor ? 0 : 1)
     gl.bindVertexArray(this.quadVAO)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
@@ -974,11 +1155,12 @@ export class RenderSystem implements System {
     let batchKey = ''
     let batchSampling: Sampling | undefined
     let batchBlendMode: string = 'normal'
+    let batchShapeRef: SpriteComponent | undefined
 
     for (let i = 0; i <= renderables.length; i++) {
       // Sentinel: flush remaining batch at end of list
       if (i === renderables.length) {
-        this.flush(batchCount, batchKey, batchSampling, batchBlendMode)
+        this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
         break
       }
 
@@ -1038,12 +1220,14 @@ export class RenderSystem implements System {
 
       // Flush if texture group or blend mode changes, or buffer is full
       if (((key !== batchKey || spriteBlend !== batchBlendMode) && batchCount > 0) || batchCount >= MAX_INSTANCES) {
-        this.flush(batchCount, batchKey, batchSampling, batchBlendMode)
+        this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
         batchCount = 0
       }
       batchKey = key
       batchSampling = sprite.sampling
       batchBlendMode = spriteBlend
+      if (key.startsWith('__shape__')) batchShapeRef = sprite
+      else batchShapeRef = undefined
 
       const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')
       const scaleXMod = ss ? ss.currentScaleX : 1
@@ -1097,11 +1281,12 @@ export class RenderSystem implements System {
       if (!entry) continue
 
       // Flush any pending sprite batch first, then draw the text quad
-      this.flush(batchCount, batchKey, batchSampling, batchBlendMode)
+      this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
       batchCount = 0
       batchKey = ''
       batchSampling = undefined
       batchBlendMode = 'normal'
+      batchShapeRef = undefined
 
       // Write text as a single textured instance
       this.writeInstance(
