@@ -233,7 +233,15 @@ describe('steering', () => {
 
     it('averages push direction from multiple neighbors', () => {
       // Two neighbors: one left, one right → net force cancels → zero
-      const vel = separation({ x: 0, y: 0 }, [{ x: -10, y: 0 }, { x: 10, y: 0 }], 5, 50)
+      const vel = separation(
+        { x: 0, y: 0 },
+        [
+          { x: -10, y: 0 },
+          { x: 10, y: 0 },
+        ],
+        5,
+        50,
+      )
       expect(vel.x).toBeCloseTo(0)
       expect(vel.y).toBeCloseTo(0)
     })
@@ -253,7 +261,14 @@ describe('steering', () => {
 
     it('computes the correct centroid for multiple neighbors', () => {
       // Two neighbors at (-10,0) and (10,0) → centroid at (0,0) = self → zero vel
-      const vel = cohesion({ x: 0, y: 0 }, [{ x: -10, y: 0 }, { x: 10, y: 0 }], 5)
+      const vel = cohesion(
+        { x: 0, y: 0 },
+        [
+          { x: -10, y: 0 },
+          { x: 10, y: 0 },
+        ],
+        5,
+      )
       expect(vel).toEqual({ x: 0, y: 0 })
     })
 
@@ -277,7 +292,13 @@ describe('steering', () => {
 
     it('averages directions of multiple neighbors', () => {
       // One up, one right → 45° diagonal
-      const vel = alignment([{ x: 0, y: -10 }, { x: 10, y: 0 }], 4)
+      const vel = alignment(
+        [
+          { x: 0, y: -10 },
+          { x: 10, y: 0 },
+        ],
+        4,
+      )
       expect(vel.x).toBeGreaterThan(0)
       expect(vel.y).toBeLessThan(0)
       expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(4)
@@ -285,12 +306,24 @@ describe('steering', () => {
 
     it('cancels when neighbors move in opposite directions', () => {
       // One left, one right → zero net
-      const vel = alignment([{ x: -5, y: 0 }, { x: 5, y: 0 }], 4)
+      const vel = alignment(
+        [
+          { x: -5, y: 0 },
+          { x: 5, y: 0 },
+        ],
+        4,
+      )
       expect(vel).toEqual({ x: 0, y: 0 })
     })
 
     it('has correct speed magnitude', () => {
-      const vel = alignment([{ x: 3, y: 4 }, { x: 0, y: 10 }], 7)
+      const vel = alignment(
+        [
+          { x: 3, y: 4 },
+          { x: 0, y: 10 },
+        ],
+        7,
+      )
       expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(7)
     })
   })

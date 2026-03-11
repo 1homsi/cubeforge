@@ -53,8 +53,7 @@ export function useAISteering(): AISteering {
     [],
   )
   const separation$ = useCallback(
-    (pos: Vec2Like, neighbors: Vec2Like[], speed: number, radius: number) =>
-      separation(pos, neighbors, speed, radius),
+    (pos: Vec2Like, neighbors: Vec2Like[], speed: number, radius: number) => separation(pos, neighbors, speed, radius),
     [],
   )
   const cohesion$ = useCallback(

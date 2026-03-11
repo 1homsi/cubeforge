@@ -231,7 +231,17 @@ describe('tween', () => {
 
     it('completes and fires onComplete after delay + duration', () => {
       let fired = false
-      const t = tween(0, 100, 1, Ease.linear, () => {}, () => { fired = true }, { delay: 0.5 })
+      const t = tween(
+        0,
+        100,
+        1,
+        Ease.linear,
+        () => {},
+        () => {
+          fired = true
+        },
+        { delay: 0.5 },
+      )
       t.update(1.5)
       expect(t.isComplete).toBe(true)
       expect(fired).toBe(true)
@@ -242,7 +252,17 @@ describe('tween', () => {
     it('plays twice with repeat:1', () => {
       const completions: number[] = []
       let cycleEnd = 0
-      const t = tween(0, 10, 1, Ease.linear, (v) => { if (v >= 10) cycleEnd++ }, () => completions.push(1), { repeat: 1 })
+      const t = tween(
+        0,
+        10,
+        1,
+        Ease.linear,
+        (v) => {
+          if (v >= 10) cycleEnd++
+        },
+        () => completions.push(1),
+        { repeat: 1 },
+      )
       t.update(1.0) // first pass done
       expect(t.isComplete).toBe(false)
       t.update(1.0) // second pass done
@@ -252,7 +272,17 @@ describe('tween', () => {
 
     it('loops indefinitely with repeat:Infinity', () => {
       let count = 0
-      const t = tween(0, 10, 1, Ease.linear, (v) => { if (v >= 9.9) count++ }, undefined, { repeat: Infinity })
+      const t = tween(
+        0,
+        10,
+        1,
+        Ease.linear,
+        (v) => {
+          if (v >= 9.9) count++
+        },
+        undefined,
+        { repeat: Infinity },
+      )
       for (let i = 0; i < 5; i++) t.update(1.0)
       expect(t.isComplete).toBe(false)
       expect(count).toBeGreaterThanOrEqual(5)
@@ -260,7 +290,15 @@ describe('tween', () => {
 
     it('onComplete fires only once even with repeat:2', () => {
       let fired = 0
-      const t = tween(0, 10, 1, Ease.linear, () => {}, () => fired++, { repeat: 2 })
+      const t = tween(
+        0,
+        10,
+        1,
+        Ease.linear,
+        () => {},
+        () => fired++,
+        { repeat: 2 },
+      )
       t.update(1.0)
       t.update(1.0)
       t.update(1.0)
