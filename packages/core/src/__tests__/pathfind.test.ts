@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createNavGrid, findPath, setWalkable } from '../nav/pathfind'
 
 function cells(path: { x: number; y: number }[], cellSize = 10): Array<[number, number]> {
-  return path.map(point => [Math.floor(point.x / cellSize), Math.floor(point.y / cellSize)])
+  return path.map((point) => [Math.floor(point.x / cellSize), Math.floor(point.y / cellSize)])
 }
 
 describe('pathfind', () => {
