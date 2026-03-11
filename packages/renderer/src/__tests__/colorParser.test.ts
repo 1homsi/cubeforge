@@ -28,14 +28,14 @@ describe('parseCSSColor', () => {
     })
 
     it('parses #00ff00 as green', () => {
-      const [r, g, b, a] = parseCSSColor('#00ff00')
+      const [r, g, b] = parseCSSColor('#00ff00')
       expect(r).toBe(0)
       expect(g).toBe(1)
       expect(b).toBe(0)
     })
 
     it('parses #0000ff as blue', () => {
-      const [r, g, b, a] = parseCSSColor('#0000ff')
+      const [r, g, b] = parseCSSColor('#0000ff')
       expect(r).toBe(0)
       expect(g).toBe(0)
       expect(b).toBe(1)
