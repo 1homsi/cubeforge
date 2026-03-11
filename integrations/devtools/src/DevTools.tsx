@@ -555,18 +555,12 @@ function EntitiesTab({
       <div style={{ maxHeight: 140, overflowY: 'auto' }}>
         {entities.length === 0 && <div style={{ padding: '4px 14px', color: '#3d4666' }}>No entities</div>}
         {entities.map((e) => {
-          const tagComp = e.components.find((c) => c.type === 'Tag') as
-            | { tags?: string[]; tag?: string }
-            | undefined
-          const tagLabel = tagComp
-            ? (tagComp.tags ?? (tagComp.tag ? [tagComp.tag] : [])).join(', ')
-            : null
+          const tagComp = e.components.find((c) => c.type === 'Tag') as { tags?: string[]; tag?: string } | undefined
+          const tagLabel = tagComp ? (tagComp.tags ?? (tagComp.tag ? [tagComp.tag] : [])).join(', ') : null
           return (
             <div key={e.id} style={s.row(selectedEntity === e.id)} onClick={() => onSelectEntity(e.id)}>
               <span style={{ color: C.accent, minWidth: 28, fontSize: 10 }}>#{e.id}</span>
-              {tagLabel && (
-                <span style={{ color: C.text, fontSize: 10, fontWeight: 600 }}>{tagLabel}</span>
-              )}
+              {tagLabel && <span style={{ color: C.text, fontSize: 10, fontWeight: 600 }}>{tagLabel}</span>}
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
                 {e.components.map((c) => (
                   <span key={c.type} style={s.pill}>
@@ -585,7 +579,9 @@ function EntitiesTab({
               style={s.btn()}
               onClick={() => {
                 navigator.clipboard
-                  ?.writeText(JSON.stringify({ id: selectedEntityData.id, components: selectedEntityData.components }, null, 2))
+                  ?.writeText(
+                    JSON.stringify({ id: selectedEntityData.id, components: selectedEntityData.components }, null, 2),
+                  )
                   .catch(() => {})
               }}
             >
