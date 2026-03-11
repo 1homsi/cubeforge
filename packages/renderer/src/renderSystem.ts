@@ -380,6 +380,11 @@ export class RenderSystem implements System {
         transform.scaleY * (sprite.flipY ? -1 : 1) * scaleYMod,
       )
 
+      // Overall opacity
+      if (sprite.opacity != null && sprite.opacity < 1) {
+        ctx.globalAlpha = sprite.opacity
+      }
+
       // Blend mode
       const blendMode = sprite.blendMode ?? 'normal'
       if (blendMode !== 'normal') {
@@ -438,10 +443,11 @@ export class RenderSystem implements System {
       // Tint overlay
       if (sprite.tint) {
         ctx.globalCompositeOperation = 'source-atop'
-        ctx.globalAlpha = sprite.tintOpacity ?? 0.3
+        const baseAlpha = sprite.opacity ?? 1
+        ctx.globalAlpha = (sprite.tintOpacity ?? 0.3) * baseAlpha
         ctx.fillStyle = sprite.tint
         ctx.fillRect(drawX, drawY, sprite.width, sprite.height)
-        ctx.globalAlpha = 1
+        ctx.globalAlpha = baseAlpha
         ctx.globalCompositeOperation = 'source-over'
       }
 

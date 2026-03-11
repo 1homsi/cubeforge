@@ -36,6 +36,8 @@ interface SpriteProps {
   tint?: string
   /** Tint opacity 0-1 */
   tintOpacity?: number
+  /** Overall opacity 0-1 (default 1) */
+  opacity?: number
 }
 
 export function Sprite({
@@ -66,6 +68,7 @@ export function Sprite({
   layer = 'default',
   tint,
   tintOpacity,
+  opacity = 1,
 }: SpriteProps) {
   const resolvedFrameIndex = atlas && frame != null ? (atlas[frame] ?? 0) : frameIndex
   const engine = useContext(EngineContext)!
@@ -109,6 +112,7 @@ export function Sprite({
       layer,
       tint,
       tintOpacity,
+      opacity,
     })
     engine.ecs.addComponent(entityId, comp)
 
@@ -145,7 +149,22 @@ export function Sprite({
     comp.layer = layer
     comp.tint = tint
     comp.tintOpacity = tintOpacity
-  }, [color, visible, flipX, flipY, zIndex, resolvedFrameIndex, blendMode, layer, tint, tintOpacity, engine, entityId])
+    comp.opacity = opacity
+  }, [
+    color,
+    visible,
+    flipX,
+    flipY,
+    zIndex,
+    resolvedFrameIndex,
+    blendMode,
+    layer,
+    tint,
+    tintOpacity,
+    opacity,
+    engine,
+    entityId,
+  ])
 
   return null
 }

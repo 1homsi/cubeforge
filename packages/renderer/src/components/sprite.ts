@@ -57,6 +57,8 @@ export interface SpriteComponent extends Component {
   tint?: string
   /** Tint opacity 0-1 */
   tintOpacity?: number
+  /** Overall opacity 0-1 (default 1) */
+  opacity: number
 }
 
 export function createSprite(opts: Partial<SpriteComponent> & { width: number; height: number }): SpriteComponent {
@@ -74,6 +76,7 @@ export function createSprite(opts: Partial<SpriteComponent> & { width: number; h
     frameIndex: 0,
     blendMode: 'normal',
     layer: 'default',
+    opacity: 1,
     ...opts,
   }
 }
