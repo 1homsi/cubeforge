@@ -287,7 +287,11 @@ describe('Audio system', () => {
     it('fires when a source ends naturally', async () => {
       const { useSound } = await import('../useSound')
       let fired = false
-      const controls = useSound('/sfx.wav', { onEnded: () => { fired = true } })
+      const controls = useSound('/sfx.wav', {
+        onEnded: () => {
+          fired = true
+        },
+      })
       flushEffects()
       await new Promise((r) => setTimeout(r, 10))
       controls.play()
@@ -298,7 +302,11 @@ describe('Audio system', () => {
     it('does not fire when stop() is called manually', async () => {
       const { useSound } = await import('../useSound')
       let fired = false
-      const controls = useSound('/sfx.wav', { onEnded: () => { fired = true } })
+      const controls = useSound('/sfx.wav', {
+        onEnded: () => {
+          fired = true
+        },
+      })
       flushEffects()
       await new Promise((r) => setTimeout(r, 10))
       controls.play()
