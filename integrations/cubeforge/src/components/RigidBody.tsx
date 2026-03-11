@@ -55,7 +55,7 @@ export function RigidBody({
   vy = 0,
   lockX = false,
   lockY = false,
-  lockRotation = false,
+  lockRotation = true,
   ccd = false,
   angularVelocity = 0,
   angularDamping = 0,
