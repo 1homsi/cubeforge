@@ -8,7 +8,7 @@ export class Canvas2DRenderer {
   }
 
   clear(color?: string): void {
-    if (color) {
+    if (color && color !== 'transparent') {
       this.ctx.fillStyle = color
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
     } else {
