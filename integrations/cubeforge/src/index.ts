@@ -108,6 +108,7 @@ export {
   useCircleStay,
   useCollidingWith,
 } from '@cubeforge/context'
+export type { ContactData } from '@cubeforge/context'
 
 // Gameplay hooks (via @cubeforge/gameplay)
 export { usePlatformerController } from '@cubeforge/gameplay'
@@ -170,6 +171,16 @@ export type { SpatialSoundControls, SpatialSoundOptions } from '@cubeforge/audio
 export { setListenerPosition, getListenerPosition } from '@cubeforge/audio'
 export { useMusic } from '@cubeforge/audio'
 export type { MusicControls, MusicOptions } from '@cubeforge/audio'
+export { useStreamedMusic } from '@cubeforge/audio'
+export type { StreamedMusicControls, StreamedMusicOptions } from '@cubeforge/audio'
+export { setGroupEffect, clearGroupEffect } from '@cubeforge/audio'
+export type {
+  GroupEffectOptions,
+  ReverbEffectOptions,
+  FilterEffectOptions,
+  CompressorEffectOptions,
+  DelayEffectOptions,
+} from '@cubeforge/audio'
 
 // DevTools (via @cubeforge/devtools)
 export type { DevToolsHandle } from '@cubeforge/devtools'
