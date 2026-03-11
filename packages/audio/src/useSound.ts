@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getAudioCtx, getGroupGainNode } from './audioContext'
+import { getAudioCtx, getGroupGainNode, registerGroupSource } from './audioContext'
 import type { AudioGroup } from './audioContext'
 
 // Re-export everything from audioContext for backwards compatibility
@@ -9,9 +9,11 @@ export {
   setGroupVolume,
   setMasterVolume,
   getGroupVolume,
+  getMasterVolume,
   setGroupMute,
   stopGroup,
   duck,
+  setGroupVolumeFaded,
 } from './audioContext'
 export type { AudioGroup } from './audioContext'
 
@@ -58,6 +60,7 @@ function releaseBuffer(src: string): void {
 interface PoolEntry {
   source: AudioBufferSourceNode
   gain: GainNode
+  unregister?: () => void
 }
 
 function createPoolEntry(
@@ -93,6 +96,11 @@ export interface SoundControls {
   /** Change this sound's volume (0–1). Does not affect the group or master volume. */
   setVolume(v: number): void
   /**
+   * Change the playback rate (and pitch). 1.0 = normal, 2.0 = double speed / octave up,
+   * 0.5 = half speed / octave down. Applies to all active instances.
+   */
+  setPlaybackRate(rate: number): void
+  /**
    * Fade in: ramp gain from 0 to the current volume over `duration` seconds.
    * Starts playback if not already playing.
    */
@@ -106,6 +114,8 @@ export interface SoundControls {
    * Fades out the current sound while fading in the new one.
    */
   crossfadeTo(src: string, duration: number): void
+  /** Whether at least one instance of this sound is currently playing. */
+  readonly isPlaying: boolean
 }
 
 export interface SoundOptions {
@@ -118,6 +128,15 @@ export interface SoundOptions {
    * @default 4
    */
   maxInstances?: number
+  /**
+   * Initial playback rate. 1.0 = normal speed, 2.0 = double speed.
+   * @default 1
+   */
+  playbackRate?: number
+  /**
+   * Called when a sound instance ends naturally (not when stopped manually).
+   */
+  onEnded?: () => void
 }
 
 /**
@@ -140,7 +159,12 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
   const volRef = useRef(opts.volume ?? 1)
   const loopRef = useRef(opts.loop ?? false)
   const groupRef = useRef(opts.group)
+  const rateRef = useRef(opts.playbackRate ?? 1)
+  const onEndedRef = useRef(opts.onEnded)
   const maxInstances = opts.maxInstances ?? 4
+
+  // Keep onEnded ref current without re-running the effect
+  onEndedRef.current = opts.onEnded
 
   useEffect(() => {
     let cancelled = false
@@ -152,7 +176,6 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
 
     return () => {
       cancelled = true
-      // Stop all active playback
       for (const entry of activeInstances.current) {
         try {
           entry.source.stop()
@@ -160,6 +183,7 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
           /* already stopped */
         }
         entry.gain.disconnect()
+        entry.unregister?.()
       }
       activeInstances.current = []
       bufferRef.current = null
@@ -171,6 +195,7 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     groupRef.current ? getGroupGainNode(groupRef.current) : getGroupGainNode('master')
 
   const removeInstance = (entry: PoolEntry): void => {
+    entry.unregister?.()
     const idx = activeInstances.current.indexOf(entry)
     if (idx !== -1) activeInstances.current.splice(idx, 1)
   }
@@ -179,14 +204,42 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     while (activeInstances.current.length >= maxInstances) {
       const oldest = activeInstances.current.shift()
       if (oldest) {
+        oldest.source.onended = null
         try {
           oldest.source.stop()
         } catch {
           /* already stopped */
         }
         oldest.gain.disconnect()
+        oldest.unregister?.()
       }
     }
+  }
+
+  const spawnEntry = (buf: AudioBuffer, startGain: number): PoolEntry => {
+    const ctx = getAudioCtx()
+    const dest = getDestination()
+    const entry = createPoolEntry(ctx, buf, loopRef.current, startGain, dest)
+    entry.source.playbackRate.value = rateRef.current
+
+    const group = groupRef.current ?? 'master'
+    entry.unregister = registerGroupSource(group, () => {
+      try {
+        entry.source.stop()
+      } catch {
+        /* already stopped */
+      }
+      removeInstance(entry)
+      entry.gain.disconnect()
+    })
+
+    entry.source.onended = () => {
+      removeInstance(entry)
+      entry.gain.disconnect()
+      onEndedRef.current?.()
+    }
+
+    return entry
   }
 
   const play = (playOpts?: { delay?: number }): void => {
@@ -196,31 +249,24 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
 
     stopOldestIfNeeded()
 
-    const entry = createPoolEntry(ctx, bufferRef.current, loopRef.current, volRef.current, getDestination())
-
-    entry.source.onended = () => {
-      removeInstance(entry)
-      entry.gain.disconnect()
-    }
-
+    const entry = spawnEntry(bufferRef.current, volRef.current)
     const delay = playOpts?.delay
-    if (delay && delay > 0) {
-      entry.source.start(ctx.currentTime + delay)
-    } else {
-      entry.source.start()
-    }
-
+    entry.source.start(delay && delay > 0 ? ctx.currentTime + delay : undefined)
     activeInstances.current.push(entry)
   }
 
   const stop = (): void => {
-    for (const entry of activeInstances.current) {
+    for (const entry of [...activeInstances.current]) {
+      // Clear onended before stopping so the user's onEnded callback only fires
+      // on natural completion, not on manual stop() calls.
+      entry.source.onended = null
       try {
         entry.source.stop()
       } catch {
         /* already stopped */
       }
       entry.gain.disconnect()
+      entry.unregister?.()
     }
     activeInstances.current = []
   }
@@ -232,23 +278,23 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     }
   }
 
+  const setPlaybackRate = (rate: number): void => {
+    rateRef.current = rate
+    for (const entry of activeInstances.current) {
+      entry.source.playbackRate.value = rate
+    }
+  }
+
   const fadeIn = (duration: number): void => {
     if (!bufferRef.current) return
     const ctx = getAudioCtx()
     if (ctx.state === 'suspended') void ctx.resume()
 
-    // Stop existing
     stop()
 
-    const entry = createPoolEntry(ctx, bufferRef.current, loopRef.current, 0, getDestination())
+    const entry = spawnEntry(bufferRef.current, 0)
     entry.gain.gain.setValueAtTime(0, ctx.currentTime)
     entry.gain.gain.linearRampToValueAtTime(volRef.current, ctx.currentTime + duration)
-
-    entry.source.onended = () => {
-      removeInstance(entry)
-      entry.gain.disconnect()
-    }
-
     entry.source.start()
     activeInstances.current.push(entry)
   }
@@ -285,15 +331,9 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
         const ctx = getAudioCtx()
         if (ctx.state === 'suspended') void ctx.resume()
 
-        const entry = createPoolEntry(ctx, buf, loopRef.current, 0, getDestination())
+        const entry = spawnEntry(buf, 0)
         entry.gain.gain.setValueAtTime(0, ctx.currentTime)
         entry.gain.gain.linearRampToValueAtTime(volRef.current, ctx.currentTime + duration)
-
-        entry.source.onended = () => {
-          removeInstance(entry)
-          entry.gain.disconnect()
-        }
-
         entry.source.start()
         activeInstances.current.push(entry)
         bufferRef.current = buf
@@ -301,5 +341,16 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
       .catch(console.error)
   }
 
-  return { play, stop, setVolume, fadeIn, fadeOut, crossfadeTo }
+  return {
+    play,
+    stop,
+    setVolume,
+    setPlaybackRate,
+    fadeIn,
+    fadeOut,
+    crossfadeTo,
+    get isPlaying() {
+      return activeInstances.current.length > 0
+    },
+  }
 }

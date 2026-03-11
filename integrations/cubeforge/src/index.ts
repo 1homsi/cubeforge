@@ -154,11 +154,22 @@ export type { ObjectPool } from '@cubeforge/gameplay'
 
 // Audio (via @cubeforge/audio)
 export { useSound } from '@cubeforge/audio'
-export type { SoundControls, AudioGroup } from '@cubeforge/audio'
-export { setGroupVolume, setMasterVolume, getGroupVolume, setGroupMute, stopGroup, duck } from '@cubeforge/audio'
+export type { SoundControls, SoundOptions, AudioGroup } from '@cubeforge/audio'
+export {
+  setGroupVolume,
+  setMasterVolume,
+  getMasterVolume,
+  getGroupVolume,
+  setGroupMute,
+  stopGroup,
+  duck,
+  setGroupVolumeFaded,
+} from '@cubeforge/audio'
 export { useSpatialSound } from '@cubeforge/audio'
 export type { SpatialSoundControls, SpatialSoundOptions } from '@cubeforge/audio'
 export { setListenerPosition, getListenerPosition } from '@cubeforge/audio'
+export { useMusic } from '@cubeforge/audio'
+export type { MusicControls, MusicOptions } from '@cubeforge/audio'
 
 // DevTools (via @cubeforge/devtools)
 export type { DevToolsHandle } from '@cubeforge/devtools'

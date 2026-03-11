@@ -14,6 +14,7 @@ function createMockSourceNode() {
   const node: any = {
     buffer: null,
     loop: false,
+    playbackRate: { value: 1 },
     connect: vi.fn(),
     start: vi.fn(),
     stop: vi.fn(),
@@ -239,6 +240,158 @@ describe('Audio system', () => {
 
       expect(mockCtx.listener.positionX.setValueAtTime).toHaveBeenCalledWith(100, mockCtx.currentTime)
       expect(mockCtx.listener.positionY.setValueAtTime).toHaveBeenCalledWith(200, mockCtx.currentTime)
+    })
+  })
+
+  describe('isPlaying', () => {
+    it('is false before play() is called', async () => {
+      const { useSound } = await import('../useSound')
+      const controls = useSound('/sfx.wav')
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      expect(controls.isPlaying).toBe(false)
+    })
+
+    it('is true after play() is called', async () => {
+      const { useSound } = await import('../useSound')
+      const controls = useSound('/sfx.wav')
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      expect(controls.isPlaying).toBe(true)
+    })
+
+    it('is false after stop() is called', async () => {
+      const { useSound } = await import('../useSound')
+      const controls = useSound('/sfx.wav')
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      controls.stop()
+      expect(controls.isPlaying).toBe(false)
+    })
+
+    it('is false after source ends naturally', async () => {
+      const { useSound } = await import('../useSound')
+      const controls = useSound('/sfx.wav')
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      // Simulate natural end
+      createdSources[0].onended?.()
+      expect(controls.isPlaying).toBe(false)
+    })
+  })
+
+  describe('onEnded callback', () => {
+    it('fires when a source ends naturally', async () => {
+      const { useSound } = await import('../useSound')
+      let fired = false
+      const controls = useSound('/sfx.wav', { onEnded: () => { fired = true } })
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      createdSources[0].onended?.()
+      expect(fired).toBe(true)
+    })
+
+    it('does not fire when stop() is called manually', async () => {
+      const { useSound } = await import('../useSound')
+      let fired = false
+      const controls = useSound('/sfx.wav', { onEnded: () => { fired = true } })
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      controls.stop() // manual stop — onEnded should NOT fire
+      expect(fired).toBe(false)
+    })
+  })
+
+  describe('setPlaybackRate', () => {
+    it('sets playbackRate on new sources at the time of play', async () => {
+      const { useSound } = await import('../useSound')
+      const controls = useSound('/sfx.wav', { playbackRate: 2 })
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      expect(createdSources[0].playbackRate.value).toBe(2)
+    })
+
+    it('updates all active sources immediately', async () => {
+      const { useSound } = await import('../useSound')
+      const controls = useSound('/sfx.wav', { maxInstances: 3 })
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      controls.play()
+      controls.setPlaybackRate(0.5)
+      expect(createdSources[0].playbackRate.value).toBe(0.5)
+      expect(createdSources[1].playbackRate.value).toBe(0.5)
+    })
+  })
+
+  describe('audioContext helpers', () => {
+    it('getMasterVolume returns 1 by default', async () => {
+      const { getMasterVolume } = await import('../useSound')
+      expect(getMasterVolume()).toBe(1)
+    })
+
+    it('getMasterVolume reflects setMasterVolume', async () => {
+      const { getMasterVolume, setMasterVolume } = await import('../useSound')
+      setMasterVolume(0.4)
+      expect(getMasterVolume()).toBeCloseTo(0.4)
+    })
+
+    it('setGroupMute(false) restores the volume set before muting', async () => {
+      const { setGroupVolume, setGroupMute, getGroupVolume } = await import('../useSound')
+      const { getGroupGainNode } = await import('../audioContext')
+
+      setGroupVolume('sfx', 0.6)
+      setGroupMute('sfx', true)
+      setGroupMute('sfx', false)
+
+      // Gain node should be at 0.6, not 1
+      const node = getGroupGainNode('sfx')
+      expect(node.gain.value).toBeCloseTo(0.6)
+      expect(getGroupVolume('sfx')).toBeCloseTo(0.6)
+    })
+
+    it('setGroupVolume has no effect on gain node while group is muted', async () => {
+      const { setGroupVolume, setGroupMute } = await import('../useSound')
+      const { getGroupGainNode } = await import('../audioContext')
+
+      setGroupMute('music', true)
+      setGroupVolume('music', 0.7)
+
+      const node = getGroupGainNode('music')
+      expect(node.gain.value).toBe(0) // still muted
+    })
+
+    it('setGroupVolumeFaded calls linearRamp on group gain node', async () => {
+      const { setGroupVolumeFaded } = await import('../useSound')
+      const { getGroupGainNode } = await import('../audioContext')
+
+      const node = getGroupGainNode('sfx')
+      setGroupVolumeFaded('sfx', 0.3, 2)
+
+      expect(node.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.3, expect.any(Number))
+    })
+
+    it('stopGroup calls stop on all registered sources', async () => {
+      const { useSound, stopGroup } = await import('../useSound')
+
+      const controls = useSound('/sfx.wav', { group: 'sfx', maxInstances: 5 })
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+
+      controls.play()
+      controls.play()
+      expect(createdSources.length).toBe(2)
+
+      stopGroup('sfx')
+
+      expect(createdSources[0].stop).toHaveBeenCalled()
+      expect(createdSources[1].stop).toHaveBeenCalled()
     })
   })
 })
