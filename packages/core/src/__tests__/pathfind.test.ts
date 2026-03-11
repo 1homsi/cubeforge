@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createNavGrid, findPath, setWalkable } from '../nav/pathfind'
+import { createNavGrid, findPath, setWalkable, smoothPath } from '../nav/pathfind'
 
 function cells(path: { x: number; y: number }[], cellSize = 10): Array<[number, number]> {
   return path.map((point) => [Math.floor(point.x / cellSize), Math.floor(point.y / cellSize)])
@@ -168,6 +168,75 @@ describe('pathfind', () => {
         { x: 4, y: 4 },
         { x: 12, y: 12 },
       ])
+    })
+  })
+
+  describe('smoothPath', () => {
+    it('returns a copy when path has 0 or 1 points', () => {
+      const grid = createNavGrid(5, 5, 10)
+      expect(smoothPath(grid, [])).toEqual([])
+      expect(smoothPath(grid, [{ x: 5, y: 5 }])).toEqual([{ x: 5, y: 5 }])
+    })
+
+    it('preserves start and end points', () => {
+      const grid = createNavGrid(5, 1, 10)
+      const path = findPath(grid, { x: 1, y: 5 }, { x: 49, y: 5 })
+      const smoothed = smoothPath(grid, path)
+
+      expect(smoothed[0]).toEqual(path[0])
+      expect(smoothed[smoothed.length - 1]).toEqual(path[path.length - 1])
+    })
+
+    it('collapses a straight horizontal path to two points', () => {
+      const grid = createNavGrid(5, 1, 10)
+      const path = findPath(grid, { x: 1, y: 5 }, { x: 49, y: 5 })
+      // Raw path has 5 waypoints; smoothed should collapse to 2
+      expect(path.length).toBe(5)
+      const smoothed = smoothPath(grid, path)
+      expect(smoothed.length).toBe(2)
+    })
+
+    it('collapses a straight diagonal path to two points', () => {
+      const grid = createNavGrid(5, 5, 10)
+      const path = findPath(grid, { x: 1, y: 1 }, { x: 49, y: 49 })
+      const smoothed = smoothPath(grid, path)
+      expect(smoothed.length).toBe(2)
+    })
+
+    it('keeps the detour waypoint when a wall blocks direct sight', () => {
+      // Build a 5x3 grid with a vertical wall at col=2 except at row=1
+      const grid = createNavGrid(5, 3, 10)
+      setWalkable(grid, 2, 0, false)
+      setWalkable(grid, 2, 2, false)
+      // Gap at row=1, so path must go through (2,1)
+
+      const path = findPath(grid, { x: 5, y: 5 }, { x: 45, y: 15 })
+      const smoothed = smoothPath(grid, path)
+
+      // Start and end must be preserved
+      expect(smoothed[0]).toEqual(path[0])
+      expect(smoothed[smoothed.length - 1]).toEqual(path[path.length - 1])
+      // Smoothed path must still be at least 3 points (cannot shortcut through wall)
+      expect(smoothed.length).toBeGreaterThanOrEqual(3)
+    })
+
+    it('returns a path no longer than the input', () => {
+      const grid = createNavGrid(10, 10, 10)
+      setWalkable(grid, 5, 0, false)
+      setWalkable(grid, 5, 1, false)
+      setWalkable(grid, 5, 2, false)
+
+      const path = findPath(grid, { x: 5, y: 5 }, { x: 95, y: 25 })
+      const smoothed = smoothPath(grid, path)
+      expect(smoothed.length).toBeLessThanOrEqual(path.length)
+    })
+
+    it('does not modify the original path array', () => {
+      const grid = createNavGrid(4, 1, 10)
+      const path = findPath(grid, { x: 1, y: 5 }, { x: 39, y: 5 })
+      const original = JSON.stringify(path)
+      smoothPath(grid, path)
+      expect(JSON.stringify(path)).toBe(original)
     })
   })
 })

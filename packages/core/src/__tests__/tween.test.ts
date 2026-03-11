@@ -203,4 +203,89 @@ describe('tween', () => {
     expect(t.isComplete).toBe(true)
     expect(fired).toBe(true)
   })
+
+  describe('delay option', () => {
+    it('does not call onUpdate during the delay period', () => {
+      const values: number[] = []
+      const t = tween(0, 100, 1, Ease.linear, (v) => values.push(v), undefined, { delay: 0.5 })
+      t.update(0.3)
+      expect(values).toHaveLength(0)
+    })
+
+    it('begins tweening after the delay expires', () => {
+      const values: number[] = []
+      const t = tween(0, 100, 1, Ease.linear, (v) => values.push(v), undefined, { delay: 0.5 })
+      t.update(0.5) // exactly consumes delay
+      t.update(0.5) // half of tween
+      expect(values[values.length - 1]).toBeCloseTo(50, 1)
+    })
+
+    it('carries delay overshoot into tween time', () => {
+      const values: number[] = []
+      const t = tween(0, 100, 1, Ease.linear, (v) => values.push(v), undefined, { delay: 0.4 })
+      // Single update that covers delay + half tween
+      t.update(0.9)
+      expect(values.length).toBeGreaterThan(0)
+      expect(values[values.length - 1]).toBeCloseTo(50, 1)
+    })
+
+    it('completes and fires onComplete after delay + duration', () => {
+      let fired = false
+      const t = tween(0, 100, 1, Ease.linear, () => {}, () => { fired = true }, { delay: 0.5 })
+      t.update(1.5)
+      expect(t.isComplete).toBe(true)
+      expect(fired).toBe(true)
+    })
+  })
+
+  describe('repeat option', () => {
+    it('plays twice with repeat:1', () => {
+      const completions: number[] = []
+      let cycleEnd = 0
+      const t = tween(0, 10, 1, Ease.linear, (v) => { if (v >= 10) cycleEnd++ }, () => completions.push(1), { repeat: 1 })
+      t.update(1.0) // first pass done
+      expect(t.isComplete).toBe(false)
+      t.update(1.0) // second pass done
+      expect(t.isComplete).toBe(true)
+      expect(completions).toHaveLength(1)
+    })
+
+    it('loops indefinitely with repeat:Infinity', () => {
+      let count = 0
+      const t = tween(0, 10, 1, Ease.linear, (v) => { if (v >= 9.9) count++ }, undefined, { repeat: Infinity })
+      for (let i = 0; i < 5; i++) t.update(1.0)
+      expect(t.isComplete).toBe(false)
+      expect(count).toBeGreaterThanOrEqual(5)
+    })
+
+    it('onComplete fires only once even with repeat:2', () => {
+      let fired = 0
+      const t = tween(0, 10, 1, Ease.linear, () => {}, () => fired++, { repeat: 2 })
+      t.update(1.0)
+      t.update(1.0)
+      t.update(1.0)
+      expect(fired).toBe(1)
+    })
+  })
+
+  describe('yoyo option', () => {
+    it('returns to start value on second pass', () => {
+      const values: number[] = []
+      const t = tween(0, 100, 1, Ease.linear, (v) => values.push(v), undefined, { repeat: 1, yoyo: true })
+      t.update(0.5) // mid forward pass → ~50
+      t.update(0.5) // end of forward pass, start reverse
+      t.update(0.5) // mid reverse pass → ~50
+      t.update(0.5) // end of reverse pass → 0
+      expect(t.isComplete).toBe(true)
+      expect(values[values.length - 1]).toBeCloseTo(0, 1)
+    })
+
+    it('reaches full value at end of forward pass', () => {
+      const values: number[] = []
+      const t = tween(0, 100, 1, Ease.linear, (v) => values.push(v), undefined, { repeat: 1, yoyo: true })
+      t.update(1.0) // complete forward pass
+      // The value produced at end of forward pass should be 100
+      expect(values.some((v) => Math.abs(v - 100) < 1)).toBe(true)
+    })
+  })
 })

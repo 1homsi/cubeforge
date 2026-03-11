@@ -143,6 +143,74 @@ export function findPath(grid: NavGrid, start: Vec2Like, goal: Vec2Like): Vec2Li
   return [] // No path found
 }
 
+/**
+ * Smooth a path by removing redundant waypoints using line-of-sight pruning.
+ *
+ * A* returns every cell center on the path, which makes agents move in a
+ * staircase pattern. This function walks the path and skips any waypoint that
+ * has a clear straight-line sight to a further waypoint, producing direct
+ * diagonal movement wherever the grid allows it.
+ *
+ * @param grid - The nav grid used to generate the path.
+ * @param path - World-space waypoints from `findPath`.
+ * @returns A new array with redundant intermediate waypoints removed.
+ *
+ * @example
+ * ```ts
+ * const raw = findPath(grid, start, goal)
+ * const smooth = smoothPath(grid, raw)
+ * ```
+ */
+export function smoothPath(grid: NavGrid, path: Vec2Like[]): Vec2Like[] {
+  if (path.length <= 2) return path.slice()
+
+  const result: Vec2Like[] = [path[0]]
+  let anchor = 0
+
+  while (anchor < path.length - 1) {
+    let farthest = anchor + 1
+    // Try to find the farthest point we can see directly from `anchor`
+    for (let probe = anchor + 2; probe < path.length; probe++) {
+      if (hasLineOfSight(grid, path[anchor], path[probe])) {
+        farthest = probe
+      }
+    }
+    result.push(path[farthest])
+    anchor = farthest
+  }
+
+  return result
+}
+
+/** Bresenham line-of-sight check on the nav grid. */
+function hasLineOfSight(grid: NavGrid, a: Vec2Like, b: Vec2Like): boolean {
+  let c0 = Math.floor(a.x / grid.cellSize)
+  let r0 = Math.floor(a.y / grid.cellSize)
+  const c1 = Math.floor(b.x / grid.cellSize)
+  const r1 = Math.floor(b.y / grid.cellSize)
+
+  const dc = Math.abs(c1 - c0)
+  const dr = Math.abs(r1 - r0)
+  const sc = c0 < c1 ? 1 : -1
+  const sr = r0 < r1 ? 1 : -1
+  let err = dc - dr
+
+  while (true) {
+    if (!isWalkable(grid, c0, r0)) return false
+    if (c0 === c1 && r0 === r1) break
+    const e2 = 2 * err
+    if (e2 > -dr) {
+      err -= dr
+      c0 += sc
+    }
+    if (e2 < dc) {
+      err += dc
+      r0 += sr
+    }
+  }
+  return true
+}
+
 // ── Binary min-heap ────────────────────────────────────────────────────────────
 
 class MinHeap<T> {

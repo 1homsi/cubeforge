@@ -115,6 +115,23 @@ export interface TweenHandle {
   readonly isComplete: boolean
 }
 
+export interface TweenOptions {
+  /**
+   * Number of additional times to repeat after the first play.
+   * Use `Infinity` for an infinite loop. Default: 0 (play once).
+   */
+  repeat?: number
+  /**
+   * When true, alternate direction on each repeat (ping-pong).
+   * Requires `repeat > 0`. Default: false.
+   */
+  yoyo?: boolean
+  /**
+   * Delay in seconds before the tween starts. Default: 0.
+   */
+  delay?: number
+}
+
 /**
  * Create a tween that calls `onUpdate` with interpolated values from `from` to `to`
  * over `duration` seconds. Call the returned handle's `update(dt)` each frame.
@@ -123,6 +140,9 @@ export interface TweenHandle {
  * const t = tween(0, 100, 1.0, Ease.easeOutQuad, v => entity.x = v)
  * // In your update loop:
  * t.update(dt)
+ *
+ * @example Looping yoyo
+ * const t = tween(0, 100, 0.5, Ease.easeInOutSine, v => x = v, undefined, { repeat: Infinity, yoyo: true })
  */
 export function tween(
   from: number,
@@ -131,10 +151,16 @@ export function tween(
   ease: EaseFn = Ease.linear,
   onUpdate: (value: number) => void,
   onComplete?: () => void,
+  opts?: TweenOptions,
 ): TweenHandle & { update(dt: number): void } {
   let elapsed = 0
   let stopped = false
   let complete = false
+  let delayRemaining = opts?.delay ?? 0
+  const maxRepeats = opts?.repeat ?? 0
+  const yoyo = opts?.yoyo ?? false
+  let repeatsDone = 0
+  let forward = true
 
   return {
     get isComplete() {
@@ -145,13 +171,39 @@ export function tween(
     },
     update(dt: number) {
       if (stopped || complete) return
-      elapsed = Math.min(elapsed + dt, duration)
-      const t = duration > 0 ? elapsed / duration : 1
-      onUpdate(from + (to - from) * ease(t))
-      if (elapsed >= duration) {
-        complete = true
-        onComplete?.()
+
+      // Burn through delay first
+      if (delayRemaining > 0) {
+        delayRemaining -= dt
+        if (delayRemaining > 0) return
+        dt = -delayRemaining // carry over the overshoot
+        delayRemaining = 0
       }
+
+      elapsed += dt
+
+      if (elapsed >= duration) {
+        // Completed one pass
+        const overshoot = elapsed - duration
+        const end = forward ? to : from
+        onUpdate(end)
+
+        if (repeatsDone < maxRepeats) {
+          repeatsDone++
+          if (yoyo) forward = !forward
+          elapsed = Math.min(overshoot, duration)
+        } else {
+          complete = true
+          onComplete?.()
+          return
+        }
+      }
+
+      const t = duration > 0 ? elapsed / duration : 1
+      const easedT = ease(t)
+      const start = forward ? from : to
+      const end = forward ? to : from
+      onUpdate(start + (end - start) * easedT)
     },
   }
 }

@@ -10,4 +10,11 @@ export interface SquashStretchComponent extends Component {
   currentScaleX: number
   /** Current applied Y scale modifier */
   currentScaleY: number
+  /**
+   * Manual trigger target X scale. When set, overrides velocity-based calculation
+   * for one frame and then recovers normally. Set via useSquashStretch().trigger().
+   */
+  _manualTargetX?: number
+  /** Manual trigger target Y scale. Pair with _manualTargetX. */
+  _manualTargetY?: number
 }

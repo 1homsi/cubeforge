@@ -122,6 +122,8 @@ interface SquashStretchComponent {
   recovery: number
   currentScaleX: number
   currentScaleY: number
+  _manualTargetX?: number
+  _manualTargetY?: number
 }
 
 interface RigidBodyShape {
@@ -140,6 +142,10 @@ interface Particle {
   size: number
   color: string
   gravity: number
+  rotation?: number
+  rotationSpeed?: number
+  startSize?: number
+  endSize?: number
 }
 
 interface ParticlePoolComponent {
@@ -161,6 +167,10 @@ interface ParticlePoolComponent {
   emitRadius?: number
   emitWidth?: number
   emitHeight?: number
+  enableRotation?: boolean
+  rotationSpeedRange?: [number, number]
+  sizeOverLife?: { start: number; end: number }
+  colorOverLife?: string[]
 }
 
 interface ParallaxLayerComponent {
@@ -198,6 +208,8 @@ interface TrailComponent {
   color: string
   width: number
   points: { x: number; y: number }[]
+  colorOverLife?: string[]
+  widthOverLife?: { start: number; end: number }
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -1073,12 +1085,24 @@ export class RenderSystem implements System {
     }
 
     // ── SquashStretch update ─────────────────────────────────────────────────
-    for (const id of world.query('SquashStretch', 'RigidBody')) {
+    for (const id of world.query('SquashStretch')) {
       const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
-      const rb = world.getComponent<RigidBodyShape>(id, 'RigidBody')!
-      const spd = Math.sqrt(rb.vx * rb.vx + rb.vy * rb.vy)
-      const tScX = rb.vy < -100 ? 1 + ss.intensity * 0.4 : spd > 50 ? 1 - ss.intensity * 0.3 : 1
-      const tScY = rb.vy < -100 ? 1 - ss.intensity * 0.4 : spd > 50 ? 1 + ss.intensity * 0.3 : 1
+      let tScX: number
+      let tScY: number
+
+      if (ss._manualTargetX !== undefined && ss._manualTargetY !== undefined) {
+        // Manual trigger takes priority; clear after reading so it only applies once
+        tScX = ss._manualTargetX
+        tScY = ss._manualTargetY
+        ss._manualTargetX = undefined
+        ss._manualTargetY = undefined
+      } else {
+        const rb = world.getComponent<RigidBodyShape>(id, 'RigidBody')
+        const spd = rb ? Math.sqrt(rb.vx * rb.vx + rb.vy * rb.vy) : 0
+        tScX = rb && rb.vy < -100 ? 1 + ss.intensity * 0.4 : spd > 50 ? 1 - ss.intensity * 0.3 : 1
+        tScY = rb && rb.vy < -100 ? 1 - ss.intensity * 0.4 : spd > 50 ? 1 + ss.intensity * 0.3 : 1
+      }
+
       ss.currentScaleX += (tScX - ss.currentScaleX) * ss.recovery * dt
       ss.currentScaleY += (tScY - ss.currentScaleY) * ss.recovery * dt
     }
@@ -1344,6 +1368,7 @@ export class RenderSystem implements System {
         p.x += p.vx * dt
         p.y += p.vy * dt
         p.vy += p.gravity * dt
+        if (p.rotationSpeed !== undefined) p.rotation = (p.rotation ?? 0) + p.rotationSpeed * dt
         return p.life > 0
       })
 
@@ -1373,6 +1398,13 @@ export class RenderSystem implements System {
             ox = (world.rng() - 0.5) * (pool.emitWidth ?? 0)
             oy = (world.rng() - 0.5) * (pool.emitHeight ?? 0)
           }
+          const startSize = pool.sizeOverLife?.start ?? pool.particleSize
+          const endSize = pool.sizeOverLife?.end ?? pool.particleSize
+          let rotSpeed: number | undefined
+          if (pool.enableRotation && pool.rotationSpeedRange) {
+            const [mn, mx] = pool.rotationSpeedRange
+            rotSpeed = mn + world.rng() * (mx - mn)
+          }
           pool.particles.push({
             x: t.x + ox,
             y: t.y + oy,
@@ -1380,9 +1412,13 @@ export class RenderSystem implements System {
             vy: Math.sin(angle) * speed,
             life: pool.particleLife,
             maxLife: pool.particleLife,
-            size: pool.particleSize,
+            size: startSize,
+            startSize,
+            endSize,
             color: pool.color,
             gravity: pool.gravity,
+            rotation: pool.enableRotation ? world.rng() * Math.PI * 2 : 0,
+            rotationSpeed: rotSpeed,
           })
         }
       }
@@ -1395,15 +1431,43 @@ export class RenderSystem implements System {
           this.flush(pCount, pKey)
           pCount = 0
         }
-        const alpha = p.life / p.maxLife
-        const [r, g, b] = parseCSSColor(p.color)
+
+        // Life fraction: 1 at spawn, 0 at death
+        const lifeFrac = p.life / p.maxLife
+        const alpha = lifeFrac
+
+        // Size over life
+        const sz =
+          p.startSize !== undefined && p.endSize !== undefined
+            ? p.endSize + (p.startSize - p.endSize) * lifeFrac
+            : p.size
+
+        // Color over life
+        let r: number, g: number, b: number
+        if (pool.colorOverLife && pool.colorOverLife.length >= 2) {
+          const palette = pool.colorOverLife
+          // lifeFrac goes 1→0, so index 0 = spawn color, last = death color
+          const frac = 1 - lifeFrac
+          const scaled = frac * (palette.length - 1)
+          const lo = Math.floor(scaled)
+          const hi = Math.min(lo + 1, palette.length - 1)
+          const lf = scaled - lo
+          const [r0, g0, b0] = parseCSSColor(palette[lo])
+          const [r1, g1, b1] = parseCSSColor(palette[hi])
+          r = r0 + (r1 - r0) * lf
+          g = g0 + (g1 - g0) * lf
+          b = b0 + (b1 - b0) * lf
+        } else {
+          ;[r, g, b] = parseCSSColor(p.color)
+        }
+
         this.writeInstance(
           pCount * FLOATS_PER_INSTANCE,
           p.x,
           p.y,
-          p.size,
-          p.size,
-          0,
+          sz,
+          sz,
+          p.rotation ?? 0,
           0.5,
           0.5,
           0,
@@ -1436,8 +1500,7 @@ export class RenderSystem implements System {
 
       if (trail.points.length < 1) continue
 
-      const [tr, tg, tb] = parseCSSColor(trail.color)
-      const trailW = trail.width > 0 ? trail.width : 1
+      const baseColor = parseCSSColor(trail.color)
       let tCount = 0
 
       for (let i = 0; i < trail.points.length; i++) {
@@ -1445,14 +1508,43 @@ export class RenderSystem implements System {
           this.flush(tCount, '__color__')
           tCount = 0
         }
+
+        // t=0 = newest (head), t=1 = oldest (tail)
+        const frac = trail.points.length > 1 ? i / (trail.points.length - 1) : 0
+
+        // Color: interpolate through colorOverLife palette or use base color
+        let tr: number, tg: number, tb: number
+        if (trail.colorOverLife && trail.colorOverLife.length >= 2) {
+          const palette = trail.colorOverLife
+          const scaled = frac * (palette.length - 1)
+          const lo = Math.floor(scaled)
+          const hi = Math.min(lo + 1, palette.length - 1)
+          const lf = scaled - lo
+          const [r0, g0, b0] = parseCSSColor(palette[lo])
+          const [r1, g1, b1] = parseCSSColor(palette[hi])
+          tr = r0 + (r1 - r0) * lf
+          tg = g0 + (g1 - g0) * lf
+          tb = b0 + (b1 - b0) * lf
+        } else {
+          ;[tr, tg, tb] = baseColor
+        }
+
+        // Width: interpolate widthOverLife or use flat width
+        const segW = trail.widthOverLife
+          ? trail.widthOverLife.start + (trail.widthOverLife.end - trail.widthOverLife.start) * frac
+          : trail.width > 0
+            ? trail.width
+            : 1
+
         // Alpha fades from 1 (newest) to 0 (oldest)
-        const alpha = 1 - i / trail.points.length
+        const alpha = 1 - frac
+
         this.writeInstance(
           tCount * FLOATS_PER_INSTANCE,
           trail.points[i].x,
           trail.points[i].y,
-          trailW,
-          trailW,
+          segW,
+          segW,
           0,
           0.5,
           0.5,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { arrive, flee, patrol, seek, wander } from '../nav/steering'
+import { arrive, flee, patrol, seek, wander, pursuit, evade, separation, cohesion, alignment } from '../nav/steering'
 
 describe('steering', () => {
   afterEach(() => {
@@ -158,6 +158,140 @@ describe('steering', () => {
       expect(result.newAngle).toBeCloseTo(Math.PI / 2)
       expect(result.vel.x).toBeCloseTo(0)
       expect(result.vel.y).toBeCloseTo(2)
+    })
+  })
+
+  describe('pursuit', () => {
+    it('steers toward a stationary target the same as seek', () => {
+      const vel = pursuit({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 0 }, 5, 0.5)
+      expect(vel.x).toBeCloseTo(5)
+      expect(vel.y).toBeCloseTo(0)
+    })
+
+    it('leads a target moving away — predicted position is ahead of current', () => {
+      // Target at (10,0) moving right at 20px/s, lookAhead=1s → predict (30,0)
+      const vel = pursuit({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }, 5, 1)
+      // Should aim toward (30,0) not (10,0) — still pointing right but full speed
+      expect(vel.x).toBeCloseTo(5)
+      expect(vel.y).toBeCloseTo(0)
+    })
+
+    it('has correct speed magnitude', () => {
+      const vel = pursuit({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 1, y: 0 }, 10, 0.5)
+      expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(10)
+    })
+
+    it('returns zero when predicted position equals self', () => {
+      // Target at (2,0) moving toward us at -2/s with lookAhead=1 → predicted at (0,0)
+      const vel = pursuit({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: -2, y: 0 }, 5, 1)
+      expect(vel).toEqual({ x: 0, y: 0 })
+    })
+  })
+
+  describe('evade', () => {
+    it('flees from a stationary threat the same as flee', () => {
+      const vel = evade({ x: 3, y: 4 }, { x: 0, y: 0 }, { x: 0, y: 0 }, 5, 0)
+      expect(vel.x).toBeCloseTo(3)
+      expect(vel.y).toBeCloseTo(4)
+    })
+
+    it('flees from a threat predicted position', () => {
+      // Threat at (0,0) moving right at 5/s, lookAhead=1 → predicted at (5,0)
+      // Self at (10,0) — should flee from (5,0), i.e. go right
+      const vel = evade({ x: 10, y: 0 }, { x: 0, y: 0 }, { x: 5, y: 0 }, 4, 1)
+      expect(vel.x).toBeCloseTo(4)
+      expect(vel.y).toBeCloseTo(0)
+    })
+
+    it('has correct speed magnitude', () => {
+      const vel = evade({ x: 10, y: 0 }, { x: 0, y: 5 }, { x: 0, y: 0 }, 7, 0.5)
+      expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(7)
+    })
+  })
+
+  describe('separation', () => {
+    it('returns zero with no neighbors', () => {
+      expect(separation({ x: 0, y: 0 }, [], 5, 50)).toEqual({ x: 0, y: 0 })
+    })
+
+    it('pushes away from a single neighbor', () => {
+      // Neighbor directly below
+      const vel = separation({ x: 0, y: 0 }, [{ x: 0, y: 10 }], 5, 50)
+      expect(vel.x).toBeCloseTo(0)
+      expect(vel.y).toBeLessThan(0) // push upward
+    })
+
+    it('ignores neighbors beyond the radius', () => {
+      const vel = separation({ x: 0, y: 0 }, [{ x: 0, y: 100 }], 5, 50)
+      expect(vel).toEqual({ x: 0, y: 0 })
+    })
+
+    it('result has the requested speed magnitude when neighbors are close', () => {
+      const vel = separation({ x: 0, y: 0 }, [{ x: 10, y: 0 }], 6, 50)
+      expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(6)
+    })
+
+    it('averages push direction from multiple neighbors', () => {
+      // Two neighbors: one left, one right → net force cancels → zero
+      const vel = separation({ x: 0, y: 0 }, [{ x: -10, y: 0 }, { x: 10, y: 0 }], 5, 50)
+      expect(vel.x).toBeCloseTo(0)
+      expect(vel.y).toBeCloseTo(0)
+    })
+  })
+
+  describe('cohesion', () => {
+    it('returns zero with no neighbors', () => {
+      expect(cohesion({ x: 0, y: 0 }, [], 5)).toEqual({ x: 0, y: 0 })
+    })
+
+    it('seeks the centroid of neighbors', () => {
+      // Single neighbor at (10,0) → steer right
+      const vel = cohesion({ x: 0, y: 0 }, [{ x: 10, y: 0 }], 4)
+      expect(vel.x).toBeCloseTo(4)
+      expect(vel.y).toBeCloseTo(0)
+    })
+
+    it('computes the correct centroid for multiple neighbors', () => {
+      // Two neighbors at (-10,0) and (10,0) → centroid at (0,0) = self → zero vel
+      const vel = cohesion({ x: 0, y: 0 }, [{ x: -10, y: 0 }, { x: 10, y: 0 }], 5)
+      expect(vel).toEqual({ x: 0, y: 0 })
+    })
+
+    it('has correct speed magnitude', () => {
+      const vel = cohesion({ x: 0, y: 0 }, [{ x: 3, y: 4 }], 10)
+      expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(10)
+    })
+  })
+
+  describe('alignment', () => {
+    it('returns zero with no neighbors', () => {
+      expect(alignment([], 5)).toEqual({ x: 0, y: 0 })
+    })
+
+    it('matches a single neighbor velocity direction', () => {
+      // Neighbor moving right → align moving right
+      const vel = alignment([{ x: 10, y: 0 }], 5)
+      expect(vel.x).toBeCloseTo(5)
+      expect(vel.y).toBeCloseTo(0)
+    })
+
+    it('averages directions of multiple neighbors', () => {
+      // One up, one right → 45° diagonal
+      const vel = alignment([{ x: 0, y: -10 }, { x: 10, y: 0 }], 4)
+      expect(vel.x).toBeGreaterThan(0)
+      expect(vel.y).toBeLessThan(0)
+      expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(4)
+    })
+
+    it('cancels when neighbors move in opposite directions', () => {
+      // One left, one right → zero net
+      const vel = alignment([{ x: -5, y: 0 }, { x: 5, y: 0 }], 4)
+      expect(vel).toEqual({ x: 0, y: 0 })
+    })
+
+    it('has correct speed magnitude', () => {
+      const vel = alignment([{ x: 3, y: 4 }, { x: 0, y: 10 }], 7)
+      expect(Math.hypot(vel.x, vel.y)).toBeCloseTo(7)
     })
   })
 })
