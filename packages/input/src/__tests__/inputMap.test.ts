@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { createInputMap } from '../inputMap'
 
 // Helper: create a mock input object
-function mockInput(downKeys: Set<string> = new Set(), pressedKeys: Set<string> = new Set(), releasedKeys: Set<string> = new Set()) {
+function mockInput(
+  downKeys: Set<string> = new Set(),
+  pressedKeys: Set<string> = new Set(),
+  releasedKeys: Set<string> = new Set(),
+) {
   return {
     isDown: (k: string) => downKeys.has(k),
     isPressed: (k: string) => pressedKeys.has(k),

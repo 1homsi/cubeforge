@@ -3,7 +3,11 @@ import { createInputMap } from '@cubeforge/input'
 
 // Test the createInputMap used by the React useInputMap hook
 describe('createInputMap (used by useInputMap)', () => {
-  function mockInput(down: Set<string> = new Set(), pressed: Set<string> = new Set(), released: Set<string> = new Set()) {
+  function mockInput(
+    down: Set<string> = new Set(),
+    pressed: Set<string> = new Set(),
+    released: Set<string> = new Set(),
+  ) {
     return {
       isDown: (k: string) => down.has(k),
       isPressed: (k: string) => pressed.has(k),

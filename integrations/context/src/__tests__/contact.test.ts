@@ -262,13 +262,10 @@ describe('useContact hooks', () => {
     it('uses the latest handler without re-subscribing', () => {
       const handler1 = vi.fn()
       const handler2 = vi.fn()
-      const { rerender } = renderHook(
-        ({ handler }) => useTriggerEnter(handler),
-        {
-          wrapper: contactWrapper(engine, entityA),
-          initialProps: { handler: handler1 },
-        },
-      )
+      const { rerender } = renderHook(({ handler }) => useTriggerEnter(handler), {
+        wrapper: contactWrapper(engine, entityA),
+        initialProps: { handler: handler1 },
+      })
 
       rerender({ handler: handler2 })
 

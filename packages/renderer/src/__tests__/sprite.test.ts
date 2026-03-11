@@ -119,7 +119,16 @@ describe('createSprite', () => {
   })
 
   describe('shape types', () => {
-    const shapes: SpriteShape[] = ['rect', 'circle', 'ellipse', 'roundedRect', 'triangle', 'star', 'pentagon', 'hexagon']
+    const shapes: SpriteShape[] = [
+      'rect',
+      'circle',
+      'ellipse',
+      'roundedRect',
+      'triangle',
+      'star',
+      'pentagon',
+      'hexagon',
+    ]
 
     shapes.forEach((shape) => {
       it(`accepts shape "${shape}"`, () => {

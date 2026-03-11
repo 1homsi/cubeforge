@@ -37,28 +37,19 @@ describe('SweepAndPrune', () => {
 
   describe('non-overlapping entities', () => {
     it('returns no pairs for separated AABBs', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 20, 30, 0, 10),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 20, 30, 0, 10)])
       expect(sap.query()).toEqual([])
     })
 
     it('returns no pairs when separated on Y', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 0, 10, 20, 30),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 0, 10, 20, 30)])
       expect(sap.query()).toEqual([])
     })
   })
 
   describe('overlapping entities', () => {
     it('detects X and Y overlap', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 5, 15),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 5, 15)])
       const pairs = sap.query()
       expect(pairs).toHaveLength(1)
       const ps = pairSet(pairs)
@@ -66,20 +57,13 @@ describe('SweepAndPrune', () => {
     })
 
     it('detects fully contained AABB', () => {
-      sap.update([
-        aabb(0, 0, 100, 0, 100),
-        aabb(1, 10, 20, 10, 20),
-      ])
+      sap.update([aabb(0, 0, 100, 0, 100), aabb(1, 10, 20, 10, 20)])
       const pairs = sap.query()
       expect(pairs).toHaveLength(1)
     })
 
     it('detects multiple overlapping pairs', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 5, 15),
-        aabb(2, 8, 18, 8, 18),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 5, 15), aabb(2, 8, 18, 8, 18)])
       const ps = pairSet(sap.query())
       expect(ps.has('0:1')).toBe(true)
       expect(ps.has('1:2')).toBe(true)
@@ -89,40 +73,25 @@ describe('SweepAndPrune', () => {
 
   describe('update with movement', () => {
     it('detects new overlap after entities move together', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 20, 30, 0, 10),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 20, 30, 0, 10)])
       expect(sap.query()).toEqual([])
 
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 0, 10),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 0, 10)])
       expect(sap.query()).toHaveLength(1)
     })
 
     it('removes overlap after entities separate', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 5, 15),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 5, 15)])
       expect(sap.query()).toHaveLength(1)
 
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 50, 60, 50, 60),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 50, 60, 50, 60)])
       expect(sap.query()).toEqual([])
     })
   })
 
   describe('entity removal', () => {
     it('remove() removes entity and its pairs', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 5, 15),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 5, 15)])
       expect(sap.query()).toHaveLength(1)
 
       sap.remove(1 as EntityId)
@@ -134,10 +103,7 @@ describe('SweepAndPrune', () => {
     })
 
     it('entities absent from update are auto-removed', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 5, 15),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 5, 15)])
       expect(sap.query()).toHaveLength(1)
 
       // Only entity 0 remains
@@ -148,10 +114,7 @@ describe('SweepAndPrune', () => {
 
   describe('clear', () => {
     it('clears all state', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 5, 15),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 5, 15)])
       sap.clear()
       expect(sap.query()).toEqual([])
     })
@@ -166,10 +129,7 @@ describe('SweepAndPrune', () => {
 
   describe('caching', () => {
     it('query returns same result when called twice without update', () => {
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 5, 15, 5, 15),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 5, 15, 5, 15)])
       const r1 = sap.query()
       const r2 = sap.query()
       expect(r1).toBe(r2) // same reference
@@ -179,10 +139,7 @@ describe('SweepAndPrune', () => {
   describe('edge cases', () => {
     it('handles touching edges (not overlapping) on X', () => {
       // Entity 0: maxX = 10, Entity 1: minX = 10 → touching, not overlapping
-      sap.update([
-        aabb(0, 0, 10, 0, 10),
-        aabb(1, 10, 20, 0, 10),
-      ])
+      sap.update([aabb(0, 0, 10, 0, 10), aabb(1, 10, 20, 0, 10)])
       // This depends on strict < vs <=. The rebuild uses Set active approach.
       // Touching on X means no overlap in SAP (they share an edge).
       // Based on the code: rebuildPairsFromSortedAxis uses min/max endpoints.
@@ -190,17 +147,12 @@ describe('SweepAndPrune', () => {
     })
 
     it('handles identical AABBs', () => {
-      sap.update([
-        aabb(0, 5, 15, 5, 15),
-        aabb(1, 5, 15, 5, 15),
-      ])
+      sap.update([aabb(0, 5, 15, 5, 15), aabb(1, 5, 15, 5, 15)])
       expect(sap.query()).toHaveLength(1)
     })
 
     it('handles many entities', () => {
-      const boxes = Array.from({ length: 50 }, (_, i) =>
-        aabb(i, i * 5, i * 5 + 10, 0, 10),
-      )
+      const boxes = Array.from({ length: 50 }, (_, i) => aabb(i, i * 5, i * 5 + 10, 0, 10))
       sap.update(boxes)
       // Should not throw and should return some pairs (overlapping by 5 units)
       const pairs = sap.query()

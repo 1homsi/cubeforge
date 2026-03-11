@@ -119,10 +119,9 @@ describe('useGameStateMachine', () => {
 
   it('transition function is stable', () => {
     const states = { idle: {}, running: {}, jumping: {} }
-    const { result, rerender } = renderHook(
-      () => useGameStateMachine<GameStates>(states, 'idle'),
-      { wrapper: engineWrapper(engine) },
-    )
+    const { result, rerender } = renderHook(() => useGameStateMachine<GameStates>(states, 'idle'), {
+      wrapper: engineWrapper(engine),
+    })
     const fn1 = result.current.transition
     rerender()
     expect(result.current.transition).toBe(fn1)

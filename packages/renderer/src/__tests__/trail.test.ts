@@ -43,7 +43,10 @@ describe('createTrail', () => {
     })
 
     it('accepts initial points', () => {
-      const pts = [{ x: 0, y: 0 }, { x: 1, y: 1 }]
+      const pts = [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ]
       const trail = createTrail({ points: pts })
       expect(trail.points).toEqual(pts)
     })
