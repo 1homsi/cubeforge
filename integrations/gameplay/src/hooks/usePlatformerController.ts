@@ -13,6 +13,10 @@ export interface PlatformerControllerOptions {
   coyoteTime?: number
   jumpBuffer?: number
   jumpCooldown?: number
+  /** Gamepad index to read (default 0). Set to -1 to disable gamepad input. */
+  gamepadIndex?: number
+  /** Dead zone for gamepad analog stick axes (default 0.2). */
+  gamepadDeadZone?: number
   bindings?: {
     left?: string | string[]
     right?: string | string[]
@@ -25,6 +29,7 @@ interface ControllerState {
   jumpBuffer: number
   jumpCooldown: number
   jumpsLeft: number
+  prevGpJump: boolean
 }
 
 function normalizeKeys(val: string | string[] | undefined, defaults: string[]): string[] {
@@ -42,6 +47,8 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
     coyoteTime = 0.08,
     jumpBuffer = 0.08,
     jumpCooldown = 0.18,
+    gamepadIndex = 0,
+    gamepadDeadZone = 0.2,
     bindings,
   } = opts
 
@@ -55,12 +62,22 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
       jumpBuffer: 0,
       jumpCooldown: 0,
       jumpsLeft: maxJumps,
+      prevGpJump: false,
     }
 
     const updateFn = (id: EntityId, world: ECSWorld, input: InputManager, dt: number) => {
       if (!world.hasEntity(id)) return
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
       if (!rb) return
+
+      // Gamepad input
+      const gp = gamepadIndex >= 0 ? (navigator.getGamepads?.()[gamepadIndex] ?? null) : null
+      const gpAxis = gp?.axes[0] ?? 0
+      const gpLeft = gpAxis < -gamepadDeadZone || (gp?.buttons[14]?.pressed ?? false)
+      const gpRight = gpAxis > gamepadDeadZone || (gp?.buttons[15]?.pressed ?? false)
+      const gpJump = gp?.buttons[0]?.pressed ?? false
+      const gpJumpPressed = gpJump && !state.prevGpJump
+      state.prevGpJump = gpJump
 
       if (rb.onGround) {
         state.coyoteTimer = coyoteTime
@@ -69,13 +86,13 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
 
       state.jumpCooldown = Math.max(0, state.jumpCooldown - dt)
 
-      const jumpPressed = jumpKeys.some((k) => input.isPressed(k))
+      const jumpPressed = jumpKeys.some((k) => input.isPressed(k)) || gpJumpPressed
       const canJumpEarly = state.coyoteTimer > 0 || state.jumpsLeft > 0
       if (jumpPressed && state.jumpCooldown <= 0 && canJumpEarly) state.jumpBuffer = jumpBuffer
-      else if (!jumpKeys.some((k) => input.isDown(k))) state.jumpBuffer = Math.max(0, state.jumpBuffer - dt)
+      else if (!jumpKeys.some((k) => input.isDown(k)) && !gpJump) state.jumpBuffer = Math.max(0, state.jumpBuffer - dt)
 
-      const left = leftKeys.some((k) => input.isDown(k))
-      const right = rightKeys.some((k) => input.isDown(k))
+      const left = leftKeys.some((k) => input.isDown(k)) || gpLeft
+      const right = rightKeys.some((k) => input.isDown(k)) || gpRight
       if (left) rb.vx = -speed
       else if (right) rb.vx = speed
       else rb.vx *= rb.onGround ? 0.6 : 0.92
@@ -95,7 +112,7 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
         state.jumpCooldown = jumpCooldown
       }
 
-      const jumpHeld = jumpKeys.some((k) => input.isDown(k))
+      const jumpHeld = jumpKeys.some((k) => input.isDown(k)) || gpJump
       if (!jumpHeld && rb.vy < -120) rb.vy += 800 * dt
     }
 

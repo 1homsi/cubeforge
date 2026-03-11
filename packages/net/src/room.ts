@@ -82,9 +82,16 @@ export class Room {
     this.send(msg)
   }
 
-  /** Register a handler that receives every inbound NetMessage. */
-  onMessage(handler: (msg: NetMessage) => void): void {
+  /**
+   * Register a handler that receives every inbound NetMessage.
+   * Returns an unsubscribe function — call it to remove the handler and prevent memory leaks.
+   */
+  onMessage(handler: (msg: NetMessage) => void): () => void {
     this._messageHandlers.push(handler)
+    return () => {
+      const i = this._messageHandlers.indexOf(handler)
+      if (i !== -1) this._messageHandlers.splice(i, 1)
+    }
   }
 
   get isConnected(): boolean {
