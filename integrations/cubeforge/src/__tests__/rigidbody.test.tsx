@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import React from 'react'
 import { render, act } from '@testing-library/react'
 import { ECSWorld, EventBus, AssetManager, createTransform } from '@cubeforge/core'
 import { EngineContext, EntityContext } from '../context'
@@ -44,20 +43,24 @@ describe('RigidBody component', () => {
     )
   }
 
+  function getRigidBody<T extends object = { type: string }>(): T {
+    return engine.ecs.getComponent(entityId, 'RigidBody') as unknown as T
+  }
+
   it('registers a RigidBody component', async () => {
     await act(async () => {
       renderRB()
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody')
+    const rb = getRigidBody()
     expect(rb).toBeDefined()
-    expect(rb!.type).toBe('RigidBody')
+    expect(rb.type).toBe('RigidBody')
   })
 
   it('sets mass prop', async () => {
     await act(async () => {
       renderRB({ mass: 10 })
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { mass: number }
+    const rb = getRigidBody<{ mass: number }>()
     expect(rb.mass).toBe(10)
   })
 
@@ -65,7 +68,7 @@ describe('RigidBody component', () => {
     await act(async () => {
       renderRB({ isStatic: true })
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { isStatic: boolean }
+    const rb = getRigidBody<{ isStatic: boolean }>()
     expect(rb.isStatic).toBe(true)
   })
 
@@ -73,7 +76,7 @@ describe('RigidBody component', () => {
     await act(async () => {
       renderRB({ friction: 0.5 })
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { friction: number }
+    const rb = getRigidBody<{ friction: number }>()
     expect(rb.friction).toBe(0.5)
   })
 
@@ -81,7 +84,7 @@ describe('RigidBody component', () => {
     await act(async () => {
       renderRB({ gravityScale: 0 })
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { gravityScale: number }
+    const rb = getRigidBody<{ gravityScale: number }>()
     expect(rb.gravityScale).toBe(0)
   })
 
@@ -89,7 +92,7 @@ describe('RigidBody component', () => {
     await act(async () => {
       renderRB({ ccd: true })
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { ccd: boolean }
+    const rb = getRigidBody<{ ccd: boolean }>()
     expect(rb.ccd).toBe(true)
   })
 
@@ -110,7 +113,7 @@ describe('RigidBody component', () => {
     await act(async () => {
       renderRB()
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { friction: number }
+    const rb = getRigidBody<{ friction: number }>()
     expect(rb.friction).toBe(0.85)
   })
 
@@ -118,7 +121,7 @@ describe('RigidBody component', () => {
     await act(async () => {
       renderRB({ lockRotation: false })
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { lockRotation: boolean }
+    const rb = getRigidBody<{ lockRotation: boolean }>()
     expect(rb.lockRotation).toBe(false)
   })
 
@@ -126,7 +129,7 @@ describe('RigidBody component', () => {
     await act(async () => {
       renderRB({ density: 2.5 })
     })
-    const rb = engine.ecs.getComponent(entityId, 'RigidBody') as { density: number }
+    const rb = getRigidBody<{ density: number }>()
     expect(rb.density).toBe(2.5)
   })
 })

@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import React from 'react'
 import { render, act } from '@testing-library/react'
 import { ECSWorld, EventBus, AssetManager, createTransform } from '@cubeforge/core'
 import { EngineContext, EntityContext } from '../context'
@@ -44,20 +43,24 @@ describe('Sprite component', () => {
     )
   }
 
+  function getSprite<T extends object = { type: string }>(): T {
+    return engine.ecs.getComponent(entityId, 'Sprite') as unknown as T
+  }
+
   it('registers a Sprite component on the entity', async () => {
     await act(async () => {
       renderSprite()
     })
-    const sprite = engine.ecs.getComponent(entityId, 'Sprite')
+    const sprite = getSprite()
     expect(sprite).toBeDefined()
-    expect(sprite!.type).toBe('Sprite')
+    expect(sprite.type).toBe('Sprite')
   })
 
   it('sets correct width and height', async () => {
     await act(async () => {
       renderSprite({ width: 64, height: 96 })
     })
-    const sprite = engine.ecs.getComponent(entityId, 'Sprite') as { width: number; height: number }
+    const sprite = getSprite<{ width: number; height: number }>()
     expect(sprite.width).toBe(64)
     expect(sprite.height).toBe(96)
   })
@@ -66,7 +69,7 @@ describe('Sprite component', () => {
     await act(async () => {
       renderSprite({ color: '#ff0000' })
     })
-    const sprite = engine.ecs.getComponent(entityId, 'Sprite') as { color: string }
+    const sprite = getSprite<{ color: string }>()
     expect(sprite.color).toBe('#ff0000')
   })
 
@@ -74,7 +77,7 @@ describe('Sprite component', () => {
     await act(async () => {
       renderSprite({ shape: 'circle' })
     })
-    const sprite = engine.ecs.getComponent(entityId, 'Sprite') as { shape: string }
+    const sprite = getSprite<{ shape: string }>()
     expect(sprite.shape).toBe('circle')
   })
 
@@ -82,7 +85,7 @@ describe('Sprite component', () => {
     await act(async () => {
       renderSprite({ opacity: 0.5 })
     })
-    const sprite = engine.ecs.getComponent(entityId, 'Sprite') as { opacity: number }
+    const sprite = getSprite<{ opacity: number }>()
     expect(sprite.opacity).toBe(0.5)
   })
 
