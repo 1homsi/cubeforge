@@ -289,6 +289,9 @@ function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
  * drawn in a single `drawArraysInstanced` call.
  */
 export class RenderSystem implements System {
+  /** Default background used when no Camera2D component exists */
+  defaultBackground = '#1a1a2e'
+
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
   private readonly quadVAO: WebGLVertexArrayObject
@@ -729,7 +732,7 @@ export class RenderSystem implements System {
     let camX = 0,
       camY = 0,
       zoom = 1
-    let background = '#000000'
+    let background = this.defaultBackground
     let shakeX = 0,
       shakeY = 0
 

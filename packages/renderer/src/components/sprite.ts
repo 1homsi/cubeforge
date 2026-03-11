@@ -3,6 +3,8 @@ import type { Sampling } from '../textureFilter'
 
 export type BlendMode = 'normal' | 'additive' | 'multiply' | 'screen'
 
+export type SpriteShape = 'rect' | 'circle' | 'ellipse' | 'roundedRect' | 'triangle' | 'star' | 'pentagon' | 'hexagon'
+
 export interface SpriteComponent extends Component {
   readonly type: 'Sprite'
   width: number
@@ -59,6 +61,20 @@ export interface SpriteComponent extends Component {
   tintOpacity?: number
   /** Overall opacity 0-1 (default 1) */
   opacity: number
+  /** Shape to draw when no image is loaded: 'rect' (default), 'circle', 'ellipse', 'roundedRect', 'triangle', 'star', 'pentagon', 'hexagon' */
+  shape: SpriteShape
+  /** Border radius for 'roundedRect' shape (px) */
+  borderRadius: number
+  /** Stroke outline color (e.g. '#ff0000'). No stroke if undefined */
+  strokeColor?: string
+  /** Stroke outline width in pixels (default 0 = no stroke) */
+  strokeWidth: number
+  /** Custom draw callback — receives canvas context, width, height. Called instead of default shape drawing */
+  customDraw?: (ctx: CanvasRenderingContext2D, width: number, height: number) => void
+  /** Number of points for 'star' shape (default 5) */
+  starPoints: number
+  /** Inner radius ratio for 'star' shape (0-1, default 0.4) */
+  starInnerRadius: number
 }
 
 export function createSprite(opts: Partial<SpriteComponent> & { width: number; height: number }): SpriteComponent {
@@ -77,6 +93,11 @@ export function createSprite(opts: Partial<SpriteComponent> & { width: number; h
     blendMode: 'normal',
     layer: 'default',
     opacity: 1,
+    shape: 'rect',
+    borderRadius: 0,
+    strokeWidth: 0,
+    starPoints: 5,
+    starInnerRadius: 0.4,
     ...opts,
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useContext } from 'react'
-import { createSprite, type SpriteComponent, type Sampling, type BlendMode } from '@cubeforge/renderer'
+import { createSprite, type SpriteComponent, type Sampling, type BlendMode, type SpriteShape } from '@cubeforge/renderer'
 import { EngineContext, EntityContext } from '../context'
 import type { SpriteAtlas } from './spriteAtlas'
 
@@ -38,6 +38,20 @@ interface SpriteProps {
   tintOpacity?: number
   /** Overall opacity 0-1 (default 1) */
   opacity?: number
+  /** Shape to draw: 'rect' (default), 'circle', 'ellipse', 'roundedRect', 'triangle', 'star', 'pentagon', 'hexagon' */
+  shape?: SpriteShape
+  /** Border radius for 'roundedRect' shape (px) */
+  borderRadius?: number
+  /** Stroke outline color */
+  strokeColor?: string
+  /** Stroke outline width in pixels */
+  strokeWidth?: number
+  /** Custom draw callback */
+  customDraw?: (ctx: CanvasRenderingContext2D, width: number, height: number) => void
+  /** Number of points for 'star' shape (default 5) */
+  starPoints?: number
+  /** Inner radius ratio for 'star' shape (0-1, default 0.4) */
+  starInnerRadius?: number
 }
 
 export function Sprite({
@@ -69,6 +83,13 @@ export function Sprite({
   tint,
   tintOpacity,
   opacity = 1,
+  shape = 'rect',
+  borderRadius = 0,
+  strokeColor,
+  strokeWidth = 0,
+  customDraw,
+  starPoints = 5,
+  starInnerRadius = 0.4,
 }: SpriteProps) {
   const resolvedFrameIndex = atlas && frame != null ? (atlas[frame] ?? 0) : frameIndex
   const engine = useContext(EngineContext)!
@@ -113,6 +134,13 @@ export function Sprite({
       tint,
       tintOpacity,
       opacity,
+      shape,
+      borderRadius,
+      strokeColor,
+      strokeWidth,
+      customDraw,
+      starPoints,
+      starInnerRadius,
     })
     engine.ecs.addComponent(entityId, comp)
 
@@ -150,6 +178,13 @@ export function Sprite({
     comp.tint = tint
     comp.tintOpacity = tintOpacity
     comp.opacity = opacity
+    comp.shape = shape
+    comp.borderRadius = borderRadius
+    comp.strokeColor = strokeColor
+    comp.strokeWidth = strokeWidth
+    comp.customDraw = customDraw
+    comp.starPoints = starPoints
+    comp.starInnerRadius = starInnerRadius
   }, [
     color,
     visible,
@@ -162,6 +197,13 @@ export function Sprite({
     tint,
     tintOpacity,
     opacity,
+    shape,
+    borderRadius,
+    strokeColor,
+    strokeWidth,
+    customDraw,
+    starPoints,
+    starInnerRadius,
     engine,
     entityId,
   ])

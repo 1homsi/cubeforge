@@ -342,7 +342,7 @@ export type { GradientComponent, GradientStop, GradientType } from '@cubeforge/r
 export { createMask } from '@cubeforge/renderer'
 export type { MaskComponent, MaskShape } from '@cubeforge/renderer'
 export { TextureFilter } from '@cubeforge/renderer'
-export type { TextureFilterValue, MagFilterValue, Sampling, BlendMode } from '@cubeforge/renderer'
+export type { TextureFilterValue, MagFilterValue, Sampling, BlendMode, SpriteShape } from '@cubeforge/renderer'
 export type { TweenHandle } from '@cubeforge/core'
 export { Ease, tween } from '@cubeforge/core'
 export { createTimeline } from '@cubeforge/core'
