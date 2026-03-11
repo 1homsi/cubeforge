@@ -103,13 +103,7 @@ function drawShape(
   }
 }
 
-function drawRegularPolygon(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  r: number,
-  sides: number,
-): void {
+function drawRegularPolygon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, sides: number): void {
   ctx.beginPath()
   for (let i = 0; i < sides; i++) {
     const angle = (i * 2 * Math.PI) / sides - Math.PI / 2
@@ -544,7 +538,17 @@ export class RenderSystem implements System {
         ctx.restore()
       } else {
         ctx.fillStyle = sprite.color
-        drawShape(ctx, sprite.shape, drawX, drawY, sprite.width, sprite.height, sprite.borderRadius, sprite.starPoints, sprite.starInnerRadius)
+        drawShape(
+          ctx,
+          sprite.shape,
+          drawX,
+          drawY,
+          sprite.width,
+          sprite.height,
+          sprite.borderRadius,
+          sprite.starPoints,
+          sprite.starInnerRadius,
+        )
         ctx.fill()
         if (sprite.strokeColor && sprite.strokeWidth > 0) {
           ctx.strokeStyle = sprite.strokeColor

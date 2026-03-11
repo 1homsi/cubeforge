@@ -1,5 +1,11 @@
 import { useEffect, useContext } from 'react'
-import { createSprite, type SpriteComponent, type Sampling, type BlendMode, type SpriteShape } from '@cubeforge/renderer'
+import {
+  createSprite,
+  type SpriteComponent,
+  type Sampling,
+  type BlendMode,
+  type SpriteShape,
+} from '@cubeforge/renderer'
 import { EngineContext, EntityContext } from '../context'
 import type { SpriteAtlas } from './spriteAtlas'
 
