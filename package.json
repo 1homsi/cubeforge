@@ -8,19 +8,19 @@
     "build": "pnpm --filter './packages/*' --filter 'cubeforge' run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
-    "check-exports": "tsx scripts/check-exports.ts",
     "format": "prettier --write 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
-    "prettier": "^3.2.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "esbuild": "^0.21.0",
     "happy-dom": "^14.0.0",
+    "prettier": "^3.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^2.0.0"
