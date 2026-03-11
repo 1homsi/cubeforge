@@ -249,7 +249,15 @@ function createWhiteTexture(gl: WebGL2RenderingContext): WebGLTexture {
 
 // ── Shape texture helpers ─────────────────────────────────────────────────────
 
-const SHAPE_TEX_SIZE = 128 // resolution of generated shape textures
+/** Pick a texture resolution that fits the sprite size - powers of 2, capped at 512. */
+function shapeTexSize(spriteW: number, spriteH: number): number {
+  const maxDim = Math.max(spriteW, spriteH)
+  if (maxDim <= 32) return 32
+  if (maxDim <= 64) return 64
+  if (maxDim <= 128) return 128
+  if (maxDim <= 256) return 256
+  return 512
+}
 
 function drawShapeOnCanvas(
   ctx: CanvasRenderingContext2D,
@@ -350,7 +358,8 @@ function getShapeKey(sprite: SpriteComponent): string {
   const sir = shape === 'star' ? (sprite.starInnerRadius ?? 0.4) : 0
   const stroke =
     sprite.strokeColor && (sprite.strokeWidth ?? 0) > 0 ? `|s:${sprite.strokeColor}:${sprite.strokeWidth}` : ''
-  return `__shape__:${shape}:${br}:${sp}:${sir}${stroke}`
+  const res = shapeTexSize(sprite.width, sprite.height)
+  return `__shape__:${shape}:${br}:${sp}:${sir}${stroke}:r${res}`
 }
 
 // ── Sprite helpers ────────────────────────────────────────────────────────────
@@ -743,7 +752,7 @@ export class RenderSystem implements System {
     const cached = this.shapeTextures.get(key)
     if (cached) return cached
 
-    const size = SHAPE_TEX_SIZE
+    const size = shapeTexSize(sprite.width, sprite.height)
     const offscreen = document.createElement('canvas')
     offscreen.width = size
     offscreen.height = size
@@ -1235,7 +1244,17 @@ export class RenderSystem implements System {
       // Textured sprites use white tint so the texture shows true colors;
       // only solid-color sprites use the color property as fill.
       const hasTexture = sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0
-      const [r, g, b, a] = hasTexture ? [1, 1, 1, 1] : parseCSSColor(sprite.color)
+      const opacity = sprite.opacity ?? 1
+      let [r, g, b, a] = hasTexture ? [1, 1, 1, 1] : parseCSSColor(sprite.color)
+      a *= opacity
+      // Apply tint: blend tint color into rgb channels
+      if (sprite.tint && (sprite.tintOpacity ?? 0) > 0) {
+        const [tr, tg, tb] = parseCSSColor(sprite.tint)
+        const t = sprite.tintOpacity ?? 0.3
+        r = r * (1 - t) + tr * t
+        g = g * (1 - t) + tg * t
+        b = b * (1 - t) + tb * t
+      }
       const uv = getUVRect(sprite)
 
       this.writeInstance(

@@ -11,21 +11,31 @@ export interface CameraControls {
   shake(intensity: number, duration: number): void
 
   /**
-   * Set the world-space offset applied to the camera's follow target.
+   * Set the world-space offset applied to the camera follow target.
    * Useful for look-ahead: `setFollowOffset(facing * 80, 0)`.
    */
   setFollowOffset(x: number, y: number): void
 
   /**
    * Instantly move the camera center to a world-space position.
-   * Bypasses smoothing — useful for instant scene cuts.
+   * Bypasses smoothing - useful for instant scene cuts.
    */
   setPosition(x: number, y: number): void
+
+  /**
+   * Returns the current camera world-space position.
+   */
+  getPosition(): { x: number; y: number }
 
   /**
    * Programmatically set the camera zoom level.
    */
   setZoom(zoom: number): void
+
+  /**
+   * Returns the current camera zoom level.
+   */
+  getZoom(): number
 }
 
 /**
@@ -83,6 +93,20 @@ export function useCamera(): CameraControls {
         if (camId === undefined) return
         const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
         if (cam) cam.zoom = zoom
+      },
+
+      getPosition() {
+        const camId = engine.ecs.queryOne('Camera2D')
+        if (camId === undefined) return { x: 0, y: 0 }
+        const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
+        return cam ? { x: cam.x, y: cam.y } : { x: 0, y: 0 }
+      },
+
+      getZoom() {
+        const camId = engine.ecs.queryOne('Camera2D')
+        if (camId === undefined) return 1
+        const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
+        return cam?.zoom ?? 1
       },
     }),
     [engine],
