@@ -11,10 +11,7 @@
     "check-exports": "tsx scripts/check-exports.ts",
     "format": "prettier --write 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
-    "prepare": "git config core.hooksPath .githooks",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "prettier": "^3.2.0",
@@ -26,7 +23,6 @@
     "happy-dom": "^14.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^2.0.0",
-    "vitepress": "^1.6.4"
+    "vitest": "^2.0.0"
   }
 }
