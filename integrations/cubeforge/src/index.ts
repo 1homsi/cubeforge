@@ -203,12 +203,7 @@ export { createRenderLayerManager, defaultLayers } from '@cubeforge/renderer'
 export type { RenderLayer, RenderLayerManager } from '@cubeforge/renderer'
 
 // Post-processing effects
-export {
-  createPostProcessStack,
-  vignetteEffect,
-  scanlineEffect,
-  chromaticAberrationEffect,
-} from '@cubeforge/renderer'
+export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect } from '@cubeforge/renderer'
 export type { PostProcessEffect, PostProcessStack } from '@cubeforge/renderer'
 
 // Types and utilities from engine packages
