@@ -1,4 +1,6 @@
 export * from './useSound'
 export * from './useSpatialSound'
 export * from './useMusic'
+export * from './useStreamedMusic'
+export * from './audioEffects'
 export { setListenerPosition, getListenerPosition } from './listener'

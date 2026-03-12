@@ -2,6 +2,11 @@ import { useState, useCallback, useRef } from 'react'
 
 export interface DialogueLine {
   speaker?: string
+  /**
+   * URL or asset path for the speaker's portrait image.
+   * Displayed alongside the dialogue text when using `<DialogueBox>`.
+   */
+  portrait?: string
   text: string
   choices?: { label: string; next?: string }[]
 }

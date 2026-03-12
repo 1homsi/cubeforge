@@ -3161,16 +3161,20 @@ export class PhysicsSystem implements System {
     // ── Phase 12: Collision events ────────────────────────────────────────
 
     for (const [key, [a, b]] of currentCollisionPairs) {
+      // manifoldCache holds the current-frame contact normal (A→B direction)
+      const m = this.manifoldCache.get(key)
+      const normalX = m?.normalX ?? 0
+      const normalY = m?.normalY ?? 0
       if (!this.activeCollisionPairs.has(key)) {
-        this.events?.emit('collisionEnter', { a, b })
+        this.events?.emit('collisionEnter', { a, b, normalX, normalY })
       } else {
-        this.events?.emit('collisionStay', { a, b })
+        this.events?.emit('collisionStay', { a, b, normalX, normalY })
       }
-      this.events?.emit('collision', { a, b })
+      this.events?.emit('collision', { a, b, normalX, normalY })
     }
     for (const [key, [a, b]] of this.activeCollisionPairs) {
       if (!currentCollisionPairs.has(key)) {
-        this.events?.emit('collisionExit', { a, b })
+        this.events?.emit('collisionExit', { a, b, normalX: 0, normalY: 0 })
       }
     }
     this.activeCollisionPairs = currentCollisionPairs
@@ -3179,6 +3183,7 @@ export class PhysicsSystem implements System {
 
     const allWithCollider = world.query('Transform', 'BoxCollider')
     const currentTriggerPairs = new Map<string, [EntityId, EntityId]>()
+    const triggerNormals = new Map<string, { nx: number; ny: number }>()
 
     for (let i = 0; i < allWithCollider.length; i++) {
       for (let j = i + 1; j < allWithCollider.length; j++) {
@@ -3191,18 +3196,32 @@ export class PhysicsSystem implements System {
         if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
         const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
         const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
-        if (!getOverlap(getAABB(ta, ca), getAABB(tb, cb))) continue
-        currentTriggerPairs.set(pairKey(ia, ib), [ia, ib])
+        const ov = getOverlap(getAABB(ta, ca), getAABB(tb, cb))
+        if (!ov) continue
+        const key = pairKey(ia, ib)
+        currentTriggerPairs.set(key, [ia, ib])
+        // Contact normal (A→B) via minimum-penetration axis
+        let nx = 0,
+          ny = 0
+        if (Math.abs(ov.x) < Math.abs(ov.y)) {
+          nx = ov.x > 0 ? 1 : -1
+        } else {
+          ny = ov.y > 0 ? 1 : -1
+        }
+        triggerNormals.set(key, { nx, ny })
       }
     }
 
     for (const [key, [a, b]] of currentTriggerPairs) {
-      if (!this.activeTriggerPairs.has(key)) this.events?.emit('triggerEnter', { a, b })
-      else this.events?.emit('triggerStay', { a, b })
-      this.events?.emit('trigger', { a, b })
+      const tn = triggerNormals.get(key)
+      const normalX = tn?.nx ?? 0
+      const normalY = tn?.ny ?? 0
+      if (!this.activeTriggerPairs.has(key)) this.events?.emit('triggerEnter', { a, b, normalX, normalY })
+      else this.events?.emit('triggerStay', { a, b, normalX, normalY })
+      this.events?.emit('trigger', { a, b, normalX, normalY })
     }
     for (const [key, [a, b]] of this.activeTriggerPairs) {
-      if (!currentTriggerPairs.has(key)) this.events?.emit('triggerExit', { a, b })
+      if (!currentTriggerPairs.has(key)) this.events?.emit('triggerExit', { a, b, normalX: 0, normalY: 0 })
     }
     this.activeTriggerPairs = currentTriggerPairs
 
@@ -3210,6 +3229,7 @@ export class PhysicsSystem implements System {
 
     if (allCircle.length > 0) {
       const currentCirclePairs = new Map<string, [EntityId, EntityId]>()
+      const circleNormals = new Map<string, { nx: number; ny: number }>()
 
       for (let i = 0; i < allCircle.length; i++) {
         for (let j = i + 1; j < allCircle.length; j++) {
@@ -3223,8 +3243,16 @@ export class PhysicsSystem implements System {
           const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
           const dx = ta.x + ca.offsetX - (tb.x + cb.offsetX)
           const dy = ta.y + ca.offsetY - (tb.y + cb.offsetY)
-          if (dx * dx + dy * dy < (ca.radius + cb.radius) ** 2) {
-            currentCirclePairs.set(pairKey(ia, ib), [ia, ib])
+          const distSq = dx * dx + dy * dy
+          if (distSq < (ca.radius + cb.radius) ** 2) {
+            const key = pairKey(ia, ib)
+            currentCirclePairs.set(key, [ia, ib])
+            // Normal points A→B (from ia toward ib)
+            const dist = Math.sqrt(distSq)
+            circleNormals.set(key, {
+              nx: dist > 0 ? dx / dist : 0,
+              ny: dist > 0 ? dy / dist : 0,
+            })
           }
         }
       }
@@ -3249,23 +3277,33 @@ export class PhysicsSystem implements System {
           const nearY = Math.max(by - bc.height / 2, Math.min(cy, by + bc.height / 2))
           const dx = cx - nearX
           const dy = cy - nearY
-          if (dx * dx + dy * dy < cc.radius * cc.radius) {
-            currentCirclePairs.set(pairKey(cid, bid), [cid, bid])
+          const distSq = dx * dx + dy * dy
+          if (distSq < cc.radius * cc.radius) {
+            const key = pairKey(cid, bid)
+            currentCirclePairs.set(key, [cid, bid])
+            const dist = Math.sqrt(distSq)
+            circleNormals.set(key, {
+              nx: dist > 0 ? dx / dist : 0,
+              ny: dist > 0 ? dy / dist : 0,
+            })
           }
         }
       }
 
       for (const [key, [a, b]] of currentCirclePairs) {
-        if (!this.activeCirclePairs.has(key)) this.events?.emit('circleEnter', { a, b })
-        else this.events?.emit('circleStay', { a, b })
-        this.events?.emit('circle', { a, b })
+        const cn = circleNormals.get(key)
+        const normalX = cn?.nx ?? 0
+        const normalY = cn?.ny ?? 0
+        if (!this.activeCirclePairs.has(key)) this.events?.emit('circleEnter', { a, b, normalX, normalY })
+        else this.events?.emit('circleStay', { a, b, normalX, normalY })
+        this.events?.emit('circle', { a, b, normalX, normalY })
       }
       for (const [key, [a, b]] of this.activeCirclePairs) {
-        if (!currentCirclePairs.has(key)) this.events?.emit('circleExit', { a, b })
+        if (!currentCirclePairs.has(key)) this.events?.emit('circleExit', { a, b, normalX: 0, normalY: 0 })
       }
       this.activeCirclePairs = currentCirclePairs
     } else if (this.activeCirclePairs.size > 0) {
-      for (const [, [a, b]] of this.activeCirclePairs) this.events?.emit('circleExit', { a, b })
+      for (const [, [a, b]] of this.activeCirclePairs) this.events?.emit('circleExit', { a, b, normalX: 0, normalY: 0 })
       this.activeCirclePairs = new Map()
     }
 

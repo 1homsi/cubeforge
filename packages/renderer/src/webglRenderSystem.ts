@@ -1,6 +1,24 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  PRIMARY GAME RENDERER — WebGL2 instanced renderer                      ║
+// ║                                                                          ║
+// ║  This is the production rendering system. All visual game features       ║
+// ║  (sprites, text, particles, post-processing, etc.) belong here or in    ║
+// ║  shaders.ts.                                                             ║
+// ║                                                                          ║
+// ║  Exported as `RenderSystem` from @cubeforge/renderer.                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
-import { VERT_SRC, FRAG_SRC, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC } from './shaders'
+import {
+  VERT_SRC,
+  FRAG_SRC,
+  PARALLAX_VERT_SRC,
+  PARALLAX_FRAG_SRC,
+  BLOOM_EXTRACT_FRAG_SRC,
+  BLUR_FRAG_SRC,
+  COMPOSITE_FRAG_SRC,
+} from './shaders'
 import { parseCSSColor } from './colorParser'
 import {
   type Sampling,
@@ -419,6 +437,35 @@ function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
   return [0, 0, uw, vh]
 }
 
+// ── Post-process options ──────────────────────────────────────────────────────
+
+export interface PostProcessOptions {
+  bloom?: {
+    enabled?: boolean
+    /** Luminance cutoff 0–1 above which a pixel contributes to bloom. Default 0.65. */
+    threshold?: number
+    /** Additive blend strength 0–1. Default 0.6. */
+    intensity?: number
+  }
+  vignette?: {
+    enabled?: boolean
+    /** Darkness at edges 0–1. Default 0.4. */
+    intensity?: number
+  }
+  chromaticAberration?: {
+    enabled?: boolean
+    /** Pixel shift for R/B channels. Default 2. */
+    offset?: number
+  }
+  scanlines?: {
+    enabled?: boolean
+    /** Pixel rows between scanlines. Default 3. */
+    gap?: number
+    /** Darkness of each scanline 0–1. Default 0.15. */
+    opacity?: number
+  }
+}
+
 // ── RenderSystem (WebGL2) ─────────────────────────────────────────────────────
 
 /**
@@ -512,6 +559,45 @@ export class RenderSystem implements System {
   private frameTimes: number[] = []
   private lastTimestamp = 0
 
+  // ── Post-process ─────────────────────────────────────────────────────────
+  private _ppOptions: PostProcessOptions = {}
+
+  // Lazily created programs (null until first PP use)
+  private _ppBloomExtractProg: WebGLProgram | null = null
+  private _ppBlurProg: WebGLProgram | null = null
+  private _ppCompositeProg: WebGLProgram | null = null
+
+  // Bloom-extract uniforms
+  private _ppBeScene: WebGLUniformLocation | null = null
+  private _ppBeThreshold: WebGLUniformLocation | null = null
+  // Blur uniforms
+  private _ppBlurTex: WebGLUniformLocation | null = null
+  private _ppBlurDir: WebGLUniformLocation | null = null
+  private _ppBlurTexel: WebGLUniformLocation | null = null
+  // Composite uniforms
+  private _ppCmpScene: WebGLUniformLocation | null = null
+  private _ppCmpBloom: WebGLUniformLocation | null = null
+  private _ppCmpBloomIntensity: WebGLUniformLocation | null = null
+  private _ppCmpVignette: WebGLUniformLocation | null = null
+  private _ppCmpCaOffset: WebGLUniformLocation | null = null
+  private _ppCmpCaEnabled: WebGLUniformLocation | null = null
+  private _ppCmpTexelSize: WebGLUniformLocation | null = null
+  private _ppCmpScanlineGap: WebGLUniformLocation | null = null
+  private _ppCmpScanlineOpacity: WebGLUniformLocation | null = null
+  private _ppCmpCanvasSize: WebGLUniformLocation | null = null
+
+  // FBOs + textures (recreated on canvas resize)
+  private _ppSceneFBO: WebGLFramebuffer | null = null
+  private _ppSceneTex: WebGLTexture | null = null
+  private _ppBloomExtractFBO: WebGLFramebuffer | null = null
+  private _ppBloomExtractTex: WebGLTexture | null = null
+  private _ppBlurFBO1: WebGLFramebuffer | null = null
+  private _ppBlurTex1: WebGLTexture | null = null
+  private _ppBlurFBO2: WebGLFramebuffer | null = null
+  private _ppBlurTex2: WebGLTexture | null = null
+  private _ppFBOW = 0
+  private _ppFBOH = 0
+
   /** Overlay a nav grid: green = walkable, red = blocked. Pass null to clear. */
   setDebugNavGrid(grid: NavGrid | null): void {
     this.debugNavGrid = grid
@@ -520,6 +606,157 @@ export class RenderSystem implements System {
   /** Flash a point on the canvas for one frame (world-space coords). */
   flashContactPoint(x: number, y: number): void {
     this.contactFlashPoints.push({ x, y, ttl: 1 })
+  }
+
+  /** Configure native WebGL post-process effects for this render system. */
+  setPostProcessOptions(opts: PostProcessOptions): void {
+    this._ppOptions = opts
+  }
+
+  private get _anyPPEnabled(): boolean {
+    const o = this._ppOptions
+    return (
+      (o.bloom?.enabled ?? false) ||
+      (o.vignette?.enabled ?? false) ||
+      (o.chromaticAberration?.enabled ?? false) ||
+      (o.scanlines?.enabled ?? false)
+    )
+  }
+
+  /** Lazily compile post-process shader programs. */
+  private _ensurePPPrograms(): void {
+    if (this._ppBloomExtractProg) return
+    const { gl } = this
+
+    this._ppBloomExtractProg = createProgram(gl, PARALLAX_VERT_SRC, BLOOM_EXTRACT_FRAG_SRC)
+    gl.useProgram(this._ppBloomExtractProg)
+    this._ppBeScene = gl.getUniformLocation(this._ppBloomExtractProg, 'u_scene')
+    this._ppBeThreshold = gl.getUniformLocation(this._ppBloomExtractProg, 'u_threshold')
+
+    this._ppBlurProg = createProgram(gl, PARALLAX_VERT_SRC, BLUR_FRAG_SRC)
+    gl.useProgram(this._ppBlurProg)
+    this._ppBlurTex = gl.getUniformLocation(this._ppBlurProg, 'u_tex')
+    this._ppBlurDir = gl.getUniformLocation(this._ppBlurProg, 'u_direction')
+    this._ppBlurTexel = gl.getUniformLocation(this._ppBlurProg, 'u_texelSize')
+
+    this._ppCompositeProg = createProgram(gl, PARALLAX_VERT_SRC, COMPOSITE_FRAG_SRC)
+    gl.useProgram(this._ppCompositeProg)
+    this._ppCmpScene = gl.getUniformLocation(this._ppCompositeProg, 'u_scene')
+    this._ppCmpBloom = gl.getUniformLocation(this._ppCompositeProg, 'u_bloom')
+    this._ppCmpBloomIntensity = gl.getUniformLocation(this._ppCompositeProg, 'u_bloomIntensity')
+    this._ppCmpVignette = gl.getUniformLocation(this._ppCompositeProg, 'u_vignetteIntensity')
+    this._ppCmpCaOffset = gl.getUniformLocation(this._ppCompositeProg, 'u_caOffset')
+    this._ppCmpCaEnabled = gl.getUniformLocation(this._ppCompositeProg, 'u_caEnabled')
+    this._ppCmpTexelSize = gl.getUniformLocation(this._ppCompositeProg, 'u_texelSize')
+    this._ppCmpScanlineGap = gl.getUniformLocation(this._ppCompositeProg, 'u_scanlineGap')
+    this._ppCmpScanlineOpacity = gl.getUniformLocation(this._ppCompositeProg, 'u_scanlineOpacity')
+    this._ppCmpCanvasSize = gl.getUniformLocation(this._ppCompositeProg, 'u_canvasSize')
+  }
+
+  /** Create or resize scene + bloom FBOs to match canvas dimensions. */
+  private _ensurePPFBOs(w: number, h: number): void {
+    if (this._ppFBOW === w && this._ppFBOH === h) return
+    const { gl } = this
+
+    const makeFBO = (
+      prevFBO: WebGLFramebuffer | null,
+      prevTex: WebGLTexture | null,
+    ): [WebGLFramebuffer, WebGLTexture] => {
+      if (prevFBO) gl.deleteFramebuffer(prevFBO)
+      if (prevTex) gl.deleteTexture(prevTex)
+      const tex = gl.createTexture()!
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      const fbo = gl.createFramebuffer()!
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.bindTexture(gl.TEXTURE_2D, null)
+      return [fbo, tex]
+    }
+
+    ;[this._ppSceneFBO, this._ppSceneTex] = makeFBO(this._ppSceneFBO, this._ppSceneTex)
+    ;[this._ppBloomExtractFBO, this._ppBloomExtractTex] = makeFBO(this._ppBloomExtractFBO, this._ppBloomExtractTex)
+    ;[this._ppBlurFBO1, this._ppBlurTex1] = makeFBO(this._ppBlurFBO1, this._ppBlurTex1)
+    ;[this._ppBlurFBO2, this._ppBlurTex2] = makeFBO(this._ppBlurFBO2, this._ppBlurTex2)
+
+    this._ppFBOW = w
+    this._ppFBOH = h
+  }
+
+  /** Run post-process passes (extract → blur → composite) and blit to screen. */
+  private _applyPostProcess(W: number, H: number): void {
+    const { gl } = this
+    const opts = this._ppOptions
+    const texelW = 1 / W
+    const texelH = 1 / H
+
+    gl.bindVertexArray(this.parallaxVAO)
+    gl.disable(gl.BLEND)
+
+    let bloomTex: WebGLTexture = this.whiteTexture // black if bloom disabled
+
+    if (opts.bloom?.enabled) {
+      const threshold = opts.bloom.threshold ?? 0.65
+
+      // Pass 1: Extract bright pixels → bloomExtractFBO
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this._ppBloomExtractFBO)
+      gl.useProgram(this._ppBloomExtractProg!)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, this._ppSceneTex!)
+      gl.uniform1i(this._ppBeScene!, 0)
+      gl.uniform1f(this._ppBeThreshold!, threshold)
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+
+      // Pass 2: Horizontal blur → blurFBO1
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this._ppBlurFBO1)
+      gl.useProgram(this._ppBlurProg!)
+      gl.bindTexture(gl.TEXTURE_2D, this._ppBloomExtractTex!)
+      gl.uniform1i(this._ppBlurTex!, 0)
+      gl.uniform2f(this._ppBlurDir!, 1.0, 0.0)
+      gl.uniform2f(this._ppBlurTexel!, texelW, texelH)
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+
+      // Pass 3: Vertical blur → blurFBO2
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this._ppBlurFBO2)
+      gl.bindTexture(gl.TEXTURE_2D, this._ppBlurTex1!)
+      gl.uniform2f(this._ppBlurDir!, 0.0, 1.0)
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+
+      bloomTex = this._ppBlurTex2!
+    }
+
+    // Final composite → screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.useProgram(this._ppCompositeProg!)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this._ppSceneTex!)
+    gl.uniform1i(this._ppCmpScene!, 0)
+
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, bloomTex)
+    gl.uniform1i(this._ppCmpBloom!, 1)
+
+    gl.uniform1f(this._ppCmpBloomIntensity!, opts.bloom?.enabled ? (opts.bloom.intensity ?? 0.6) : 0.0)
+    gl.uniform1f(this._ppCmpVignette!, opts.vignette?.enabled ? (opts.vignette.intensity ?? 0.4) : 0.0)
+    gl.uniform1f(this._ppCmpCaEnabled!, opts.chromaticAberration?.enabled ? 1.0 : 0.0)
+    gl.uniform1f(this._ppCmpCaOffset!, opts.chromaticAberration?.offset ?? 2.0)
+    gl.uniform2f(this._ppCmpTexelSize!, texelW, texelH)
+    gl.uniform1f(this._ppCmpScanlineGap!, opts.scanlines?.enabled ? (opts.scanlines.gap ?? 3) : 0.0)
+    gl.uniform1f(this._ppCmpScanlineOpacity!, opts.scanlines?.opacity ?? 0.15)
+    gl.uniform2f(this._ppCmpCanvasSize!, W, H)
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+
+    // Restore GL state for next frame's regular rendering
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    gl.activeTexture(gl.TEXTURE0)
   }
 
   constructor(
@@ -1107,6 +1344,14 @@ export class RenderSystem implements System {
       ss.currentScaleY += (tScY - ss.currentScaleY) * ss.recovery * dt
     }
 
+    // ── Post-process: redirect scene to off-screen FBO ────────────────────────
+    const ppEnabled = this._anyPPEnabled
+    if (ppEnabled) {
+      this._ensurePPPrograms()
+      this._ensurePPFBOs(W, H)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this._ppSceneFBO)
+    }
+
     // ── Clear ────────────────────────────────────────────────────────────────
     const [br, bg, bb] = parseCSSColor(background)
     gl.viewport(0, 0, W, H)
@@ -1170,6 +1415,14 @@ export class RenderSystem implements System {
     gl.activeTexture(gl.TEXTURE0)
 
     // ── Sprites ───────────────────────────────────────────────────────────────
+    // Frustum culling: pre-compute view bounds in world space (with 32px padding)
+    const halfVW = (W * 0.5) / zoom
+    const halfVH = (H * 0.5) / zoom
+    const viewL = camX - halfVW - 32 / zoom
+    const viewR = camX + halfVW + 32 / zoom
+    const viewT = camY - halfVH - 32 / zoom
+    const viewB = camY + halfVH + 32 / zoom
+
     const renderables = world.query('Transform', 'Sprite')
     renderables.sort((a: EntityId, b: EntityId) => {
       const sa = world.getComponent<SpriteComponent>(a, 'Sprite')!
@@ -1201,6 +1454,14 @@ export class RenderSystem implements System {
       const transform = world.getComponent<TransformComponent>(id, 'Transform')!
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
       if (!sprite.visible) continue
+
+      // Frustum culling: bounding-sphere test in world space
+      const scx = transform.x + sprite.offsetX
+      const scy = transform.y + sprite.offsetY
+      const shw = sprite.width * transform.scaleX * 0.5
+      const shh = sprite.height * transform.scaleY * 0.5
+      const sr = Math.sqrt(shw * shw + shh * shh)
+      if (scx + sr < viewL || scx - sr > viewR || scy + sr < viewT || scy - sr > viewB) continue
 
       // Ensure we have a GL texture for this sprite's image.
       // Sprite.tsx already loads the image via AssetManager (with correct BASE_URL resolution)
@@ -1642,6 +1903,12 @@ export class RenderSystem implements System {
       }
       if (cfCount > 0) this.flush(cfCount, '__color__')
       this.contactFlashPoints = this.contactFlashPoints.filter((p) => p.ttl > 0)
+    }
+
+    // ── Post-process: apply effects on top of scene FBO ─────────────────────
+    if (ppEnabled) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      this._applyPostProcess(W, H)
     }
 
     // ── FPS tracking ─────────────────────────────────────────────────────────

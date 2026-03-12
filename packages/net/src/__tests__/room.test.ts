@@ -88,6 +88,20 @@ describe('Room', () => {
     expect(handlerB).toHaveBeenCalledWith(msg)
   })
 
+  it('onMessage returns an unsubscribe function that stops delivery', () => {
+    const room = new Room({ transport: mock.transport })
+    const handler = vi.fn()
+    const msg = { type: 'ping', payload: {} }
+
+    const unsubscribe = room.onMessage(handler)
+    mock.emitMessage(JSON.stringify(msg))
+    expect(handler).toHaveBeenCalledTimes(1)
+
+    unsubscribe()
+    mock.emitMessage(JSON.stringify(msg))
+    expect(handler).toHaveBeenCalledTimes(1) // not called again
+  })
+
   it('ignores malformed inbound frames', () => {
     const room = new Room({ transport: mock.transport })
     const handler = vi.fn()

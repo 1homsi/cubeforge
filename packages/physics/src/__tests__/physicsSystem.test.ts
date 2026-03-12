@@ -363,6 +363,8 @@ describe('Contact events', () => {
   interface ContactPayload {
     a: number
     b: number
+    normalX?: number
+    normalY?: number
   }
 
   describe('triggerEnter / triggerExit', () => {
@@ -577,6 +579,87 @@ describe('Contact events', () => {
 
       runSteps(world, 1)
       expect(exited.length).toBe(1)
+    })
+  })
+
+  describe('Contact normals', () => {
+    it('collisionEnter includes a unit normal pointing from A toward B', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      // A is at x=0, B is to the right at x=15 — they overlap by 5 units
+      // Normal should point in +x direction (A→B)
+      const a = world.createEntity()
+      world.addComponent(a, createTransform(0, 0))
+      world.addComponent(a, createRigidBody())
+      world.addComponent(a, createBoxCollider(20, 20))
+
+      const b = world.createEntity()
+      world.addComponent(b, createTransform(15, 0))
+      world.addComponent(b, createRigidBody())
+      world.addComponent(b, createBoxCollider(20, 20))
+
+      const entered: ContactPayload[] = []
+      events.on<ContactPayload>('collisionEnter', (p) => entered.push(p))
+
+      runSteps(world, 1)
+
+      expect(entered.length).toBe(1)
+      // Normal should be non-zero and approximately a unit vector
+      const { normalX = 0, normalY = 0 } = entered[0]
+      expect(Math.abs(normalX) + Math.abs(normalY)).toBeGreaterThan(0.5)
+    })
+
+    it('triggerEnter includes a normal indicating entry direction', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      // Trigger at x=0, dynamic body enters from the left (x=-12)
+      const trigger = world.createEntity()
+      world.addComponent(trigger, createTransform(0, 0))
+      world.addComponent(trigger, createBoxCollider(20, 20, { isTrigger: true }))
+
+      const dyn = world.createEntity()
+      world.addComponent(dyn, createTransform(-12, 0)) // overlapping left edge
+      world.addComponent(dyn, createRigidBody())
+      world.addComponent(dyn, createBoxCollider(10, 10))
+
+      const entered: ContactPayload[] = []
+      events.on<ContactPayload>('triggerEnter', (p) => entered.push(p))
+
+      runSteps(world, 1)
+
+      expect(entered.length).toBe(1)
+      const { normalX = 0, normalY = 0 } = entered[0]
+      expect(Math.abs(normalX) + Math.abs(normalY)).toBeGreaterThan(0.5)
+    })
+
+    it('collisionExit emits with normalX=0 normalY=0', () => {
+      const { world, events } = createTestWorldWithEvents()
+
+      const a = world.createEntity()
+      world.addComponent(a, createTransform(0, 0))
+      world.addComponent(a, createRigidBody())
+      world.addComponent(a, createBoxCollider(20, 20))
+
+      const b = world.createEntity()
+      world.addComponent(b, createTransform(5, 0))
+      world.addComponent(b, createRigidBody())
+      world.addComponent(b, createBoxCollider(20, 20))
+
+      runSteps(world, 1)
+
+      const ta = world.getComponent<TransformComponent>(a, 'Transform')!
+      const tb = world.getComponent<TransformComponent>(b, 'Transform')!
+      ta.x = -100
+      tb.x = 100
+
+      const exited: ContactPayload[] = []
+      events.on<ContactPayload>('collisionExit', (p) => exited.push(p))
+
+      runSteps(world, 1)
+
+      expect(exited.length).toBe(1)
+      expect(exited[0].normalX).toBe(0)
+      expect(exited[0].normalY).toBe(0)
     })
   })
 })

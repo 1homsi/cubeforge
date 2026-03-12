@@ -5,6 +5,40 @@ import { EngineContext, EntityContext } from './context'
 interface ContactEvent {
   a: EntityId
   b: EntityId
+  normalX?: number
+  normalY?: number
+}
+
+/**
+ * Contact normal data passed to collision/trigger handlers.
+ *
+ * `normalX` / `normalY` form a unit vector pointing **from the other entity
+ * toward this entity** — i.e. the direction you were pushed. Use this for
+ * knockback, surface detection (floor, wall, ceiling), and damage scaling.
+ *
+ * @example
+ * useCollisionEnter((other, contact) => {
+ *   // Knock player back on contact
+ *   setVelocity(contact.normalX * 300, contact.normalY * 300)
+ * })
+ *
+ * @example
+ * useTriggerEnter((other, contact) => {
+ *   // Detect which side the player entered from
+ *   const fromTop = contact.normalY > 0.5
+ * })
+ */
+export interface ContactData {
+  /**
+   * X component of the contact normal — direction from other entity toward this entity.
+   * Positive = other entity is to the left of this entity.
+   */
+  normalX: number
+  /**
+   * Y component of the contact normal — direction from other entity toward this entity.
+   * Positive = other entity is above this entity (world Y-down convention).
+   */
+  normalY: number
 }
 
 interface ContactOpts {
@@ -14,7 +48,11 @@ interface ContactOpts {
   layer?: string
 }
 
-function useContactEvent(eventName: string, handler: (other: EntityId) => void, opts?: ContactOpts): void {
+function useContactEvent(
+  eventName: string,
+  handler: (other: EntityId, contact: ContactData) => void,
+  opts?: ContactOpts,
+): void {
   const engine = useContext(EngineContext)
   const entityId = useContext(EntityContext)
 
@@ -27,7 +65,7 @@ function useContactEvent(eventName: string, handler: (other: EntityId) => void, 
   handlerRef.current = handler
 
   useEffect(() => {
-    return engine.events.on<ContactEvent>(eventName, ({ a, b }) => {
+    return engine.events.on<ContactEvent>(eventName, ({ a, b, normalX = 0, normalY = 0 }) => {
       // Only handle events involving this entity
       const isA = a === entityId
       const isB = b === entityId
@@ -49,7 +87,16 @@ function useContactEvent(eventName: string, handler: (other: EntityId) => void, 
         if (layer !== opts.layer) return
       }
 
-      handlerRef.current(other)
+      // The manifold normal points A→B. From A's perspective the normal pointing
+      // toward A (away from B) is -normal. From B's perspective it's +normal.
+      // Both give "direction from other entity toward this entity."
+      const flip = isA ? -1 : 1
+      const contact: ContactData = {
+        normalX: normalX * flip,
+        normalY: normalY * flip,
+      }
+
+      handlerRef.current(other, contact)
     })
     // opts.tag and opts.layer intentionally in deps: filter changes require re-subscription.
     // handler is NOT a dep — the ref keeps it current without re-subscribing.
@@ -67,7 +114,7 @@ function useContactEvent(eventName: string, handler: (other: EntityId) => void, 
  *   return null
  * }
  */
-export function useTriggerEnter(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useTriggerEnter(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('triggerEnter', handler, opts)
 }
 
@@ -75,7 +122,7 @@ export function useTriggerEnter(handler: (other: EntityId) => void, opts?: Conta
  * Fires once when an overlapping entity's collider leaves this entity's trigger.
  * Must be used inside an `<Entity>`.
  */
-export function useTriggerExit(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useTriggerExit(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('triggerExit', handler, opts)
 }
 
@@ -85,11 +132,15 @@ export function useTriggerExit(handler: (other: EntityId) => void, opts?: Contac
  *
  * @example
  * function Enemy() {
- *   useCollisionEnter((other) => takeDamage(), { tag: 'player' })
+ *   useCollisionEnter((other, contact) => {
+ *     // Knock enemy back
+ *     rb.vx = contact.normalX * 400
+ *     rb.vy = contact.normalY * 400
+ *   }, { tag: 'player' })
  *   return null
  * }
  */
-export function useCollisionEnter(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useCollisionEnter(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('collisionEnter', handler, opts)
 }
 
@@ -97,7 +148,7 @@ export function useCollisionEnter(handler: (other: EntityId) => void, opts?: Con
  * Fires once when two solid dynamic bodies separate.
  * Must be used inside an `<Entity>`.
  */
-export function useCollisionExit(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useCollisionExit(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('collisionExit', handler, opts)
 }
 
@@ -108,11 +159,11 @@ export function useCollisionExit(handler: (other: EntityId) => void, opts?: Cont
  *
  * @example
  * function Asteroid() {
- *   useCircleEnter((other) => onHit(other), { tag: 'bullet' })
+ *   useCircleEnter((other, contact) => onHit(other, contact), { tag: 'bullet' })
  *   return null
  * }
  */
-export function useCircleEnter(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useCircleEnter(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('circleEnter', handler, opts)
 }
 
@@ -120,7 +171,7 @@ export function useCircleEnter(handler: (other: EntityId) => void, opts?: Contac
  * Fires once when two CircleCollider entities stop overlapping.
  * Must be used inside an `<Entity>`.
  */
-export function useCircleExit(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useCircleExit(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('circleExit', handler, opts)
 }
 
@@ -128,7 +179,7 @@ export function useCircleExit(handler: (other: EntityId) => void, opts?: Contact
  * Fires every frame while another entity remains inside this entity's trigger.
  * Must be used inside an `<Entity>`.
  */
-export function useTriggerStay(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useTriggerStay(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('triggerStay', handler, opts)
 }
 
@@ -136,7 +187,7 @@ export function useTriggerStay(handler: (other: EntityId) => void, opts?: Contac
  * Fires every frame while two solid dynamic bodies remain in contact.
  * Must be used inside an `<Entity>`.
  */
-export function useCollisionStay(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useCollisionStay(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('collisionStay', handler, opts)
 }
 
@@ -144,6 +195,6 @@ export function useCollisionStay(handler: (other: EntityId) => void, opts?: Cont
  * Fires every frame while two CircleColliders remain overlapping.
  * Must be used inside an `<Entity>`.
  */
-export function useCircleStay(handler: (other: EntityId) => void, opts?: ContactOpts): void {
+export function useCircleStay(handler: (other: EntityId, contact: ContactData) => void, opts?: ContactOpts): void {
   useContactEvent('circleStay', handler, opts)
 }

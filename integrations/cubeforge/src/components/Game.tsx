@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin, type System } from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
-import { RenderSystem, Canvas2DRenderer, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
+import { RenderSystem, DebugOverlayRenderer, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { DebugSystem, DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from '@cubeforge/devtools'
@@ -113,7 +113,7 @@ export function Game({
     if (debug) {
       const debugCanvas2dEl = debugCanvasRef.current
       if (debugCanvas2dEl) {
-        const debugCanvas2d = new Canvas2DRenderer(debugCanvas2dEl)
+        const debugCanvas2d = new DebugOverlayRenderer(debugCanvas2dEl)
         debugSystem = new DebugSystem(debugCanvas2d)
       }
     }
@@ -266,12 +266,17 @@ export function Game({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine])
 
-  // Sync canvas dimensions when width/height props change
+  // Sync canvas dimensions when width/height props change (HiDPI-aware)
   useEffect(() => {
     if (!engine) return
+    const dpr = window.devicePixelRatio || 1
+    const physW = Math.round(width * dpr)
+    const physH = Math.round(height * dpr)
     const canvas = engine.canvas
-    if (canvas.width !== width) canvas.width = width
-    if (canvas.height !== height) canvas.height = height
+    if (canvas.width !== physW) canvas.width = physW
+    if (canvas.height !== physH) canvas.height = physH
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
   }, [width, height, engine])
 
   // Sync gravity changes

@@ -21,6 +21,7 @@ export { ParticleEmitter } from './components/ParticleEmitter'
 export { VirtualJoystick } from './components/VirtualJoystick'
 export type { VirtualJoystickProps } from './components/VirtualJoystick'
 export { MovingPlatform } from './components/MovingPlatform'
+export type { Waypoint } from './components/MovingPlatform'
 export { Checkpoint } from './components/Checkpoint'
 export { Tilemap } from './components/Tilemap'
 export { ParallaxLayer } from './components/ParallaxLayer'
@@ -48,6 +49,8 @@ export type { TiledObject, TiledLayer } from './components/Tilemap'
 export { useGame } from './hooks/useGame'
 export { useCamera } from './hooks/useCamera'
 export type { CameraControls } from './hooks/useCamera'
+export { useCameraLookahead } from './hooks/useCameraLookahead'
+export type { CameraLookaheadOptions } from './hooks/useCameraLookahead'
 export { useSnapshot } from './hooks/useSnapshot'
 export type { SnapshotControls } from './hooks/useSnapshot'
 export { useEntity } from './hooks/useEntity'
@@ -76,8 +79,13 @@ export type { PauseControls } from './hooks/usePause'
 export { useProfiler } from './hooks/useProfiler'
 export type { ProfilerData } from './hooks/useProfiler'
 export { usePostProcess } from './hooks/usePostProcess'
+export { useWebGLPostProcess } from './hooks/useWebGLPostProcess'
+export { useAudioListener } from './hooks/useAudioListener'
 export { useTouch } from './hooks/useTouch'
 export type { TouchControls } from './hooks/useTouch'
+export { useGestures } from './hooks/useGestures'
+export type { SwipeEvent, PinchEvent, GestureHandlers, GestureOptions } from './hooks/useGestures'
+export { useGamepadHaptics } from './hooks/useGamepadHaptics'
 export { useTimer } from './hooks/useTimer'
 export type { TimerControls } from './hooks/useTimer'
 export { useCoroutine, wait, waitFrames, waitUntil } from './hooks/useCoroutine'
@@ -108,6 +116,7 @@ export {
   useCircleStay,
   useCollidingWith,
 } from '@cubeforge/context'
+export type { ContactData } from '@cubeforge/context'
 
 // Gameplay hooks (via @cubeforge/gameplay)
 export { usePlatformerController } from '@cubeforge/gameplay'
@@ -123,6 +132,8 @@ export { usePersistedBindings } from '@cubeforge/gameplay'
 export type { BindingControls } from '@cubeforge/gameplay'
 export { useSave } from '@cubeforge/gameplay'
 export type { SaveControls, SaveOptions } from '@cubeforge/gameplay'
+export { useIDBSave } from '@cubeforge/gameplay'
+export type { IDBSaveControls, IDBSaveOptions } from '@cubeforge/gameplay'
 export { useRestart } from '@cubeforge/gameplay'
 export type { RestartControls } from '@cubeforge/gameplay'
 export { useLevelTransition } from '@cubeforge/gameplay'
@@ -144,6 +155,8 @@ export type { CharacterControllerConfig, CharacterCollision, MoveResult } from '
 export { useDropThrough } from '@cubeforge/gameplay'
 export { useDialogue } from '@cubeforge/gameplay'
 export type { DialogueLine, DialogueScript, DialogueControls } from '@cubeforge/gameplay'
+export { DialogueBox } from '@cubeforge/gameplay'
+export type { DialogueBoxProps, DialogueBoxStyle } from '@cubeforge/gameplay'
 export { useCutscene } from '@cubeforge/gameplay'
 export type { CutsceneStep, CutsceneControls } from '@cubeforge/gameplay'
 export { useGameStore } from '@cubeforge/gameplay'
@@ -170,6 +183,16 @@ export type { SpatialSoundControls, SpatialSoundOptions } from '@cubeforge/audio
 export { setListenerPosition, getListenerPosition } from '@cubeforge/audio'
 export { useMusic } from '@cubeforge/audio'
 export type { MusicControls, MusicOptions } from '@cubeforge/audio'
+export { useStreamedMusic } from '@cubeforge/audio'
+export type { StreamedMusicControls, StreamedMusicOptions } from '@cubeforge/audio'
+export { setGroupEffect, clearGroupEffect } from '@cubeforge/audio'
+export type {
+  GroupEffectOptions,
+  ReverbEffectOptions,
+  FilterEffectOptions,
+  CompressorEffectOptions,
+  DelayEffectOptions,
+} from '@cubeforge/audio'
 
 // DevTools (via @cubeforge/devtools)
 export type { DevToolsHandle } from '@cubeforge/devtools'
@@ -186,6 +209,7 @@ export type { RenderLayer, RenderLayerManager } from '@cubeforge/renderer'
 // Post-processing effects
 export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect } from '@cubeforge/renderer'
 export type { PostProcessEffect, PostProcessStack } from '@cubeforge/renderer'
+export type { PostProcessOptions } from '@cubeforge/renderer'
 
 // Types and utilities from engine packages
 export type { EngineState } from './context'
@@ -378,3 +402,17 @@ export type { AnimationClipDefinition } from '@cubeforge/renderer'
 
 // Prefab utility
 export { definePrefab } from './utils/prefab'
+
+// Multiplayer React hooks
+export { useNetworkSync } from './hooks/useNetworkSync'
+export type { NetworkSyncOptions } from './hooks/useNetworkSync'
+export { useRemotePlayer } from './hooks/useRemotePlayer'
+export type { RemotePlayerOptions, RemotePlayerControls } from './hooks/useRemotePlayer'
+
+// Re-export net primitives used alongside the hooks
+export { Room, syncEntity, ClientPrediction, useNetworkInput } from '@cubeforge/net'
+export type { NetMessage, RoomConfig, SyncConfig, PredictionConfig, NetworkInputConfig } from '@cubeforge/net'
+
+// Core: delta + binary snapshots
+export type { DeltaSnapshot } from '@cubeforge/core'
+export { applyDeltaSnapshot } from '@cubeforge/core'

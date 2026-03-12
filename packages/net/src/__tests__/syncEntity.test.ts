@@ -21,6 +21,10 @@ describe('syncEntity', () => {
       broadcast: vi.fn(),
       onMessage: vi.fn((handler: (msg: NetMessage) => void) => {
         handlers.push(handler)
+        return () => {
+          const i = handlers.indexOf(handler)
+          if (i !== -1) handlers.splice(i, 1)
+        }
       }),
     }
     world = {

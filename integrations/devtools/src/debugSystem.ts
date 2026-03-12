@@ -1,13 +1,13 @@
 import type { System, ECSWorld } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
-import type { Canvas2DRenderer } from '@cubeforge/renderer'
+import type { DebugOverlayRenderer } from '@cubeforge/renderer'
 
 export class DebugSystem implements System {
   private frameCount = 0
   private lastFpsTime = 0
   private fps = 0
 
-  constructor(private readonly renderer: Canvas2DRenderer) {}
+  constructor(private readonly renderer: DebugOverlayRenderer) {}
 
   update(world: ECSWorld, dt: number): void {
     const { ctx, canvas } = this.renderer

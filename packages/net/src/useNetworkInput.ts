@@ -64,7 +64,7 @@ export function useNetworkInput(config: NetworkInputConfig): {
     }, 50)
 
     // Receive remote peer inputs.
-    room.onMessage((msg) => {
+    const unsubscribe = room.onMessage((msg) => {
       if (msg.type !== INPUT_MSG_TYPE) return
       if (!msg.peerId) return
       remoteInputs.set(msg.peerId, msg.payload as Record<string, boolean>)
@@ -74,6 +74,7 @@ export function useNetworkInput(config: NetworkInputConfig): {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
       clearInterval(broadcastInterval)
+      unsubscribe()
     }
   }, [room, keys, remoteInputs])
 

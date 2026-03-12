@@ -1,3 +1,12 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  DEBUG OVERLAY DRAW SYSTEM — NOT THE GAME RENDERER                      ║
+// ║                                                                          ║
+// ║  Draws debug wireframes, physics shapes, nav grids, and contact points   ║
+// ║  onto a transparent Canvas2D overlay in dev/debug mode.                  ║
+// ║                                                                          ║
+// ║  Production rendering lives in webglRenderSystem.ts (WebGL2).           ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import type { SpriteComponent } from './components/sprite'
@@ -10,7 +19,7 @@ import type { ParallaxLayerComponent } from './components/parallaxLayer'
 import type { TextComponent } from './components/text'
 import type { TrailComponent } from './components/trail'
 import type { NineSliceComponent } from './components/nineSlice'
-import { Canvas2DRenderer } from './canvas2d'
+import { DebugOverlayRenderer } from './canvas2d'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
 import { createPostProcessStack, type PostProcessStack } from './postProcess'
 
@@ -65,7 +74,7 @@ export class RenderSystem implements System {
   readonly postProcessStack: PostProcessStack = createPostProcessStack()
 
   constructor(
-    private readonly renderer: Canvas2DRenderer,
+    private readonly renderer: DebugOverlayRenderer,
     private readonly entityIds: Map<string, EntityId>,
   ) {}
 
@@ -670,6 +679,7 @@ export class RenderSystem implements System {
       ctx.translate(transform.x + text.offsetX, transform.y + text.offsetY)
       ctx.rotate(transform.rotation)
       if (text.opacity != null) ctx.globalAlpha = text.opacity
+
       ctx.font = `${text.fontSize}px ${text.fontFamily}`
       ctx.textAlign = text.align
       ctx.textBaseline = text.baseline

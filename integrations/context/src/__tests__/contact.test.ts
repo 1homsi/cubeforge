@@ -44,6 +44,9 @@ function contactWrapper(engine: EngineState, entityId: number) {
     )
 }
 
+/** Shorthand: matcher for the ContactData object — just checks it's an object with numbers */
+const anyContact = expect.objectContaining({ normalX: expect.any(Number), normalY: expect.any(Number) })
+
 describe('useContact hooks', () => {
   let engine: EngineState
   let entityA: number
@@ -65,7 +68,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('triggerEnter', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
 
     it('fires when triggerEnter event includes this entity as B', () => {
@@ -77,7 +80,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('triggerEnter', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityA)
+      expect(handler).toHaveBeenCalledWith(entityA, anyContact)
     })
 
     it('does not fire for unrelated entities', () => {
@@ -103,7 +106,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('triggerEnter', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
 
     it('does not fire when tag does not match', () => {
@@ -129,7 +132,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('triggerEnter', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
 
     it('does not fire when layer does not match', () => {
@@ -144,6 +147,35 @@ describe('useContact hooks', () => {
       })
       expect(handler).not.toHaveBeenCalled()
     })
+
+    it('orients normalX toward self — entity A gets flipped normal', () => {
+      const handler = vi.fn()
+      renderHook(() => useTriggerEnter(handler), {
+        wrapper: contactWrapper(engine, entityA),
+      })
+
+      // Event has normalX=1 (A→B direction). Entity A should receive normalX=-1 (B→A = toward A)
+      act(() => {
+        engine.events.emit('triggerEnter', { a: entityA, b: entityB, normalX: 1, normalY: 0 })
+      })
+      const call = (handler as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect(call[0]).toBe(entityB)
+      expect(call[1].normalX).toBeCloseTo(-1)
+      expect(call[1].normalY).toBeCloseTo(0)
+    })
+
+    it('orients normalX toward self — entity B keeps normal as-is', () => {
+      const handler = vi.fn()
+      renderHook(() => useTriggerEnter(handler), {
+        wrapper: contactWrapper(engine, entityB),
+      })
+
+      // Event has normalX=1 (A→B direction). Entity B should receive normalX=1 (A→B = toward B)
+      act(() => {
+        engine.events.emit('triggerEnter', { a: entityA, b: entityB, normalX: 1, normalY: 0 })
+      })
+      expect(handler).toHaveBeenCalledWith(entityA, expect.objectContaining({ normalX: 1, normalY: 0 }))
+    })
   })
 
   describe('useTriggerExit', () => {
@@ -156,7 +188,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('triggerExit', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -170,7 +202,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('collisionEnter', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -184,7 +216,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('collisionExit', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -198,7 +230,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('triggerStay', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -212,7 +244,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('collisionStay', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -226,7 +258,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('circleEnter', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -240,7 +272,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('circleExit', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -254,7 +286,7 @@ describe('useContact hooks', () => {
       act(() => {
         engine.events.emit('circleStay', { a: entityA, b: entityB })
       })
-      expect(handler).toHaveBeenCalledWith(entityB)
+      expect(handler).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 
@@ -273,7 +305,7 @@ describe('useContact hooks', () => {
         engine.events.emit('triggerEnter', { a: entityA, b: entityB })
       })
       expect(handler1).not.toHaveBeenCalled()
-      expect(handler2).toHaveBeenCalledWith(entityB)
+      expect(handler2).toHaveBeenCalledWith(entityB, anyContact)
     })
   })
 })
