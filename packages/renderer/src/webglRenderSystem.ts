@@ -1,3 +1,13 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  PRIMARY GAME RENDERER — WebGL2 instanced renderer                      ║
+// ║                                                                          ║
+// ║  This is the production rendering system. All visual game features       ║
+// ║  (sprites, text, particles, post-processing, etc.) belong here or in    ║
+// ║  shaders.ts.                                                             ║
+// ║                                                                          ║
+// ║  Exported as `RenderSystem` from @cubeforge/renderer.                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import { VERT_SRC, FRAG_SRC, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC } from './shaders'

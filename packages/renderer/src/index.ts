@@ -17,7 +17,7 @@ export * from './components/mask'
 export * from './components/shapes'
 export { RenderSystem } from './webglRenderSystem'
 export { resolveClip, evaluateConditions } from './renderSystem'
-// Canvas2DRenderer is kept for the debug overlay system in @cubeforge/devtools
-export { Canvas2DRenderer } from './canvas2d'
+// DebugOverlayRenderer — Canvas2D, debug/devtools only. NOT the game renderer.
+export { DebugOverlayRenderer } from './canvas2d'
 export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect } from './postProcess'
 export type { PostProcessEffect, PostProcessStack } from './postProcess'
