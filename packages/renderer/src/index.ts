@@ -19,6 +19,5 @@ export { RenderSystem } from './webglRenderSystem'
 export { resolveClip, evaluateConditions } from './renderSystem'
 // Canvas2DRenderer is kept for the debug overlay system in @cubeforge/devtools
 export { Canvas2DRenderer } from './canvas2d'
-export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect, bloomEffect } from './postProcess'
+export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect } from './postProcess'
 export type { PostProcessEffect, PostProcessStack } from './postProcess'
-export { generateSdfText, renderSdfText, clearSdfCache } from './sdfText'

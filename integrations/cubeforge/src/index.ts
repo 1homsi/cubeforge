@@ -412,5 +412,3 @@ export type { NetMessage, RoomConfig, SyncConfig, PredictionConfig, NetworkInput
 export type { DeltaSnapshot } from '@cubeforge/core'
 export { applyDeltaSnapshot } from '@cubeforge/core'
 
-// SDF text utilities
-export { generateSdfText, renderSdfText, clearSdfCache } from '@cubeforge/renderer'

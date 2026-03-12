@@ -4,7 +4,6 @@ import {
   vignetteEffect,
   scanlineEffect,
   chromaticAberrationEffect,
-  bloomEffect,
   type PostProcessEffect,
 } from '../postProcess'
 
@@ -195,30 +194,3 @@ describe('chromaticAberrationEffect', () => {
   })
 })
 
-describe('bloomEffect', () => {
-  it('creates a function', () => {
-    expect(typeof bloomEffect()).toBe('function')
-  })
-
-  it('is a no-op for zero-size canvas', () => {
-    const effect = bloomEffect()
-    const ctx = makeCtx()
-    expect(() => effect(ctx, 0, 0, 0.016)).not.toThrow()
-    expect(ctx.getImageData).not.toHaveBeenCalled()
-  })
-
-  it('reads image data twice and writes once for non-zero canvas', () => {
-    const effect = bloomEffect(0.5, 0.8, 2)
-    const ctx = makeCtx()
-    effect(ctx, 4, 4, 0.016)
-    // getImageData called for src read + output read; putImageData called once
-    expect(ctx.getImageData).toHaveBeenCalled()
-    expect(ctx.putImageData).toHaveBeenCalledTimes(1)
-  })
-
-  it('accepts custom threshold, intensity, and radius without throwing', () => {
-    const effect = bloomEffect(0.3, 1.0, 3)
-    const ctx = makeCtx()
-    expect(() => effect(ctx, 4, 4, 0.016)).not.toThrow()
-  })
-})
