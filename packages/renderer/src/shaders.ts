@@ -124,3 +124,115 @@ void main() {
   fragColor = texture(u_texture, uv);
 }
 `
+
+// ── Post-process shaders ──────────────────────────────────────────────────────
+// These share PARALLAX_VERT_SRC as their vertex shader (fullscreen NDC quad).
+
+/** Bloom extract: outputs pixels above the luminance threshold, scaled by brightness. */
+export const BLOOM_EXTRACT_FRAG_SRC = `#version 300 es
+precision mediump float;
+
+in vec2 v_fragCoord;
+
+uniform sampler2D u_scene;
+uniform float     u_threshold;
+
+out vec4 fragColor;
+
+void main() {
+  vec4 c = texture(u_scene, v_fragCoord);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  float factor = max(0.0, lum - u_threshold) / max(0.001, 1.0 - u_threshold);
+  fragColor = vec4(c.rgb * factor, 1.0);
+}
+`
+
+/** Separable Gaussian blur (5-tap). Use u_direction=(1,0) for H, (0,1) for V. */
+export const BLUR_FRAG_SRC = `#version 300 es
+precision mediump float;
+
+in vec2 v_fragCoord;
+
+uniform sampler2D u_tex;
+uniform vec2      u_direction;  // (1,0) = horizontal, (0,1) = vertical
+uniform vec2      u_texelSize;  // (1/width, 1/height)
+
+out vec4 fragColor;
+
+void main() {
+  const float w0 = 0.227027;
+  const float w1 = 0.194595;
+  const float w2 = 0.121622;
+  const float w3 = 0.054054;
+  const float w4 = 0.016216;
+
+  vec2 off = u_direction * u_texelSize;
+  vec3 result = texture(u_tex, v_fragCoord).rgb * w0;
+  result += texture(u_tex, v_fragCoord + off * 1.0).rgb * w1;
+  result += texture(u_tex, v_fragCoord - off * 1.0).rgb * w1;
+  result += texture(u_tex, v_fragCoord + off * 2.0).rgb * w2;
+  result += texture(u_tex, v_fragCoord - off * 2.0).rgb * w2;
+  result += texture(u_tex, v_fragCoord + off * 3.0).rgb * w3;
+  result += texture(u_tex, v_fragCoord - off * 3.0).rgb * w3;
+  result += texture(u_tex, v_fragCoord + off * 4.0).rgb * w4;
+  result += texture(u_tex, v_fragCoord - off * 4.0).rgb * w4;
+  fragColor = vec4(result, 1.0);
+}
+`
+
+/**
+ * Final composite: combines scene + blurred bloom, then applies vignette,
+ * chromatic aberration, and scanlines as uniform-controlled shader effects.
+ */
+export const COMPOSITE_FRAG_SRC = `#version 300 es
+precision mediump float;
+
+in vec2 v_fragCoord;
+
+uniform sampler2D u_scene;
+uniform sampler2D u_bloom;
+uniform float     u_bloomIntensity;
+uniform float     u_vignetteIntensity;
+uniform float     u_caOffset;        // pixels to shift R/B channels
+uniform float     u_caEnabled;       // 0.0 = off, 1.0 = on
+uniform vec2      u_texelSize;       // (1/width, 1/height)
+uniform float     u_scanlineGap;     // rows between scanlines (0 = disabled)
+uniform float     u_scanlineOpacity; // darkness of each scanline
+uniform vec2      u_canvasSize;
+
+out vec4 fragColor;
+
+void main() {
+  vec2 uv = v_fragCoord;
+
+  // Chromatic aberration: shift R right, B left
+  vec3 col;
+  if (u_caEnabled > 0.5) {
+    float ox = u_caOffset * u_texelSize.x;
+    col.r = texture(u_scene, vec2(uv.x + ox, uv.y)).r;
+    col.g = texture(u_scene, uv).g;
+    col.b = texture(u_scene, vec2(uv.x - ox, uv.y)).b;
+  } else {
+    col = texture(u_scene, uv).rgb;
+  }
+
+  // Additive bloom
+  col += texture(u_bloom, uv).rgb * u_bloomIntensity;
+
+  // Scanlines: darken every nth row
+  if (u_scanlineGap > 0.5) {
+    float row = floor(uv.y * u_canvasSize.y);
+    if (mod(row, u_scanlineGap) < 1.0) col *= (1.0 - u_scanlineOpacity);
+  }
+
+  // Vignette: radial darkening toward edges
+  if (u_vignetteIntensity > 0.0) {
+    vec2 vig = uv * 2.0 - 1.0;
+    float dist = length(vig);
+    float factor = smoothstep(0.3, 1.0, dist);
+    col = mix(col, vec3(0.0), factor * u_vignetteIntensity);
+  }
+
+  fragColor = vec4(col, 1.0);
+}
+`

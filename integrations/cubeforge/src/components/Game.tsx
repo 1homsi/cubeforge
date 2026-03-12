@@ -266,12 +266,17 @@ export function Game({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine])
 
-  // Sync canvas dimensions when width/height props change
+  // Sync canvas dimensions when width/height props change (HiDPI-aware)
   useEffect(() => {
     if (!engine) return
+    const dpr = window.devicePixelRatio || 1
+    const physW = Math.round(width * dpr)
+    const physH = Math.round(height * dpr)
     const canvas = engine.canvas
-    if (canvas.width !== width) canvas.width = width
-    if (canvas.height !== height) canvas.height = height
+    if (canvas.width !== physW) canvas.width = physW
+    if (canvas.height !== physH) canvas.height = physH
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
   }, [width, height, engine])
 
   // Sync gravity changes

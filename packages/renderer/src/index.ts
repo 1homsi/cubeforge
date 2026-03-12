@@ -16,6 +16,7 @@ export * from './components/nineSlice'
 export * from './components/mask'
 export * from './components/shapes'
 export { RenderSystem } from './webglRenderSystem'
+export type { PostProcessOptions } from './webglRenderSystem'
 export { resolveClip, evaluateConditions } from './renderSystem'
 // DebugOverlayRenderer — Canvas2D, debug/devtools only. NOT the game renderer.
 export { DebugOverlayRenderer } from './canvas2d'

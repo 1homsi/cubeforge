@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import React from 'react'
 import { render, act, cleanup } from '@testing-library/react'
 import { VirtualJoystick } from '../components/VirtualJoystick'
 import { setVirtualAxis, setVirtualButton, useVirtualInput } from '../hooks/useVirtualInput'
