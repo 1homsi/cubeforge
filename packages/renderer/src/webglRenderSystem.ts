@@ -680,10 +680,7 @@ export class RenderSystem implements System {
     }
 
     ;[this._ppSceneFBO, this._ppSceneTex] = makeFBO(this._ppSceneFBO, this._ppSceneTex)
-    ;[this._ppBloomExtractFBO, this._ppBloomExtractTex] = makeFBO(
-      this._ppBloomExtractFBO,
-      this._ppBloomExtractTex,
-    )
+    ;[this._ppBloomExtractFBO, this._ppBloomExtractTex] = makeFBO(this._ppBloomExtractFBO, this._ppBloomExtractTex)
     ;[this._ppBlurFBO1, this._ppBlurTex1] = makeFBO(this._ppBlurFBO1, this._ppBlurTex1)
     ;[this._ppBlurFBO2, this._ppBlurTex2] = makeFBO(this._ppBlurFBO2, this._ppBlurTex2)
 
@@ -746,10 +743,7 @@ export class RenderSystem implements System {
     gl.uniform1i(this._ppCmpBloom!, 1)
 
     gl.uniform1f(this._ppCmpBloomIntensity!, opts.bloom?.enabled ? (opts.bloom.intensity ?? 0.6) : 0.0)
-    gl.uniform1f(
-      this._ppCmpVignette!,
-      opts.vignette?.enabled ? (opts.vignette.intensity ?? 0.4) : 0.0,
-    )
+    gl.uniform1f(this._ppCmpVignette!, opts.vignette?.enabled ? (opts.vignette.intensity ?? 0.4) : 0.0)
     gl.uniform1f(this._ppCmpCaEnabled!, opts.chromaticAberration?.enabled ? 1.0 : 0.0)
     gl.uniform1f(this._ppCmpCaOffset!, opts.chromaticAberration?.offset ?? 2.0)
     gl.uniform2f(this._ppCmpTexelSize!, texelW, texelH)
@@ -1422,8 +1416,8 @@ export class RenderSystem implements System {
 
     // ── Sprites ───────────────────────────────────────────────────────────────
     // Frustum culling: pre-compute view bounds in world space (with 32px padding)
-    const halfVW = W * 0.5 / zoom
-    const halfVH = H * 0.5 / zoom
+    const halfVW = (W * 0.5) / zoom
+    const halfVH = (H * 0.5) / zoom
     const viewL = camX - halfVW - 32 / zoom
     const viewR = camX + halfVW + 32 / zoom
     const viewT = camY - halfVH - 32 / zoom
@@ -1464,8 +1458,8 @@ export class RenderSystem implements System {
       // Frustum culling: bounding-sphere test in world space
       const scx = transform.x + sprite.offsetX
       const scy = transform.y + sprite.offsetY
-      const shw = (sprite.width * transform.scaleX) * 0.5
-      const shh = (sprite.height * transform.scaleY) * 0.5
+      const shw = sprite.width * transform.scaleX * 0.5
+      const shh = sprite.height * transform.scaleY * 0.5
       const sr = Math.sqrt(shw * shw + shh * shh)
       if (scx + sr < viewL || scx - sr > viewR || scy + sr < viewT || scy - sr > viewB) continue
 
