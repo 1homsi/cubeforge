@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { ECSWorld } from '../ecs/world'
+import { ECSWorld, applyDeltaSnapshot } from '../ecs/world'
 import type { System } from '../ecs/world'
 
 describe('ECSWorld', () => {
@@ -264,5 +264,131 @@ describe('ECSWorld', () => {
       world.update(0)
       expect(called).toBe(false)
     })
+  })
+})
+
+describe('Binary snapshot', () => {
+  it('round-trips a world through binary format', () => {
+    const world = new ECSWorld()
+    const a = world.createEntity()
+    world.addComponent(a, { type: 'Transform', x: 42, y: 7 })
+    const b = world.createEntity()
+    world.addComponent(b, { type: 'Tag', tags: ['player'] })
+
+    const bin = world.getSnapshotBinary()
+    expect(bin).toBeInstanceOf(Uint8Array)
+
+    const world2 = new ECSWorld()
+    world2.restoreSnapshotBinary(bin)
+
+    expect(world2.hasEntity(a)).toBe(true)
+    expect(world2.hasEntity(b)).toBe(true)
+    const t = world2.getComponent<{ x: number; y: number }>(a, 'Transform')
+    expect(t?.x).toBe(42)
+    expect(t?.y).toBe(7)
+    const tag = world2.getComponent<{ tags: string[] }>(b, 'Tag')
+    expect(tag?.tags).toEqual(['player'])
+  })
+
+  it('binary snapshot is smaller than JSON for many entities', () => {
+    const world = new ECSWorld()
+    for (let i = 0; i < 50; i++) {
+      const e = world.createEntity()
+      world.addComponent(e, { type: 'Transform', x: i * 10, y: i * 5, rotation: 0, scaleX: 1, scaleY: 1 })
+      world.addComponent(e, { type: 'RigidBody', vx: 0, vy: 0, isStatic: false })
+    }
+    const bin = world.getSnapshotBinary()
+    const json = JSON.stringify(world.getSnapshot())
+    // Binary should be meaningfully smaller than raw JSON
+    expect(bin.byteLength).toBeLessThan(json.length)
+  })
+
+  it('restores empty world from binary', () => {
+    const world = new ECSWorld()
+    const bin = world.getSnapshotBinary()
+    const world2 = new ECSWorld()
+    world2.createEntity() // pre-existing entity
+    world2.restoreSnapshotBinary(bin)
+    expect(world2.entityCount).toBe(0)
+  })
+})
+
+describe('Delta snapshot', () => {
+  it('delta against identical baseline has no changes or removals', () => {
+    const world = new ECSWorld()
+    const e = world.createEntity()
+    world.addComponent(e, { type: 'Transform', x: 0, y: 0 })
+
+    const baseline = world.getSnapshot()
+    const delta = world.getDeltaSnapshot(baseline)
+
+    expect(delta.changed).toHaveLength(0)
+    expect(delta.removed).toHaveLength(0)
+  })
+
+  it('delta includes modified entities', () => {
+    const world = new ECSWorld()
+    const e = world.createEntity()
+    world.addComponent(e, { type: 'Transform', x: 0, y: 0 })
+
+    const baseline = world.getSnapshot()
+    const t = world.getComponent<{ x: number; y: number }>(e, 'Transform')!
+    t.x = 99
+
+    const delta = world.getDeltaSnapshot(baseline)
+    expect(delta.changed).toHaveLength(1)
+    expect(delta.changed[0].id).toBe(e)
+  })
+
+  it('delta includes newly added entities', () => {
+    const world = new ECSWorld()
+    const baseline = world.getSnapshot()
+    const newE = world.createEntity()
+    world.addComponent(newE, { type: 'Tag', tags: ['enemy'] })
+
+    const delta = world.getDeltaSnapshot(baseline)
+    expect(delta.changed.some((en) => en.id === newE)).toBe(true)
+  })
+
+  it('delta records removed entities', () => {
+    const world = new ECSWorld()
+    const e = world.createEntity()
+    world.addComponent(e, { type: 'Transform', x: 0, y: 0 })
+    const baseline = world.getSnapshot()
+
+    world.destroyEntity(e)
+    const delta = world.getDeltaSnapshot(baseline)
+
+    expect(delta.removed).toContain(e)
+  })
+
+  it('applyDeltaSnapshot reconstructs full snapshot', () => {
+    const world = new ECSWorld()
+    const e = world.createEntity()
+    world.addComponent(e, { type: 'Transform', x: 10, y: 20 })
+    const baseline = world.getSnapshot()
+
+    const t = world.getComponent<{ x: number; y: number }>(e, 'Transform')!
+    t.x = 50
+    const delta = world.getDeltaSnapshot(baseline)
+
+    const reconstructed = applyDeltaSnapshot(baseline, delta)
+    const tx = reconstructed.entities.find((en) => en.id === e)?.components.find((c) => c.type === 'Transform') as
+      | { x: number }
+      | undefined
+    expect(tx?.x).toBe(50)
+  })
+
+  it('applyDeltaSnapshot removes deleted entities', () => {
+    const world = new ECSWorld()
+    const e = world.createEntity()
+    world.addComponent(e, { type: 'Tag', tags: ['bullet'] })
+    const baseline = world.getSnapshot()
+
+    world.destroyEntity(e)
+    const delta = world.getDeltaSnapshot(baseline)
+    const reconstructed = applyDeltaSnapshot(baseline, delta)
+
+    expect(reconstructed.entities.find((en) => en.id === e)).toBeUndefined()
   })
 })

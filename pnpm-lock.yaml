@@ -87,6 +87,9 @@ importers:
       '@cubeforge/input':
         specifier: workspace:*
         version: link:../../packages/input
+      '@cubeforge/net':
+        specifier: workspace:*
+        version: link:../../packages/net
       '@cubeforge/physics':
         specifier: workspace:*
         version: link:../../packages/physics

@@ -397,3 +397,20 @@ export type { AnimationClipDefinition } from '@cubeforge/renderer'
 
 // Prefab utility
 export { definePrefab } from './utils/prefab'
+
+// Multiplayer React hooks
+export { useNetworkSync } from './hooks/useNetworkSync'
+export type { NetworkSyncOptions } from './hooks/useNetworkSync'
+export { useRemotePlayer } from './hooks/useRemotePlayer'
+export type { RemotePlayerOptions, RemotePlayerControls } from './hooks/useRemotePlayer'
+
+// Re-export net primitives used alongside the hooks
+export { Room, syncEntity, ClientPrediction, useNetworkInput } from '@cubeforge/net'
+export type { NetMessage, RoomConfig, SyncConfig, PredictionConfig, NetworkInputConfig } from '@cubeforge/net'
+
+// Core: delta + binary snapshots
+export type { DeltaSnapshot } from '@cubeforge/core'
+export { applyDeltaSnapshot } from '@cubeforge/core'
+
+// SDF text utilities
+export { generateSdfText, renderSdfText, clearSdfCache } from '@cubeforge/renderer'

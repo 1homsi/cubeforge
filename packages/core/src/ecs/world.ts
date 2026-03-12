@@ -14,6 +14,50 @@ export interface WorldSnapshot {
   entities: Array<{ id: EntityId; components: Component[] }>
 }
 
+/**
+ * A compact incremental update relative to a known baseline `WorldSnapshot`.
+ * Produced by `ECSWorld.getDeltaSnapshot`, consumed by `applyDeltaSnapshot`.
+ */
+export interface DeltaSnapshot {
+  nextId: number
+  rngState: number
+  /** Entities that were added or whose components changed since baseline. */
+  changed: WorldSnapshot['entities']
+  /** IDs of entities that were destroyed since baseline. */
+  removed: number[]
+}
+
+/**
+ * Merge a `DeltaSnapshot` onto a `baseline` WorldSnapshot, returning a new
+ * full snapshot that reflects the current world state.
+ *
+ * This is a pure function — neither the baseline nor the delta is mutated.
+ *
+ * @example
+ * const delta = world.getDeltaSnapshot(prevSnap)
+ * sendOverNetwork(delta)   // much smaller than a full snapshot
+ * // On the receiving end:
+ * const newSnap = applyDeltaSnapshot(prevSnap, delta)
+ * remoteWorld.restoreSnapshot(newSnap)
+ */
+export function applyDeltaSnapshot(baseline: WorldSnapshot, delta: DeltaSnapshot): WorldSnapshot {
+  const removedSet = new Set(delta.removed)
+  const changedMap = new Map(delta.changed.map((e) => [e.id, e]))
+
+  const entities: WorldSnapshot['entities'] = []
+  for (const entity of baseline.entities) {
+    if (removedSet.has(entity.id)) continue
+    entities.push(changedMap.get(entity.id) ?? entity)
+    changedMap.delete(entity.id)
+  }
+  // Entities in `changed` that weren't in baseline are new — append them
+  for (const entity of changedMap.values()) {
+    entities.push(entity)
+  }
+
+  return { nextId: delta.nextId, rngState: delta.rngState, entities }
+}
+
 // ── Archetype ─────────────────────────────────────────────────────────────────
 // An archetype is a unique set of component types. All entities with exactly
 // the same set of component types live in the same archetype.
@@ -279,6 +323,141 @@ export class ECSWorld {
       this.entityArchetype.set(id, arch.key)
     }
     this.dirtyAll = true
+  }
+
+  // ── Binary snapshot ─────────────────────────────────────────────────────────
+  //
+  // Binary format (little-endian):
+  //   [4] nextId       uint32
+  //   [4] rngState     uint32
+  //   [4] entityCount  uint32
+  //   for each entity:
+  //     [4] id              uint32
+  //     [2] componentCount  uint16
+  //     for each component:
+  //       [2] typeLen uint16  — byte length of the type string (UTF-8)
+  //       [N] type    bytes
+  //       [4] dataLen uint32  — byte length of JSON component body (without `type`)
+  //       [N] data    bytes
+  //
+  // Storing `type` separately avoids repeating it inside each JSON body,
+  // which measurably reduces size in worlds with many entities.
+
+  /**
+   * Serialise the world state into a compact binary format.
+   *
+   * Smaller than JSON for large worlds because entity IDs are fixed-width
+   * integers and the `type` string is stored once per component rather than
+   * duplicated as a JSON key in every body.
+   *
+   * Compatible with `restoreSnapshotBinary`.
+   */
+  getSnapshotBinary(): Uint8Array {
+    const enc = new TextEncoder()
+    const snap = this.getSnapshot()
+
+    // Pre-encode to measure total size
+    const eecs: Array<{ id: number; comps: Array<{ tb: Uint8Array; db: Uint8Array }> }> = snap.entities.map(
+      ({ id, components }) => ({
+        id,
+        comps: components.map((comp) => {
+          const { type, ...rest } = comp as unknown as Record<string, unknown>
+          void type
+          return { tb: enc.encode(comp.type), db: enc.encode(JSON.stringify(rest)) }
+        }),
+      }),
+    )
+
+    let size = 12 // nextId + rngState + entityCount
+    for (const { comps } of eecs) {
+      size += 6 // id (4) + componentCount (2)
+      for (const { tb, db } of comps) size += 2 + tb.byteLength + 4 + db.byteLength
+    }
+
+    const buf = new ArrayBuffer(size)
+    const view = new DataView(buf)
+    const u8 = new Uint8Array(buf)
+    let o = 0
+
+    view.setUint32(o, snap.nextId, true); o += 4
+    view.setUint32(o, snap.rngState, true); o += 4
+    view.setUint32(o, eecs.length, true); o += 4
+
+    for (const { id, comps } of eecs) {
+      view.setUint32(o, id, true); o += 4
+      view.setUint16(o, comps.length, true); o += 2
+      for (const { tb, db } of comps) {
+        view.setUint16(o, tb.byteLength, true); o += 2
+        u8.set(tb, o); o += tb.byteLength
+        view.setUint32(o, db.byteLength, true); o += 4
+        u8.set(db, o); o += db.byteLength
+      }
+    }
+
+    return u8
+  }
+
+  /**
+   * Restore world state from a binary buffer produced by `getSnapshotBinary`.
+   */
+  restoreSnapshotBinary(data: Uint8Array): void {
+    const dec = new TextDecoder()
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+    let o = 0
+
+    const nextId = view.getUint32(o, true); o += 4
+    const rngState = view.getUint32(o, true); o += 4
+    const entityCount = view.getUint32(o, true); o += 4
+
+    const entities: WorldSnapshot['entities'] = []
+    for (let e = 0; e < entityCount; e++) {
+      const id = view.getUint32(o, true); o += 4
+      const compCount = view.getUint16(o, true); o += 2
+      const components: Component[] = []
+      for (let c = 0; c < compCount; c++) {
+        const typeLen = view.getUint16(o, true); o += 2
+        const type = dec.decode(data.subarray(o, o + typeLen)); o += typeLen
+        const dataLen = view.getUint32(o, true); o += 4
+        const body = JSON.parse(dec.decode(data.subarray(o, o + dataLen))) as Record<string, unknown>
+        o += dataLen
+        components.push({ type, ...body } as Component)
+      }
+      entities.push({ id, components })
+    }
+
+    this.restoreSnapshot({ nextId, rngState, entities })
+  }
+
+  // ── Delta snapshot ──────────────────────────────────────────────────────────
+
+  /**
+   * Compute a delta snapshot relative to `baseline`.
+   *
+   * Only includes entities whose components differ from `baseline`.
+   * Entities deleted since `baseline` appear in `removed`.
+   *
+   * Pair with `applyDeltaSnapshot` to reconstruct the full snapshot from a
+   * baseline + a sequence of deltas without sending full world state each tick.
+   */
+  getDeltaSnapshot(baseline: WorldSnapshot): DeltaSnapshot {
+    const current = this.getSnapshot()
+    const baseMap = new Map(baseline.entities.map((e) => [e.id, e]))
+    const changed: WorldSnapshot['entities'] = []
+    const removed: number[] = []
+
+    for (const entity of current.entities) {
+      const base = baseMap.get(entity.id)
+      if (!base || JSON.stringify(entity.components) !== JSON.stringify(base.components)) {
+        changed.push(entity)
+      }
+    }
+
+    const currentIds = new Set(current.entities.map((e) => e.id))
+    for (const { id } of baseline.entities) {
+      if (!currentIds.has(id)) removed.push(id)
+    }
+
+    return { nextId: current.nextId, rngState: current.rngState, changed, removed }
   }
 
   addSystem(system: System): void {

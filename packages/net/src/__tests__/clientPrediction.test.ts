@@ -71,4 +71,40 @@ describe('ClientPrediction', () => {
     expect(prediction.rollbackTo(2)).toBe(false)
     expect(prediction.rollbackTo(3)).toBe(true)
   })
+
+  it('re-simulates frames after correction tick when simulate is provided', () => {
+    const simulate = vi.fn()
+    const prediction = new ClientPrediction({ world: world as never, simulate })
+
+    const inputsT3 = { ArrowLeft: true }
+    const inputsT4 = { ArrowRight: true }
+    prediction.saveFrame(2)
+    prediction.saveFrame(3, inputsT3)
+    prediction.saveFrame(4, inputsT4)
+
+    const serverSnapshot = { tick: 'server' } as unknown as WorldSnapshot
+    prediction.applyCorrection(serverSnapshot, 2)
+
+    // simulate should be called once for tick 3 and once for tick 4
+    expect(simulate).toHaveBeenCalledTimes(2)
+    expect(simulate.mock.calls[0][1]).toEqual(inputsT3)
+    expect(simulate.mock.calls[1][1]).toEqual(inputsT4)
+  })
+
+  it('does not call simulate when simulate is not provided', () => {
+    // No simulate option — plain rollback mode
+    const prediction = new ClientPrediction({ world: world as never })
+    prediction.saveFrame(1)
+    prediction.saveFrame(2)
+    const serverSnapshot = { tick: 'server' } as unknown as WorldSnapshot
+    // Should not throw, simulate is undefined
+    expect(() => prediction.applyCorrection(serverSnapshot, 1)).not.toThrow()
+  })
+
+  it('saveFrame accepts inputs parameter without affecting existing behaviour', () => {
+    const prediction = new ClientPrediction({ world: world as never })
+    prediction.saveFrame(5, { Space: true })
+    expect(prediction.bufferedFrameCount).toBe(1)
+    expect(prediction.rollbackTo(5)).toBe(true)
+  })
 })

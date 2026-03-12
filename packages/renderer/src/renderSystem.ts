@@ -8,6 +8,7 @@ import type { SquashStretchComponent } from './components/squashStretch'
 import type { ParticlePoolComponent } from './components/particle'
 import type { ParallaxLayerComponent } from './components/parallaxLayer'
 import type { TextComponent } from './components/text'
+import { renderSdfText } from './sdfText'
 import type { TrailComponent } from './components/trail'
 import type { NineSliceComponent } from './components/nineSlice'
 import { Canvas2DRenderer } from './canvas2d'
@@ -670,6 +671,15 @@ export class RenderSystem implements System {
       ctx.translate(transform.x + text.offsetX, transform.y + text.offsetY)
       ctx.rotate(transform.rotation)
       if (text.opacity != null) ctx.globalAlpha = text.opacity
+
+      // SDF text path — pre-generated distance field gives sharper rendering at any scale
+      if (text.sdf) {
+        const sdfFont = `${text.fontSize}px ${text.fontFamily}`
+        renderSdfText(ctx, text.text, sdfFont, 0, 0, text.color, text.sdfSpread)
+        ctx.restore()
+        continue
+      }
+
       ctx.font = `${text.fontSize}px ${text.fontFamily}`
       ctx.textAlign = text.align
       ctx.textBaseline = text.baseline
