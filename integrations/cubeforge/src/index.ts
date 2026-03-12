@@ -208,7 +208,6 @@ export {
   vignetteEffect,
   scanlineEffect,
   chromaticAberrationEffect,
-  bloomEffect,
 } from '@cubeforge/renderer'
 export type { PostProcessEffect, PostProcessStack } from '@cubeforge/renderer'
 
