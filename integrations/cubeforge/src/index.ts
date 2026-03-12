@@ -203,7 +203,13 @@ export { createRenderLayerManager, defaultLayers } from '@cubeforge/renderer'
 export type { RenderLayer, RenderLayerManager } from '@cubeforge/renderer'
 
 // Post-processing effects
-export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect, bloomEffect } from '@cubeforge/renderer'
+export {
+  createPostProcessStack,
+  vignetteEffect,
+  scanlineEffect,
+  chromaticAberrationEffect,
+  bloomEffect,
+} from '@cubeforge/renderer'
 export type { PostProcessEffect, PostProcessStack } from '@cubeforge/renderer'
 
 // Types and utilities from engine packages
@@ -411,4 +417,3 @@ export type { NetMessage, RoomConfig, SyncConfig, PredictionConfig, NetworkInput
 // Core: delta + binary snapshots
 export type { DeltaSnapshot } from '@cubeforge/core'
 export { applyDeltaSnapshot } from '@cubeforge/core'
-

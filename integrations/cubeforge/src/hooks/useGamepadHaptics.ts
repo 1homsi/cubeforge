@@ -24,7 +24,7 @@ export function useGamepadHaptics(playerIndex = 0): {
   function getActuator() {
     const gp = navigator.getGamepads?.()[playerIndex]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return gp ? (gp as any).vibrationActuator ?? null : null
+    return gp ? ((gp as any).vibrationActuator ?? null) : null
   }
 
   return {

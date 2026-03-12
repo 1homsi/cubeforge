@@ -110,4 +110,3 @@ export function chromaticAberrationEffect(offset = 2): PostProcessEffect {
     ctx.putImageData(imageData, 0, 0)
   }
 }
-

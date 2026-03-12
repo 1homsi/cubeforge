@@ -379,18 +379,27 @@ export class ECSWorld {
     const u8 = new Uint8Array(buf)
     let o = 0
 
-    view.setUint32(o, snap.nextId, true); o += 4
-    view.setUint32(o, snap.rngState, true); o += 4
-    view.setUint32(o, eecs.length, true); o += 4
+    view.setUint32(o, snap.nextId, true)
+    o += 4
+    view.setUint32(o, snap.rngState, true)
+    o += 4
+    view.setUint32(o, eecs.length, true)
+    o += 4
 
     for (const { id, comps } of eecs) {
-      view.setUint32(o, id, true); o += 4
-      view.setUint16(o, comps.length, true); o += 2
+      view.setUint32(o, id, true)
+      o += 4
+      view.setUint16(o, comps.length, true)
+      o += 2
       for (const { tb, db } of comps) {
-        view.setUint16(o, tb.byteLength, true); o += 2
-        u8.set(tb, o); o += tb.byteLength
-        view.setUint32(o, db.byteLength, true); o += 4
-        u8.set(db, o); o += db.byteLength
+        view.setUint16(o, tb.byteLength, true)
+        o += 2
+        u8.set(tb, o)
+        o += tb.byteLength
+        view.setUint32(o, db.byteLength, true)
+        o += 4
+        u8.set(db, o)
+        o += db.byteLength
       }
     }
 
@@ -405,19 +414,27 @@ export class ECSWorld {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
     let o = 0
 
-    const nextId = view.getUint32(o, true); o += 4
-    const rngState = view.getUint32(o, true); o += 4
-    const entityCount = view.getUint32(o, true); o += 4
+    const nextId = view.getUint32(o, true)
+    o += 4
+    const rngState = view.getUint32(o, true)
+    o += 4
+    const entityCount = view.getUint32(o, true)
+    o += 4
 
     const entities: WorldSnapshot['entities'] = []
     for (let e = 0; e < entityCount; e++) {
-      const id = view.getUint32(o, true); o += 4
-      const compCount = view.getUint16(o, true); o += 2
+      const id = view.getUint32(o, true)
+      o += 4
+      const compCount = view.getUint16(o, true)
+      o += 2
       const components: Component[] = []
       for (let c = 0; c < compCount; c++) {
-        const typeLen = view.getUint16(o, true); o += 2
-        const type = dec.decode(data.subarray(o, o + typeLen)); o += typeLen
-        const dataLen = view.getUint32(o, true); o += 4
+        const typeLen = view.getUint16(o, true)
+        o += 2
+        const type = dec.decode(data.subarray(o, o + typeLen))
+        o += typeLen
+        const dataLen = view.getUint32(o, true)
+        o += 4
         const body = JSON.parse(dec.decode(data.subarray(o, o + dataLen))) as Record<string, unknown>
         o += dataLen
         components.push({ type, ...body } as Component)

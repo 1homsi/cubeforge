@@ -193,4 +193,3 @@ describe('chromaticAberrationEffect', () => {
     expect(ctx.putImageData).toHaveBeenCalled()
   })
 })
-
