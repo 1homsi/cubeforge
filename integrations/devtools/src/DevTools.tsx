@@ -227,6 +227,15 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
     }
   }, [handle, paused])
 
+  // Sync selected entity highlight to the renderer
+  useEffect(() => {
+    const rs = engine?.activeRenderSystem as { setEntityHighlight?: (id: number | null) => void }
+    rs?.setEntityHighlight?.(selectedEntity)
+    return () => {
+      rs?.setEntityHighlight?.(null)
+    }
+  }, [engine, selectedEntity])
+
   // Subscribe to contact events for the contact log + optional visual flash
   useEffect(() => {
     if (!engine) return
@@ -366,6 +375,7 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
   })()
   const entityCount = entities.length
   const compCount = entities.reduce((sum, e) => sum + e.components.length, 0)
+  const rbCount = entities.filter((e) => e.components.some((c) => c.type === 'RigidBody')).length
 
   // Input state
   const activeKeys = engine ? getActiveKeys(engine) : []
@@ -419,6 +429,7 @@ export function DevToolsOverlay({ handle, loop, ecs, engine }: DevToolsProps) {
               fps={fps}
               entityCount={entityCount}
               compCount={compCount}
+              rbCount={rbCount}
               timings={timings}
               showNavGrid={showNavGrid}
               onToggleNavGrid={handleToggleNavGrid}
@@ -613,6 +624,7 @@ function PerfTab({
   fps,
   entityCount,
   compCount,
+  rbCount,
   timings,
   showNavGrid,
   onToggleNavGrid,
@@ -620,6 +632,7 @@ function PerfTab({
   fps: number
   entityCount: number
   compCount: number
+  rbCount: number
   timings?: Map<string, number>
   showNavGrid: boolean
   onToggleNavGrid(): void
@@ -629,6 +642,7 @@ function PerfTab({
     { label: 'FPS', value: String(fps), ok: fps >= 55 },
     { label: 'Entities', value: String(entityCount), ok: true },
     { label: 'Components', value: String(compCount), ok: true },
+    { label: 'Rigidbodies', value: String(rbCount), ok: true },
   ]
 
   return (
@@ -798,6 +812,7 @@ function AssetsTab({
         <>
           {imageEntries.map(([src, img]) => {
             const loaded = img.complete && img.naturalWidth > 0
+            const byteEstimate = loaded ? img.naturalWidth * img.naturalHeight * 4 : 0
             return (
               <div key={src} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
                 <span style={{ color: C.muted, fontSize: 9, minWidth: 16 }}>IMG</span>
@@ -818,27 +833,32 @@ function AssetsTab({
                     {img.naturalWidth}×{img.naturalHeight}
                   </span>
                 )}
+                {loaded && <span style={{ color: C.muted, fontSize: 9 }}>~{formatBytes(byteEstimate)}</span>}
               </div>
             )
           })}
-          {audioEntries.map(([src, buf]) => (
-            <div key={src} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
-              <span style={{ color: C.accent, fontSize: 9, minWidth: 16 }}>SFX</span>
-              <span style={{ color: C.ok, fontSize: 9, minWidth: 10 }}>✓</span>
-              <span
-                style={{
-                  color: C.text,
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap' as const,
-                }}
-              >
-                {src.split('/').pop()}
-              </span>
-              <span style={{ color: C.muted, fontSize: 9 }}>{buf.duration.toFixed(2)}s</span>
-            </div>
-          ))}
+          {audioEntries.map(([src, buf]) => {
+            const byteEstimate = Math.round(buf.duration * buf.sampleRate * buf.numberOfChannels * 2)
+            return (
+              <div key={src} style={{ padding: '3px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span style={{ color: C.accent, fontSize: 9, minWidth: 16 }}>SFX</span>
+                <span style={{ color: C.ok, fontSize: 9, minWidth: 10 }}>✓</span>
+                <span
+                  style={{
+                    color: C.text,
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap' as const,
+                  }}
+                >
+                  {src.split('/').pop()}
+                </span>
+                <span style={{ color: C.muted, fontSize: 9 }}>{buf.duration.toFixed(2)}s</span>
+                <span style={{ color: C.muted, fontSize: 9 }}>~{formatBytes(byteEstimate)}</span>
+              </div>
+            )
+          })}
         </>
       )}
     </div>
@@ -1078,6 +1098,12 @@ function formatValue(v: unknown): string {
   if (v === null || v === undefined) return '—'
   if (typeof v === 'object') return JSON.stringify(v).slice(0, 60)
   return String(v)
+}
+
+function formatBytes(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)}MB`
+  if (n >= 1024) return `${(n / 1024).toFixed(1)}KB`
+  return `${n}B`
 }
 
 function getActiveKeys(engine: EngineState): string[] {

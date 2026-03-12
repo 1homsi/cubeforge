@@ -554,6 +554,7 @@ export class RenderSystem implements System {
   // ── Debug overlays ──────────────────────────────────────────────────────
   private debugNavGrid: NavGrid | null = null
   private contactFlashPoints: { x: number; y: number; ttl: number }[] = []
+  private _highlightEntityId: number | null = null
 
   // FPS tracking
   private frameTimes: number[] = []
@@ -606,6 +607,11 @@ export class RenderSystem implements System {
   /** Flash a point on the canvas for one frame (world-space coords). */
   flashContactPoint(x: number, y: number): void {
     this.contactFlashPoints.push({ x, y, ttl: 1 })
+  }
+
+  /** Highlight an entity's collider bounds for one or more frames (DevTools inspector). Pass null to clear. */
+  setEntityHighlight(id: number | null): void {
+    this._highlightEntityId = id
   }
 
   /** Configure native WebGL post-process effects for this render system. */
@@ -1903,6 +1909,74 @@ export class RenderSystem implements System {
       }
       if (cfCount > 0) this.flush(cfCount, '__color__')
       this.contactFlashPoints = this.contactFlashPoints.filter((p) => p.ttl > 0)
+    }
+
+    // ── Entity highlight (DevTools inspector selection) ──────────────────────
+    if (this._highlightEntityId !== null) {
+      const ht = world.getComponent<TransformComponent>(this._highlightEntityId, 'Transform')
+      if (ht) {
+        const hBox = world.getComponent<{
+          type: string
+          width: number
+          height: number
+          offsetX?: number
+          offsetY?: number
+        }>(this._highlightEntityId, 'BoxCollider')
+        const hCirc = world.getComponent<{ type: string; radius: number; offsetX?: number; offsetY?: number }>(
+          this._highlightEntityId,
+          'CircleCollider',
+        )
+        const hCap = world.getComponent<{
+          type: string
+          width: number
+          height: number
+          offsetX?: number
+          offsetY?: number
+        }>(this._highlightEntityId, 'CapsuleCollider')
+        const col = hBox ?? hCap
+        const hox = col?.offsetX ?? hCirc?.offsetX ?? 0
+        const hoy = col?.offsetY ?? hCirc?.offsetY ?? 0
+        const hx = ht.x + hox
+        const hy = ht.y + hoy
+        const hw = col ? col.width : hCirc ? hCirc.radius * 2 : 32
+        const hh = col ? col.height : hCirc ? hCirc.radius * 2 : 32
+        const rot = ht.rotation
+        const lw = 2 / zoom // 2 screen-pixels in world units
+
+        // Draw 4 thin rects forming an outline box
+        const outlines: [number, number, number, number][] = [
+          [hx, hy - hh / 2 - lw / 2, hw + lw * 2, lw], // top
+          [hx, hy + hh / 2 + lw / 2, hw + lw * 2, lw], // bottom
+          [hx - hw / 2 - lw / 2, hy, lw, hh], // left
+          [hx + hw / 2 + lw / 2, hy, lw, hh], // right
+        ]
+        for (let oi = 0; oi < outlines.length; oi++) {
+          const [ox, oy, ow, oh] = outlines[oi]
+          this.writeInstance(
+            oi * FLOATS_PER_INSTANCE,
+            ox,
+            oy,
+            ow,
+            oh,
+            rot,
+            0.5,
+            0.5,
+            0,
+            0,
+            false,
+            false,
+            1,
+            0.9,
+            0.1,
+            0.9,
+            0,
+            0,
+            1,
+            1,
+          )
+        }
+        this.flush(4, '__color__')
+      }
     }
 
     // ── Post-process: apply effects on top of scene FBO ─────────────────────
