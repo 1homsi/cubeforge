@@ -110,3 +110,107 @@ export function chromaticAberrationEffect(offset = 2): PostProcessEffect {
     ctx.putImageData(imageData, 0, 0)
   }
 }
+
+/**
+ * Bloom — extracts pixels above a luminance threshold, blurs them with a
+ * multi-pass box blur, and blends the result back additively. Creates a
+ * glowing halo around bright elements.
+ *
+ * Works with the Canvas2D renderer. For the WebGL renderer use the built-in
+ * FBO bloom pipeline instead.
+ *
+ * @param threshold - Luminance cutoff 0–1 above which a pixel contributes to
+ *   bloom (default 0.65). Lower values = more bloom.
+ * @param intensity - Additive blend strength 0–1 (default 0.6).
+ * @param radius - Box-blur radius in pixels — higher = wider glow (default 6).
+ *   Internally runs two passes so the blur is approximately Gaussian.
+ */
+export function bloomEffect(threshold = 0.65, intensity = 0.6, radius = 6): PostProcessEffect {
+  return (ctx, width, height) => {
+    if (width === 0 || height === 0) return
+
+    const src = ctx.getImageData(0, 0, width, height)
+    const { data } = src
+    const n = width * height
+
+    // ── 1. Extract bright pixels ──────────────────────────────────────────────
+    const bright = new Float32Array(n * 3) // r,g,b floats 0..1
+    for (let i = 0; i < n; i++) {
+      const r = data[i * 4] / 255
+      const g = data[i * 4 + 1] / 255
+      const b = data[i * 4 + 2] / 255
+      // Perceptual luminance
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b
+      if (lum > threshold) {
+        const factor = (lum - threshold) / (1 - threshold)
+        bright[i * 3] = r * factor
+        bright[i * 3 + 1] = g * factor
+        bright[i * 3 + 2] = b * factor
+      }
+    }
+
+    // ── 2. Horizontal box blur ────────────────────────────────────────────────
+    const blurH = new Float32Array(n * 3)
+    const inv = 1 / (radius * 2 + 1)
+    for (let y = 0; y < height; y++) {
+      let sr = 0, sg = 0, sb = 0
+      for (let x = -radius; x <= radius; x++) {
+        const cx = Math.max(0, Math.min(width - 1, x))
+        const i = y * width + cx
+        sr += bright[i * 3]
+        sg += bright[i * 3 + 1]
+        sb += bright[i * 3 + 2]
+      }
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x
+        blurH[i * 3] = sr * inv
+        blurH[i * 3 + 1] = sg * inv
+        blurH[i * 3 + 2] = sb * inv
+        // Slide window
+        const removeX = Math.max(0, x - radius)
+        const addX = Math.min(width - 1, x + radius + 1)
+        const ri = y * width + removeX
+        const ai = y * width + addX
+        sr += bright[ai * 3] - bright[ri * 3]
+        sg += bright[ai * 3 + 1] - bright[ri * 3 + 1]
+        sb += bright[ai * 3 + 2] - bright[ri * 3 + 2]
+      }
+    }
+
+    // ── 3. Vertical box blur ──────────────────────────────────────────────────
+    const blurV = new Float32Array(n * 3)
+    for (let x = 0; x < width; x++) {
+      let sr = 0, sg = 0, sb = 0
+      for (let y = -radius; y <= radius; y++) {
+        const cy = Math.max(0, Math.min(height - 1, y))
+        const i = cy * width + x
+        sr += blurH[i * 3]
+        sg += blurH[i * 3 + 1]
+        sb += blurH[i * 3 + 2]
+      }
+      for (let y = 0; y < height; y++) {
+        const i = y * width + x
+        blurV[i * 3] = sr * inv
+        blurV[i * 3 + 1] = sg * inv
+        blurV[i * 3 + 2] = sb * inv
+        const removeY = Math.max(0, y - radius)
+        const addY = Math.min(height - 1, y + radius + 1)
+        const ri = removeY * width + x
+        const ai = addY * width + x
+        sr += blurH[ai * 3] - blurH[ri * 3]
+        sg += blurH[ai * 3 + 1] - blurH[ri * 3 + 1]
+        sb += blurH[ai * 3 + 2] - blurH[ri * 3 + 2]
+      }
+    }
+
+    // ── 4. Additive blend back onto src ──────────────────────────────────────
+    const out = ctx.getImageData(0, 0, width, height)
+    const od = out.data
+    for (let i = 0; i < n; i++) {
+      od[i * 4] = Math.min(255, od[i * 4] + blurV[i * 3] * intensity * 255)
+      od[i * 4 + 1] = Math.min(255, od[i * 4 + 1] + blurV[i * 3 + 1] * intensity * 255)
+      od[i * 4 + 2] = Math.min(255, od[i * 4 + 2] + blurV[i * 3 + 2] * intensity * 255)
+    }
+    ctx.putImageData(out, 0, 0)
+  }
+}
