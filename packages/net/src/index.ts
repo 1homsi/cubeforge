@@ -5,8 +5,14 @@
  */
 
 // Transport
-export type { NetTransport } from './transport'
+export type { NetTransport, BinaryNetTransport } from './transport'
+export { isBinaryTransport } from './transport'
 export { createWebSocketTransport } from './wsTransport'
+export type { WebSocketTransportOptions } from './wsTransport'
+
+// WebRTC (P2P DataChannel)
+export { createWebRTCTransport } from './webrtcTransport'
+export type { WebRTCTransportConfig, WebRTCTransport } from './webrtcTransport'
 
 // Room
 export type { NetMessage, RoomConfig } from './room'
@@ -23,3 +29,7 @@ export { useNetworkInput } from './useNetworkInput'
 // Client prediction
 export type { PredictionConfig } from './clientPrediction'
 export { ClientPrediction } from './clientPrediction'
+
+// Interpolation
+export { InterpolationBuffer } from './interpolation'
+export type { InterpolationState, InterpolationBufferConfig } from './interpolation'

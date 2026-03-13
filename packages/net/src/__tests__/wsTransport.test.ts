@@ -90,15 +90,17 @@ describe('createWebSocketTransport', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
-  it('notifies disconnect handlers on close and error', () => {
+  it('notifies disconnect handlers on close', () => {
     const transport = createWebSocketTransport('ws://example.test')
     const handler = vi.fn()
 
     transport.onDisconnect(handler)
     MockWebSocket.instances[0].emit('close')
-    MockWebSocket.instances[0].emit('error')
 
-    expect(handler).toHaveBeenCalledTimes(2)
+    // In a real WebSocket, 'close' always follows 'error', so disconnect
+    // fires once from close. Emitting 'error' alone does not fire disconnect
+    // since that would double-fire on real connections.
+    expect(handler).toHaveBeenCalledTimes(1)
   })
 
   it('sends only when the socket is open', () => {

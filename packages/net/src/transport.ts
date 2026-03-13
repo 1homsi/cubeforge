@@ -20,3 +20,21 @@ export interface NetTransport {
   /** Close the underlying connection. */
   close(): void
 }
+
+/**
+ * BinaryNetTransport — extends NetTransport with binary channel support.
+ *
+ * Implemented by both the WebSocket and WebRTC transports.
+ * Use `isBinaryTransport` to check at runtime before calling `sendBinary`.
+ */
+export interface BinaryNetTransport extends NetTransport {
+  /** Send a raw binary message (ArrayBuffer). */
+  sendBinary(data: ArrayBuffer): void
+  /** Register a handler called whenever a binary message arrives. */
+  onBinaryMessage(handler: (data: ArrayBuffer) => void): void
+}
+
+/** Type guard — returns true if the transport supports binary framing. */
+export function isBinaryTransport(t: NetTransport): t is BinaryNetTransport {
+  return typeof (t as BinaryNetTransport).sendBinary === 'function'
+}

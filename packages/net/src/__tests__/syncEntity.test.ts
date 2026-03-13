@@ -210,4 +210,63 @@ describe('syncEntity', () => {
 
     expect(existing.hp).toBe(3)
   })
+
+  it('delta sync: skips broadcast when nothing has changed', () => {
+    const transform = { x: 10, y: 20 }
+    world.getComponent.mockImplementation((_entityId: number, type: string) => {
+      if (type === 'Transform') return transform
+      return undefined
+    })
+
+    const sync = syncEntity({
+      entityId: 1,
+      components: ['Transform'],
+      room: room as Room,
+      owner: true,
+      tickRate: 10,
+      world: world as never,
+    })
+
+    sync.start()
+    vi.advanceTimersByTime(100) // first tick — sends initial state
+    expect(room.broadcast).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(100) // second tick — nothing changed, no broadcast
+    expect(room.broadcast).toHaveBeenCalledTimes(1)
+
+    transform.x = 99 // mutate in place
+    vi.advanceTimersByTime(100) // third tick — changed, broadcasts
+    expect(room.broadcast).toHaveBeenCalledTimes(2)
+    const lastCall = (room.broadcast as ReturnType<typeof vi.fn>).mock.calls[1][0]
+    expect(lastCall.payload.Transform.x).toBe(99)
+  })
+
+  it('delta sync: clears cache on stop so next start sends full state', () => {
+    const transform = { x: 5, y: 5 }
+    world.getComponent.mockImplementation((_entityId: number, type: string) => {
+      if (type === 'Transform') return transform
+      return undefined
+    })
+
+    const sync = syncEntity({
+      entityId: 2,
+      components: ['Transform'],
+      room: room as Room,
+      owner: true,
+      tickRate: 10,
+      world: world as never,
+    })
+
+    sync.start()
+    vi.advanceTimersByTime(100) // first tick — sends initial state
+    expect(room.broadcast).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(100) // nothing changed — no send
+    expect(room.broadcast).toHaveBeenCalledTimes(1)
+
+    sync.stop()
+    sync.start() // cache cleared — next tick sends full state again
+    vi.advanceTimersByTime(100)
+    expect(room.broadcast).toHaveBeenCalledTimes(2)
+  })
 })

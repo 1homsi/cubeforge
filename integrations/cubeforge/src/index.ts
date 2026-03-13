@@ -410,8 +410,30 @@ export { useRemotePlayer } from './hooks/useRemotePlayer'
 export type { RemotePlayerOptions, RemotePlayerControls } from './hooks/useRemotePlayer'
 
 // Re-export net primitives used alongside the hooks
-export { Room, syncEntity, ClientPrediction, useNetworkInput } from '@cubeforge/net'
-export type { NetMessage, RoomConfig, SyncConfig, PredictionConfig, NetworkInputConfig } from '@cubeforge/net'
+export {
+  Room,
+  syncEntity,
+  ClientPrediction,
+  useNetworkInput,
+  createWebSocketTransport,
+  createWebRTCTransport,
+  isBinaryTransport,
+  InterpolationBuffer,
+} from '@cubeforge/net'
+export type {
+  NetMessage,
+  RoomConfig,
+  SyncConfig,
+  PredictionConfig,
+  NetworkInputConfig,
+  NetTransport,
+  BinaryNetTransport,
+  WebSocketTransportOptions,
+  WebRTCTransportConfig,
+  WebRTCTransport,
+  InterpolationState,
+  InterpolationBufferConfig,
+} from '@cubeforge/net'
 
 // Core: delta + binary snapshots
 export type { DeltaSnapshot } from '@cubeforge/core'

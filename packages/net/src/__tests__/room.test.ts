@@ -49,13 +49,27 @@ describe('Room', () => {
     expect(room.isConnected).toBe(false)
   })
 
-  it('sends structured messages as JSON', () => {
+  it('sends structured messages as JSON with an auto-incrementing seq', () => {
     const room = new Room({ transport: mock.transport })
     const msg: NetMessage = { type: 'ping', payload: { ok: true }, tick: 5 }
 
     room.send(msg)
 
-    expect(mock.transport.send).toHaveBeenCalledWith(JSON.stringify(msg))
+    const sent = JSON.parse((mock.transport.send as ReturnType<typeof vi.fn>).mock.calls[0][0])
+    expect(sent).toMatchObject({ type: 'ping', payload: { ok: true }, tick: 5, seq: 0 })
+  })
+
+  it('increments seq on each send', () => {
+    const room = new Room({ transport: mock.transport })
+
+    room.send({ type: 'a', payload: null })
+    room.send({ type: 'b', payload: null })
+    room.send({ type: 'c', payload: null })
+
+    const calls = (mock.transport.send as ReturnType<typeof vi.fn>).mock.calls
+    expect(JSON.parse(calls[0][0]).seq).toBe(0)
+    expect(JSON.parse(calls[1][0]).seq).toBe(1)
+    expect(JSON.parse(calls[2][0]).seq).toBe(2)
   })
 
   it('broadcast delegates to send', () => {
@@ -63,7 +77,8 @@ describe('Room', () => {
 
     room.broadcast({ type: 'state', payload: { x: 1 } })
 
-    expect(mock.transport.send).toHaveBeenCalledWith(JSON.stringify({ type: 'state', payload: { x: 1 } }))
+    const sent = JSON.parse((mock.transport.send as ReturnType<typeof vi.fn>).mock.calls[0][0])
+    expect(sent).toMatchObject({ type: 'state', payload: { x: 1 } })
   })
 
   it('disconnect closes the underlying transport', () => {
@@ -129,5 +144,67 @@ describe('Room', () => {
     mock.emitMessage(JSON.stringify({ type: 'state', payload: {} }))
 
     expect(onPeerMessage).not.toHaveBeenCalled()
+  })
+
+  it('adds peer to peers set on peer:join', () => {
+    const onPeerJoin = vi.fn()
+    const room = new Room({ transport: mock.transport, onPeerJoin })
+
+    mock.emitMessage(JSON.stringify({ type: 'peer:join', payload: null, peerId: 'player-2' }))
+
+    expect(room.peers.has('player-2')).toBe(true)
+    expect(onPeerJoin).toHaveBeenCalledWith('player-2')
+  })
+
+  it('removes peer from peers set on peer:leave', () => {
+    const onPeerLeave = vi.fn()
+    const room = new Room({ transport: mock.transport, onPeerLeave })
+
+    mock.emitMessage(JSON.stringify({ type: 'peer:join', payload: null, peerId: 'player-2' }))
+    mock.emitMessage(JSON.stringify({ type: 'peer:leave', payload: null, peerId: 'player-2' }))
+
+    expect(room.peers.has('player-2')).toBe(false)
+    expect(onPeerLeave).toHaveBeenCalledWith('player-2')
+  })
+
+  it('sends a ping message and measures latency on pong', () => {
+    mock.emitConnect()
+    const room = new Room({ transport: mock.transport })
+    // Manually mark as connected
+    ;(mock.transport.onConnect as ReturnType<typeof vi.fn>).mock.calls[0][0]()
+
+    room.ping()
+
+    const sentRaw = (mock.transport.send as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const sentMsg = JSON.parse(sentRaw)
+    expect(sentMsg.type).toBe('room:ping')
+
+    // Simulate pong response
+    const pingId = sentMsg.payload as string
+    mock.emitMessage(JSON.stringify({ type: 'room:pong', payload: pingId }))
+
+    // latencyMs should be updated (≥ 0)
+    expect(room.latencyMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('pong messages are not forwarded to regular handlers', () => {
+    const handler = vi.fn()
+    const room = new Room({ transport: mock.transport })
+    room.onMessage(handler)
+
+    mock.emitMessage(JSON.stringify({ type: 'room:pong', payload: 'some-id' }))
+
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('latencyMs starts at 0', () => {
+    const room = new Room({ transport: mock.transport })
+    expect(room.latencyMs).toBe(0)
+  })
+
+  it('ping does nothing when not connected', () => {
+    const room = new Room({ transport: mock.transport })
+    room.ping() // not connected
+    expect(mock.transport.send).not.toHaveBeenCalled()
   })
 })

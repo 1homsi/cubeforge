@@ -23,8 +23,9 @@ const SYNC_MSG_TYPE = 'entity:state'
 /**
  * syncEntity — keeps a single ECS entity in sync across peers.
  *
- * Owner peers read component data from the world and broadcast it at `tickRate`
- * Hz.  Non-owner peers listen for incoming state and apply it.
+ * Owner peers read component data from the world and broadcast only fields
+ * that have changed since the last send (delta sync). Non-owner peers listen
+ * for incoming state and apply it via shallow merge.
  */
 export function syncEntity(config: SyncConfig): {
   start(): void
@@ -38,15 +39,25 @@ export function syncEntity(config: SyncConfig): {
   let intervalId: ReturnType<typeof setInterval> | null = null
   let unsubscribe: (() => void) | null = null
 
-  function buildStatePayload(): Record<string, unknown> {
-    const state: Record<string, unknown> = { entityId }
+  // Per-component JSON cache for delta detection — only changed fields are sent.
+  const lastSent = new Map<string, string>()
+
+  function buildDeltaPayload(): Record<string, unknown> | null {
+    const delta: Record<string, unknown> = { entityId }
+    let hasChanges = false
+
     for (const compType of components) {
       const comp = world.getComponent(entityId, compType)
-      if (comp !== undefined) {
-        state[compType] = comp
+      if (comp === undefined) continue
+      const json = JSON.stringify(comp)
+      if (json !== lastSent.get(compType)) {
+        delta[compType] = comp
+        lastSent.set(compType, json)
+        hasChanges = true
       }
     }
-    return state
+
+    return hasChanges ? delta : null
   }
 
   function applyRemoteState(msg: NetMessage): void {
@@ -71,10 +82,9 @@ export function syncEntity(config: SyncConfig): {
       if (owner) {
         intervalId = setInterval(() => {
           if (!room.isConnected) return
-          room.broadcast({
-            type: SYNC_MSG_TYPE,
-            payload: buildStatePayload(),
-          })
+          const payload = buildDeltaPayload()
+          if (payload === null) return // nothing changed this tick
+          room.broadcast({ type: SYNC_MSG_TYPE, payload })
         }, intervalMs)
       } else {
         const handler = (msg: NetMessage) => applyRemoteState(msg)
@@ -91,6 +101,7 @@ export function syncEntity(config: SyncConfig): {
         unsubscribe()
         unsubscribe = null
       }
+      lastSent.clear()
     },
 
     applyRemoteState,
