@@ -17,6 +17,10 @@ interface SegmentColliderProps {
   enabled?: boolean
 }
 
+/**
+ * @experimental Segment (edge) collider support is not yet complete.
+ * Suitable for static one-way platforms; dynamic response is not guaranteed.
+ */
 export function SegmentCollider({
   start,
   end,

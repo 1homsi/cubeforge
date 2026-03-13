@@ -15,6 +15,10 @@ interface HalfSpaceColliderProps {
   enabled?: boolean
 }
 
+/**
+ * @experimental Infinite half-space collider is not yet fully implemented.
+ * Useful as a static world boundary; dynamic body response may be incomplete.
+ */
 export function HalfSpaceCollider({
   normalX = 0,
   normalY = -1,

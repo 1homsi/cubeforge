@@ -16,6 +16,10 @@ interface HeightFieldColliderProps {
   enabled?: boolean
 }
 
+/**
+ * @experimental Height field terrain collider is not yet fully implemented.
+ * Static terrain collision works; complex interactions may have edge cases.
+ */
 export function HeightFieldCollider({
   heights,
   scaleX = 1,

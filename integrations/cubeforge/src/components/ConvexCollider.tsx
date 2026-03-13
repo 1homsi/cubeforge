@@ -18,6 +18,10 @@ interface ConvexColliderProps {
   enabled?: boolean
 }
 
+/**
+ * @experimental Physics response for convex polygons is not yet fully implemented.
+ * This collider generates contact events but impulse resolution may be incomplete.
+ */
 export function ConvexCollider({
   vertices,
   offsetX = 0,

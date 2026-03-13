@@ -87,6 +87,7 @@ export function Game({
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<EngineState | null>(null)
   const [assetsReady, setAssetsReady] = useState(asyncAssets)
+  const [webglError, setWebglError] = useState<string | null>(null)
   const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
 
   useEffect(() => {
@@ -104,7 +105,15 @@ export function Game({
     const entityIds = new Map<string, number>()
 
     // Always use the WebGL2 render system
-    const renderSystem = new RenderSystem(canvas, entityIds)
+    let renderSystem: RenderSystem
+    try {
+      renderSystem = new RenderSystem(canvas, entityIds)
+    } catch {
+      setWebglError(
+        'WebGL2 is required to run this game. Please use a modern browser such as Chrome, Firefox, Edge, or Safari 15+.',
+      )
+      return
+    }
     if (sampling) renderSystem.setDefaultSampling(sampling)
     const activeRenderSystem: System = renderSystem
 
@@ -295,6 +304,33 @@ export function Game({
     position: 'relative',
     display: 'inline-block',
     ...(scale === 'contain' ? { width, height, overflow: 'visible' } : {}),
+  }
+
+  if (webglError) {
+    return (
+      <div
+        style={{
+          width,
+          height,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0a0a0f',
+          color: '#ef5350',
+          fontFamily: 'monospace',
+          fontSize: 13,
+          padding: 24,
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          gap: 8,
+        }}
+      >
+        <span style={{ fontSize: 24 }}>⚠</span>
+        <strong>WebGL2 Not Available</strong>
+        <span style={{ color: '#78909c', fontSize: 11, maxWidth: 380 }}>{webglError}</span>
+      </div>
+    )
   }
 
   return (

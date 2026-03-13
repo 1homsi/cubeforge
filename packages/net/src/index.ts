@@ -1,3 +1,9 @@
+/**
+ * @beta The multiplayer package is under active development.
+ * APIs are functional but may change before 1.0. No server reference implementation
+ * is included — you must provide your own WebSocket server.
+ */
+
 // Transport
 export type { NetTransport } from './transport'
 export { createWebSocketTransport } from './wsTransport'

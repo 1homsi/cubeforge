@@ -15,6 +15,10 @@ interface TriMeshColliderProps {
   enabled?: boolean
 }
 
+/**
+ * @experimental Triangle mesh collider is not yet fully implemented.
+ * Suitable for static complex geometry; dynamic body response may be incomplete.
+ */
 export function TriMeshCollider({
   vertices,
   indices,

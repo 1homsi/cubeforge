@@ -19,6 +19,10 @@ interface TriangleColliderProps {
   enabled?: boolean
 }
 
+/**
+ * @experimental Triangle collider support is not yet complete.
+ * Collision events are generated but physics response may be unreliable.
+ */
 export function TriangleCollider({
   a,
   b,
