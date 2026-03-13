@@ -94,9 +94,7 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
   const { iceServers = DEFAULT_ICE_SERVERS, ordered = false, maxRetransmits = 0 } = config
 
   const pc = new RTCPeerConnection({ iceServers })
-  const channelConfig: RTCDataChannelInit = ordered
-    ? { ordered: true }
-    : { ordered: false, maxRetransmits }
+  const channelConfig: RTCDataChannelInit = ordered ? { ordered: true } : { ordered: false, maxRetransmits }
 
   let channel: RTCDataChannel | null = null
 

@@ -62,8 +62,14 @@ describe('createWebRTCTransport', () => {
       'RTCPeerConnection',
       vi.fn(() => mockPC),
     )
-    vi.stubGlobal('RTCSessionDescription', vi.fn((sdp) => sdp))
-    vi.stubGlobal('RTCIceCandidate', vi.fn((c) => c))
+    vi.stubGlobal(
+      'RTCSessionDescription',
+      vi.fn((sdp) => sdp),
+    )
+    vi.stubGlobal(
+      'RTCIceCandidate',
+      vi.fn((c) => c),
+    )
   })
 
   it('creates an RTCPeerConnection with ice servers', () => {
@@ -197,7 +203,10 @@ describe('createWebRTCTransport', () => {
 
     // Mock returns createDataChannel — check it's called with ordered:false
     const { pc } = createMockPeerConnection()
-    vi.stubGlobal('RTCPeerConnection', vi.fn(() => pc))
+    vi.stubGlobal(
+      'RTCPeerConnection',
+      vi.fn(() => pc),
+    )
     const transport2 = createWebRTCTransport({ ordered: false, maxRetransmits: 0 })
     transport2.createOffer()
     expect(pc.createDataChannel).toHaveBeenCalledWith('cubeforge', { ordered: false, maxRetransmits: 0 })
@@ -205,7 +214,10 @@ describe('createWebRTCTransport', () => {
 
   it('uses ordered channel when ordered:true', async () => {
     const { pc } = createMockPeerConnection()
-    vi.stubGlobal('RTCPeerConnection', vi.fn(() => pc))
+    vi.stubGlobal(
+      'RTCPeerConnection',
+      vi.fn(() => pc),
+    )
     const transport = createWebRTCTransport({ ordered: true })
     await transport.createOffer()
     expect(pc.createDataChannel).toHaveBeenCalledWith('cubeforge', { ordered: true })

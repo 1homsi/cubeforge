@@ -19,10 +19,7 @@ export interface WebSocketTransportOptions {
  * - Supports binary ArrayBuffer framing via BinaryNetTransport.
  * - Optional auto-reconnect with exponential backoff.
  */
-export function createWebSocketTransport(
-  url: string,
-  options: WebSocketTransportOptions = {},
-): BinaryNetTransport {
+export function createWebSocketTransport(url: string, options: WebSocketTransportOptions = {}): BinaryNetTransport {
   const { reconnect = false, reconnectBaseDelayMs = 500, maxReconnectAttempts = Infinity } = options
 
   const messageHandlers: Array<(data: string) => void> = []
