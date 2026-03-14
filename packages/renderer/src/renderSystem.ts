@@ -777,27 +777,25 @@ export class RenderSystem implements System {
       for (let i = alive - 1; i >= 0; i--) {
         const p = pool.particles[i]
         if (isFormation) {
-          // Attractor impulses (supports negative strength = repulsion)
-          if (pool.attractors) {
-            for (const attr of pool.attractors) {
-              const adx = attr.x - p.x
-              const ady = attr.y - p.y
-              const dist = Math.sqrt(adx * adx + ady * ady)
-              if (dist < attr.radius && dist > 0) {
-                const force = attr.strength * (1 - dist / attr.radius)
-                p.vx += (adx / dist) * force * dt
-                p.vy += (ady / dist) * force * dt
-              }
-            }
-          }
-          p.vx *= 0.82
-          p.vy *= 0.82
-          p.x += p.vx * dt
-          p.y += p.vy * dt
+          // Seek toward formation target
           if (p.targetX !== undefined && p.targetY !== undefined) {
             const seek = pool.seekStrength ?? 0.055
             p.x += (p.targetX - p.x) * seek
             p.y += (p.targetY - p.y) * seek
+          }
+          // Attractor/repulsion: direct positional push applied after seek
+          // so it visibly overrides the pull. strength < 0 = repulsion.
+          if (pool.attractors) {
+            for (const attr of pool.attractors) {
+              const adx = p.x - attr.x
+              const ady = p.y - attr.y
+              const dist = Math.sqrt(adx * adx + ady * ady)
+              if (dist < attr.radius && dist > 0) {
+                const magnitude = (-attr.strength) * (1 - dist / attr.radius) * dt
+                p.x += (adx / dist) * magnitude
+                p.y += (ady / dist) * magnitude
+              }
+            }
           }
           continue // formation particles never expire
         }
@@ -922,8 +920,27 @@ export class RenderSystem implements System {
         if (texImg) {
           ctx.drawImage(texImg, -sz / 2, -sz / 2, sz, sz)
         } else {
+          const shape = pool.particleShape ?? 'soft'
           ctx.fillStyle = p.color
-          ctx.fillRect(-sz / 2, -sz / 2, sz, sz)
+          if (shape === 'square') {
+            ctx.fillRect(-sz / 2, -sz / 2, sz, sz)
+          } else if (shape === 'circle') {
+            ctx.beginPath()
+            ctx.arc(0, 0, sz / 2, 0, Math.PI * 2)
+            ctx.fill()
+          } else {
+            // 'soft' — radial gradient for glow effect
+            const r = sz / 2
+            const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r)
+            g.addColorStop(0,    p.color)
+            g.addColorStop(0.25, p.color)
+            g.addColorStop(0.5,  p.color.replace(')', ', 0.2)').replace('rgb', 'rgba'))
+            g.addColorStop(1,    p.color.replace(')', ', 0)').replace('rgb', 'rgba'))
+            ctx.fillStyle = g
+            ctx.beginPath()
+            ctx.arc(0, 0, r, 0, Math.PI * 2)
+            ctx.fill()
+          }
         }
         ctx.restore()
       }

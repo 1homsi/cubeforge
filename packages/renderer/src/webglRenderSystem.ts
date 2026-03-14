@@ -193,6 +193,7 @@ interface ParticlePoolComponent {
   colorOverLife?: string[]
   attractors?: Array<{ x: number; y: number; strength: number; radius: number }>
   blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
+  particleShape?: 'soft' | 'circle' | 'square'
   mode?: 'standard' | 'formation'
   formationPoints?: { x: number; y: number }[]
   seekStrength?: number
@@ -495,6 +496,8 @@ export class RenderSystem implements System {
   private readonly instanceBuffer: WebGLBuffer
   private readonly instanceData: Float32Array
   private readonly whiteTexture: WebGLTexture
+  private readonly particleTextureSoft: WebGLTexture
+  private readonly particleTextureCircle: WebGLTexture
   private readonly textures = new Map<string, WebGLTexture>()
   /** Tracks texture access order for LRU eviction (most recent at end). */
   private readonly textureLRU: string[] = []
@@ -842,6 +845,8 @@ export class RenderSystem implements System {
     this.uUseTexture = gl.getUniformLocation(this.program, 'u_useTexture')!
 
     this.whiteTexture = createWhiteTexture(gl)
+    this.particleTextureSoft = this._createParticleTexture('soft')
+    this.particleTextureCircle = this._createParticleTexture('circle')
 
     // ── Parallax fullscreen quad ──────────────────────────────────────────────
     this.parallaxProgram = createProgram(gl, PARALLAX_VERT_SRC, PARALLAX_FRAG_SRC)
@@ -869,6 +874,43 @@ export class RenderSystem implements System {
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+  }
+
+  /** Pre-baked particle shape textures: white alpha mask, tinted by instance color at render time. */
+  private _createParticleTexture(shape: 'soft' | 'circle'): WebGLTexture {
+    const { gl } = this
+    const SIZE = 64
+    const canvas = document.createElement('canvas')
+    canvas.width = SIZE
+    canvas.height = SIZE
+    const ctx = canvas.getContext('2d')!
+    const cx = SIZE / 2
+
+    if (shape === 'soft') {
+      // Radial gradient: bright tight core fading to transparent — produces a glow halo with additive blending
+      const g = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx)
+      g.addColorStop(0,    'rgba(255,255,255,1)')   // bright core
+      g.addColorStop(0.25, 'rgba(255,255,255,0.9)') // tight solid region
+      g.addColorStop(0.5,  'rgba(255,255,255,0.2)') // subtle halo
+      g.addColorStop(1,    'rgba(255,255,255,0)')    // transparent edge
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, SIZE, SIZE)
+    } else {
+      // Hard circle with 1px anti-aliased edge — no glow, just a clean disc
+      ctx.fillStyle = 'white'
+      ctx.beginPath()
+      ctx.arc(cx, cx, cx - 1, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    const tex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    return tex
   }
 
   // ── Texture management (sprite textures — CLAMP_TO_EDGE) ──────────────────
@@ -1183,6 +1225,9 @@ export class RenderSystem implements System {
     const { gl, canvas } = this
     const W = canvas.width
     const H = canvas.height
+    // Logical (CSS) dimensions — world coordinates are in CSS pixels, not physical pixels
+    const Wl = canvas.clientWidth || W
+    const Hl = canvas.clientHeight || H
 
     // ── Camera ──────────────────────────────────────────────────────────────
     let camX = 0,
@@ -1426,7 +1471,7 @@ export class RenderSystem implements System {
     gl.useProgram(this.program)
     gl.uniform2f(this.uCamPos, camX, camY)
     gl.uniform1f(this.uZoom, zoom)
-    gl.uniform2f(this.uCanvasSize, W, H)
+    gl.uniform2f(this.uCanvasSize, Wl, Hl)
     gl.uniform2f(this.uShake, shakeX, shakeY)
     gl.uniform1i(this.uTexture, 0)
     gl.activeTexture(gl.TEXTURE0)
@@ -1648,9 +1693,9 @@ export class RenderSystem implements System {
         const ease = ct * ct * (3 - 2 * ct)
         const [cr0, cg0, cb0] = parseCSSColor(pool._colorTransitionFrom)
         const [cr1, cg1, cb1] = parseCSSColor(pool.targetColor)
-        const ri = Math.round(cr0 + (cr1 - cr0) * ease)
-        const gi = Math.round(cg0 + (cg1 - cg0) * ease)
-        const bi = Math.round(cb0 + (cb1 - cb0) * ease)
+        const ri = Math.round((cr0 + (cr1 - cr0) * ease) * 255)
+        const gi = Math.round((cg0 + (cg1 - cg0) * ease) * 255)
+        const bi = Math.round((cb0 + (cb1 - cb0) * ease) * 255)
         pool.color = `rgb(${ri},${gi},${bi})`
         if (ct >= 1) {
           pool._colorTransitionFrom = undefined
@@ -1663,29 +1708,25 @@ export class RenderSystem implements System {
       // Update existing particles
       pool.particles = pool.particles.filter((p: Particle) => {
         if (isFormation) {
-          // Attractor impulses (supports negative strength = repulsion)
-          if (pool.attractors) {
-            for (const attr of pool.attractors) {
-              const adx = attr.x - p.x
-              const ady = attr.y - p.y
-              const dist = Math.sqrt(adx * adx + ady * ady)
-              if (dist < attr.radius && dist > 0) {
-                const force = attr.strength * (1 - dist / attr.radius)
-                p.vx += (adx / dist) * force * dt
-                p.vy += (ady / dist) * force * dt
-              }
-            }
-          }
-          // Fast velocity decay so impulses (repulsion) settle quickly
-          p.vx *= 0.82
-          p.vy *= 0.82
-          p.x += p.vx * dt
-          p.y += p.vy * dt
-          // Exponential lerp toward formation target
+          // Seek toward formation target
           if (p.targetX !== undefined && p.targetY !== undefined) {
             const seek = pool.seekStrength ?? 0.055
             p.x += (p.targetX - p.x) * seek
             p.y += (p.targetY - p.y) * seek
+          }
+          // Attractor/repulsion: direct positional push applied after seek
+          // so it visibly overrides the pull. strength < 0 = repulsion.
+          if (pool.attractors) {
+            for (const attr of pool.attractors) {
+              const adx = p.x - attr.x
+              const ady = p.y - attr.y
+              const dist = Math.sqrt(adx * adx + ady * ady)
+              if (dist < attr.radius && dist > 0) {
+                const magnitude = (-attr.strength) * (1 - dist / attr.radius) * dt
+                p.x += (adx / dist) * magnitude
+                p.y += (ady / dist) * magnitude
+              }
+            }
           }
           return true // formation particles never expire
         }
@@ -1715,7 +1756,7 @@ export class RenderSystem implements System {
       if (isFormation) {
         // Formation mode: spawn one persistent particle per formation point
         const fp = pool.formationPoints ?? []
-        while (pool.particles.length < fp.length) {
+while (pool.particles.length < fp.length) {
           const idx = pool.particles.length
           const startSize = pool.sizeOverLife?.start ?? pool.particleSize
           const endSize = pool.sizeOverLife?.end ?? pool.particleSize
@@ -1786,13 +1827,24 @@ export class RenderSystem implements System {
         }
       }
 
-      // Render particles as instanced color quads
+      // Render particles — shape determined by pool.particleShape
       let pCount = 0
-      const pKey = `__color__`
+      const pShape = pool.particleShape ?? 'soft'
       const pBlend = pool.blendMode ?? 'normal'
+      const flushParticles = (n: number) => {
+        if (n === 0) return
+        if (pBlend !== 'normal') this.applyBlendMode(pBlend)
+        if (pShape === 'square') {
+          this.flush(n, '__color__')
+        } else {
+          const tex = pShape === 'circle' ? this.particleTextureCircle : this.particleTextureSoft
+          this.flushWithTex(n, tex, true)
+        }
+        if (pBlend !== 'normal') this.applyBlendMode('normal')
+      }
       for (const p of pool.particles) {
         if (pCount >= MAX_INSTANCES) {
-          this.flush(pCount, pKey, undefined, pBlend)
+          flushParticles(pCount)
           pCount = 0
         }
 
@@ -1849,7 +1901,7 @@ export class RenderSystem implements System {
         )
         pCount++
       }
-      if (pCount > 0) this.flush(pCount, pKey, undefined, pBlend)
+      if (pCount > 0) flushParticles(pCount)
     }
 
     // ── Trail update + render pass ────────────────────────────────────────────

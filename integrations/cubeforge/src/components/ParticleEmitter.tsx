@@ -57,6 +57,13 @@ interface ParticleEmitterProps {
    */
   blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
   /**
+   * Visual shape of each particle.
+   * - `'soft'` (default) — radial gradient with glow halo; pairs well with `blendMode="additive"`
+   * - `'circle'` — hard-edged anti-aliased circle, no glow falloff
+   * - `'square'` — solid quad (fastest, no texture lookup)
+   */
+  particleShape?: 'soft' | 'circle' | 'square'
+  /**
    * Formation mode: particles lerp toward fixed target positions instead of
    * being emitted with velocity. Enables logo reveals, constellations, shape morphing.
    * - `'standard'` (default) — normal emit/gravity/lifetime behaviour
@@ -111,6 +118,7 @@ export function ParticleEmitter({
   seekStrength,
   targetColor,
   colorTransitionDuration,
+  particleShape,
 }: ParticleEmitterProps) {
   const presetConfig = preset ? PARTICLE_PRESETS[preset] : {}
 
@@ -157,6 +165,7 @@ export function ParticleEmitter({
       formationPoints,
       seekStrength,
       colorTransitionDuration,
+      particleShape,
     } as ParticlePoolComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParticlePool')
@@ -169,6 +178,14 @@ export function ParticleEmitter({
     if (!pool) return
     pool.active = active
   }, [active, engine, entityId])
+
+  // Sync blend mode and particle shape (e.g. theme switching)
+  useEffect(() => {
+    const pool = engine.ecs.getComponent<ParticlePoolComponent>(entityId, 'ParticlePool')
+    if (!pool) return
+    pool.blendMode = blendMode
+    pool.particleShape = particleShape
+  }, [blendMode, particleShape, engine, entityId])
 
   // Sync attractor changes (e.g. cursor repulsion driven by live coordinates)
   useEffect(() => {

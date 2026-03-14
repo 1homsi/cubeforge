@@ -87,6 +87,13 @@ export interface ParticlePoolComponent extends Component {
    */
   blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
   /**
+   * Visual shape of each particle.
+   * - `'soft'` (default) — radial gradient: bright core fading to transparent, produces a glow halo with additive blending
+   * - `'circle'` — hard-edged anti-aliased circle, no glow falloff
+   * - `'square'` — solid axis-aligned quad (fastest, original behaviour)
+   */
+  particleShape?: 'soft' | 'circle' | 'square'
+  /**
    * Formation mode: particles lerp toward fixed target positions instead of
    * being emitted with velocity. Enables logo reveals, constellations, morphing shapes.
    * - `'standard'` (default) — normal emit/gravity/lifetime behaviour
