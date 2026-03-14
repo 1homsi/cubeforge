@@ -27,12 +27,12 @@ export interface AudioAnalyserControls {
    * Get the current frequency-domain data. Values are 0–255 magnitudes across
    * `frequencyBinCount` bins. Call this every animation frame for live data.
    */
-  getFrequencyData(): Uint8Array
+  getFrequencyData(): Uint8Array<ArrayBuffer>
   /**
    * Get the current time-domain (waveform) data. Values are 0–255 where 128
    * represents zero amplitude. Useful for oscilloscope-style visualizers.
    */
-  getWaveformData(): Uint8Array
+  getWaveformData(): Uint8Array<ArrayBuffer>
   /**
    * Average magnitude across all frequency bins (0–255). A quick measure of
    * overall loudness/energy in the signal.
@@ -80,8 +80,8 @@ export function useAudioAnalyser(opts: AudioAnalyserOptions = {}): AudioAnalyser
   const { fftSize = 2048, smoothingTimeConstant = 0.8, group = 'master' } = opts
 
   const analyserRef = useRef<AnalyserNode | null>(null)
-  const freqDataRef = useRef<Uint8Array | null>(null)
-  const waveDataRef = useRef<Uint8Array | null>(null)
+  const freqDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
+  const waveDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
 
   useEffect(() => {
     const ctx = getAudioCtx()
@@ -94,8 +94,8 @@ export function useAudioAnalyser(opts: AudioAnalyserOptions = {}): AudioAnalyser
     groupGain.connect(analyser)
 
     analyserRef.current = analyser
-    freqDataRef.current = new Uint8Array(analyser.frequencyBinCount)
-    waveDataRef.current = new Uint8Array(analyser.frequencyBinCount)
+    freqDataRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>
+    waveDataRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>
 
     return () => {
       try {
@@ -109,18 +109,18 @@ export function useAudioAnalyser(opts: AudioAnalyserOptions = {}): AudioAnalyser
     }
   }, [fftSize, smoothingTimeConstant, group])
 
-  const getFrequencyData = (): Uint8Array => {
+  const getFrequencyData = (): Uint8Array<ArrayBuffer> => {
     const analyser = analyserRef.current
     const data = freqDataRef.current
-    if (!analyser || !data) return new Uint8Array(0)
+    if (!analyser || !data) return new Uint8Array(0) as Uint8Array<ArrayBuffer>
     analyser.getByteFrequencyData(data)
     return data
   }
 
-  const getWaveformData = (): Uint8Array => {
+  const getWaveformData = (): Uint8Array<ArrayBuffer> => {
     const analyser = analyserRef.current
     const data = waveDataRef.current
-    if (!analyser || !data) return new Uint8Array(0)
+    if (!analyser || !data) return new Uint8Array(0) as Uint8Array<ArrayBuffer>
     analyser.getByteTimeDomainData(data)
     return data
   }
