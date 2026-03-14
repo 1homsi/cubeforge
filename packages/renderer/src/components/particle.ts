@@ -22,6 +22,10 @@ export interface Particle {
   endSize?: number
   /** Whether the particle is active (used by object pool) */
   _active?: boolean
+  /** Formation mode target position */
+  targetX?: number
+  /** Formation mode target position */
+  targetY?: number
 }
 
 export interface ParticlePoolComponent extends Component {
@@ -74,4 +78,37 @@ export interface ParticlePoolComponent extends Component {
   colorOverLife?: string[]
   /** Use object pooling for particles (avoids GC). Default true */
   pooled?: boolean
+  /**
+   * WebGL blend mode for particles.
+   * - `'normal'` (default) — standard alpha blending
+   * - `'additive'` — particles brighten the background; produces a glow effect
+   * - `'multiply'` — darkens based on particle color
+   * - `'screen'` — lightens, softer than additive
+   */
+  blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
+  /**
+   * Formation mode: particles lerp toward fixed target positions instead of
+   * being emitted with velocity. Enables logo reveals, constellations, morphing shapes.
+   * - `'standard'` (default) — normal emit/gravity/lifetime behaviour
+   * - `'formation'` — particles seek `formationPoints`; no gravity, no expiry
+   */
+  mode?: 'standard' | 'formation'
+  /** Target positions for formation mode. One particle is spawned per point. */
+  formationPoints?: { x: number; y: number }[]
+  /**
+   * How strongly particles seek their target each frame in formation mode.
+   * Exponential lerp factor (0–1). Default 0.055 (~5.5% per frame at 60 fps).
+   */
+  seekStrength?: number
+  /**
+   * Smoothly transition all currently alive particles to this color.
+   * Set alongside `colorTransitionDuration`. Clear by setting to undefined.
+   */
+  targetColor?: string
+  /** Duration of the global color transition in seconds. Default 0.5. */
+  colorTransitionDuration?: number
+  /** @internal — tracks transition source color */
+  _colorTransitionFrom?: string
+  /** @internal — elapsed time for color transition */
+  _colorTransitionElapsed?: number
 }

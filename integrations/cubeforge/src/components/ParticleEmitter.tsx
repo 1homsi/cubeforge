@@ -56,6 +56,30 @@ interface ParticleEmitterProps {
    * - `'screen'` — lightens, softer than additive
    */
   blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
+  /**
+   * Formation mode: particles lerp toward fixed target positions instead of
+   * being emitted with velocity. Enables logo reveals, constellations, shape morphing.
+   * - `'standard'` (default) — normal emit/gravity/lifetime behaviour
+   * - `'formation'` — particles seek `formationPoints`; no gravity, no expiry
+   */
+  mode?: 'standard' | 'formation'
+  /**
+   * Target positions for formation mode. One particle is spawned per point.
+   * Change this array to morph the formation — particles smoothly lerp to new targets.
+   */
+  formationPoints?: { x: number; y: number }[]
+  /**
+   * How strongly particles seek their target each frame in formation mode.
+   * Exponential lerp factor (0–1). Default 0.055 (~5.5% per frame at 60 fps).
+   */
+  seekStrength?: number
+  /**
+   * Smoothly transition all particles to this color.
+   * Works in both standard and formation modes.
+   */
+  targetColor?: string
+  /** Duration of the global color transition in seconds. Default 0.5. */
+  colorTransitionDuration?: number
 }
 
 export function ParticleEmitter({
@@ -82,6 +106,11 @@ export function ParticleEmitter({
   attractors,
   colorOverLife,
   blendMode,
+  mode,
+  formationPoints,
+  seekStrength,
+  targetColor,
+  colorTransitionDuration,
 }: ParticleEmitterProps) {
   const presetConfig = preset ? PARTICLE_PRESETS[preset] : {}
 
@@ -124,6 +153,10 @@ export function ParticleEmitter({
       attractors,
       colorOverLife,
       blendMode,
+      mode,
+      formationPoints,
+      seekStrength,
+      colorTransitionDuration,
     } as ParticlePoolComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParticlePool')
@@ -136,6 +169,37 @@ export function ParticleEmitter({
     if (!pool) return
     pool.active = active
   }, [active, engine, entityId])
+
+  // Sync attractor changes (e.g. cursor repulsion driven by live coordinates)
+  useEffect(() => {
+    const pool = engine.ecs.getComponent<ParticlePoolComponent>(entityId, 'ParticlePool')
+    if (!pool) return
+    pool.attractors = attractors
+  }, [attractors, engine, entityId])
+
+  // Morph formation: reassign targets (shuffled to avoid clumping)
+  useEffect(() => {
+    const pool = engine.ecs.getComponent<ParticlePoolComponent>(entityId, 'ParticlePool')
+    if (!pool || pool.mode !== 'formation' || !formationPoints) return
+    pool.formationPoints = formationPoints
+    const shuffled = [...formationPoints].sort(() => Math.random() - 0.5)
+    pool.particles.forEach((p, i) => {
+      if (shuffled[i]) {
+        p.targetX = shuffled[i].x
+        p.targetY = shuffled[i].y
+      }
+    })
+  }, [formationPoints, engine, entityId])
+
+  // Trigger global color transition
+  useEffect(() => {
+    const pool = engine.ecs.getComponent<ParticlePoolComponent>(entityId, 'ParticlePool')
+    if (!pool || !targetColor) return
+    pool._colorTransitionFrom = pool.color
+    pool._colorTransitionElapsed = 0
+    pool.targetColor = targetColor
+    pool.colorTransitionDuration = colorTransitionDuration
+  }, [targetColor, colorTransitionDuration, engine, entityId])
 
   return null
 }

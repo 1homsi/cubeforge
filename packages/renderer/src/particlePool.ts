@@ -20,6 +20,8 @@ function resetParticle(p: FullParticle): FullParticle {
   p.startSize = 0
   p.endSize = 0
   p._active = false
+  p.targetX = 0
+  p.targetY = 0
   return p
 }
 
@@ -40,6 +42,8 @@ function createParticle(): FullParticle {
     startSize: 0,
     endSize: 0,
     _active: false,
+    targetX: 0,
+    targetY: 0,
   }
 }
 

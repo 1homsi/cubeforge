@@ -748,17 +748,67 @@ export class RenderSystem implements System {
         if (img.complete && img.naturalWidth > 0) pool._textureImage = img
       }
 
+      // Global color transition
+      if (pool.targetColor && pool._colorTransitionFrom !== undefined) {
+        pool._colorTransitionElapsed = (pool._colorTransitionElapsed ?? 0) + dt
+        const dur = pool.colorTransitionDuration ?? 0.5
+        const ct = Math.min((pool._colorTransitionElapsed ?? 0) / dur, 1)
+        const ease = ct * ct * (3 - 2 * ct)
+        const hexToRgb = (hex: string) => {
+          const h = hex.replace('#', '')
+          return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+        }
+        const [cr0, cg0, cb0] = hexToRgb(pool._colorTransitionFrom)
+        const [cr1, cg1, cb1] = hexToRgb(pool.targetColor)
+        const ri = Math.round(cr0 + (cr1 - cr0) * ease)
+        const gi = Math.round(cg0 + (cg1 - cg0) * ease)
+        const bi = Math.round(cb0 + (cb1 - cb0) * ease)
+        pool.color = `rgb(${ri},${gi},${bi})`
+        if (ct >= 1) {
+          pool._colorTransitionFrom = undefined
+          pool._colorTransitionElapsed = undefined
+        }
+      }
+
+      const isFormation = pool.mode === 'formation'
+
       // Update existing particles (in-place swap-remove to avoid array reallocation)
       let alive = pool.particles.length
       for (let i = alive - 1; i >= 0; i--) {
         const p = pool.particles[i]
+        if (isFormation) {
+          // Attractor impulses (supports negative strength = repulsion)
+          if (pool.attractors) {
+            for (const attr of pool.attractors) {
+              const adx = attr.x - p.x
+              const ady = attr.y - p.y
+              const dist = Math.sqrt(adx * adx + ady * ady)
+              if (dist < attr.radius && dist > 0) {
+                const force = attr.strength * (1 - dist / attr.radius)
+                p.vx += (adx / dist) * force * dt
+                p.vy += (ady / dist) * force * dt
+              }
+            }
+          }
+          p.vx *= 0.82
+          p.vy *= 0.82
+          p.x += p.vx * dt
+          p.y += p.vy * dt
+          if (p.targetX !== undefined && p.targetY !== undefined) {
+            const seek = pool.seekStrength ?? 0.055
+            p.x += (p.targetX - p.x) * seek
+            p.y += (p.targetY - p.y) * seek
+          }
+          continue // formation particles never expire
+        }
+
         p.life -= dt
         if (p.life <= 0) {
           // Swap with last alive element and shrink
           alive--
           pool.particles[i] = pool.particles[alive]
         } else {
-          // Attractors
+          // Attractors (supports negative strength = repulsion)
           if (pool.attractors) {
             for (const attr of pool.attractors) {
               const adx = attr.x - p.x
@@ -786,7 +836,32 @@ export class RenderSystem implements System {
       pool.particles.length = alive
 
       // Emit new particles
-      if (pool.active && pool.particles.length < pool.maxParticles) {
+      if (isFormation) {
+        // Formation mode: spawn one persistent particle per formation point
+        const fp = pool.formationPoints ?? []
+        while (pool.particles.length < fp.length) {
+          const idx = pool.particles.length
+          const sol = pool.sizeOverLife
+          const startSz = sol ? sol.start : pool.particleSize
+          const endSz = sol ? sol.end : pool.particleSize
+          pool.particles.push({
+            x: t.x + (world.rng() - 0.5) * 20,
+            y: t.y + (world.rng() - 0.5) * 20,
+            vx: 0,
+            vy: 0,
+            life: 1,
+            maxLife: 1,
+            size: startSz,
+            color: pool.color,
+            gravity: 0,
+            currentSize: startSz,
+            startSize: startSz,
+            endSize: endSz,
+            targetX: fp[idx].x,
+            targetY: fp[idx].y,
+          })
+        }
+      } else if (pool.active && pool.particles.length < pool.maxParticles) {
         let spawnCount: number
         if (pool.burstCount != null && pool.burstCount > 0) {
           spawnCount = pool.burstCount
