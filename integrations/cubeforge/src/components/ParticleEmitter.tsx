@@ -48,6 +48,14 @@ interface ParticleEmitterProps {
   attractors?: Array<{ x: number; y: number; strength: number; radius: number }>
   /** Color over lifetime: array of colors to interpolate through */
   colorOverLife?: string[]
+  /**
+   * WebGL blend mode for particles.
+   * - `'normal'` (default) — standard alpha blending
+   * - `'additive'` — particles brighten the background; produces a glow effect
+   * - `'multiply'` — darkens based on particle color
+   * - `'screen'` — lightens, softer than additive
+   */
+  blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
 }
 
 export function ParticleEmitter({
@@ -73,6 +81,7 @@ export function ParticleEmitter({
   sizeOverLife,
   attractors,
   colorOverLife,
+  blendMode,
 }: ParticleEmitterProps) {
   const presetConfig = preset ? PARTICLE_PRESETS[preset] : {}
 
@@ -114,6 +123,7 @@ export function ParticleEmitter({
       sizeOverLife,
       attractors,
       colorOverLife,
+      blendMode,
     } as ParticlePoolComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParticlePool')

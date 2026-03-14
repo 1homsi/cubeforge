@@ -189,6 +189,8 @@ interface ParticlePoolComponent {
   rotationSpeedRange?: [number, number]
   sizeOverLife?: { start: number; end: number }
   colorOverLife?: string[]
+  attractors?: Array<{ x: number; y: number; strength: number; radius: number }>
+  blendMode?: 'normal' | 'additive' | 'multiply' | 'screen'
 }
 
 interface ParallaxLayerComponent {
@@ -1693,9 +1695,10 @@ export class RenderSystem implements System {
       // Render particles as instanced color quads
       let pCount = 0
       const pKey = `__color__`
+      const pBlend = pool.blendMode ?? 'normal'
       for (const p of pool.particles) {
         if (pCount >= MAX_INSTANCES) {
-          this.flush(pCount, pKey)
+          this.flush(pCount, pKey, undefined, pBlend)
           pCount = 0
         }
 
@@ -1752,7 +1755,7 @@ export class RenderSystem implements System {
         )
         pCount++
       }
-      if (pCount > 0) this.flush(pCount, pKey)
+      if (pCount > 0) this.flush(pCount, pKey, undefined, pBlend)
     }
 
     // ── Trail update + render pass ────────────────────────────────────────────
