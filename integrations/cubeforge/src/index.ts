@@ -193,6 +193,13 @@ export type {
   CompressorEffectOptions,
   DelayEffectOptions,
 } from '@cubeforge/audio'
+export { useAudioAnalyser } from '@cubeforge/audio'
+export type { AudioAnalyserOptions, AudioAnalyserControls } from '@cubeforge/audio'
+export { useAudioScheduler } from '@cubeforge/audio'
+export type { AudioSchedulerOptions, AudioSchedulerControls, BeatHandler, BarHandler } from '@cubeforge/audio'
+export { usePreloadAudio } from '@cubeforge/audio'
+export type { PreloadAudioResult } from '@cubeforge/audio'
+export { saveAudioSettings, loadAudioSettings } from '@cubeforge/audio'
 
 // DevTools (via @cubeforge/devtools)
 export type { DevToolsHandle } from '@cubeforge/devtools'

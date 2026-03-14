@@ -144,6 +144,54 @@ export function setGroupVolumeFaded(group: AudioGroup | 'master', volume: number
   node.gain.linearRampToValueAtTime(clamped, now + Math.max(0, duration))
 }
 
+// ─── Settings persistence ────────────────────────────────────────────────────
+
+const AUDIO_STORAGE_KEY = 'cubeforge:audio'
+
+/**
+ * Persist the current master volume and all group volumes to `localStorage`.
+ * Call this whenever the player changes a volume setting so preferences survive
+ * page reloads.
+ *
+ * @example
+ * setMasterVolume(0.7)
+ * saveAudioSettings()
+ */
+export function saveAudioSettings(): void {
+  try {
+    const data: Record<string, number> = {}
+    for (const [group, volume] of groupVolumes) {
+      data[group] = volume
+    }
+    localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(data))
+  } catch {
+    /* localStorage unavailable (SSR, private browsing, quota exceeded) */
+  }
+}
+
+/**
+ * Restore master and group volumes previously saved with `saveAudioSettings`.
+ * Call once on game startup before audio starts playing.
+ *
+ * @example
+ * // In your game initialisation
+ * loadAudioSettings()
+ */
+export function loadAudioSettings(): void {
+  try {
+    const raw = localStorage.getItem(AUDIO_STORAGE_KEY)
+    if (!raw) return
+    const data = JSON.parse(raw) as Record<string, number>
+    for (const [group, volume] of Object.entries(data)) {
+      if (typeof volume !== 'number') continue
+      if (group === 'master') setMasterVolume(volume)
+      else setGroupVolume(group, volume)
+    }
+  } catch {
+    /* corrupt data or localStorage unavailable */
+  }
+}
+
 /**
  * Temporarily lower a group's volume to `amount` (0–1) for `duration` seconds,
  * then restore it. Useful for ducking music under SFX or dialogue.
