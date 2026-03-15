@@ -791,7 +791,7 @@ export class RenderSystem implements System {
               const ady = p.y - attr.y
               const dist = Math.sqrt(adx * adx + ady * ady)
               if (dist < attr.radius && dist > 0) {
-                const magnitude = (-attr.strength) * (1 - dist / attr.radius) * dt
+                const magnitude = -attr.strength * (1 - dist / attr.radius) * dt
                 p.x += (adx / dist) * magnitude
                 p.y += (ady / dist) * magnitude
               }
@@ -932,10 +932,10 @@ export class RenderSystem implements System {
             // 'soft' — radial gradient for glow effect
             const r = sz / 2
             const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r)
-            g.addColorStop(0,    p.color)
+            g.addColorStop(0, p.color)
             g.addColorStop(0.25, p.color)
-            g.addColorStop(0.5,  p.color.replace(')', ', 0.2)').replace('rgb', 'rgba'))
-            g.addColorStop(1,    p.color.replace(')', ', 0)').replace('rgb', 'rgba'))
+            g.addColorStop(0.5, p.color.replace(')', ', 0.2)').replace('rgb', 'rgba'))
+            g.addColorStop(1, p.color.replace(')', ', 0)').replace('rgb', 'rgba'))
             ctx.fillStyle = g
             ctx.beginPath()
             ctx.arc(0, 0, r, 0, Math.PI * 2)

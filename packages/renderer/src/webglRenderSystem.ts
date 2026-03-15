@@ -889,10 +889,10 @@ export class RenderSystem implements System {
     if (shape === 'soft') {
       // Radial gradient: bright tight core fading to transparent — produces a glow halo with additive blending
       const g = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx)
-      g.addColorStop(0,    'rgba(255,255,255,1)')   // bright core
+      g.addColorStop(0, 'rgba(255,255,255,1)') // bright core
       g.addColorStop(0.25, 'rgba(255,255,255,0.9)') // tight solid region
-      g.addColorStop(0.5,  'rgba(255,255,255,0.2)') // subtle halo
-      g.addColorStop(1,    'rgba(255,255,255,0)')    // transparent edge
+      g.addColorStop(0.5, 'rgba(255,255,255,0.2)') // subtle halo
+      g.addColorStop(1, 'rgba(255,255,255,0)') // transparent edge
       ctx.fillStyle = g
       ctx.fillRect(0, 0, SIZE, SIZE)
     } else {
@@ -1722,7 +1722,7 @@ export class RenderSystem implements System {
               const ady = p.y - attr.y
               const dist = Math.sqrt(adx * adx + ady * ady)
               if (dist < attr.radius && dist > 0) {
-                const magnitude = (-attr.strength) * (1 - dist / attr.radius) * dt
+                const magnitude = -attr.strength * (1 - dist / attr.radius) * dt
                 p.x += (adx / dist) * magnitude
                 p.y += (ady / dist) * magnitude
               }
@@ -1756,7 +1756,7 @@ export class RenderSystem implements System {
       if (isFormation) {
         // Formation mode: spawn one persistent particle per formation point
         const fp = pool.formationPoints ?? []
-while (pool.particles.length < fp.length) {
+        while (pool.particles.length < fp.length) {
           const idx = pool.particles.length
           const startSize = pool.sizeOverLife?.start ?? pool.particleSize
           const endSize = pool.sizeOverLife?.end ?? pool.particleSize
