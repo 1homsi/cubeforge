@@ -151,6 +151,24 @@ interface TilemapProps {
    * row-run (legacy behaviour).
    */
   mergeColliders?: boolean
+  /**
+   * Array of tile GIDs (global IDs) to treat as solid, regardless of layer.
+   * When set, only tiles whose GID is in this array generate colliders in
+   * the collision layer. Without this, ALL non-zero tiles in the collision
+   * layer produce colliders.
+   */
+  solidTiles?: number[]
+  /**
+   * When true, also scan visual layers for tiles whose GID matches
+   * `solidTiles` and auto-generate colliders from them — no separate
+   * collision layer required. Default: false.
+   */
+  autoColliders?: boolean
+  /**
+   * Per-tile-GID collider properties. Keys are tile GIDs.
+   * Example: `{ 6: { isTrigger: true }, 7: { oneWay: true } }`
+   */
+  tileColliderProps?: Record<number, { isTrigger?: boolean; oneWay?: boolean; layer?: string }>
 }
 
 export function Tilemap({
@@ -163,6 +181,9 @@ export function Tilemap({
   onTileProperty,
   navGrid,
   mergeColliders = true,
+  solidTiles,
+  autoColliders = false,
+  tileColliderProps: _tileColliderProps,
 }: TilemapProps): React.ReactElement | null {
   const engine = useContext(EngineContext)!
   const [spawnedNodes, setSpawnedNodes] = useState<React.ReactNode[]>([])
@@ -241,7 +262,8 @@ export function Tilemap({
         if (!layer.visible) continue
 
         if (layer.type === 'tilelayer' && layer.data) {
-          const collision = isCollisionLayer(layer, collisionLayer)
+          const collision =
+            isCollisionLayer(layer, collisionLayer) || (autoColliders && solidTiles && solidTiles.length > 0)
           const trigger = !collision && isTriggerLayer(layer, triggerLayerName)
 
           // Mark navGrid cells as non-walkable for collision tiles
@@ -257,11 +279,13 @@ export function Tilemap({
           if (collision || trigger) {
             if (mergeColliders) {
               // Build a 2D solid grid and merge into large rectangles
+              const solidSet = solidTiles ? new Set(solidTiles) : null
               const solidGrid: boolean[][] = []
               for (let row = 0; row < mapData.height; row++) {
                 solidGrid[row] = []
                 for (let col = 0; col < mapData.width; col++) {
-                  solidGrid[row][col] = layer.data![row * mapData.width + col] !== 0
+                  const gid = layer.data![row * mapData.width + col]
+                  solidGrid[row][col] = gid !== 0 && (!solidSet || solidSet.has(gid))
                 }
               }
 

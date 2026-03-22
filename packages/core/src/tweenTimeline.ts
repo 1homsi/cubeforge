@@ -7,92 +7,222 @@ export interface TimelineEntry {
   ease?: (t: number) => number
   onUpdate: (value: number) => void
   onComplete?: () => void
+}
+
+export interface TimelineAddOptions {
+  /** Delay in seconds before this entry starts (relative to its start time). */
   delay?: number
+  /** Start at a named label position instead of sequentially. */
+  at?: string
+}
+
+export interface TimelineOptions {
+  /** Loop the entire timeline when it completes. Default false. */
+  loop?: boolean
+  /** Number of additional repeats after the first play. Use Infinity for infinite. Default 0. */
+  repeat?: number
+  /** Called when the timeline finishes all repeats. */
+  onComplete?: () => void
+}
+
+interface Segment {
+  startTime: number
+  delay: number
+  entry: TimelineEntry
+  handle?: ReturnType<typeof tween>
+  started: boolean
+  complete: boolean
 }
 
 export interface TweenTimeline {
-  add(entry: TimelineEntry): TweenTimeline
+  /** Append a tween to play after the previous one ends. */
+  add(entry: TimelineEntry, opts?: TimelineAddOptions): TweenTimeline
+  /** Add a named time marker at the current cursor position. */
+  addLabel(name: string): TweenTimeline
+  /** Add multiple tweens that all start at the same time (the current cursor). */
+  addParallel(entries: TimelineEntry[], opts?: TimelineAddOptions): TweenTimeline
+  /** Advance the timeline by dt seconds. Call this from a Script or game loop. */
+  update(dt: number): void
+  /** Start or restart the timeline from the beginning. */
   start(): void
+  /** Stop the timeline and reset to the beginning. */
   stop(): void
-  isRunning(): boolean
+  /** Seek to a specific time in seconds. */
+  seek(time: number): void
+  readonly isRunning: boolean
+  readonly isComplete: boolean
+  /** Total duration in seconds (computed from all segments). */
+  readonly totalDuration: number
 }
 
-export function createTimeline(): TweenTimeline {
-  const entries: TimelineEntry[] = []
+export function createTimeline(opts?: TimelineOptions): TweenTimeline {
+  const segments: Segment[] = []
+  const labels = new Map<string, number>()
+  let cursor = 0
+  let elapsed = 0
   let running = false
-  let currentTween: ReturnType<typeof tween> | null = null
-  let delayTimer: ReturnType<typeof setTimeout> | null = null
-  let rafId: number | null = null
-  let lastTime = 0
+  let complete = false
+  const maxRepeats = opts?.repeat ?? (opts?.loop ? Infinity : 0)
+  let repeatsDone = 0
 
-  function clearCurrent() {
-    if (currentTween) {
-      currentTween.stop()
-      currentTween = null
+  function resolveStartTime(addOpts?: TimelineAddOptions): number {
+    if (addOpts?.at) {
+      const labelTime = labels.get(addOpts.at)
+      return labelTime ?? cursor
     }
-    if (delayTimer !== null) {
-      clearTimeout(delayTimer)
-      delayTimer = null
-    }
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId)
-      rafId = null
+    return cursor
+  }
+
+  function resetSegments() {
+    for (const seg of segments) {
+      seg.handle?.stop()
+      seg.handle = undefined
+      seg.started = false
+      seg.complete = false
     }
   }
 
-  function tick(now: number) {
-    if (!running || !currentTween) return
-    const dt = (now - lastTime) / 1000
-    lastTime = now
-    currentTween.update(dt)
-    if (!currentTween.isComplete) {
-      rafId = requestAnimationFrame(tick)
+  function computeTotalDuration(): number {
+    let max = 0
+    for (const seg of segments) {
+      const end = seg.startTime + seg.delay + seg.entry.duration
+      if (end > max) max = end
     }
-    // completion is handled via the onComplete callback passed to tween()
-  }
-
-  function playEntry(index: number) {
-    if (index >= entries.length) {
-      running = false
-      return
-    }
-
-    const entry = entries[index]
-    const delay = entry.delay ?? 0
-
-    const startTween = () => {
-      if (!running) return
-      currentTween = tween(entry.from, entry.to, entry.duration, entry.ease ?? Ease.linear, entry.onUpdate, () => {
-        entry.onComplete?.()
-        playEntry(index + 1)
-      })
-      lastTime = performance.now()
-      rafId = requestAnimationFrame(tick)
-    }
-
-    if (delay > 0) {
-      delayTimer = setTimeout(startTween, delay * 1000)
-    } else {
-      startTween()
-    }
+    return max
   }
 
   const timeline: TweenTimeline = {
-    add(entry: TimelineEntry): TweenTimeline {
-      entries.push(entry)
+    add(entry: TimelineEntry, addOpts?: TimelineAddOptions): TweenTimeline {
+      const start = resolveStartTime(addOpts)
+      const delay = addOpts?.delay ?? 0
+      segments.push({ startTime: start, delay, entry, started: false, complete: false })
+      cursor = start + delay + entry.duration
       return timeline
     },
-    start() {
-      clearCurrent()
+
+    addLabel(name: string): TweenTimeline {
+      labels.set(name, cursor)
+      return timeline
+    },
+
+    addParallel(entries: TimelineEntry[], addOpts?: TimelineAddOptions): TweenTimeline {
+      const start = resolveStartTime(addOpts)
+      const delay = addOpts?.delay ?? 0
+      let maxEnd = cursor
+      for (const entry of entries) {
+        segments.push({ startTime: start, delay, entry, started: false, complete: false })
+        const end = start + delay + entry.duration
+        if (end > maxEnd) maxEnd = end
+      }
+      cursor = maxEnd
+      return timeline
+    },
+
+    update(dt: number): void {
+      if (!running || complete) return
+      elapsed += dt
+
+      let allDone = true
+      for (const seg of segments) {
+        if (seg.complete) continue
+        const effectiveStart = seg.startTime + seg.delay
+        if (elapsed < effectiveStart) {
+          allDone = false
+          continue
+        }
+        if (!seg.started) {
+          seg.started = true
+          seg.handle = tween(
+            seg.entry.from,
+            seg.entry.to,
+            seg.entry.duration,
+            seg.entry.ease ?? Ease.linear,
+            seg.entry.onUpdate,
+            () => {
+              seg.complete = true
+              seg.entry.onComplete?.()
+            },
+          )
+          // Apply time already elapsed past the start
+          const overflow = elapsed - effectiveStart
+          if (overflow > 0) seg.handle.update(overflow)
+        } else if (seg.handle) {
+          seg.handle.update(dt)
+        }
+        if (!seg.complete) allDone = false
+      }
+
+      if (allDone && segments.length > 0) {
+        if (repeatsDone < maxRepeats) {
+          repeatsDone++
+          elapsed = 0
+          resetSegments()
+        } else {
+          complete = true
+          running = false
+          opts?.onComplete?.()
+        }
+      }
+    },
+
+    start(): void {
+      elapsed = 0
       running = true
-      playEntry(0)
+      complete = false
+      repeatsDone = 0
+      resetSegments()
     },
-    stop() {
+
+    stop(): void {
       running = false
-      clearCurrent()
+      complete = false
+      elapsed = 0
+      repeatsDone = 0
+      resetSegments()
     },
-    isRunning() {
+
+    seek(time: number): void {
+      elapsed = 0
+      resetSegments()
+      // Fast-forward to the target time
+      elapsed = 0
+      const step = 1 / 60
+      while (elapsed < time) {
+        const d = Math.min(step, time - elapsed)
+        elapsed += d
+        for (const seg of segments) {
+          if (seg.complete) continue
+          const effectiveStart = seg.startTime + seg.delay
+          if (elapsed < effectiveStart) continue
+          if (!seg.started) {
+            seg.started = true
+            seg.handle = tween(
+              seg.entry.from,
+              seg.entry.to,
+              seg.entry.duration,
+              seg.entry.ease ?? Ease.linear,
+              seg.entry.onUpdate,
+              () => {
+                seg.complete = true
+              },
+            )
+            const overflow = elapsed - effectiveStart
+            if (overflow > 0) seg.handle.update(overflow)
+          } else if (seg.handle) {
+            seg.handle.update(d)
+          }
+        }
+      }
+    },
+
+    get isRunning() {
       return running
+    },
+    get isComplete() {
+      return complete
+    },
+    get totalDuration() {
+      return computeTotalDuration()
     },
   }
 

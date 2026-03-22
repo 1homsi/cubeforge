@@ -154,7 +154,11 @@ export function Game({
           handle.onFrame?.()
         }
       },
-      deterministic ? { fixedDt: 1 / 60 } : undefined,
+      {
+        ...(deterministic ? { fixedDt: 1 / 60 } : {}),
+        // During hit-pause, re-render the last frame so the screen isn't blank
+        onRender: () => renderSystem.update(ecs, 0),
+      },
     )
 
     const postProcessStack = createPostProcessStack()

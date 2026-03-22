@@ -124,7 +124,13 @@ interface AnimatorComponent {
     string,
     {
       clip: string
-      transitions?: { to: string; when: AnimatorCondition[]; priority?: number; exitTime?: number }[]
+      transitions?: {
+        to: string
+        when: AnimatorCondition[]
+        priority?: number
+        exitTime?: number
+        blendDuration?: number
+      }[]
       onEnter?: () => void
       onExit?: () => void
     }
@@ -132,6 +138,8 @@ interface AnimatorComponent {
   params: Record<string, unknown>
   playing: boolean
   _entered: boolean
+  _blendTimer?: number
+  _blendToState?: string
 }
 
 interface SquashStretchComponent {
@@ -1316,22 +1324,42 @@ export class RenderSystem implements System {
         stateDef.onEnter?.()
       }
 
-      // Evaluate transitions
-      if (stateDef.transitions && stateDef.transitions.length > 0) {
-        // Sort by priority descending (stable: declaration order for same priority)
-        const sorted = [...stateDef.transitions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-        for (const trans of sorted) {
-          // exitTime check
-          if (trans.exitTime != null && anim.frames.length > 0) {
-            const progress = anim.currentIndex / anim.frames.length
-            if (progress < trans.exitTime) continue
-          }
-          // Evaluate all conditions (AND)
-          if (evaluateConditions(trans.when, animator.params)) {
-            stateDef.onExit?.()
-            animator.currentState = trans.to
-            animator._entered = false
-            break
+      // Blend timer: count down and complete deferred state transition
+      if (animator._blendTimer != null && animator._blendTimer > 0) {
+        animator._blendTimer -= dt
+        if (animator._blendTimer <= 0 && animator._blendToState) {
+          stateDef.onExit?.()
+          animator.currentState = animator._blendToState
+          animator._entered = false
+          animator._blendTimer = undefined
+          animator._blendToState = undefined
+        }
+        // Skip evaluating new transitions while blending
+      } else {
+        // Evaluate transitions
+        if (stateDef.transitions && stateDef.transitions.length > 0) {
+          // Sort by priority descending (stable: declaration order for same priority)
+          const sorted = [...stateDef.transitions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+          for (const trans of sorted) {
+            // exitTime check
+            if (trans.exitTime != null && anim.frames.length > 0) {
+              const progress = anim.currentIndex / anim.frames.length
+              if (progress < trans.exitTime) continue
+            }
+            // Evaluate all conditions (AND)
+            if (evaluateConditions(trans.when, animator.params)) {
+              if (trans.blendDuration && trans.blendDuration > 0) {
+                // Deferred transition: old clip keeps playing during blend
+                animator._blendTimer = trans.blendDuration
+                animator._blendToState = trans.to
+              } else {
+                // Instant transition
+                stateDef.onExit?.()
+                animator.currentState = trans.to
+                animator._entered = false
+              }
+              break
+            }
           }
         }
       }

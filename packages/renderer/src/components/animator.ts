@@ -13,6 +13,12 @@ export interface AnimatorTransition {
   priority?: number
   /** Normalized playback progress (0–1) required before this transition can fire. */
   exitTime?: number
+  /**
+   * Duration in seconds to blend between the old and new clip.
+   * During the blend, the old clip finishes playing before the new clip starts.
+   * Default: 0 (instant switch).
+   */
+  blendDuration?: number
 }
 
 export interface AnimatorStateDefinition {
@@ -32,4 +38,8 @@ export interface AnimatorComponent extends Component {
   playing: boolean
   /** Internal: whether onEnter has been called for the current state. */
   _entered: boolean
+  /** @internal — remaining blend time before completing a state transition */
+  _blendTimer?: number
+  /** @internal — the state being blended into (transition target) */
+  _blendToState?: string
 }
