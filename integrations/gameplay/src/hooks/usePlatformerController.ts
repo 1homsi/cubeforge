@@ -13,6 +13,22 @@ export interface PlatformerControllerOptions {
   coyoteTime?: number
   jumpBuffer?: number
   jumpCooldown?: number
+  /**
+   * Horizontal acceleration when input is held (px/s²).
+   * `Infinity` (default) = instant velocity assignment (legacy behaviour).
+   * Try 800–1600 for smooth, responsive movement.
+   */
+  acceleration?: number
+  /**
+   * Velocity multiplier applied each frame when grounded and no horizontal input.
+   * 0 = instant stop, 1 = no friction. Default 0.6.
+   */
+  groundFriction?: number
+  /**
+   * Velocity multiplier applied each frame when airborne and no horizontal input.
+   * 0 = instant stop, 1 = full air control. Default 0.92.
+   */
+  airFriction?: number
   /** Gamepad index to read (default 0). Set to -1 to disable gamepad input. */
   gamepadIndex?: number
   /** Dead zone for gamepad analog stick axes (default 0.2). */
@@ -47,6 +63,9 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
     coyoteTime = 0.08,
     jumpBuffer = 0.08,
     jumpCooldown = 0.18,
+    acceleration = Infinity,
+    groundFriction = 0.6,
+    airFriction = 0.92,
     gamepadIndex = 0,
     gamepadDeadZone = 0.2,
     bindings,
@@ -93,9 +112,18 @@ export function usePlatformerController(entityId: EntityId, opts: PlatformerCont
 
       const left = leftKeys.some((k) => input.isDown(k)) || gpLeft
       const right = rightKeys.some((k) => input.isDown(k)) || gpRight
-      if (left) rb.vx = -speed
-      else if (right) rb.vx = speed
-      else rb.vx *= rb.onGround ? 0.6 : 0.92
+      if (left || right) {
+        const targetVx = left ? -speed : speed
+        if (acceleration === Infinity) {
+          rb.vx = targetVx
+        } else {
+          const diff = targetVx - rb.vx
+          const maxDelta = acceleration * dt
+          rb.vx += Math.abs(diff) <= maxDelta ? diff : Math.sign(diff) * maxDelta
+        }
+      } else {
+        rb.vx *= rb.onGround ? groundFriction : airFriction
+      }
 
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')
       if (sprite) {
