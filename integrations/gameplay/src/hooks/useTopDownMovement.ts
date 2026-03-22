@@ -28,12 +28,7 @@ function moveToward(current: number, target: number, maxDelta: number): number {
 
 export function useTopDownMovement(entityId: EntityId, opts: TopDownMovementOptions = {}): void {
   const engine = useContext(EngineContext)!
-  const {
-    speed = 200,
-    normalizeDiagonal = true,
-    acceleration = Infinity,
-    deceleration = acceleration,
-  } = opts
+  const { speed = 200, normalizeDiagonal = true, acceleration = Infinity, deceleration = acceleration } = opts
 
   useEffect(() => {
     const updateFn = (id: EntityId, world: ECSWorld, input: InputManager, dt: number) => {
