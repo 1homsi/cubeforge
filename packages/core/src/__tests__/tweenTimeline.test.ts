@@ -4,7 +4,7 @@ import { createTimeline } from '../tweenTimeline'
 describe('createTimeline', () => {
   it('creates a timeline that is not running initially', () => {
     const timeline = createTimeline()
-    expect(timeline.isRunning()).toBe(false)
+    expect(timeline.isRunning).toBe(false)
   })
 
   it('add returns the timeline for chaining', () => {
@@ -30,7 +30,7 @@ describe('createTimeline', () => {
     const timeline = createTimeline()
     timeline.add({ from: 0, to: 1, duration: 1, onUpdate: () => {} })
     timeline.start()
-    expect(timeline.isRunning()).toBe(true)
+    expect(timeline.isRunning).toBe(true)
   })
 
   it('stop sets running to false', () => {
@@ -38,14 +38,14 @@ describe('createTimeline', () => {
     timeline.add({ from: 0, to: 1, duration: 1, onUpdate: () => {} })
     timeline.start()
     timeline.stop()
-    expect(timeline.isRunning()).toBe(false)
+    expect(timeline.isRunning).toBe(false)
   })
 
   it('start with no entries does not throw', () => {
     const timeline = createTimeline()
     expect(() => timeline.start()).not.toThrow()
     // With no entries, it should immediately stop
-    expect(timeline.isRunning()).toBe(false)
+    expect(timeline.isRunning).toBe(false)
   })
 
   it('stop without start does not throw', () => {

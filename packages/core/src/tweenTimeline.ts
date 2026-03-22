@@ -167,10 +167,17 @@ export function createTimeline(opts?: TimelineOptions): TweenTimeline {
 
     start(): void {
       elapsed = 0
-      running = true
-      complete = false
       repeatsDone = 0
       resetSegments()
+      if (segments.length === 0) {
+        // Nothing to play
+        running = false
+        complete = true
+        opts?.onComplete?.()
+        return
+      }
+      running = true
+      complete = false
     },
 
     stop(): void {
