@@ -123,6 +123,28 @@ export { A11yNode } from './components/A11yNode'
 export type { A11yNodeProps } from './components/A11yNode'
 export { VectorPath } from './components/VectorPath'
 export type { VectorPathProps } from './components/VectorPath'
+export { useGrid } from './hooks/useGrid'
+export type { GridControls, GridOptions, GridCell } from './hooks/useGrid'
+export { useTurnSystem } from './hooks/useTurnSystem'
+export type { TurnSystemControls, TurnSystemOptions } from './hooks/useTurnSystem'
+export { useHoverable } from './hooks/useHoverable'
+export type { HoverableControls, HoverableOptions } from './hooks/useHoverable'
+export { useDraggable, useDroppable } from './hooks/useDragDrop'
+export type { DraggableControls, DraggableOptions, DroppableControls, DroppableOptions } from './hooks/useDragDrop'
+export { useKeyboardFocus, useFocusable } from './hooks/useKeyboardFocus'
+export type { KeyboardFocusControls, FocusableOptions } from './hooks/useKeyboardFocus'
+export { FocusRing } from './components/FocusRing'
+export type { FocusRingProps } from './components/FocusRing'
+export {
+  saveScene,
+  loadScene,
+  saveSceneToLocalStorage,
+  loadSceneFromLocalStorage,
+  deleteSavedScene,
+  listSavedScenes,
+} from './utils/sceneSerialize'
+export type { SceneSaveOptions } from './utils/sceneSerialize'
+export { isReducedMotionPreferred, setReducedMotionOverride } from '@cubeforge/core'
 
 // Contact hooks (via @cubeforge/context)
 export {
@@ -315,8 +337,6 @@ export {
   createHalfSpaceCollider,
   createTriMeshCollider,
 } from '@cubeforge/physics'
-export { buildBVH, queryBVH, queryBVHCircle } from '@cubeforge/physics'
-export type { BVH, Triangle2D } from '@cubeforge/physics'
 export {
   setAdditionalMass,
   setMassProperties,
@@ -351,30 +371,9 @@ export type {
   DebugRenderColors,
   DebugRenderBackend,
 } from '@cubeforge/physics'
-export {
-  sortEntities,
-  generateDeterministicPairs,
-  pairKey,
-  deterministicAtan2,
-  deterministicSqrt,
-  deterministicSin,
-  deterministicCos,
-  setDeterministicMode,
-  isDeterministicMode,
-  dMath,
-  KahanSum,
-} from '@cubeforge/physics'
-export { gjk, epa, gjkEpaQuery, circleShape, boxShape, capsuleShape, polygonShape } from '@cubeforge/physics'
-export type { ConvexShape, GJKResult, EPAResult, GJKContactManifold } from '@cubeforge/physics'
-export { SweepAndPrune } from '@cubeforge/physics'
-export type { BroadPhaseAABB, BroadPhasePair } from '@cubeforge/physics'
-export { IslandDetector } from '@cubeforge/physics'
-export type { Island } from '@cubeforge/physics'
-export { computeTOI, resolveTOI } from '@cubeforge/physics'
-export type { TOIBody, TOIResult } from '@cubeforge/physics'
-export { ObjectPool as PhysicsObjectPool, Float64Pool, resetAllPools } from '@cubeforge/physics'
-export { MultibodyArticulation, createMultibody, createLink } from '@cubeforge/physics'
-export type { MultibodyLink, Spatial3, SpatialInertia3 } from '@cubeforge/physics'
+// Low-level physics internals (GJK/EPA, broad phase, TOI, determinism,
+// multibody, BVH, pools) have moved to `cubeforge/advanced`. Import from there
+// if you need them — this trims ~30 symbols from the main autocomplete.
 export type {
   InputManager,
   ActionBindings,

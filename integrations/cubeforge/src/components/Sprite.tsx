@@ -162,7 +162,15 @@ export function Sprite({
             c.src = img.src // use the fully resolved URL for WebGL cache matching
           }
         })
-        .catch(console.error)
+        .catch((err: unknown) => {
+          // Surface through the engine event bus so games can log, show an error
+          // overlay, or fall back to a placeholder. Also log to console so devs
+          // see the failure during development.
+          const message = err instanceof Error ? err.message : String(err)
+          engine.events.emit('asset:error', { type: 'image', src, entityId, error: err })
+          // eslint-disable-next-line no-console
+          console.error(`[Cubeforge] <Sprite> failed to load image "${src}": ${message}`)
+        })
     }
 
     return () => engine.ecs.removeComponent(entityId, 'Sprite')

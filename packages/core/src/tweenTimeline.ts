@@ -1,4 +1,5 @@
 import { tween, Ease } from './tween'
+import { isReducedMotionPreferred } from './reducedMotion'
 
 export interface TimelineEntry {
   from: number
@@ -23,6 +24,12 @@ export interface TimelineOptions {
   repeat?: number
   /** Called when the timeline finishes all repeats. */
   onComplete?: () => void
+  /**
+   * When true, this timeline plays at full length even if the user has the
+   * `prefers-reduced-motion: reduce` system setting on. Default: false, meaning
+   * reduced-motion users see all segments snap to their end values.
+   */
+  ignoreReducedMotion?: boolean
 }
 
 interface Segment {
@@ -132,16 +139,18 @@ export function createTimeline(opts?: TimelineOptions): TweenTimeline {
         }
         if (!seg.started) {
           seg.started = true
+          const reducedMotion = !opts?.ignoreReducedMotion && isReducedMotionPreferred()
           seg.handle = tween(
             seg.entry.from,
             seg.entry.to,
-            seg.entry.duration,
+            reducedMotion ? 0 : seg.entry.duration,
             seg.entry.ease ?? Ease.linear,
             seg.entry.onUpdate,
             () => {
               seg.complete = true
               seg.entry.onComplete?.()
             },
+            { ignoreReducedMotion: true }, // timeline already collapsed duration
           )
           // Apply time already elapsed past the start
           const overflow = elapsed - effectiveStart
@@ -203,15 +212,17 @@ export function createTimeline(opts?: TimelineOptions): TweenTimeline {
           if (elapsed < effectiveStart) continue
           if (!seg.started) {
             seg.started = true
+            const reducedMotion = !opts?.ignoreReducedMotion && isReducedMotionPreferred()
             seg.handle = tween(
               seg.entry.from,
               seg.entry.to,
-              seg.entry.duration,
+              reducedMotion ? 0 : seg.entry.duration,
               seg.entry.ease ?? Ease.linear,
               seg.entry.onUpdate,
               () => {
                 seg.complete = true
               },
+              { ignoreReducedMotion: true },
             )
             const overflow = elapsed - effectiveStart
             if (overflow > 0) seg.handle.update(overflow)

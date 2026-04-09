@@ -1,3 +1,5 @@
+import { isReducedMotionPreferred } from './reducedMotion'
+
 type EaseFn = (t: number) => number
 
 export const Ease = {
@@ -130,6 +132,15 @@ export interface TweenOptions {
    * Delay in seconds before the tween starts. Default: 0.
    */
   delay?: number
+  /**
+   * When true, this tween plays at full length even if the user has the
+   * `prefers-reduced-motion: reduce` system setting on. Default: false, meaning
+   * reduced-motion users get an instant jump to the final value.
+   *
+   * Only opt out for tweens where the motion is load-bearing for gameplay
+   * (e.g. reading physics interpolation) rather than decorative.
+   */
+  ignoreReducedMotion?: boolean
 }
 
 /**
@@ -153,6 +164,13 @@ export function tween(
   onComplete?: () => void,
   opts?: TweenOptions,
 ): TweenHandle & { update(dt: number): void } {
+  // Honor prefers-reduced-motion by collapsing duration to 0 unless the caller
+  // explicitly opted out. Delay, repeats, and yoyo all still behave — they just
+  // happen instantly.
+  if (!opts?.ignoreReducedMotion && isReducedMotionPreferred()) {
+    duration = 0
+  }
+
   let elapsed = 0
   let stopped = false
   let complete = false

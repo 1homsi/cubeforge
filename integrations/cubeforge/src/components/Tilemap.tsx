@@ -196,10 +196,13 @@ export function Tilemap({
       let mapData: TiledMap
       try {
         const res = await fetch(src)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) throw new Error(`Tilemap fetch for "${src}" returned HTTP ${res.status} ${res.statusText}`)
         mapData = (await res.json()) as TiledMap
       } catch (err) {
-        console.warn(`[Cubeforge] Tilemap: failed to load "${src}":`, err)
+        const message = err instanceof Error ? err.message : String(err)
+        engine?.events.emit('asset:error', { type: 'tilemap', src, error: err })
+        // eslint-disable-next-line no-console
+        console.error(`[Cubeforge] <Tilemap> failed to load "${src}": ${message}`)
         return
       }
 

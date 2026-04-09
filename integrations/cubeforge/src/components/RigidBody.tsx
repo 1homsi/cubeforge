@@ -7,10 +7,6 @@ interface RigidBodyProps {
   mass?: number
   gravityScale?: number
   isStatic?: boolean
-  /** @deprecated Use restitution on BoxCollider/CircleCollider instead */
-  bounce?: number
-  /** @deprecated Use friction on BoxCollider/CircleCollider instead */
-  friction?: number
   vx?: number
   vy?: number
   /** Prevent any horizontal movement — velocity.x is zeroed every frame */
@@ -49,8 +45,6 @@ export function RigidBody({
   mass = 0,
   gravityScale = 1,
   isStatic = false,
-  bounce = 0,
-  friction = 0.85,
   vx = 0,
   vy = 0,
   lockX = false,
@@ -85,8 +79,6 @@ export function RigidBody({
         mass,
         gravityScale,
         isStatic,
-        bounce,
-        friction,
         vx,
         vy,
         lockX,

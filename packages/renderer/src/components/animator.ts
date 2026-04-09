@@ -36,10 +36,10 @@ export interface AnimatorComponent extends Component {
   states: Record<string, AnimatorStateDefinition>
   params: Record<string, AnimatorParamValue>
   playing: boolean
-  /** Internal: whether onEnter has been called for the current state. */
+  /** @internal Whether onEnter has been called for the current state. Don't touch. */
   _entered: boolean
-  /** @internal — remaining blend time before completing a state transition */
+  /** @internal Remaining blend time before completing a state transition. Don't touch. */
   _blendTimer?: number
-  /** @internal — the state being blended into (transition target) */
+  /** @internal The state being blended into (transition target). Don't touch. */
   _blendToState?: string
 }

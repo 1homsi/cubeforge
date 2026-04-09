@@ -72,12 +72,14 @@ describe('RigidBody component', () => {
     expect(rb.isStatic).toBe(true)
   })
 
-  it('sets friction prop', async () => {
+  it('sets linearDamping prop', async () => {
+    // friction was removed in 0.5.0 in favor of per-collider friction. Use
+    // linearDamping as a proxy for "a scalar that adjusts how motion attenuates".
     await act(async () => {
-      renderRB({ friction: 0.5 })
+      renderRB({ linearDamping: 0.3 })
     })
-    const rb = getRigidBody<{ friction: number }>()
-    expect(rb.friction).toBe(0.5)
+    const rb = getRigidBody<{ linearDamping: number }>()
+    expect(rb.linearDamping).toBe(0.3)
   })
 
   it('sets gravityScale prop', async () => {

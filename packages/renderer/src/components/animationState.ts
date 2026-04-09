@@ -30,7 +30,11 @@ export interface AnimationStateComponent extends Component {
    * Fired once each time the animation advances to that frame.
    */
   frameEvents?: Record<number, () => void>
-  /** Internal flag to prevent onComplete from firing more than once per playthrough. */
+  /**
+   * @internal Flag to prevent onComplete from firing more than once per playthrough.
+   * Don't read or write this from game code — it's reset automatically when the
+   * currentClip or frames change.
+   */
   _completed: boolean
 
   // ── Named clip layer (optional) ──
@@ -39,6 +43,6 @@ export interface AnimationStateComponent extends Component {
   clips?: Record<string, AnimationClipDefinition>
   /** The currently active clip name. Set this from a Script to switch clips at the ECS level. */
   currentClip?: string
-  /** Internal: tracks the last resolved clip name so the engine detects changes. */
+  /** @internal Tracks the last resolved clip name so the engine detects changes. Don't touch. */
   _resolvedClip?: string
 }

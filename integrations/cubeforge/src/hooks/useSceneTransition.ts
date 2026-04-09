@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { isReducedMotionPreferred } from '@cubeforge/core'
 
 export type TransitionEffect =
   | { type: 'fade'; duration?: number; color?: string }
@@ -101,7 +102,8 @@ export function useSceneTransition(
   const startTransition = useCallback(
     (effect: TransitionEffect | undefined, action: () => void) => {
       const eff = effect ?? defaultTransition ?? { type: 'instant' }
-      if (eff.type === 'instant') {
+      if (eff.type === 'instant' || isReducedMotionPreferred()) {
+        // Honor prefers-reduced-motion by skipping the animation entirely.
         action()
         return
       }
