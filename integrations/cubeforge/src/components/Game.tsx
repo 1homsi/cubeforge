@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ECSWorld, GameLoop, EventBus, AssetManager, ScriptSystem, type Plugin, type System } from '@cubeforge/core'
+import {
+  ECSWorld,
+  GameLoop,
+  EventBus,
+  AssetManager,
+  ScriptSystem,
+  type GameLoopMode,
+  type Plugin,
+  type System,
+} from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
 import { RenderSystem, DebugOverlayRenderer, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
@@ -60,6 +69,15 @@ interface GameProps {
   sampling?: Sampling
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
+  /**
+   * Loop mode (default 'realtime'):
+   * - 'realtime' — continuous 60fps tick. Use for action games, anything with
+   *   continuous motion or physics.
+   * - 'onDemand' — sleeps until input arrives or a component calls markDirty().
+   *   Use for puzzle games, turn-based games, visual novels, level editors, or any
+   *   scene where nothing changes unless the user acts. Saves battery and CPU.
+   */
+  mode?: GameLoopMode
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
@@ -78,6 +96,7 @@ export function Game({
   sampling,
   onReady,
   plugins,
+  mode = 'realtime',
   style,
   className,
   children,
@@ -156,10 +175,27 @@ export function Game({
       },
       {
         ...(deterministic ? { fixedDt: 1 / 60 } : {}),
+        // In onDemand mode, default to a 1/60 step so animations advance predictably.
+        ...(mode === 'onDemand' && !deterministic ? { fixedDt: 1 / 60 } : {}),
+        mode,
         // During hit-pause, re-render the last frame so the screen isn't blank
         onRender: () => renderSystem.update(ecs, 0),
       },
     )
+
+    // In onDemand mode, wake the loop on input events so the user sees their actions
+    // take effect. Without this the scene would be frozen until a component manually
+    // called engine.loop.markDirty().
+    const dirtyHandler = (): void => loop.markDirty()
+    if (mode === 'onDemand') {
+      canvas.addEventListener('pointerdown', dirtyHandler)
+      canvas.addEventListener('pointerup', dirtyHandler)
+      canvas.addEventListener('pointermove', dirtyHandler)
+      canvas.addEventListener('wheel', dirtyHandler, { passive: true })
+      window.addEventListener('keydown', dirtyHandler)
+      window.addEventListener('keyup', dirtyHandler)
+      window.addEventListener('resize', dirtyHandler)
+    }
 
     const postProcessStack = createPostProcessStack()
 
@@ -242,6 +278,15 @@ export function Game({
       input.detach()
       ecs.clear()
       resizeObserver?.disconnect()
+      if (mode === 'onDemand') {
+        canvas.removeEventListener('pointerdown', dirtyHandler)
+        canvas.removeEventListener('pointerup', dirtyHandler)
+        canvas.removeEventListener('pointermove', dirtyHandler)
+        canvas.removeEventListener('wheel', dirtyHandler)
+        window.removeEventListener('keydown', dirtyHandler)
+        window.removeEventListener('keyup', dirtyHandler)
+        window.removeEventListener('resize', dirtyHandler)
+      }
       // Call onDestroy on all plugins
       if (plugins) {
         for (const plugin of plugins) {

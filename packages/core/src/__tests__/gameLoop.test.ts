@@ -170,4 +170,171 @@ describe('GameLoop', () => {
       expect(ticks).toHaveLength(0)
     })
   })
+
+  describe('onDemand mode', () => {
+    it('isOnDemand is false for default (realtime) mode', () => {
+      expect(loop.isOnDemand).toBe(false)
+    })
+
+    it('isOnDemand is true when mode is onDemand', () => {
+      const ondemand = new GameLoop(() => {}, { mode: 'onDemand' })
+      expect(ondemand.isOnDemand).toBe(true)
+    })
+
+    it('start() renders one initial frame in onDemand mode', () => {
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {
+        mode: 'onDemand',
+        fixedDt: 1 / 60,
+      })
+      _now = 0
+      ondemand.start()
+      fireFrame(16)
+      expect(onDemandTicks).toHaveLength(1)
+      ondemand.stop()
+    })
+
+    it('does not auto-schedule subsequent frames after initial tick', () => {
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {
+        mode: 'onDemand',
+        fixedDt: 1 / 60,
+      })
+      _now = 0
+      ondemand.start()
+      fireFrame(16) // initial frame
+      // After the initial frame, no further rAF should be scheduled
+      expect(rafCallback).toBeNull()
+      ondemand.stop()
+    })
+
+    it('markDirty() schedules exactly one frame', () => {
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {
+        mode: 'onDemand',
+        fixedDt: 1 / 60,
+      })
+      _now = 0
+      ondemand.start()
+      fireFrame(16) // initial
+      expect(onDemandTicks).toHaveLength(1)
+      ondemand.markDirty()
+      expect(rafCallback).not.toBeNull()
+      fireFrame(32)
+      expect(onDemandTicks).toHaveLength(2)
+      ondemand.stop()
+    })
+
+    it('markDirty() calls within a single frame coalesce to one', () => {
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {
+        mode: 'onDemand',
+        fixedDt: 1 / 60,
+      })
+      _now = 0
+      ondemand.start()
+      fireFrame(16) // initial
+      ondemand.markDirty()
+      ondemand.markDirty()
+      ondemand.markDirty()
+      fireFrame(32)
+      expect(onDemandTicks).toHaveLength(2) // initial + one coalesced
+      expect(rafCallback).toBeNull()
+      ondemand.stop()
+    })
+
+    it('markDirty() during onTick schedules the next frame', () => {
+      let remaining = 3
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop(
+        (dt) => {
+          onDemandTicks.push(dt)
+          if (remaining > 0) {
+            remaining--
+            ondemand.markDirty()
+          }
+        },
+        { mode: 'onDemand', fixedDt: 1 / 60 },
+      )
+      _now = 0
+      ondemand.start()
+      fireFrame(16)
+      fireFrame(32)
+      fireFrame(48)
+      fireFrame(64)
+      // initial + 3 dirty-triggered ticks
+      expect(onDemandTicks).toHaveLength(4)
+      ondemand.stop()
+    })
+
+    it('markDirty() is a no-op in realtime mode', () => {
+      const realtime = new GameLoop(() => {}, { fixedDt: 1 / 60 })
+      realtime.start()
+      // Should not throw or double-schedule
+      realtime.markDirty()
+      realtime.markDirty()
+      realtime.stop()
+    })
+
+    it('markDirty() is a no-op when loop is not running', () => {
+      const ondemand = new GameLoop(() => {}, { mode: 'onDemand' })
+      ondemand.markDirty()
+      expect(rafCallback).toBeNull()
+    })
+
+    it('pause() cancels pending dirty frames in onDemand mode', () => {
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {
+        mode: 'onDemand',
+        fixedDt: 1 / 60,
+      })
+      _now = 0
+      ondemand.start()
+      fireFrame(16) // initial
+      ondemand.markDirty()
+      ondemand.pause()
+      fireFrame(32)
+      expect(onDemandTicks).toHaveLength(1) // only the initial frame
+    })
+
+    it('resume() in onDemand mode renders one frame', () => {
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {
+        mode: 'onDemand',
+        fixedDt: 1 / 60,
+      })
+      _now = 0
+      ondemand.start()
+      fireFrame(16)
+      ondemand.pause()
+      ondemand.resume()
+      expect(rafCallback).not.toBeNull()
+      fireFrame(32)
+      expect(onDemandTicks).toHaveLength(2)
+      ondemand.stop()
+    })
+
+    it('hitPause keeps onDemand loop awake until freeze expires', () => {
+      const renderCalls: number[] = []
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {
+        mode: 'onDemand',
+        fixedDt: 1 / 60,
+        onRender: (dt) => renderCalls.push(dt),
+      })
+      _now = 0
+      ondemand.start()
+      fireFrame(0) // initial
+      ondemand.hitPause(0.05) // 50ms freeze
+      _now = 16
+      fireFrame(16) // freeze still active — should call onRender, not onTick
+      _now = 32
+      fireFrame(32) // still frozen
+      _now = 80
+      fireFrame(80) // freeze now over — next frame should tick normally
+      // onRender was called during the frozen frames
+      expect(renderCalls.length).toBeGreaterThan(0)
+      ondemand.stop()
+    })
+  })
 })

@@ -1,5 +1,6 @@
 // Components
 export { Game } from './components/Game'
+export { Stage } from './components/Stage'
 export { World } from './components/World'
 export { Entity } from './components/Entity'
 export { Transform } from './components/Transform'
@@ -106,6 +107,8 @@ export { useHMR } from './hooks/useHMR'
 export type { HMRControls } from './hooks/useHMR'
 export { useSquashStretch } from './hooks/useSquashStretch'
 export type { SquashStretchControls } from './hooks/useSquashStretch'
+export { useHistory } from './hooks/useHistory'
+export type { HistoryControls, HistoryOptions } from './hooks/useHistory'
 
 // Contact hooks (via @cubeforge/context)
 export {
@@ -225,7 +228,7 @@ export type { PostProcessOptions } from '@cubeforge/renderer'
 // Types and utilities from engine packages
 export type { EngineState } from './context'
 export type { GameControls } from './components/Game'
-export type { EntityId, ECSWorld, ScriptUpdateFn, Plugin, WorldSnapshot } from '@cubeforge/core'
+export type { EntityId, ECSWorld, ScriptUpdateFn, Plugin, WorldSnapshot, GameLoopMode } from '@cubeforge/core'
 export { definePlugin, findByTag, preloadManifest, hotReloadPlugin } from '@cubeforge/core'
 export type { HotReloadablePlugin } from '@cubeforge/core'
 export type { PreloadManifest, AssetProgress } from '@cubeforge/core'
