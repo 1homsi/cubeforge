@@ -252,6 +252,8 @@ export { useAudioScheduler } from '@cubeforge/audio'
 export type { AudioSchedulerOptions, AudioSchedulerControls, BeatHandler, BarHandler } from '@cubeforge/audio'
 export { usePreloadAudio } from '@cubeforge/audio'
 export type { PreloadAudioResult } from '@cubeforge/audio'
+export { useSoundscape } from '@cubeforge/audio'
+export type { SoundscapeLayer, SoundscapeOptions, SoundscapeControls } from '@cubeforge/audio'
 export { saveAudioSettings, loadAudioSettings } from '@cubeforge/audio'
 
 // DevTools (via @cubeforge/devtools)
