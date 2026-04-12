@@ -320,6 +320,33 @@ export class PhysicsSystem implements System {
   // Physics hooks for filtering and modifying contacts
   private hooks: PhysicsHooks = {}
 
+  // ── Scratch containers — reused every frame to avoid GC pressure ──────────
+  //
+  // Previously these were allocated fresh inside update() every substep,
+  // producing ~20 Map/Set allocations per frame. Now they live as instance
+  // fields and are cleared at the start of each use. Never escape the class.
+  //
+  // The _current*Pairs fields are double-buffered with their active*Pairs
+  // counterparts: at the end of each substep, the filled "current" is swapped
+  // with "active", and next substep clears the new "current" (which was the
+  // previous "active"). Same enter/stay/exit event semantics, zero allocation.
+
+  private _staticDelta = new Map<EntityId, { dx: number; dy: number }>()
+  private _preStepPos = new Map<EntityId, { x: number; y: number }>()
+  private _spatialGrid = new Map<string, EntityId[]>()
+  private _jointExcludedPairs = new Set<string>()
+  private _solverBodies = new Map<number, SolverBody>()
+  private _triggerNormals = new Map<string, { nx: number; ny: number }>()
+  private _circleNormals = new Map<string, { nx: number; ny: number }>()
+  /** Shared scratch for per-body "checked" neighbor dedup; cleared per iteration. */
+  private _checkedScratch = new Set<EntityId>()
+  private _currentCollisionPairs = new Map<string, [EntityId, EntityId]>()
+  private _currentTriggerPairs = new Map<string, [EntityId, EntityId]>()
+  private _currentCirclePairs = new Map<string, [EntityId, EntityId]>()
+  private _currentCompoundPairs = new Map<string, [EntityId, EntityId]>()
+  private _currentCapsulePairs = new Map<string, [EntityId, EntityId]>()
+  private _currentPolygonPairs = new Map<string, [EntityId, EntityId]>()
+
   constructor(
     private gravity: number,
     private readonly events?: EventBus,
@@ -527,7 +554,8 @@ export class PhysicsSystem implements System {
 
     // ── Platform carry ────────────────────────────────────────────────────
 
-    const staticDelta = new Map<EntityId, { dx: number; dy: number }>()
+    const staticDelta = this._staticDelta
+    staticDelta.clear()
     for (const sid of nonDynamic) {
       const st = world.getComponent<TransformComponent>(sid, 'Transform')!
       const prev = this.staticPrevPos.get(sid)
@@ -694,7 +722,8 @@ export class PhysicsSystem implements System {
     }
 
     // Save pre-integration positions for CCD and one-way platform checks
-    const preStepPos = new Map<EntityId, { x: number; y: number }>()
+    const preStepPos = this._preStepPos
+    preStepPos.clear()
     for (const id of dynamicBox) {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       preStepPos.set(id, { x: t.x, y: t.y })
@@ -702,7 +731,8 @@ export class PhysicsSystem implements System {
 
     // ── Phase 2: Build spatial grid ───────────────────────────────────────
 
-    const spatialGrid = new Map<string, EntityId[]>()
+    const spatialGrid = this._spatialGrid
+    spatialGrid.clear()
 
     // Insert static/kinematic box entities
     for (const sid of nonDynamic) {
@@ -723,7 +753,8 @@ export class PhysicsSystem implements System {
     // ── Phase 2.5: Build joint contact exclusion set ─────────────────────
     // Joints with contactsEnabled=false prevent contact generation between
     // the two connected bodies.
-    const jointExcludedPairs = new Set<string>()
+    const jointExcludedPairs = this._jointExcludedPairs
+    jointExcludedPairs.clear()
     for (const jid of world.query('Joint')) {
       const j = world.getComponent<JointComponent>(jid, 'Joint')!
       if (!j.enabled || j.broken) continue
@@ -736,7 +767,8 @@ export class PhysicsSystem implements System {
     // ── Phase 3: Narrow phase — generate contact manifolds ────────────────
 
     const manifolds: ContactManifold[] = []
-    const currentCollisionPairs = new Map<string, [EntityId, EntityId]>()
+    const currentCollisionPairs = this._currentCollisionPairs
+    currentCollisionPairs.clear()
 
     // Dynamic box vs static/kinematic box
     for (const id of dynamicBox) {
@@ -748,7 +780,8 @@ export class PhysicsSystem implements System {
 
       const dynAABB = getAABB(transform, col)
       const candidateCells = this.getCells(dynAABB.cx, dynAABB.cy, dynAABB.hw, dynAABB.hh)
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
 
       for (const cell of candidateCells) {
         const bucket = spatialGrid.get(cell)
@@ -968,7 +1001,8 @@ export class PhysicsSystem implements System {
       const circleCy = ct.y + cc.offsetY
       const circleAABB: AABB = { cx: circleCx, cy: circleCy, hw: cc.radius, hh: cc.radius }
       const candidateCells = this.getCells(circleAABB.cx, circleAABB.cy, circleAABB.hw, circleAABB.hh)
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
 
       for (const cell of candidateCells) {
         const bucket = spatialGrid.get(cell)
@@ -1180,7 +1214,8 @@ export class PhysicsSystem implements System {
       const capHw = cc.width / 2
       const capHh = cc.height / 2
       const candidateCells = this.getCells(capCx, capCy, capHw, capHh)
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
 
       for (const cell of candidateCells) {
         const bucket = spatialGrid.get(cell)
@@ -1453,7 +1488,8 @@ export class PhysicsSystem implements System {
       const polyCy = (minY + maxY) / 2
 
       const candidateCells = this.getCells(polyCx, polyCy, polyHw, polyHh)
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
 
       for (const cell of candidateCells) {
         const bucket = spatialGrid.get(cell)
@@ -1741,7 +1777,8 @@ export class PhysicsSystem implements System {
       const triCy = (minY + maxY) / 2
 
       const candidateCells = this.getCells(triCx, triCy, triHw, triHh)
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
 
       for (const cell of candidateCells) {
         const bucket = spatialGrid.get(cell)
@@ -2303,7 +2340,8 @@ export class PhysicsSystem implements System {
 
     // ── Phase 4: Build solver bodies ──────────────────────────────────────
 
-    const solverBodies = new Map<number, SolverBody>()
+    const solverBodies = this._solverBodies
+    solverBodies.clear()
 
     for (const id of allBox) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -2659,7 +2697,8 @@ export class PhysicsSystem implements System {
         (Math.max(startCx, endCx) - Math.min(startCx, endCx)) / 2 + hw,
         (Math.max(startCy, endCy) - Math.min(startCy, endCy)) / 2 + hh,
       )
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
       for (const cell of sweepCells) {
         const bucket = spatialGrid.get(cell)
         if (!bucket) continue
@@ -2755,7 +2794,8 @@ export class PhysicsSystem implements System {
         hh: col.height / 2,
       }
       const candidateCells = this.getCells(probeAABB.cx, probeAABB.cy, probeAABB.hw, probeAABB.hh)
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
       outer: for (const cell of candidateCells) {
         const bucket = spatialGrid.get(cell)
         if (!bucket) continue
@@ -2792,7 +2832,8 @@ export class PhysicsSystem implements System {
         hh: cap.height / 2,
       }
       const candidateCells = this.getCells(probeAABB.cx, probeAABB.cy, probeAABB.hw, probeAABB.hh)
-      const checked = new Set<EntityId>()
+      const checked = this._checkedScratch
+      checked.clear()
       outerCap: for (const cell of candidateCells) {
         const bucket = spatialGrid.get(cell)
         if (!bucket) continue
@@ -3177,13 +3218,20 @@ export class PhysicsSystem implements System {
         this.events?.emit('collisionExit', { a, b, normalX: 0, normalY: 0 })
       }
     }
-    this.activeCollisionPairs = currentCollisionPairs
+    // Double-buffer swap: last frame's active becomes next frame's scratch.
+    {
+      const prev = this.activeCollisionPairs
+      this.activeCollisionPairs = currentCollisionPairs
+      this._currentCollisionPairs = prev
+    }
 
     // ── Phase 13: Trigger detection ───────────────────────────────────────
 
     const allWithCollider = world.query('Transform', 'BoxCollider')
-    const currentTriggerPairs = new Map<string, [EntityId, EntityId]>()
-    const triggerNormals = new Map<string, { nx: number; ny: number }>()
+    const currentTriggerPairs = this._currentTriggerPairs
+    currentTriggerPairs.clear()
+    const triggerNormals = this._triggerNormals
+    triggerNormals.clear()
 
     for (let i = 0; i < allWithCollider.length; i++) {
       for (let j = i + 1; j < allWithCollider.length; j++) {
@@ -3223,13 +3271,19 @@ export class PhysicsSystem implements System {
     for (const [key, [a, b]] of this.activeTriggerPairs) {
       if (!currentTriggerPairs.has(key)) this.events?.emit('triggerExit', { a, b, normalX: 0, normalY: 0 })
     }
-    this.activeTriggerPairs = currentTriggerPairs
+    {
+      const prev = this.activeTriggerPairs
+      this.activeTriggerPairs = currentTriggerPairs
+      this._currentTriggerPairs = prev
+    }
 
     // ── Phase 14: Circle contact events ───────────────────────────────────
 
     if (allCircle.length > 0) {
-      const currentCirclePairs = new Map<string, [EntityId, EntityId]>()
-      const circleNormals = new Map<string, { nx: number; ny: number }>()
+      const currentCirclePairs = this._currentCirclePairs
+      currentCirclePairs.clear()
+      const circleNormals = this._circleNormals
+      circleNormals.clear()
 
       for (let i = 0; i < allCircle.length; i++) {
         for (let j = i + 1; j < allCircle.length; j++) {
@@ -3301,17 +3355,22 @@ export class PhysicsSystem implements System {
       for (const [key, [a, b]] of this.activeCirclePairs) {
         if (!currentCirclePairs.has(key)) this.events?.emit('circleExit', { a, b, normalX: 0, normalY: 0 })
       }
-      this.activeCirclePairs = currentCirclePairs
+      {
+        const prev = this.activeCirclePairs
+        this.activeCirclePairs = currentCirclePairs
+        this._currentCirclePairs = prev
+      }
     } else if (this.activeCirclePairs.size > 0) {
       for (const [, [a, b]] of this.activeCirclePairs) this.events?.emit('circleExit', { a, b, normalX: 0, normalY: 0 })
-      this.activeCirclePairs = new Map()
+      this.activeCirclePairs.clear()
     }
 
     // ── Phase 15: Compound contact events ─────────────────────────────────
 
     const allCompound = world.query('Transform', 'CompoundCollider')
     if (allCompound.length > 0) {
-      const currentCompoundPairs = new Map<string, [EntityId, EntityId]>()
+      const currentCompoundPairs = this._currentCompoundPairs
+      currentCompoundPairs.clear()
 
       const allBoxEntities = world.query('Transform', 'BoxCollider')
       for (const cid of allCompound) {
@@ -3390,16 +3449,21 @@ export class PhysicsSystem implements System {
       for (const [key, [a, b]] of this.activeCompoundPairs) {
         if (!currentCompoundPairs.has(key)) this.events?.emit('compoundExit', { a, b })
       }
-      this.activeCompoundPairs = currentCompoundPairs
+      {
+        const prev = this.activeCompoundPairs
+        this.activeCompoundPairs = currentCompoundPairs
+        this._currentCompoundPairs = prev
+      }
     } else if (this.activeCompoundPairs.size > 0) {
       for (const [, [a, b]] of this.activeCompoundPairs) this.events?.emit('compoundExit', { a, b })
-      this.activeCompoundPairs = new Map()
+      this.activeCompoundPairs.clear()
     }
 
     // ── Phase 16: Capsule contact events ──────────────────────────────────
 
     if (allCapsule.length > 0) {
-      const currentCapsulePairs = new Map<string, [EntityId, EntityId]>()
+      const currentCapsulePairs = this._currentCapsulePairs
+      currentCapsulePairs.clear()
       const allBoxForCapsule = world.query('Transform', 'BoxCollider')
 
       for (const cid of allCapsule) {
@@ -3440,17 +3504,22 @@ export class PhysicsSystem implements System {
       for (const [key, [a, b]] of this.activeCapsulePairs) {
         if (!currentCapsulePairs.has(key)) this.events?.emit('capsuleExit', { a, b })
       }
-      this.activeCapsulePairs = currentCapsulePairs
+      {
+        const prev = this.activeCapsulePairs
+        this.activeCapsulePairs = currentCapsulePairs
+        this._currentCapsulePairs = prev
+      }
     } else if (this.activeCapsulePairs.size > 0) {
       for (const [, [a, b]] of this.activeCapsulePairs) this.events?.emit('capsuleExit', { a, b })
-      this.activeCapsulePairs = new Map()
+      this.activeCapsulePairs.clear()
     }
 
     // ── Phase 17: Polygon/Triangle contact events ─────────────────────────
 
     const allPolygonEntities = [...allPolygon, ...allTriangle]
     if (allPolygonEntities.length > 0) {
-      const currentPolyPairs = new Map<string, [EntityId, EntityId]>()
+      const currentPolyPairs = this._currentPolygonPairs
+      currentPolyPairs.clear()
 
       // Polygon/Triangle vs box
       const allBoxForPoly = world.query('Transform', 'BoxCollider')
@@ -3539,10 +3608,14 @@ export class PhysicsSystem implements System {
       for (const [key, [a, b]] of this.activePolygonPairs) {
         if (!currentPolyPairs.has(key)) this.events?.emit('polygonExit', { a, b })
       }
-      this.activePolygonPairs = currentPolyPairs
+      {
+        const prev = this.activePolygonPairs
+        this.activePolygonPairs = currentPolyPairs
+        this._currentPolygonPairs = prev
+      }
     } else if (this.activePolygonPairs.size > 0) {
       for (const [, [a, b]] of this.activePolygonPairs) this.events?.emit('polygonExit', { a, b })
-      this.activePolygonPairs = new Map()
+      this.activePolygonPairs.clear()
     }
   }
 

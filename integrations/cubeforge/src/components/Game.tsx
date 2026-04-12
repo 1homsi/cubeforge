@@ -76,6 +76,10 @@ interface GameProps {
    * - 'onDemand' — sleeps until input arrives or a component calls markDirty().
    *   Use for puzzle games, turn-based games, visual novels, level editors, or any
    *   scene where nothing changes unless the user acts. Saves battery and CPU.
+   *
+   * **Captured at mount.** This prop is read once when the Game mounts and
+   * baked into the loop. Changing it later has no effect — to switch modes,
+   * unmount and remount the Game (e.g. via a `key` change).
    */
   mode?: GameLoopMode
   style?: CSSProperties

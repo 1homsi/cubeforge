@@ -141,6 +141,14 @@ export function useAudioScheduler(opts: AudioSchedulerOptions): AudioSchedulerCo
     const ctx = getAudioCtx()
     if (ctx.state === 'suspended') void ctx.resume()
 
+    // Guard against double-start leaking the previous interval. Without this,
+    // calling start() twice without stop() orphans the first interval and
+    // produces duplicate beat events from that point on.
+    if (timerRef.current !== null) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+
     nextBeatTimeRef.current = ctx.currentTime
     nextBeatIndexRef.current = 0
     currentBeatRef.current = 0

@@ -201,7 +201,6 @@ export function createTimeline(opts?: TimelineOptions): TweenTimeline {
       elapsed = 0
       resetSegments()
       // Fast-forward to the target time
-      elapsed = 0
       const step = 1 / 60
       while (elapsed < time) {
         const d = Math.min(step, time - elapsed)

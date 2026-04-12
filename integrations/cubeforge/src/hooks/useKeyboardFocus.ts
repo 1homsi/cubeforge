@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import type { EntityId, TransformComponent } from '@cubeforge/core'
 import { EngineContext, EntityContext, type EngineState } from '../context'
 
@@ -60,17 +60,23 @@ export interface FocusableOptions {
  */
 export function useFocusable(options?: FocusableOptions): void {
   const entityIdCtx = useContext(EntityContext)
+  // Ref pattern so the registry entry reads the latest callbacks on every fire,
+  // not the frozen ones captured when the effect ran. Without this, inline
+  // arrow callbacks become stale as soon as parent state changes.
+  const optsRef = useRef(options)
+  optsRef.current = options
+
   useEffect(() => {
     if (entityIdCtx === null || entityIdCtx === undefined) return
     const id = entityIdCtx as EntityId
     const entry: FocusEntry = {
       entityId: id,
-      onFocus: options?.onFocus,
-      onBlur: options?.onBlur,
-      onActivate: options?.onActivate,
+      onFocus: (eid) => optsRef.current?.onFocus?.(eid),
+      onBlur: (eid) => optsRef.current?.onBlur?.(eid),
+      onActivate: (eid) => optsRef.current?.onActivate?.(eid),
     }
     registry.set(id, entry)
-    if (options?.autoFocus && focusedId === null) setFocused(id)
+    if (optsRef.current?.autoFocus && focusedId === null) setFocused(id)
     return () => {
       registry.delete(id)
       if (focusedId === id) setFocused(null)

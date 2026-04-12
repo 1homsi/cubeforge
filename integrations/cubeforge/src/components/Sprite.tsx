@@ -1,4 +1,4 @@
-import { useEffect, useContext } from 'react'
+import { useEffect, useContext, useRef } from 'react'
 import {
   createSprite,
   type SpriteComponent,
@@ -176,6 +176,44 @@ export function Sprite({
     return () => engine.ecs.removeComponent(entityId, 'Sprite')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Reactive src: reload the image when the src prop changes after mount.
+  // Skips the initial load since the mount effect above already handled it.
+  const didMount = useRef(false)
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true
+      return
+    }
+    const comp = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
+    if (!comp) return
+    if (!src) {
+      comp.image = undefined
+      comp.src = undefined
+      return
+    }
+    let cancelled = false
+    engine.assets
+      .loadImage(src)
+      .then((img: HTMLImageElement) => {
+        if (cancelled) return
+        const c = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
+        if (c) {
+          c.image = img
+          c.src = img.src
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        const message = err instanceof Error ? err.message : String(err)
+        engine.events.emit('asset:error', { type: 'image', src, entityId, error: err })
+        // eslint-disable-next-line no-console
+        console.error(`[Cubeforge] <Sprite> failed to reload image "${src}": ${message}`)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [src, engine, entityId])
 
   // Sync mutable props
   useEffect(() => {
