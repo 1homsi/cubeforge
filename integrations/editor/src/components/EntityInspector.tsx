@@ -60,7 +60,9 @@ const fieldsStyle: CSSProperties = {
 
 function isColorKey(key: string): boolean {
   const lower = key.toLowerCase()
-  return lower === 'color' || lower === 'background' || lower === 'fill' || lower === 'stroke' || lower.includes('color')
+  return (
+    lower === 'color' || lower === 'background' || lower === 'fill' || lower === 'stroke' || lower.includes('color')
+  )
 }
 
 /**
@@ -94,10 +96,10 @@ function ComponentSection({ comp }: { comp: Component }) {
                 y={compRecord['y'] as number}
                 step={0.5}
                 onChangeX={(v) => {
-                  ;compRecord['x'] = v
+                  compRecord['x'] = v
                 }}
                 onChangeY={(v) => {
-                  ;compRecord['y'] = v
+                  compRecord['y'] = v
                 }}
               />
             )
@@ -135,7 +137,7 @@ function ComponentSection({ comp }: { comp: Component }) {
                 value={val}
                 step={Math.abs(val) < 2 ? 0.01 : 1}
                 onChange={(v) => {
-                  ;compRecord[key] = v
+                  compRecord[key] = v
                 }}
               />
             )
@@ -149,7 +151,7 @@ function ComponentSection({ comp }: { comp: Component }) {
                 label={key}
                 value={val}
                 onChange={(v) => {
-                  ;compRecord[key] = v
+                  compRecord[key] = v
                 }}
               />
             )
@@ -163,7 +165,7 @@ function ComponentSection({ comp }: { comp: Component }) {
                 label={key}
                 value={val}
                 onChange={(v) => {
-                  ;compRecord[key] = v
+                  compRecord[key] = v
                 }}
               />
             )
@@ -177,7 +179,7 @@ function ComponentSection({ comp }: { comp: Component }) {
                 label={key}
                 value={val}
                 onChange={(v) => {
-                  ;compRecord[key] = v
+                  compRecord[key] = v
                 }}
               />
             )
@@ -210,7 +212,9 @@ function ComponentSection({ comp }: { comp: Component }) {
                 >
                   {key}
                 </span>
-                <span style={{ flex: 1, color: '#506070', fontFamily: 'monospace', wordBreak: 'break-all', fontSize: 10 }}>
+                <span
+                  style={{ flex: 1, color: '#506070', fontFamily: 'monospace', wordBreak: 'break-all', fontSize: 10 }}
+                >
                   {preview}
                 </span>
               </div>
@@ -269,14 +273,21 @@ export function EntityInspector({ entity, components, width = 260, style }: Enti
               <ComponentSection key={comp.type} comp={comp} />
             ))}
             {components.length === 0 && (
-              <div style={{ padding: '10px', color: '#3a5060', fontSize: 11, textAlign: 'center' }}>
-                No components
-              </div>
+              <div style={{ padding: '10px', color: '#3a5060', fontSize: 11, textAlign: 'center' }}>No components</div>
             )}
           </div>
         </>
       ) : (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2a4050', fontSize: 11 }}>
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#2a4050',
+            fontSize: 11,
+          }}
+        >
           Select an entity
         </div>
       )}

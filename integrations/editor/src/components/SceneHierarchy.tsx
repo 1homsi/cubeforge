@@ -80,13 +80,7 @@ export interface SceneHierarchyProps {
  * />
  * ```
  */
-export function SceneHierarchy({
-  entities,
-  selectedId,
-  onSelect,
-  width = 220,
-  style,
-}: SceneHierarchyProps) {
+export function SceneHierarchy({ entities, selectedId, onSelect, width = 220, style }: SceneHierarchyProps) {
   return (
     <div style={{ ...panelStyle, width, ...style }}>
       <div style={headerStyle}>Scene Hierarchy</div>
@@ -108,9 +102,7 @@ export function SceneHierarchy({
                     {t}
                   </span>
                 ))}
-                {e.componentTypes.length > 3 && (
-                  <span style={componentBadgeStyle}>+{e.componentTypes.length - 3}</span>
-                )}
+                {e.componentTypes.length > 3 && <span style={componentBadgeStyle}>+{e.componentTypes.length - 3}</span>}
               </div>
             </div>
           </div>

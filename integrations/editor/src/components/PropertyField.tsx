@@ -78,12 +78,7 @@ export function TextField({ label, value, onChange }: TextFieldProps) {
       <span style={labelStyle} title={label}>
         {label}
       </span>
-      <input
-        type="text"
-        style={inputBase}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <input type="text" style={inputBase} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
 }
@@ -133,12 +128,7 @@ export function ColorField({ label, value, onChange }: ColorFieldProps) {
           style={{ width: 28, height: 22, padding: 1, border: '1px solid #2a3a50', borderRadius: 3, cursor: 'pointer' }}
           onChange={(e) => onChange(e.target.value)}
         />
-        <input
-          type="text"
-          style={{ ...inputBase, flex: 1 }}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <input type="text" style={{ ...inputBase, flex: 1 }} value={value} onChange={(e) => onChange(e.target.value)} />
       </div>
     </div>
   )
