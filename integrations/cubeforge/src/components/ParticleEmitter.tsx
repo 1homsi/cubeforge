@@ -131,6 +131,10 @@ export function ParticleEmitter({
   const resolvedColor = color ?? presetConfig.color ?? '#ffffff'
   const resolvedGravity = gravity ?? presetConfig.gravity ?? 200
   const resolvedMaxParticles = maxParticles ?? presetConfig.maxParticles ?? 100
+  const resolvedBlendMode = blendMode ?? presetConfig.blendMode
+  const resolvedParticleShape = particleShape ?? presetConfig.particleShape
+  const resolvedColorOverLife = colorOverLife ?? presetConfig.colorOverLife
+  const resolvedSizeOverLife = sizeOverLife ?? presetConfig.sizeOverLife
   const engine = useContext(EngineContext)!
   const entityId = useContext(EntityContext)!
 
@@ -157,15 +161,15 @@ export function ParticleEmitter({
       textureSrc,
       enableRotation,
       rotationSpeedRange,
-      sizeOverLife,
+      sizeOverLife: resolvedSizeOverLife,
       attractors,
-      colorOverLife,
-      blendMode,
+      colorOverLife: resolvedColorOverLife,
+      blendMode: resolvedBlendMode,
       mode,
       formationPoints,
       seekStrength,
       colorTransitionDuration,
-      particleShape,
+      particleShape: resolvedParticleShape,
     } as ParticlePoolComponent)
 
     return () => engine.ecs.removeComponent(entityId, 'ParticlePool')
@@ -183,9 +187,9 @@ export function ParticleEmitter({
   useEffect(() => {
     const pool = engine.ecs.getComponent<ParticlePoolComponent>(entityId, 'ParticlePool')
     if (!pool) return
-    pool.blendMode = blendMode
-    pool.particleShape = particleShape
-  }, [blendMode, particleShape, engine, entityId])
+    pool.blendMode = resolvedBlendMode
+    pool.particleShape = resolvedParticleShape
+  }, [resolvedBlendMode, resolvedParticleShape, engine, entityId])
 
   // Sync attractor changes (e.g. cursor repulsion driven by live coordinates)
   useEffect(() => {

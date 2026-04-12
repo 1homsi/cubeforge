@@ -414,7 +414,10 @@ export type { TweenHandle } from '@cubeforge/core'
 export { Ease, tween } from '@cubeforge/core'
 export { createTimeline } from '@cubeforge/core'
 export type { TweenTimeline, TimelineEntry } from '@cubeforge/core'
-export type { ParticlePreset } from './components/particlePresets'
+export type { ParticlePreset, ParticleEmitterConfig } from './components/particlePresets'
+export { PARTICLE_PRESETS } from './components/particlePresets'
+export { HUD, HUDZone, HUDBar, HUDCounter } from './components/HUD'
+export type { HUDProps, HUDZoneProps, HUDBarProps, HUDCounterProps, HUDPosition } from './components/HUD'
 
 // Animation helpers
 export { playClip, setAnimationState, setAnimatorParam } from './utils/animationHelpers'
