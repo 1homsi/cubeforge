@@ -225,13 +225,16 @@ export function useDialogueTree(): DialogueTreeControls {
     [currentId],
   )
 
-  const jumpTo = useCallback((id: string) => {
-    if (!scriptRef.current?.[id]) return
-    const current = scriptRef.current[currentId ?? '']
-    current?.onExit?.(varsRef.current)
-    setCurrentNode(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId])
+  const jumpTo = useCallback(
+    (id: string) => {
+      if (!scriptRef.current?.[id]) return
+      const current = scriptRef.current[currentId ?? '']
+      current?.onExit?.(varsRef.current)
+      setCurrentNode(id)
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [currentId],
+  )
 
   const setVar = useCallback((key: string, value: string | number | boolean) => {
     varsRef.current = { ...varsRef.current, [key]: value }

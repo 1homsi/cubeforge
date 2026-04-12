@@ -129,11 +129,7 @@ export function btSelector(...children: BTNode[]): BTNode {
  * @param successPolicy `'any'` = succeed when any child succeeds, `'all'` = require all to succeed
  * @param failPolicy    `'any'` = fail when any child fails,    `'all'` = require all to fail
  */
-export function btParallel(
-  successPolicy: 'all' | 'any',
-  failPolicy: 'all' | 'any',
-  ...children: BTNode[]
-): BTNode {
+export function btParallel(successPolicy: 'all' | 'any', failPolicy: 'all' | 'any', ...children: BTNode[]): BTNode {
   return {
     tick(dt) {
       let successCount = 0
