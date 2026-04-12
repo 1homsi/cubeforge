@@ -504,3 +504,15 @@ export type {
 // Core: delta + binary snapshots
 export type { DeltaSnapshot } from '@cubeforge/core'
 export { applyDeltaSnapshot } from '@cubeforge/core'
+
+// Scene editor (dev-mode tooling)
+export { EditorShell, SceneHierarchy, EntityInspector } from '@cubeforge/editor'
+export { NumberField, TextField, BoolField, ColorField, Vec2Field } from '@cubeforge/editor'
+export { useEditorState } from '@cubeforge/editor'
+export type {
+  EditorShellProps,
+  SceneHierarchyProps,
+  EntityInspectorProps,
+  EditorState,
+  EntityInfo,
+} from '@cubeforge/editor'

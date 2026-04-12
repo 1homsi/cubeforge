@@ -225,6 +225,25 @@ export class ECSWorld {
     return this.componentIndex.get(id)?.has(type) ?? false
   }
 
+  /**
+   * Returns live references to all components on an entity.
+   * Useful for editor / inspector tooling. Returns an empty array if the
+   * entity does not exist.
+   *
+   * **Do not mutate structural fields** (e.g. `type`) — doing so will
+   * desync the archetype index. Mutating value fields (x, y, color …) is safe.
+   */
+  getEntityComponents(id: EntityId): readonly Component[] {
+    const map = this.componentIndex.get(id)
+    if (!map) return []
+    return [...map.values()]
+  }
+
+  /** Returns all live entity IDs currently in the world. */
+  getAllEntityIds(): EntityId[] {
+    return [...this.componentIndex.keys()]
+  }
+
   // Flush pending dirty flags into the query cache immediately.
   // Called inline at the top of query() so any mid-frame mutation
   // (destroyEntity, addComponent, removeComponent) is reflected before

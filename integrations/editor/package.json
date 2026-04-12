@@ -1,0 +1,39 @@
+{
+  "name": "@cubeforge/editor",
+  "version": "0.1.0",
+  "description": "Visual scene editor UI for CubeForge games",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsup"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@cubeforge/context": "workspace:*",
+    "@cubeforge/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  },
+  "keywords": ["game-engine", "react", "editor", "cubeforge"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
+  }
+}

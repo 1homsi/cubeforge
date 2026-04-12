@@ -1,6 +1,6 @@
 {
   "name": "cubeforge",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "React-first 2D browser game engine",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,6 +34,7 @@
     "@cubeforge/context": "workspace:*",
     "@cubeforge/core": "workspace:*",
     "@cubeforge/devtools": "workspace:*",
+    "@cubeforge/editor": "workspace:*",
     "@cubeforge/gameplay": "workspace:*",
     "@cubeforge/input": "workspace:*",
     "@cubeforge/net": "workspace:*",
