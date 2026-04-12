@@ -284,13 +284,7 @@ export function HUDBar({
           )}
         </div>
       )}
-      <div
-        style={trackStyle}
-        role="progressbar"
-        aria-valuenow={value}
-        aria-valuemin={0}
-        aria-valuemax={max}
-      >
+      <div style={trackStyle} role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max}>
         <div style={fillStyle} />
       </div>
     </div>
@@ -325,7 +319,15 @@ export interface HUDCounterProps {
  * </HUDZone>
  * ```
  */
-export function HUDCounter({ value, icon, label, pulse = true, color = '#fff', fontSize = 18, style }: HUDCounterProps) {
+export function HUDCounter({
+  value,
+  icon,
+  label,
+  pulse = true,
+  color = '#fff',
+  fontSize = 18,
+  style,
+}: HUDCounterProps) {
   void pulse // pulse animation could be implemented via key+CSS keyframes; left for polish pass
   return (
     <div
