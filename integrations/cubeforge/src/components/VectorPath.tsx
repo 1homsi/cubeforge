@@ -1,7 +1,8 @@
-import { useContext, useEffect, useRef, type CSSProperties } from 'react'
+import { useContext, useRef, type CSSProperties } from 'react'
 import type { EntityId, TransformComponent } from '@cubeforge/core'
 import type { Camera2DComponent } from '@cubeforge/renderer'
 import { EngineContext, EntityContext, type EngineState } from '../context'
+import { useOverlayTick } from '../hooks/useOverlayTick'
 
 export interface VectorPathProps {
   /**
@@ -76,41 +77,30 @@ export function VectorPath({
   const entityId = useContext(EntityContext)
   const svgRef = useRef<SVGSVGElement>(null)
 
-  // Standalone rAF loop so we don't wake the onDemand engine loop for overlay updates.
-  useEffect(() => {
+  // Shared overlay tick — no per-component rAF.
+  useOverlayTick(() => {
     if (!engine || entityId === null || entityId === undefined) return
     const svg = svgRef.current
     if (!svg) return
-    let rafId = 0
-    const tick = () => {
-      const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
-      if (t) {
-        const screen = worldToScreenCss(engine, t.x, t.y)
-        if (screen) {
-          svg.style.display = visible ? 'block' : 'none'
-          // The SVG is a large transparent canvas covering the game canvas,
-          // with the path transformed to the entity position + rotation + scale + zoom.
-          const rect = engine.canvas.getBoundingClientRect()
-          svg.style.left = `${rect.left + window.scrollX}px`
-          svg.style.top = `${rect.top + window.scrollY}px`
-          svg.style.width = `${rect.width}px`
-          svg.style.height = `${rect.height}px`
-          const path = svg.querySelector('path')
-          if (path) {
-            const degrees = (t.rotation * 180) / Math.PI
-            path.setAttribute(
-              'transform',
-              `translate(${screen.x} ${screen.y}) rotate(${degrees}) scale(${t.scaleX * screen.zoom} ${t.scaleY * screen.zoom})`,
-            )
-            // Compensate stroke width so it stays visually constant in world units
-            path.setAttribute('stroke-width', `${strokeWidth * screen.zoom}`)
-          }
-        }
-      }
-      rafId = requestAnimationFrame(tick)
+    const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
+    if (!t) return
+    const screen = worldToScreenCss(engine, t.x, t.y)
+    if (!screen) return
+    svg.style.display = visible ? 'block' : 'none'
+    const rect = engine.canvas.getBoundingClientRect()
+    svg.style.left = `${rect.left + window.scrollX}px`
+    svg.style.top = `${rect.top + window.scrollY}px`
+    svg.style.width = `${rect.width}px`
+    svg.style.height = `${rect.height}px`
+    const path = svg.querySelector('path')
+    if (path) {
+      const degrees = (t.rotation * 180) / Math.PI
+      path.setAttribute(
+        'transform',
+        `translate(${screen.x} ${screen.y}) rotate(${degrees}) scale(${t.scaleX * screen.zoom} ${t.scaleY * screen.zoom})`,
+      )
+      path.setAttribute('stroke-width', `${strokeWidth * screen.zoom}`)
     }
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
   }, [engine, entityId, visible, strokeWidth])
 
   if (!engine) return null

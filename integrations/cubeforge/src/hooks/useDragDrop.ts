@@ -5,11 +5,11 @@ import type { BoxColliderComponent, CircleColliderComponent } from '@cubeforge/p
 import { EngineContext, EntityContext, type EngineState } from '../context'
 import type { SnapControls } from './useSnap'
 
-// ── Shared drag state ────────────────────────────────────────────────────────
+// ── Per-engine drag state ────────────────────────────────────────────────────
 //
-// A module-level registry so useDraggable and useDroppable can coordinate without
-// forcing the user to wrap their scene in yet another provider. At most one drag
-// is active at a time (pointer capture).
+// Each EngineState has its own active-drag slot so that multiple <Stage> or
+// <Game> instances on the same page don't cross-contaminate drags. We key into
+// a WeakMap so engines don't need to explicitly unregister on teardown.
 
 interface ActiveDrag {
   entityId: EntityId
@@ -21,17 +21,27 @@ interface ActiveDrag {
   subscribers: Set<() => void>
 }
 
-let activeDrag: ActiveDrag | null = null
+const dragStateByEngine = new WeakMap<EngineState, ActiveDrag | null>()
 
-function notifyDragSubscribers() {
-  if (!activeDrag) return
-  for (const cb of activeDrag.subscribers) cb()
+function getActiveDrag(engine: EngineState): ActiveDrag | null {
+  return dragStateByEngine.get(engine) ?? null
 }
 
-function subscribeToActiveDrag(cb: () => void): () => void {
-  if (!activeDrag) return () => undefined
-  activeDrag.subscribers.add(cb)
-  return () => activeDrag?.subscribers.delete(cb)
+function setActiveDrag(engine: EngineState, drag: ActiveDrag | null): void {
+  dragStateByEngine.set(engine, drag)
+}
+
+function notifyDragSubscribers(engine: EngineState) {
+  const drag = dragStateByEngine.get(engine)
+  if (!drag) return
+  for (const cb of drag.subscribers) cb()
+}
+
+function subscribeToActiveDrag(engine: EngineState, cb: () => void): () => void {
+  const drag = dragStateByEngine.get(engine)
+  if (!drag) return () => undefined
+  drag.subscribers.add(cb)
+  return () => dragStateByEngine.get(engine)?.subscribers.delete(cb)
 }
 
 // ── useDraggable ─────────────────────────────────────────────────────────────
@@ -129,7 +139,7 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       startEntityY = t.y
       startWorldX = world.x
       startWorldY = world.y
-      activeDrag = {
+      setActiveDrag(engine, {
         entityId: entityId as EntityId,
         tag: optsRef.current?.tag ?? null,
         pointerX: e.clientX,
@@ -137,7 +147,7 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
         worldX: world.x,
         worldY: world.y,
         subscribers: new Set(),
-      }
+      })
       setIsDragging(true)
       setPosition({ x: t.x, y: t.y })
       optsRef.current?.onDragStart?.({ entityId: entityId as EntityId, x: t.x, y: t.y })
@@ -145,7 +155,8 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
     }
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!dragging || !activeDrag) return
+      const drag = getActiveDrag(engine)
+      if (!dragging || !drag) return
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
       if (!t) return
       const rect = canvas.getBoundingClientRect()
@@ -166,11 +177,11 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       }
       t.x = nx
       t.y = ny
-      activeDrag.pointerX = e.clientX
-      activeDrag.pointerY = e.clientY
-      activeDrag.worldX = world.x
-      activeDrag.worldY = world.y
-      notifyDragSubscribers()
+      drag.pointerX = e.clientX
+      drag.pointerY = e.clientY
+      drag.worldX = world.x
+      drag.worldY = world.y
+      notifyDragSubscribers(engine)
       setPosition({ x: nx, y: ny })
       optsRef.current?.onDrag?.({ entityId: entityId as EntityId, x: nx, y: ny })
       engine.loop.markDirty()
@@ -180,10 +191,11 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       if (!dragging) return
       dragging = false
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
-      const droppedOn = findDroppableUnder(engine, activeDrag)
+      const drag = getActiveDrag(engine)
+      const droppedOn = findDroppableUnder(engine, drag)
       const finalX = t?.x ?? startEntityX
       const finalY = t?.y ?? startEntityY
-      activeDrag = null
+      setActiveDrag(engine, null)
       setIsDragging(false)
       optsRef.current?.onDragEnd?.({
         entityId: entityId as EntityId,
@@ -272,7 +284,8 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
     let currentlyOver = false
 
     const check = () => {
-      if (!activeDrag) {
+      const drag = getActiveDrag(engine)
+      if (!drag) {
         if (currentlyOver) {
           currentlyOver = false
           setIsOver(false)
@@ -283,7 +296,7 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
         return
       }
       const accepts = optsRef.current?.accepts
-      if (accepts && (!activeDrag.tag || !accepts.includes(activeDrag.tag))) return
+      if (accepts && (!drag.tag || !accepts.includes(drag.tag))) return
 
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
       if (!t) return
@@ -291,8 +304,8 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
       if (!bounds) return
       const halfW = (bounds.width * Math.abs(t.scaleX)) / 2
       const halfH = (bounds.height * Math.abs(t.scaleY)) / 2
-      const inside = Math.abs(activeDrag.worldX - t.x) <= halfW && Math.abs(activeDrag.worldY - t.y) <= halfH
-      const dragId = activeDrag.entityId
+      const inside = Math.abs(drag.worldX - t.x) <= halfW && Math.abs(drag.worldY - t.y) <= halfH
+      const dragId = drag.entityId
 
       if (inside && !currentlyOver) {
         currentlyOver = true
@@ -307,14 +320,15 @@ export function useDroppable(options?: DroppableOptions): DroppableControls {
       }
     }
 
-    const unsubscribe = subscribeToActiveDrag(check)
+    const unsubscribe = subscribeToActiveDrag(engine, check)
 
     // Also check on pointerup so onDrop fires
     const onUp = () => {
-      if (!activeDrag || !currentlyOver) return
-      const dragId = activeDrag.entityId
-      const dragX = activeDrag.worldX
-      const dragY = activeDrag.worldY
+      const drag = getActiveDrag(engine)
+      if (!drag || !currentlyOver) return
+      const dragId = drag.entityId
+      const dragX = drag.worldX
+      const dragY = drag.worldY
       currentlyOver = false
       setIsOver(false)
       setHoveredBy(null)

@@ -4,6 +4,7 @@ import type { Camera2DComponent, SpriteComponent } from '@cubeforge/renderer'
 import type { BoxColliderComponent, CircleColliderComponent } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { useSelection } from '../hooks/useSelection'
+import { useOverlayTick } from '../hooks/useOverlayTick'
 
 export interface TransformHandlesProps {
   /** Whether to show the rotation handle above the top edge. Default true. */
@@ -68,50 +69,42 @@ export function TransformHandles({
   const overlayRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
 
-  // Keep the overlay positioned over the canvas every frame. We use a standalone rAF
-  // loop (not the engine loop) so we don't wake onDemand mode.
-  useEffect(() => {
+  // Keep the overlay positioned over the canvas every frame. Shares a single rAF
+  // with the other DOM overlays (EditableText, A11yNode, VectorPath, FocusRing)
+  // so mounting many selected entities doesn't multiply rAF callbacks.
+  useOverlayTick(() => {
     if (!engine) return
     const overlay = overlayRef.current
     if (!overlay) return
     const canvas = engine.canvas
-    let rafId = 0
-
-    const tick = () => {
-      const rect = canvas.getBoundingClientRect()
-      overlay.style.left = `${rect.left + window.scrollX}px`
-      overlay.style.top = `${rect.top + window.scrollY}px`
-      overlay.style.width = `${rect.width}px`
-      overlay.style.height = `${rect.height}px`
-      // Update the selection handle positions
-      for (const id of selection.selected) {
-        const node = overlay.querySelector<HTMLDivElement>(`[data-selection-id="${id}"]`)
-        if (!node) continue
-        const bounds = getEntityBounds(engine.ecs, id)
-        const t = engine.ecs.getComponent<TransformComponent>(id, 'Transform')
-        if (!bounds || !t) {
-          node.style.display = 'none'
-          continue
-        }
-        const screen = worldToScreenCss(engine, t.x, t.y)
-        if (!screen) {
-          node.style.display = 'none'
-          continue
-        }
-        const w = bounds.baseWidth * Math.abs(t.scaleX) * screen.zoom
-        const h = bounds.baseHeight * Math.abs(t.scaleY) * screen.zoom
-        node.style.display = 'block'
-        node.style.left = `${screen.x}px`
-        node.style.top = `${screen.y}px`
-        node.style.width = `${w}px`
-        node.style.height = `${h}px`
-        node.style.transform = `translate(-50%, -50%) rotate(${t.rotation}rad)`
+    const rect = canvas.getBoundingClientRect()
+    overlay.style.left = `${rect.left + window.scrollX}px`
+    overlay.style.top = `${rect.top + window.scrollY}px`
+    overlay.style.width = `${rect.width}px`
+    overlay.style.height = `${rect.height}px`
+    for (const id of selection.selected) {
+      const node = overlay.querySelector<HTMLDivElement>(`[data-selection-id="${id}"]`)
+      if (!node) continue
+      const bounds = getEntityBounds(engine.ecs, id)
+      const t = engine.ecs.getComponent<TransformComponent>(id, 'Transform')
+      if (!bounds || !t) {
+        node.style.display = 'none'
+        continue
       }
-      rafId = requestAnimationFrame(tick)
+      const screen = worldToScreenCss(engine, t.x, t.y)
+      if (!screen) {
+        node.style.display = 'none'
+        continue
+      }
+      const w = bounds.baseWidth * Math.abs(t.scaleX) * screen.zoom
+      const h = bounds.baseHeight * Math.abs(t.scaleY) * screen.zoom
+      node.style.display = 'block'
+      node.style.left = `${screen.x}px`
+      node.style.top = `${screen.y}px`
+      node.style.width = `${w}px`
+      node.style.height = `${h}px`
+      node.style.transform = `translate(-50%, -50%) rotate(${t.rotation}rad)`
     }
-
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
   }, [engine, selection.selected])
 
   // Pointer drag handlers (window-level so drags continue outside the canvas)

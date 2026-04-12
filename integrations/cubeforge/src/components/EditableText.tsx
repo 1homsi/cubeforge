@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, type CSSProperties } from 'react'
 import type { EntityId, TransformComponent } from '@cubeforge/core'
 import type { Camera2DComponent } from '@cubeforge/renderer'
 import { EngineContext, EntityContext, type EngineState } from '../context'
+import { useOverlayTick } from '../hooks/useOverlayTick'
 
 export interface EditableTextProps {
   /** Current text value. */
@@ -96,40 +97,32 @@ export function EditableText({
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
 
-  // Keep the input positioned over the entity each frame (standalone rAF so we
-  // don't wake the onDemand engine loop just for overlay position updates).
-  useEffect(() => {
+  // Keep the input positioned over the entity each frame via the shared overlay tick.
+  useOverlayTick(() => {
     if (!engine || entityId === null || entityId === undefined) return
     const container = containerRef.current
     if (!container) return
-    let rafId = 0
-    const tick = () => {
-      const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
-      if (t) {
-        const screen = worldToScreenCss(engine, t.x, t.y)
-        if (screen) {
-          const zoom = screen.zoom
-          const cssW = width * zoom
-          const cssH = height * zoom
-          container.style.display = 'block'
-          container.style.left = `${screen.x - cssW / 2}px`
-          container.style.top = `${screen.y - cssH / 2}px`
-          container.style.width = `${cssW}px`
-          container.style.height = `${cssH}px`
-          container.style.transform = `rotate(${t.rotation}rad)`
-          container.style.fontSize = `${fontSize * zoom}px`
-        } else {
-          container.style.display = 'none'
-        }
+    const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
+    if (t) {
+      const screen = worldToScreenCss(engine, t.x, t.y)
+      if (screen) {
+        const zoom = screen.zoom
+        const cssW = width * zoom
+        const cssH = height * zoom
+        container.style.display = 'block'
+        container.style.left = `${screen.x - cssW / 2}px`
+        container.style.top = `${screen.y - cssH / 2}px`
+        container.style.width = `${cssW}px`
+        container.style.height = `${cssH}px`
+        container.style.transform = `rotate(${t.rotation}rad)`
+        container.style.fontSize = `${fontSize * zoom}px`
+      } else {
+        container.style.display = 'none'
       }
-      // Also anchor the container to the canvas element's position
-      const rect = engine.canvas.getBoundingClientRect()
-      container.style.setProperty('--cubeforge-canvas-left', `${rect.left + window.scrollX}px`)
-      container.style.setProperty('--cubeforge-canvas-top', `${rect.top + window.scrollY}px`)
-      rafId = requestAnimationFrame(tick)
     }
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
+    const rect = engine.canvas.getBoundingClientRect()
+    container.style.setProperty('--cubeforge-canvas-left', `${rect.left + window.scrollX}px`)
+    container.style.setProperty('--cubeforge-canvas-top', `${rect.top + window.scrollY}px`)
   }, [engine, entityId, width, height, fontSize])
 
   useEffect(() => {

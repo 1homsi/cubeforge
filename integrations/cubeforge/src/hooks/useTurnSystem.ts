@@ -72,13 +72,17 @@ export function useTurnSystem<P>({
   const [activeIndex, setActiveIndex] = useState(initialIndex % players.length)
   const [turn, setTurn] = useState(0)
   const [isPending, setIsPending] = useState(false)
-  const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingRafId = useRef<number | null>(null)
+  const pendingRemaining = useRef<number>(0)
+  const pendingTarget = useRef<number | null>(null)
+  const pendingLastTime = useRef<number>(0)
 
   const clearPending = useCallback(() => {
-    if (pendingTimer.current) {
-      clearTimeout(pendingTimer.current)
-      pendingTimer.current = null
+    if (pendingRafId.current !== null) {
+      cancelAnimationFrame(pendingRafId.current)
+      pendingRafId.current = null
     }
+    pendingTarget.current = null
     setIsPending(false)
   }, [])
 
@@ -113,13 +117,31 @@ export function useTurnSystem<P>({
         return
       }
       setIsPending(true)
-      pendingTimer.current = setTimeout(() => {
-        pendingTimer.current = null
-        setIsPending(false)
-        applyChange(nextIndex)
-      }, aiDelay * 1000)
+      pendingTarget.current = nextIndex
+      pendingRemaining.current = aiDelay
+      pendingLastTime.current = performance.now()
+
+      const tick = (now: number) => {
+        const dt = (now - pendingLastTime.current) / 1000
+        pendingLastTime.current = now
+        // Honor engine pause: if the loop is paused, freeze the countdown.
+        const paused = engine?.loop.isPaused ?? false
+        if (!paused) {
+          pendingRemaining.current -= dt
+        }
+        if (pendingRemaining.current <= 0 && pendingTarget.current !== null) {
+          const target = pendingTarget.current
+          pendingTarget.current = null
+          pendingRafId.current = null
+          setIsPending(false)
+          applyChange(target)
+          return
+        }
+        pendingRafId.current = requestAnimationFrame(tick)
+      }
+      pendingRafId.current = requestAnimationFrame(tick)
     },
-    [aiDelay, applyChange, clearPending],
+    [aiDelay, applyChange, clearPending, engine],
   )
 
   const nextTurn = useCallback(() => scheduleChange(activeIndex + 1), [scheduleChange, activeIndex])
@@ -146,10 +168,10 @@ export function useTurnSystem<P>({
     engine?.loop.markDirty()
   }, [players.length, initialIndex, clearPending, engine])
 
-  // Cleanup any pending timer on unmount
+  // Cleanup any pending rAF on unmount
   useEffect(
     () => () => {
-      if (pendingTimer.current) clearTimeout(pendingTimer.current)
+      if (pendingRafId.current !== null) cancelAnimationFrame(pendingRafId.current)
     },
     [],
   )

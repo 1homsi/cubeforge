@@ -1,0 +1,144 @@
+import { useState } from 'react'
+import { Stage, Entity, Transform, Sprite, Text, useTurnSystem, useHistory } from 'cubeforge'
+
+type Cell = '' | 'X' | 'O'
+type Board = Cell[]
+
+const CELL = 90
+const GRID_PX = CELL * 3
+const LINES = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
+]
+
+function winner(cells: Board): Cell | null {
+  for (const [a, b, c] of LINES) {
+    if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) return cells[a]
+  }
+  return null
+}
+
+function BoardCell({
+  value,
+  row,
+  col,
+  disabled,
+  onClick,
+}: {
+  value: Cell
+  row: number
+  col: number
+  disabled: boolean
+  onClick: () => void
+}) {
+  const x = col * CELL + CELL / 2 - GRID_PX / 2
+  const y = row * CELL + CELL / 2 - GRID_PX / 2
+
+  return (
+    <>
+      <Entity>
+        <Transform x={x} y={y} />
+        <Sprite width={CELL - 6} height={CELL - 6} color="#1e2a3a" borderRadius={8} />
+        {value && <Text text={value} fontSize={52} color={value === 'X' ? '#4fc3f7' : '#ef5350'} />}
+      </Entity>
+      <div
+        onClick={disabled ? undefined : onClick}
+        aria-label={`Row ${row + 1} column ${col + 1}${value ? `, ${value}` : ', empty'}`}
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          width: CELL,
+          height: CELL,
+          transform: `translate(${x - CELL / 2}px, ${y - CELL / 2}px)`,
+          cursor: disabled || value ? 'default' : 'pointer',
+        }}
+      />
+    </>
+  )
+}
+
+function Game() {
+  const [cells, setCells] = useState<Board>(Array(9).fill(''))
+  const history = useHistory({ bindKeyboardShortcuts: true })
+  const turns = useTurnSystem<'X' | 'O'>({
+    players: ['X', 'O'],
+    onTurnStart: ({ player, turn }) => {
+      if (turn > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`${player}'s turn`)
+      }
+    },
+  })
+
+  const win = winner(cells)
+  const full = cells.every((c) => c !== '')
+  const done = win !== null || full
+
+  const onCell = (index: number) => {
+    if (done || cells[index]) return
+    const next = cells.slice() as Board
+    next[index] = turns.activePlayer
+    setCells(next)
+    history.push()
+    if (!winner(next) && next.some((c) => c === '')) turns.nextTurn()
+  }
+
+  const reset = () => {
+    setCells(Array(9).fill(''))
+    turns.reset()
+    history.clear()
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <h1 style={{ color: '#e0e7f1', fontSize: 18, fontWeight: 500 }}>{`{{PROJECT_NAME}}`}</h1>
+      <div style={{ color: '#78909c', fontSize: 14, fontFamily: 'monospace', height: 18 }}>
+        {win ? `${win} wins!` : full ? 'Draw' : `Turn: ${turns.activePlayer}`}
+      </div>
+      <div style={{ position: 'relative' }}>
+        <Stage width={GRID_PX + 20} height={GRID_PX + 20}>
+          {cells.map((value, i) => (
+            <BoardCell
+              key={i}
+              value={value}
+              row={Math.floor(i / 3)}
+              col={i % 3}
+              disabled={done}
+              onClick={() => onCell(i)}
+            />
+          ))}
+        </Stage>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={reset} style={btn}>Reset</button>
+        <button onClick={history.undo} disabled={!history.canUndo} style={btn}>Undo (Ctrl+Z)</button>
+      </div>
+    </div>
+  )
+}
+
+export function App() {
+  return (
+    <div style={{ padding: 24 }}>
+      <Game />
+    </div>
+  )
+}
+
+const btn: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.08)',
+  border: '1px solid rgba(255,255,255,0.2)',
+  color: '#e0e7f1',
+  padding: '4px 10px',
+  borderRadius: 4,
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'monospace',
+}

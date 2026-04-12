@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { EntityId } from '@cubeforge/core'
+import { EngineContext } from '../context'
 
 export interface SelectOptions {
   /** If true, add to the current selection instead of replacing it. */
@@ -48,7 +49,21 @@ export interface SelectionProps {
  * ```
  */
 export function Selection({ initial, onChange, children }: SelectionProps) {
+  const engine = useContext(EngineContext)
   const [selected, setSelected] = useState<EntityId[]>(initial ?? [])
+
+  // Auto-prune destroyed entities so stale IDs don't linger in the selection.
+  useEffect(() => {
+    if (!engine) return
+    return engine.ecs.onDestroyEntity((destroyedId) => {
+      setSelected((prev) => {
+        if (!prev.includes(destroyedId)) return prev
+        const next = prev.filter((id) => id !== destroyedId)
+        onChange?.(next)
+        return next
+      })
+    })
+  }, [engine, onChange])
 
   const commit = useCallback(
     (next: EntityId[]) => {

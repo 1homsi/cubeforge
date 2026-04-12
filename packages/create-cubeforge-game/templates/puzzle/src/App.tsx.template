@@ -1,0 +1,171 @@
+import { Stage, Entity, Transform, Sprite, Text, useGrid, useHistory } from 'cubeforge'
+
+const SIZE = 4
+const TILE = 80
+const BOARD_PX = SIZE * TILE
+const EMPTY = 0
+
+type Board = number[]
+
+function isSolved(cells: readonly number[]): boolean {
+  for (let i = 0; i < cells.length - 1; i++) {
+    if (cells[i] !== i + 1) return false
+  }
+  return cells[cells.length - 1] === EMPTY
+}
+
+function neighborsOfEmpty(cells: readonly number[]): number[] {
+  const empty = cells.indexOf(EMPTY)
+  const row = Math.floor(empty / SIZE)
+  const col = empty % SIZE
+  const out: number[] = []
+  if (row > 0) out.push(empty - SIZE)
+  if (row < SIZE - 1) out.push(empty + SIZE)
+  if (col > 0) out.push(empty - 1)
+  if (col < SIZE - 1) out.push(empty + 1)
+  return out
+}
+
+function scramble(cells: number[], moves = 80): number[] {
+  const out = cells.slice()
+  for (let i = 0; i < moves; i++) {
+    const ns = neighborsOfEmpty(out)
+    const pick = ns[Math.floor(Math.random() * ns.length)]
+    const emptyIdx = out.indexOf(EMPTY)
+    ;[out[emptyIdx], out[pick]] = [out[pick], out[emptyIdx]]
+  }
+  return out
+}
+
+function Tile({ value, row, col, onClick }: { value: number; row: number; col: number; onClick: () => void }) {
+  if (value === EMPTY) return null
+  const x = col * TILE + TILE / 2 - BOARD_PX / 2
+  const y = row * TILE + TILE / 2 - BOARD_PX / 2
+  return (
+    <Entity>
+      <Transform x={x} y={y} />
+      <Sprite width={TILE - 6} height={TILE - 6} color="#4fc3f7" borderRadius={10} />
+      <Text text={String(value)} fontSize={28} color="#0a0a0f" />
+      <HitArea onClick={onClick} width={TILE} height={TILE} />
+    </Entity>
+  )
+}
+
+// Tiny helper: an invisible sprite that catches pointer events.
+function HitArea({ onClick, width, height }: { onClick: () => void; width: number; height: number }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        position: 'absolute',
+        width,
+        height,
+        transform: `translate(-${width / 2}px, -${height / 2}px)`,
+        cursor: 'pointer',
+      }}
+    />
+  )
+}
+
+function BoardUI({ board, history }: { board: ReturnType<typeof useGrid<number>>; history: ReturnType<typeof useHistory> }) {
+  const cells: number[] = []
+  board.forEach((c) => cells.push(c.value))
+  const solved = isSolved(cells)
+
+  const tryMove = (index: number) => {
+    const ns = neighborsOfEmpty(cells)
+    if (!ns.includes(index)) return
+    const emptyIdx = cells.indexOf(EMPTY)
+    const tileRow = Math.floor(index / SIZE)
+    const tileCol = index % SIZE
+    const emptyRow = Math.floor(emptyIdx / SIZE)
+    const emptyCol = emptyIdx % SIZE
+    board.swap(tileCol, tileRow, emptyCol, emptyRow)
+    history.push()
+  }
+
+  return (
+    <>
+      {cells.map((value, i) => {
+        const row = Math.floor(i / SIZE)
+        const col = i % SIZE
+        return <Tile key={`${row}-${col}`} value={value} row={row} col={col} onClick={() => tryMove(i)} />
+      })}
+      {solved && (
+        <Entity>
+          <Transform x={0} y={-BOARD_PX / 2 - 40} />
+          <Text text="Solved!" fontSize={32} color="#8bc34a" />
+        </Entity>
+      )}
+    </>
+  )
+}
+
+export function App() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24 }}>
+      <h1 style={{ color: '#e0e7f1', fontSize: 18, fontWeight: 500 }}>{`{{PROJECT_NAME}}`}</h1>
+      <Stage width={BOARD_PX + 40} height={BOARD_PX + 40}>
+        <BoardMount />
+      </Stage>
+    </div>
+  )
+}
+
+function BoardMount() {
+  // Seed the board with a scrambled solved state (1..15, 0)
+  const solved: number[] = []
+  for (let i = 1; i < SIZE * SIZE; i++) solved.push(i)
+  solved.push(EMPTY)
+  const initial = scramble(solved)
+
+  const board = useGrid<number>({
+    width: SIZE,
+    height: SIZE,
+    fill: (x, y) => initial[y * SIZE + x],
+  })
+  const history = useHistory({ bindKeyboardShortcuts: true, capacity: 200 })
+
+  return (
+    <>
+      <BoardUI board={board} history={history} />
+      <Controls history={history} />
+    </>
+  )
+}
+
+function Controls({ history }: { history: ReturnType<typeof useHistory> }) {
+  return (
+    <div style={{ position: 'absolute', bottom: 8, left: 8, right: 8, display: 'flex', gap: 8, pointerEvents: 'auto' }}>
+      <button
+        onClick={history.undo}
+        disabled={!history.canUndo}
+        style={btn}
+      >
+        Undo (Ctrl+Z)
+      </button>
+      <button
+        onClick={history.redo}
+        disabled={!history.canRedo}
+        style={btn}
+      >
+        Redo
+      </button>
+      <span style={{ flex: 1 }} />
+      <span style={{ color: '#78909c', fontSize: 12, alignSelf: 'center' }}>
+        Moves: {history.length}
+      </span>
+    </div>
+  )
+}
+
+const btn: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.08)',
+  border: '1px solid rgba(255,255,255,0.2)',
+  color: '#e0e7f1',
+  padding: '4px 10px',
+  borderRadius: 4,
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'monospace',
+}

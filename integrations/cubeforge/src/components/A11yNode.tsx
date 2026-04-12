@@ -1,8 +1,9 @@
-import { useContext, useEffect, useRef, type CSSProperties } from 'react'
+import { useContext, useRef, type CSSProperties } from 'react'
 import type { ECSWorld, EntityId, TransformComponent } from '@cubeforge/core'
 import type { Camera2DComponent, SpriteComponent } from '@cubeforge/renderer'
 import type { BoxColliderComponent, CircleColliderComponent } from '@cubeforge/physics'
 import { EngineContext, EntityContext, type EngineState } from '../context'
+import { useOverlayTick } from '../hooks/useOverlayTick'
 
 export interface A11yNodeProps {
   /**
@@ -75,31 +76,24 @@ export function A11yNode({
   const entityId = useContext(EntityContext)
   const nodeRef = useRef<HTMLButtonElement>(null)
 
-  // Keep the node positioned over the entity so screen-reader "flyover" works.
-  useEffect(() => {
+  // Keep the node positioned over the entity via the shared overlay tick so
+  // screen-reader "flyover" works.
+  useOverlayTick(() => {
     if (!engine || entityId === null || entityId === undefined) return
     const node = nodeRef.current
     if (!node) return
-    let rafId = 0
-    const tick = () => {
-      const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
-      if (t) {
-        const screen = worldToScreenCss(engine, t.x, t.y)
-        if (screen) {
-          const size = bounds ?? deriveBounds(engine.ecs, entityId as EntityId) ?? { width: 16, height: 16 }
-          const w = size.width * Math.abs(t.scaleX) * screen.zoom
-          const h = size.height * Math.abs(t.scaleY) * screen.zoom
-          // Keep a minimum 1px hit area so the element isn't collapsed away.
-          node.style.left = `${screen.x - Math.max(w, 1) / 2}px`
-          node.style.top = `${screen.y - Math.max(h, 1) / 2}px`
-          node.style.width = `${Math.max(w, 1)}px`
-          node.style.height = `${Math.max(h, 1)}px`
-        }
-      }
-      rafId = requestAnimationFrame(tick)
-    }
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
+    const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
+    if (!t) return
+    const screen = worldToScreenCss(engine, t.x, t.y)
+    if (!screen) return
+    const size = bounds ?? deriveBounds(engine.ecs, entityId as EntityId) ?? { width: 16, height: 16 }
+    const w = size.width * Math.abs(t.scaleX) * screen.zoom
+    const h = size.height * Math.abs(t.scaleY) * screen.zoom
+    // Keep a minimum 1px hit area so the element isn't collapsed away.
+    node.style.left = `${screen.x - Math.max(w, 1) / 2}px`
+    node.style.top = `${screen.y - Math.max(h, 1) / 2}px`
+    node.style.width = `${Math.max(w, 1)}px`
+    node.style.height = `${Math.max(h, 1)}px`
   }, [engine, entityId, bounds])
 
   if (!engine || entityId === null || entityId === undefined) return null

@@ -1,0 +1,144 @@
+import { useRef, useState } from 'react'
+import type { GameControls } from 'cubeforge'
+import {
+  Stage,
+  Entity,
+  Transform,
+  Sprite,
+  Selection,
+  TransformHandles,
+  useSnap,
+  useHistory,
+  saveSceneToLocalStorage,
+  loadSceneFromLocalStorage,
+  downloadCanvas,
+  useGame,
+} from 'cubeforge'
+
+type Piece = { id: number; x: number; y: number; color: string }
+
+const PALETTE = ['#4fc3f7', '#ef5350', '#8bc34a', '#ffc107', '#ab47bc']
+const STORAGE_KEY = '{{PROJECT_NAME}}:scene'
+
+function Piece({ piece }: { piece: Piece }) {
+  return (
+    <Entity>
+      <Transform x={piece.x} y={piece.y} />
+      <Sprite width={60} height={60} color={piece.color} borderRadius={6} />
+    </Entity>
+  )
+}
+
+function Scene({ pieces }: { pieces: Piece[] }) {
+  return (
+    <>
+      {pieces.map((p) => (
+        <Piece key={p.id} piece={p} />
+      ))}
+    </>
+  )
+}
+
+// A tiny inline toolbar — talks to the engine via useGame().
+function Toolbar({ onAdd }: { onAdd: (color: string) => void }) {
+  const engine = useGame()
+  const history = useHistory({ bindKeyboardShortcuts: true })
+
+  const save = () => {
+    if (saveSceneToLocalStorage(engine, STORAGE_KEY, { pretty: true })) {
+      // eslint-disable-next-line no-console
+      console.log('Saved to localStorage')
+    }
+  }
+  const load = () => {
+    if (!loadSceneFromLocalStorage(engine, STORAGE_KEY)) {
+      // eslint-disable-next-line no-console
+      console.warn('No saved scene found')
+    }
+  }
+  const exportPng = () => downloadCanvas(engine.canvas, '{{PROJECT_NAME}}.png')
+
+  return (
+    <div style={toolbarStyle}>
+      <strong style={{ fontSize: 12, color: '#78909c', marginRight: 8 }}>Add:</strong>
+      {PALETTE.map((c) => (
+        <button
+          key={c}
+          onClick={() => onAdd(c)}
+          style={{ ...swatch, background: c }}
+          aria-label={`Add piece with color ${c}`}
+        />
+      ))}
+      <span style={{ flex: 1 }} />
+      <button onClick={history.undo} disabled={!history.canUndo} style={btn}>Undo</button>
+      <button onClick={history.redo} disabled={!history.canRedo} style={btn}>Redo</button>
+      <button onClick={save} style={btn}>Save</button>
+      <button onClick={load} style={btn}>Load</button>
+      <button onClick={exportPng} style={btn}>Export PNG</button>
+    </div>
+  )
+}
+
+export function App() {
+  const nextId = useRef(1)
+  const [pieces, setPieces] = useState<Piece[]>([
+    { id: nextId.current++, x: -80, y: 0, color: '#4fc3f7' },
+    { id: nextId.current++, x: 80, y: 0, color: '#ef5350' },
+  ])
+
+  const addPiece = (color: string) => {
+    setPieces((prev) => [...prev, { id: nextId.current++, x: 0, y: 0, color }])
+  }
+
+  return (
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <h1 style={{ fontSize: 18, fontWeight: 500 }}>{`{{PROJECT_NAME}}`}</h1>
+      <p style={{ fontSize: 13, color: '#78909c' }}>
+        Click a colored swatch to spawn a piece. Drag the handle box to move, corners to resize,
+        the round handle above to rotate. Ctrl+Z / Ctrl+Shift+Z to undo/redo. Snap to 10px grid.
+      </p>
+      <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+        <Stage width={800} height={500}>
+          <Selection>
+            <Scene pieces={pieces} />
+            <TransformHandles />
+            <Toolbar onAdd={addPiece} />
+          </Selection>
+        </Stage>
+      </div>
+    </div>
+  )
+}
+
+const toolbarStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: -48,
+  left: 0,
+  right: 0,
+  display: 'flex',
+  gap: 6,
+  alignItems: 'center',
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  padding: 6,
+  borderRadius: 4,
+}
+
+const swatch: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  border: '1px solid rgba(255,255,255,0.3)',
+  borderRadius: 3,
+  cursor: 'pointer',
+}
+
+const btn: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.08)',
+  border: '1px solid rgba(255,255,255,0.2)',
+  color: '#e0e7f1',
+  padding: '4px 10px',
+  borderRadius: 4,
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'monospace',
+}

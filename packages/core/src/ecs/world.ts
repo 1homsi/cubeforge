@@ -146,6 +146,8 @@ export class ECSWorld {
   }
 
   destroyEntity(id: EntityId): void {
+    // Guard against double-destroy: callbacks fire only if the entity existed.
+    if (!this.componentIndex.has(id)) return
     const comps = this.componentIndex.get(id)
     if (comps) {
       for (const type of comps.keys()) this.dirtyTypes.add(type)
@@ -162,11 +164,36 @@ export class ECSWorld {
     this.componentIndex.delete(id)
     this.entityArchetype.delete(id)
     this.dirtyAll = true
+    // Fire subscribers — copy to avoid mutation-during-iteration if one unsubscribes.
+    if (this.destroyListeners.size > 0) {
+      for (const cb of Array.from(this.destroyListeners)) cb(id)
+    }
   }
 
   hasEntity(id: EntityId): boolean {
     return this.componentIndex.has(id)
   }
+
+  /**
+   * Subscribe to entity-destroyed events. The callback fires after the entity
+   * has been removed from all archetypes and component storage. Returns an
+   * unsubscribe function.
+   *
+   * @example
+   * ```ts
+   * const off = ecs.onDestroyEntity((id) => console.log('gone', id))
+   * // ...
+   * off()
+   * ```
+   */
+  onDestroyEntity(cb: (id: EntityId) => void): () => void {
+    this.destroyListeners.add(cb)
+    return () => {
+      this.destroyListeners.delete(cb)
+    }
+  }
+
+  private destroyListeners: Set<(id: EntityId) => void> = new Set()
 
   addComponent<T extends Component>(id: EntityId, component: T): void {
     const comps = this.componentIndex.get(id)

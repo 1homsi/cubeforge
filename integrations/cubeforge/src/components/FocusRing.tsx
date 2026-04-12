@@ -4,6 +4,7 @@ import type { Camera2DComponent, SpriteComponent } from '@cubeforge/renderer'
 import type { BoxColliderComponent, CircleColliderComponent } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import { getFocusedEntityId, subscribeFocus } from '../hooks/useKeyboardFocus'
+import { useOverlayTick } from '../hooks/useOverlayTick'
 
 export interface FocusRingProps {
   /** Ring color. Default '#4fc3f7'. */
@@ -60,39 +61,33 @@ export function FocusRing({
     return () => mq.removeEventListener('change', cb)
   }, [])
 
-  useEffect(() => {
+  useOverlayTick(() => {
     if (!engine) return
     const ring = ringRef.current
     if (!ring) return
-    let rafId = 0
-    const tick = () => {
-      if (focused === null) {
-        ring.style.display = 'none'
-      } else {
-        const t = engine.ecs.getComponent<TransformComponent>(focused, 'Transform')
-        if (t) {
-          const screen = worldToScreenCss(engine, t.x, t.y)
-          const bounds = deriveBounds(engine.ecs, focused) ?? { width: 16, height: 16 }
-          if (screen) {
-            const w = bounds.width * Math.abs(t.scaleX) * screen.zoom + padding * 2
-            const h = bounds.height * Math.abs(t.scaleY) * screen.zoom + padding * 2
-            ring.style.display = 'block'
-            ring.style.left = `${screen.x - w / 2}px`
-            ring.style.top = `${screen.y - h / 2}px`
-            ring.style.width = `${w}px`
-            ring.style.height = `${h}px`
-            ring.style.transform = `rotate(${t.rotation}rad)`
-          } else {
-            ring.style.display = 'none'
-          }
-        } else {
-          ring.style.display = 'none'
-        }
-      }
-      rafId = requestAnimationFrame(tick)
+    if (focused === null) {
+      ring.style.display = 'none'
+      return
     }
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
+    const t = engine.ecs.getComponent<TransformComponent>(focused, 'Transform')
+    if (!t) {
+      ring.style.display = 'none'
+      return
+    }
+    const screen = worldToScreenCss(engine, t.x, t.y)
+    if (!screen) {
+      ring.style.display = 'none'
+      return
+    }
+    const bounds = deriveBounds(engine.ecs, focused) ?? { width: 16, height: 16 }
+    const w = bounds.width * Math.abs(t.scaleX) * screen.zoom + padding * 2
+    const h = bounds.height * Math.abs(t.scaleY) * screen.zoom + padding * 2
+    ring.style.display = 'block'
+    ring.style.left = `${screen.x - w / 2}px`
+    ring.style.top = `${screen.y - h / 2}px`
+    ring.style.width = `${w}px`
+    ring.style.height = `${h}px`
+    ring.style.transform = `rotate(${t.rotation}rad)`
   }, [engine, focused, padding])
 
   if (!engine) return null
