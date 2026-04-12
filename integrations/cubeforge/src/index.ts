@@ -208,6 +208,30 @@ export type { CharacterControllerConfig, CharacterCollision, MoveResult } from '
 export { useDropThrough } from '@cubeforge/gameplay'
 export { useDialogue } from '@cubeforge/gameplay'
 export type { DialogueLine, DialogueScript, DialogueControls } from '@cubeforge/gameplay'
+export { useDialogueTree } from '@cubeforge/gameplay'
+export type {
+  DialogueTreeNode,
+  DialogueTreeScript,
+  DialogueTreeChoice,
+  DialogueTreeControls,
+  DialogueVariables,
+} from '@cubeforge/gameplay'
+export { useBehaviorTree } from '@cubeforge/gameplay'
+export type { BTNode, BTStatus, BehaviorTreeControls } from '@cubeforge/gameplay'
+export {
+  btAction,
+  btCondition,
+  btWait,
+  btSequence,
+  btSelector,
+  btParallel,
+  btInvert,
+  btRepeat,
+  btRetryUntilSuccess,
+  btCooldown,
+  btSucceed,
+  btFail,
+} from '@cubeforge/gameplay'
 export { DialogueBox } from '@cubeforge/gameplay'
 export type { DialogueBoxProps, DialogueBoxStyle } from '@cubeforge/gameplay'
 export { useCutscene } from '@cubeforge/gameplay'
