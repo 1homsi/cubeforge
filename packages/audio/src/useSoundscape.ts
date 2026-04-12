@@ -84,13 +84,7 @@ async function loadBuffer(src: string): Promise<AudioBuffer> {
  * ```
  */
 export function useSoundscape(layers: SoundscapeLayer[], opts: SoundscapeOptions = {}): SoundscapeControls {
-  const {
-    volume: masterVolume = 1,
-    fadeIn = 1,
-    fadeOut = 1,
-    group = 'ambient',
-    active = true,
-  } = opts
+  const { volume: masterVolume = 1, fadeIn = 1, fadeOut = 1, group = 'ambient', active = true } = opts
 
   const masterGainRef = useRef<GainNode | null>(null)
   const layerStatesRef = useRef<Map<string, LayerState>>(new Map())
@@ -132,9 +126,7 @@ export function useSoundscape(layers: SoundscapeLayer[], opts: SoundscapeOptions
         source.loop = true
         source.connect(layerGain)
 
-        const offset = layer.randomOffset && layer.randomOffset > 0
-          ? Math.random() * layer.randomOffset
-          : 0
+        const offset = layer.randomOffset && layer.randomOffset > 0 ? Math.random() * layer.randomOffset : 0
 
         source.start(0, offset % buf.duration)
         state.source = source
@@ -245,9 +237,12 @@ export function useSoundscape(layers: SoundscapeLayer[], opts: SoundscapeOptions
     }
   }, [])
 
-  const fadeLayer = useCallback((src: string, targetVolume: number, duration: number) => {
-    setLayerVolume(src, targetVolume, duration)
-  }, [setLayerVolume])
+  const fadeLayer = useCallback(
+    (src: string, targetVolume: number, duration: number) => {
+      setLayerVolume(src, targetVolume, duration)
+    },
+    [setLayerVolume],
+  )
 
   return { setVolume, setLayerVolume, fadeLayer }
 }
