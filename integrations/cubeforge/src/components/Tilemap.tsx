@@ -70,7 +70,7 @@ interface TiledMap {
   layers: TiledLayer[]
 }
 
-// ─── Animated tile state (module-level, shared across instances) ───────────────
+// ─── Animated tile state ──────────────────────────────────────────────────────
 
 interface AnimatedTileState {
   frames: number[]
@@ -78,8 +78,6 @@ interface AnimatedTileState {
   timer: number
   currentFrame: number
 }
-
-const animatedTiles = new Map<EntityId, AnimatedTileState>()
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -191,6 +189,8 @@ export function Tilemap({
   useEffect(() => {
     if (!engine) return
     const createdEntities: EntityId[] = []
+    // Per-effect instance — not shared across Tilemap instances or re-mounts.
+    const animatedTiles = new Map<EntityId, AnimatedTileState>()
 
     async function load() {
       let mapData: TiledMap
@@ -365,6 +365,7 @@ export function Tilemap({
                 engine.assets
                   .loadImage(frame.imageSrc)
                   .then((img) => {
+                    if (!engine.ecs.hasEntity(eid)) return
                     const s = engine.ecs.getComponent<SpriteComponent>(eid, 'Sprite')
                     if (s) s.image = img
                   })
@@ -381,12 +382,11 @@ export function Tilemap({
                 const state: AnimatedTileState = { frames, durations, timer: 0, currentFrame: 0 }
                 animatedTiles.set(eid, state)
 
-                // Pre-load first frame image (tileset image already loading above)
-                // Set initial frame region from the first animation frame
                 const firstFrameRegion = getFrameForLocalId(resolved.tileset, frames[0])
                 engine.assets
                   .loadImage(firstFrameRegion.imageSrc)
                   .then((img) => {
+                    if (!engine.ecs.hasEntity(eid)) return
                     const s = engine.ecs.getComponent<SpriteComponent>(eid, 'Sprite')
                     if (s) {
                       s.image = img

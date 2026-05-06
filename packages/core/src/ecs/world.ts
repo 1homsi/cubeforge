@@ -71,6 +71,25 @@ interface Archetype {
   entities: EntityId[]
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Per-component structural comparison with early exit — avoids stringifying
+ *  the whole entity and is not sensitive to JSON key-ordering. */
+function _componentsChanged(a: Component[], b: Component[]): boolean {
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i++) {
+    const ca = a[i] as unknown as Record<string, unknown>
+    const cb = b[i] as unknown as Record<string, unknown>
+    if (ca['type'] !== cb['type']) return true
+    const keysA = Object.keys(ca)
+    if (keysA.length !== Object.keys(cb).length) return true
+    for (const k of keysA) {
+      if (ca[k] !== cb[k]) return true
+    }
+  }
+  return false
+}
+
 // ── ECSWorld ──────────────────────────────────────────────────────────────────
 
 export class ECSWorld {
@@ -510,7 +529,7 @@ export class ECSWorld {
 
     for (const entity of current.entities) {
       const base = baseMap.get(entity.id)
-      if (!base || JSON.stringify(entity.components) !== JSON.stringify(base.components)) {
+      if (!base || _componentsChanged(entity.components, base.components)) {
         changed.push(entity)
       }
     }
