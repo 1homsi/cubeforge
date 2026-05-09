@@ -58,9 +58,6 @@ jobs:
             console.log('Stamped version ${VERSION} and applied publishConfig');
           "
 
-      - name: Upgrade npm
-        run: npm install -g npm@latest
-
       - name: Publish cubeforge
         run: cd integrations/cubeforge && npm publish --provenance --access public --no-git-checks
 
