@@ -39,6 +39,7 @@ interface SpriteComponent {
   color: string
   src?: string
   image?: HTMLImageElement
+  dynamicSrc?: string
   offsetX: number
   offsetY: number
   zIndex: number
@@ -421,6 +422,8 @@ function getSamplingKey(sampling?: Sampling): string {
 }
 
 function getTextureKey(sprite: SpriteComponent): string {
+  // Dynamic canvas textures are registered by ID — no sampling suffix needed
+  if (sprite.dynamicSrc) return sprite.dynamicSrc
   const src = sprite.image?.src || sprite.src
   const samplingKey = getSamplingKey(sprite.sampling)
   const suffix = samplingKey ? `:s=${samplingKey}` : ''
@@ -582,6 +585,20 @@ export class RenderSystem implements System {
   private frameTimes: number[] = []
   private lastTimestamp = 0
 
+  // ── Dynamic canvas textures (texSubImage2D optimization) ─────────────────
+  private readonly _dynamicCanvases = new Map<
+    string,
+    { canvas: HTMLCanvasElement; tex: WebGLTexture; dirty: boolean }
+  >()
+
+  // ── Idle frame skip ──────────────────────────────────────────────────────
+  private _idleSkip = false
+  private _prevSceneHash = -1
+  private _idleFBO: WebGLFramebuffer | null = null
+  private _idleTex: WebGLTexture | null = null
+  private _idleFBOW = 0
+  private _idleFBOH = 0
+
   // ── Post-process ─────────────────────────────────────────────────────────
   private _ppOptions: PostProcessOptions = {}
 
@@ -639,6 +656,59 @@ export class RenderSystem implements System {
   /** Configure native WebGL post-process effects for this render system. */
   setPostProcessOptions(opts: PostProcessOptions): void {
     this._ppOptions = opts
+  }
+
+  /**
+   * Enable idle frame skip. When enabled the renderer computes a hash of all
+   * visible entity positions, frame indices, and camera state each frame. If
+   * the hash matches the previous frame the GPU draw calls are skipped entirely
+   * and the cached scene is blitted to screen instead.
+   *
+   * Best for scenes that are frequently static (pause menus, cutscenes, HUDs).
+   * Animations and active particles automatically disable the skip for that frame.
+   */
+  setIdleFrameSkip(enabled: boolean): void {
+    this._idleSkip = enabled
+  }
+
+  /**
+   * Register an HTMLCanvasElement as a GPU texture that the renderer can sample.
+   * The canvas is uploaded once on registration. Call {@link markDynamicCanvasDirty}
+   * to schedule a re-upload before the next frame.
+   *
+   * Use the returned `id` as the `dynamicSrc` on a `<Sprite>` component.
+   */
+  registerDynamicCanvas(id: string, canvas: HTMLCanvasElement): void {
+    const { gl } = this
+    const tex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    this._dynamicCanvases.set(id, { canvas, tex, dirty: false })
+    this.textures.set(id, tex)
+    this.touchTexture(id)
+  }
+
+  /**
+   * Mark a dynamic canvas as modified so it will be re-uploaded to the GPU
+   * (via `texSubImage2D`) at the start of the next rendered frame.
+   * Only call this after actually drawing new content to the canvas.
+   */
+  markDynamicCanvasDirty(id: string): void {
+    const entry = this._dynamicCanvases.get(id)
+    if (entry) entry.dirty = true
+  }
+
+  /** Remove a registered dynamic canvas and free its GPU texture. */
+  unregisterDynamicCanvas(id: string): void {
+    const entry = this._dynamicCanvases.get(id)
+    if (!entry) return
+    this.gl.deleteTexture(entry.tex)
+    this._dynamicCanvases.delete(id)
+    this.textures.delete(id)
   }
 
   private get _anyPPEnabled(): boolean {
@@ -1137,6 +1207,88 @@ export class RenderSystem implements System {
     }
   }
 
+  // ── Scene hash for idle frame skip ───────────────────────────────────────
+
+  private _computeSceneHash(
+    world: ECSWorld,
+    camX: number,
+    camY: number,
+    zoom: number,
+    shakeX: number,
+    shakeY: number,
+  ): number {
+    // FNV-1a 32-bit hash — fast, good avalanche, zero allocations
+    let h = 2166136261
+    const mix = (n: number) => {
+      const i = n | 0
+      h = Math.imul(h ^ (i & 0xff), 16777619)
+      h = Math.imul(h ^ ((i >> 8) & 0xff), 16777619)
+      h = Math.imul(h ^ ((i >> 16) & 0xff), 16777619)
+      h = Math.imul(h ^ ((i >> 24) & 0xff), 16777619)
+    }
+    mix(camX * 100)
+    mix(camY * 100)
+    mix(zoom * 1000)
+    mix(shakeX * 1000)
+    mix(shakeY * 1000)
+
+    for (const id of world.query('Transform', 'Sprite')) {
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      const s = world.getComponent<SpriteComponent>(id, 'Sprite')!
+      mix(id)
+      mix(t.x * 100)
+      mix(t.y * 100)
+      mix(t.rotation * 1000)
+      mix(t.scaleX * 1000)
+      mix(t.scaleY * 1000)
+      mix(s.frameIndex)
+      mix(s.visible ? 1 : 0)
+      mix((s.opacity ?? 1) * 255)
+    }
+
+    // Any playing animation or live particle system = force dirty
+    for (const id of world.query('AnimationState')) {
+      const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
+      if (anim.playing) return -1
+    }
+    for (const id of world.query('ParticlePool')) {
+      const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
+      if (pool.active || pool.particles.length > 0) return -1
+    }
+
+    // Squash/stretch not at rest = dirty
+    for (const id of world.query('SquashStretch')) {
+      const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
+      mix(ss.currentScaleX * 1000)
+      mix(ss.currentScaleY * 1000)
+    }
+
+    return h
+  }
+
+  private _ensureIdleFBO(w: number, h: number): void {
+    if (this._idleFBOW === w && this._idleFBOH === h && this._idleFBO) return
+    const { gl } = this
+    if (this._idleFBO) gl.deleteFramebuffer(this._idleFBO)
+    if (this._idleTex) gl.deleteTexture(this._idleTex)
+    const tex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    const fbo = gl.createFramebuffer()!
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+    this._idleFBO = fbo
+    this._idleTex = tex
+    this._idleFBOW = w
+    this._idleFBOH = h
+  }
+
   // ── Instanced draw call ────────────────────────────────────────────────────
 
   private flush(
@@ -1434,6 +1586,31 @@ export class RenderSystem implements System {
       ss.currentScaleY += (tScY - ss.currentScaleY) * ss.recovery * dt
     }
 
+    // ── Dynamic canvas re-uploads (texSubImage2D) ────────────────────────────
+    // Only re-uploads canvases that have been marked dirty since the last frame.
+    for (const entry of this._dynamicCanvases.values()) {
+      if (!entry.dirty) continue
+      gl.bindTexture(gl.TEXTURE_2D, entry.tex)
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, entry.canvas)
+      entry.dirty = false
+    }
+
+    // ── Idle frame skip ───────────────────────────────────────────────────────
+    // When enabled, hash visible entity state. If unchanged from last frame,
+    // blit the cached scene FBO to screen and skip all GPU draw calls.
+    if (this._idleSkip) {
+      this._ensureIdleFBO(W, H)
+      const hash = this._computeSceneHash(world, camX, camY, zoom, shakeX, shakeY)
+      if (hash !== -1 && hash === this._prevSceneHash) {
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this._idleFBO)
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
+        gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+        return
+      }
+      this._prevSceneHash = hash
+    }
+
     // ── Post-process: redirect scene to off-screen FBO ────────────────────────
     const ppEnabled = this._anyPPEnabled
     if (ppEnabled) {
@@ -1618,7 +1795,9 @@ export class RenderSystem implements System {
       const scaleYMod = ss ? ss.currentScaleY : 1
       // Textured sprites use white tint so the texture shows true colors;
       // only solid-color sprites use the color property as fill.
-      const hasTexture = sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0
+      const hasTexture =
+        (sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0) ||
+        (sprite.dynamicSrc !== undefined && this._dynamicCanvases.has(sprite.dynamicSrc))
       const opacity = sprite.opacity ?? 1
       let [r, g, b, a] = hasTexture ? [1, 1, 1, 1] : parseCSSColor(sprite.color)
       a *= opacity
@@ -2160,6 +2339,15 @@ export class RenderSystem implements System {
     if (ppEnabled) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       this._applyPostProcess(W, H)
+    }
+
+    // ── Idle frame skip: copy final composited frame to idle cache FBO ────────
+    // Stored post-PP so idle frames can blit the correct final image.
+    if (this._idleSkip && this._idleFBO) {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null)
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this._idleFBO)
+      gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     }
 
     // ── FPS tracking ─────────────────────────────────────────────────────────

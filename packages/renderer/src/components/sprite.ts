@@ -15,6 +15,12 @@ export interface SpriteComponent extends Component {
   src?: string
   /** Loaded image element (populated by renderer) */
   image?: HTMLImageElement
+  /**
+   * ID of a dynamic canvas registered via `registerDynamicCanvas()`.
+   * When set the renderer samples from that canvas texture instead of
+   * a static image. Use with `useDynamicCanvas` from 'cubeforge'.
+   */
+  dynamicSrc?: string
   /** Horizontal draw offset from anchor point */
   offsetX: number
   /** Vertical draw offset from anchor point */

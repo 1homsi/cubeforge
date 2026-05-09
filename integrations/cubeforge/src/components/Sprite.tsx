@@ -14,6 +14,12 @@ interface SpriteProps {
   height: number
   color?: string
   src?: string
+  /**
+   * ID returned by `useDynamicCanvas()`. When set the sprite samples from
+   * the registered canvas texture and re-uploads it whenever `markDirty()`
+   * is called on that handle.
+   */
+  dynamicSrc?: string
   offsetX?: number
   offsetY?: number
   zIndex?: number
@@ -65,6 +71,7 @@ export function Sprite({
   height,
   color = '#ffffff',
   src,
+  dynamicSrc,
   offsetX = 0,
   offsetY = 0,
   zIndex = 0,
@@ -118,6 +125,7 @@ export function Sprite({
       height,
       color,
       src,
+      dynamicSrc,
       offsetX,
       offsetY,
       zIndex,
@@ -220,6 +228,7 @@ export function Sprite({
     const comp = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
     if (!comp) return
     comp.color = color
+    comp.dynamicSrc = dynamicSrc
     comp.visible = visible
     comp.flipX = flipX
     comp.flipY = flipY
@@ -239,6 +248,7 @@ export function Sprite({
     comp.starInnerRadius = starInnerRadius
   }, [
     color,
+    dynamicSrc,
     visible,
     flipX,
     flipY,
