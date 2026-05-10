@@ -510,8 +510,13 @@ export class RenderSystem implements System {
   private readonly particleTextureSoft: WebGLTexture
   private readonly particleTextureCircle: WebGLTexture
   private readonly textures = new Map<string, WebGLTexture>()
-  /** Tracks texture access order for LRU eviction (most recent at end). */
-  private readonly textureLRU: string[] = []
+  /**
+   * Tracks texture access order for LRU eviction (most recent at end).
+   * A Map preserves insertion order, so re-inserting on touch moves the
+   * key to the end and evicting the oldest is the first iteration step —
+   * both O(1), avoiding the array indexOf/splice that scaled with cache size.
+   */
+  private readonly textureLRU: Map<string, true> = new Map()
   private readonly imageCache = new Map<string, HTMLImageElement>()
 
   // Cached uniform locations — sprite program
@@ -562,12 +567,16 @@ export class RenderSystem implements System {
 
   /** Record a texture key as recently used; evict LRU entries if over limit. */
   private touchTexture(key: string): void {
-    const idx = this.textureLRU.indexOf(key)
-    if (idx !== -1) this.textureLRU.splice(idx, 1)
-    this.textureLRU.push(key)
-    // Evict oldest entries if cache exceeds limit
-    while (this.textureLRU.length > MAX_SPRITE_TEXTURES) {
-      const evict = this.textureLRU.shift()!
+    // Re-insert moves the key to the end of Map iteration order, so it
+    // becomes the most-recent entry. delete+set are both O(1).
+    if (this.textureLRU.has(key)) this.textureLRU.delete(key)
+    this.textureLRU.set(key, true)
+
+    while (this.textureLRU.size > MAX_SPRITE_TEXTURES) {
+      // First key in a Map is the oldest insert. iterator.next() is O(1).
+      const evict = this.textureLRU.keys().next().value
+      if (evict === undefined) break
+      this.textureLRU.delete(evict)
       const tex = this.textures.get(evict)
       if (tex) {
         this.gl.deleteTexture(tex)
@@ -1690,19 +1699,31 @@ export class RenderSystem implements System {
     const viewT = camY - halfVH - 32 / zoom
     const viewB = camY + halfVH + 32 / zoom
 
-    const renderables = world.query('Transform', 'Sprite')
-    renderables.sort((a: EntityId, b: EntityId) => {
-      const sa = world.getComponent<SpriteComponent>(a, 'Sprite')!
-      const sb = world.getComponent<SpriteComponent>(b, 'Sprite')!
-      // Sort by render layer order first
-      const ld = this.layers.getOrder(sa.layer) - this.layers.getOrder(sb.layer)
-      if (ld !== 0) return ld
-      const zd = sa.zIndex - sb.zIndex
-      if (zd !== 0) return zd
-      const ka = getTextureKey(sa),
-        kb = getTextureKey(sb)
-      return ka < kb ? -1 : ka > kb ? 1 : 0
+    const renderableIds = world.query('Transform', 'Sprite')
+    // Pre-extract sortable fields once per entity. The previous comparator
+    // called world.getComponent twice and getTextureKey twice per
+    // comparison, costing N*log(N) hash lookups + texture-key recomputes
+    // every frame. Now each entity is touched O(1) and the comparator
+    // works on plain numbers / pre-resolved keys.
+    type SortRow = { id: EntityId; sprite: SpriteComponent; layer: number; z: number; tex: string }
+    const renderableRows: SortRow[] = new Array(renderableIds.length)
+    for (let r = 0; r < renderableIds.length; r++) {
+      const id = renderableIds[r]
+      const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
+      renderableRows[r] = {
+        id,
+        sprite,
+        layer: this.layers.getOrder(sprite.layer),
+        z: sprite.zIndex,
+        tex: getTextureKey(sprite),
+      }
+    }
+    renderableRows.sort((a, b) => {
+      if (a.layer !== b.layer) return a.layer - b.layer
+      if (a.z !== b.z) return a.z - b.z
+      return a.tex < b.tex ? -1 : a.tex > b.tex ? 1 : 0
     })
+    const renderables = renderableRows.map((r) => r.id)
 
     let batchCount = 0
     let batchKey = ''
