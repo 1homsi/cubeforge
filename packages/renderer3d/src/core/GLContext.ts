@@ -6,7 +6,11 @@ export class GLError extends Error {
 }
 
 export function createContext(canvas: HTMLCanvasElement, options?: WebGLContextAttributes): WebGL2RenderingContext {
-  const gl = canvas.getContext('webgl2', options)
+  // Try with requested options, then fall back without antialias (some drivers reject it)
+  let gl = canvas.getContext('webgl2', options)
+  if (!gl && options?.antialias) {
+    gl = canvas.getContext('webgl2', { ...options, antialias: false })
+  }
   if (!gl) {
     throw new GLError(
       'WebGL2 is not available. Your browser or device may not support it. ' +

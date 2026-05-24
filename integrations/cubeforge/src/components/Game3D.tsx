@@ -62,9 +62,12 @@ export function Game3D({
         postProcess,
         pixelRatio: pixelRatio ?? window.devicePixelRatio,
       })
-    } catch {
+    } catch (err) {
+      console.error('[Game3D] WebGLRenderer3D init failed:', err)
       setWebglError(
-        'WebGL2 is required to run this scene. Please use a modern browser such as Chrome, Firefox, Edge, or Safari 15+.',
+        err instanceof Error
+          ? err.message
+          : 'WebGL2 is required to run this scene. Please use a modern browser such as Chrome, Firefox, Edge, or Safari 15+.',
       )
       return
     }

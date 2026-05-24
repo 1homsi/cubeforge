@@ -7,9 +7,9 @@
  *   2. An InstancedMesh of point-sprite stars that fade with sun elevation.
  */
 
-import { Vec3, Mat4 } from '../math'
+import { Vec3 } from '../math'
 import { Scene } from '../scene'
-import { Mesh, InstancedMesh } from '../objects'
+import { Mesh } from '../objects'
 import { SphereGeometry, BufferGeometry, BufferAttribute } from '../geometry'
 import { ShaderMaterial } from '../material'
 import { SKY_VERT, SKY_FRAG, STARS_VERT, STARS_FRAG } from '../shaders'
@@ -43,15 +43,12 @@ export interface SkyOptions {
 // SkySystem
 // ---------------------------------------------------------------------------
 
-// Scratch mat4 for star instance matrices
-const _tmpMat = new Mat4()
-
 export class SkySystem {
   options: SkyOptions
 
   private readonly _scene: Scene
   private readonly _skyMesh: Mesh
-  private readonly _starMesh: InstancedMesh | null
+  private readonly _starMesh: Mesh | null
   private readonly _skyMat: ShaderMaterial
   private readonly _starMat: ShaderMaterial | null
 
@@ -93,47 +90,44 @@ export class SkySystem {
         u_mieCoefficient: { value: this.options.mieCoefficient },
         u_mieDirectionalG: { value: this.options.mieDirectionalG },
         u_up: { value: [0, 1, 0] },
-        u_cameraPosition: { value: [0, 0, 0] },
-        u_viewMatrix: { value: new Float32Array(16) },
-        u_projectionMatrix: { value: new Float32Array(16) },
+        // u_viewMatrix, u_projectionMatrix, u_cameraPosition are set by the
+        // renderer — do NOT put them in the uniforms dict or the ShaderMaterial
+        // handler will overwrite the correct values with zeros.
       },
     })
+    // Sky shader bypasses the model matrix — it places the dome centred on the
+    // camera using `a_position + u_cameraPosition`.  The camera is always inside
+    // the sphere, so we must render the back faces.
+    this._skyMat.side = 'back'
+    this._skyMat.depthWrite = false
+
     this._skyMesh = new Mesh(skyGeo, this._skyMat)
-    // Invert the sphere by flipping scale so normals point inward
-    this._skyMesh.scale.set(-1, 1, -1)
     this._skyMesh.frustumCulled = false
     this._skyMesh.renderOrder = -1000
     scene.add(this._skyMesh)
 
-    // ── Star InstancedMesh ────────────────────────────────────────────────────
+    // ── Star point-cloud Mesh ─────────────────────────────────────────────────
     if (this.options.starsEnabled) {
       const starCount = this.options.starCount!
       this._starMat = new ShaderMaterial({
         vertexShader: STARS_VERT,
         fragmentShader: STARS_FRAG,
+        drawMode: 'points',
         uniforms: {
           u_sunElevation: { value: 0.5 },
           u_starSize: { value: 2.5 },
           u_time: { value: 0 },
-          u_cameraPosition: { value: [0, 0, 0] },
-          u_viewMatrix: { value: new Float32Array(16) },
-          u_projectionMatrix: { value: new Float32Array(16) },
+          // u_viewMatrix, u_projectionMatrix, u_cameraPosition set by renderer
         },
       })
       this._starMat.transparent = true
+      this._starMat.depthWrite = false
 
-      // Create a minimal point geometry (single vertex at origin — each instance
-      // repositioned by its matrix).
-      const starGeo = new BufferGeometry()
-      const pointPos = new Float32Array([0, 0, 0])
-      starGeo.setAttribute('position', new BufferAttribute(pointPos, 3))
-
-      this._starMesh = new InstancedMesh(starGeo, this._starMat, starCount)
-      this._starMesh.frustumCulled = false
-      this._starMesh.renderOrder = -999
-
-      // Distribute stars uniformly on a unit sphere (Marsaglia method)
+      // Each vertex is a unit-sphere direction — the star shader scales it to
+      // a 400-unit radius and uses gl_PointSize for rendering.
+      const positions = new Float32Array(starCount * 3)
       for (let i = 0; i < starCount; i++) {
+        // Marsaglia method for uniform sampling on a sphere
         let x1: number, x2: number, s: number
         do {
           x1 = Math.random() * 2 - 1
@@ -142,16 +136,17 @@ export class SkySystem {
         } while (s >= 1)
 
         const sq = Math.sqrt(1 - s)
-        const sx = 2 * x1 * sq
-        const sy = 2 * x2 * sq
-        const sz = 1 - 2 * s
-
-        _tmpMat.identity()
-        _tmpMat.elements[12] = sx
-        _tmpMat.elements[13] = Math.abs(sy) // keep stars in upper hemisphere + some below
-        _tmpMat.elements[14] = sz
-        this._starMesh.setMatrixAt(i, _tmpMat)
+        positions[i * 3 + 0] = 2 * x1 * sq
+        positions[i * 3 + 1] = Math.abs(2 * x2 * sq) // bias to upper hemisphere
+        positions[i * 3 + 2] = 1 - 2 * s
       }
+
+      const starGeo = new BufferGeometry()
+      starGeo.setAttribute('position', new BufferAttribute(positions, 3))
+
+      this._starMesh = new Mesh(starGeo, this._starMat)
+      this._starMesh.frustumCulled = false
+      this._starMesh.renderOrder = -999
 
       scene.add(this._starMesh)
     } else {

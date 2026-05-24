@@ -75,6 +75,14 @@ export class ShaderMaterial extends Material {
    */
   glslVersion: '300 es' | '100'
 
+  /**
+   * GL primitive draw mode used by the renderer.
+   * 'triangles' (default) → gl.TRIANGLES
+   * 'points'              → gl.POINTS  (enables gl_PointSize in vertex shader)
+   * 'lines'               → gl.LINES
+   */
+  drawMode: 'triangles' | 'points' | 'lines'
+
   constructor(
     options: {
       vertexShader?: string
@@ -82,6 +90,7 @@ export class ShaderMaterial extends Material {
       uniforms?: Record<string, Uniform>
       defines?: Record<string, string | number | boolean>
       glslVersion?: '300 es' | '100'
+      drawMode?: 'triangles' | 'points' | 'lines'
       name?: string
     } = {},
   ) {
@@ -91,6 +100,7 @@ export class ShaderMaterial extends Material {
     this.uniforms = options.uniforms ?? {}
     this.defines = options.defines ?? {}
     this.glslVersion = options.glslVersion ?? '300 es'
+    this.drawMode = options.drawMode ?? 'triangles'
   }
 
   /**

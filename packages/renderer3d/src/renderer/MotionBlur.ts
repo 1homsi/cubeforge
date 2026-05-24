@@ -41,6 +41,7 @@ export class MotionBlurPass {
   private readonly gl: WebGL2RenderingContext
   private _width: number
   private _height: number
+  private readonly _canFloat: boolean
   private readonly _program: ShaderProgram
   private _outputFBO: Framebuffer
 
@@ -51,6 +52,7 @@ export class MotionBlurPass {
     this.gl = gl
     this._width = width
     this._height = height
+    this._canFloat = !!gl.getExtension('EXT_color_buffer_float') || !!gl.getExtension('EXT_color_buffer_half_float')
 
     this.options = {
       samples: opts?.samples ?? 8,
@@ -124,12 +126,15 @@ export class MotionBlurPass {
     if (this._width === w && this._height === h) return
     this._width = w
     this._height = h
+    // Dispose texture before FBO since Framebuffer.dispose() doesn't own textures
+    this._outputFBO.colorTexture.dispose()
     this._outputFBO.dispose()
     this._outputFBO = this._makeFBO(w, h)
   }
 
   dispose(): void {
     this._program.dispose()
+    this._outputFBO.colorTexture.dispose()
     this._outputFBO.dispose()
   }
 
@@ -141,9 +146,9 @@ export class MotionBlurPass {
     const { gl } = this
     const fbo = new Framebuffer(gl, width, height)
     const tex = Texture.createEmpty(gl, width, height, {
-      internalFormat: gl.RGBA16F,
+      internalFormat: this._canFloat ? gl.RGBA16F : gl.RGBA8,
       format: gl.RGBA,
-      type: gl.HALF_FLOAT,
+      type: this._canFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE,
       minFilter: gl.LINEAR,
       magFilter: gl.LINEAR,
       wrapS: gl.CLAMP_TO_EDGE,

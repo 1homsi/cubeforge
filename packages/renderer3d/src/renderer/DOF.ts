@@ -49,10 +49,13 @@ export class DOFPass {
   private _cocFBO: Framebuffer
   private _blurFBO: Framebuffer
 
+  private readonly _canFloat: boolean
+
   constructor(gl: WebGL2RenderingContext, width: number, height: number, opts?: DOFOptions) {
     this.gl = gl
     this._width = width
     this._height = height
+    this._canFloat = !!gl.getExtension('EXT_color_buffer_float') || !!gl.getExtension('EXT_color_buffer_half_float')
 
     this.options = {
       focusDistance: opts?.focusDistance ?? 10,
@@ -213,9 +216,9 @@ export class DOFPass {
     const { gl } = this
     const fbo = new Framebuffer(gl, w, h)
     const tex = Texture.createEmpty(gl, w, h, {
-      internalFormat: gl.RGBA16F,
+      internalFormat: this._canFloat ? gl.RGBA16F : gl.RGBA8,
       format: gl.RGBA,
-      type: gl.HALF_FLOAT,
+      type: this._canFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE,
       minFilter: gl.LINEAR,
       magFilter: gl.LINEAR,
       wrapS: gl.CLAMP_TO_EDGE,

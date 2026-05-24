@@ -110,6 +110,7 @@ export class WeatherSystem {
   private _transitionTarget: WeatherType
   private _transitionTime: number
   private _transitionElapsed: number
+  private _fogStart: { near: number; far: number; color: { x: number; y: number; z: number } } | null
 
   // Wind
   private _windX: number
@@ -146,6 +147,7 @@ export class WeatherSystem {
     this._transitionTarget = 'clear'
     this._transitionTime = 0
     this._transitionElapsed = 0
+    this._fogStart = null
 
     this._particles = []
     this._mat = new MeshBasicMaterial('weather_mat')
@@ -169,6 +171,11 @@ export class WeatherSystem {
       this._transitionTarget = type
       this._transitionTime = transitionTime
       this._transitionElapsed = 0
+      // Snapshot current fog so lerp starts from a fixed baseline (not accumulated)
+      const fog = this._scene.fog
+      this._fogStart = fog
+        ? { near: fog.near, far: fog.far, color: { x: fog.color.x, y: fog.color.y, z: fog.color.z } }
+        : { near: 1000, far: 1000, color: { x: 0, y: 0, z: 0 } }
     }
   }
 
@@ -377,29 +384,32 @@ export class WeatherSystem {
   }
 
   private _lerpFog(targetType: WeatherType, t: number): void {
-    const srcFog = this._scene.fog
+    // Use the baseline snapshot captured at transition start so we lerp from
+    // a fixed start value rather than accumulating delta each frame.
+    const base = this._fogStart ?? { near: 1000, far: 1000, color: { x: 0, y: 0, z: 0 } }
+
     if (targetType === 'fog' || targetType === 'storm') {
       const targetNear = targetType === 'fog' ? this._opts.fogNear : 5
       const targetFar = targetType === 'fog' ? this._opts.fogFar : 40
       const targetColor = targetType === 'fog' ? this._opts.fogColor : new Vec3(0.6, 0.6, 0.7)
 
-      if (srcFog === null) {
-        this._scene.fog = {
-          color: new Vec3(targetColor.x * t, targetColor.y * t, targetColor.z * t),
-          near: 1000 * (1 - t) + targetNear * t,
-          far: 1000 * (1 - t) + targetFar * t,
-        }
+      const near = base.near + (targetNear - base.near) * t
+      const far = base.far + (targetFar - base.far) * t
+      const cx = base.color.x + (targetColor.x - base.color.x) * t
+      const cy = base.color.y + (targetColor.y - base.color.y) * t
+      const cz = base.color.z + (targetColor.z - base.color.z) * t
+
+      if (this._scene.fog === null) {
+        this._scene.fog = { color: new Vec3(cx, cy, cz), near, far }
       } else {
-        srcFog.near += (targetNear - srcFog.near) * t
-        srcFog.far += (targetFar - srcFog.far) * t
-        srcFog.color.x += (targetColor.x - srcFog.color.x) * t
-        srcFog.color.y += (targetColor.y - srcFog.color.y) * t
-        srcFog.color.z += (targetColor.z - srcFog.color.z) * t
+        this._scene.fog.near = near
+        this._scene.fog.far = far
+        this._scene.fog.color.set(cx, cy, cz)
       }
     } else if (targetType === 'clear') {
-      if (srcFog !== null) {
-        // Fade fog out
-        srcFog.far += (10000 - srcFog.far) * t
+      if (this._scene.fog !== null) {
+        // Fade far plane out to dissolve fog
+        this._scene.fog.far = base.far + (10000 - base.far) * t
       }
     }
   }

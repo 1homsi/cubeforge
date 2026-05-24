@@ -39,6 +39,9 @@ export class PostProcess {
   private _width: number
   private _height: number
 
+  // Float texture support (requires EXT_color_buffer_float or half_float variant)
+  private readonly _canFloat: boolean
+
   // Framebuffers
   private _bloomExtractFBO: Framebuffer
   private _pingFBO: Framebuffer
@@ -53,6 +56,7 @@ export class PostProcess {
     this.gl = gl
     this._width = width
     this._height = height
+    this._canFloat = !!gl.getExtension('EXT_color_buffer_float') || !!gl.getExtension('EXT_color_buffer_half_float')
 
     // Build shader programs
     this._extractProgram = this._buildExtractProgram()
@@ -215,9 +219,9 @@ export class PostProcess {
     const { gl } = this
     const fbo = new Framebuffer(gl, width, height)
     const tex = Texture.createEmpty(gl, width, height, {
-      internalFormat: gl.RGBA16F,
+      internalFormat: this._canFloat ? gl.RGBA16F : gl.RGBA8,
       format: gl.RGBA,
-      type: gl.HALF_FLOAT,
+      type: this._canFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE,
       minFilter: gl.LINEAR,
       magFilter: gl.LINEAR,
       wrapS: gl.CLAMP_TO_EDGE,

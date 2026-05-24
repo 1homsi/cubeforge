@@ -27,6 +27,7 @@ import { PostProcess } from './PostProcess'
 import { SSAOPass, SSAOOptions } from './SSAO'
 import { FXAAPass } from './FXAA'
 import { DOFPass, DOFOptions } from './DOF'
+import { MotionBlurPass, MotionBlurOptions } from './MotionBlur'
 import { OcclusionCulling } from './OcclusionCulling'
 import { GBUFFER_NORMAL_VERT, GBUFFER_NORMAL_FRAG } from '../shaders'
 
@@ -96,6 +97,7 @@ export class WebGLRenderer3D {
     ssao: { enabled: boolean; options: SSAOOptions }
     fxaa: { enabled: boolean }
     dof: { enabled: boolean; options: DOFOptions }
+    motionBlur: { enabled: boolean; options: MotionBlurOptions }
   }
   /** GPU occlusion culling settings. */
   occlusionCulling: { enabled: boolean }
@@ -120,6 +122,11 @@ export class WebGLRenderer3D {
   private _ssaoPass: SSAOPass | null = null
   private _fxaaPass: FXAAPass | null = null
   private _dofPass: DOFPass | null = null
+  private _motionBlurPass: MotionBlurPass | null = null
+  /** VP matrix stored at the end of each frame for the next frame's motion blur. */
+  private _prevVP = new Mat4()
+  /** True after the first rendered frame — avoids blurring the initial still frame. */
+  private _prevVPValid = false
 
   /** HDR framebuffer used when post-processing is enabled. */
   private _hdrFBO: Framebuffer | null = null
@@ -190,6 +197,7 @@ export class WebGLRenderer3D {
       ssao: { enabled: false, options: {} },
       fxaa: { enabled: false },
       dof: { enabled: false, options: {} },
+      motionBlur: { enabled: false, options: {} },
     }
 
     this.occlusionCulling = { enabled: false }
@@ -235,6 +243,7 @@ export class WebGLRenderer3D {
     this._ssaoPass?.resize(pw, ph)
     this._fxaaPass?.resize(pw, ph)
     this._dofPass?.resize(pw, ph)
+    this._motionBlurPass?.resize(pw, ph)
     this._rebuildGBufferFBO(pw, ph)
   }
 
@@ -441,6 +450,33 @@ export class WebGLRenderer3D {
         }
       }
 
+      // ── 6b-3. Motion Blur (after DOF, before composite) ──
+      if (ppc.motionBlur.enabled && this._prevVPValid) {
+        // Need depth texture for world-position reconstruction
+        if (!this._gbufferDepthTex) {
+          this._runGBufferPass(scene, camera)
+        }
+
+        if (this._gbufferDepthTex) {
+          if (!this._motionBlurPass) {
+            this._motionBlurPass = new MotionBlurPass(gl, this.canvas.width, this.canvas.height, ppc.motionBlur.options)
+          } else {
+            Object.assign(this._motionBlurPass.options, ppc.motionBlur.options)
+          }
+
+          // Build current VP matrix
+          const currentVP = _mat4A.copy(camera.projectionMatrix).multiply(camera.matrixWorldInverse)
+
+          const mbResult = this._motionBlurPass.render(
+            hdrTexForComposite,
+            this._gbufferDepthTex,
+            this._prevVP,
+            currentVP,
+          )
+          hdrTexForComposite = mbResult
+        }
+      }
+
       const tonemapMode = ppc.toneMapping === 'aces' ? 1 : ppc.toneMapping === 'reinhard' ? 0 : 2
 
       // ── 6c. Composite (tone map + bloom + vignette) ──
@@ -486,6 +522,12 @@ export class WebGLRenderer3D {
     // ── Occlusion culling — endFrame ──
     if (this.occlusionCulling.enabled) {
       this._occlusionCulling.endFrame()
+    }
+
+    // ── Store VP matrix for motion blur next frame ──
+    if (this.postProcessing.motionBlur.enabled) {
+      this._prevVP.copy(camera.projectionMatrix).multiply(camera.matrixWorldInverse)
+      this._prevVPValid = true
     }
 
     // Unbind program + VAO
@@ -589,7 +631,13 @@ export class WebGLRenderer3D {
       this._state.info.calls++
       this._state.info.triangles += triCount
     } else {
-      if (material.wireframe) {
+      const isPoints = material instanceof ShaderMaterial && material.drawMode === 'points'
+
+      if (isPoints) {
+        // Point-cloud draw — uses gl_PointSize in vertex shader
+        gl.drawArrays(gl.POINTS, start, count)
+        this._state.info.calls++
+      } else if (material.wireframe) {
         if (hasIndex) {
           const indexType = geometry.index!.data instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
           const byteOffset = start * (indexType === gl.UNSIGNED_INT ? 4 : 2)
@@ -597,6 +645,8 @@ export class WebGLRenderer3D {
         } else {
           gl.drawArrays(gl.LINES, start, count)
         }
+        this._state.info.calls++
+        this._state.info.triangles += Math.floor(count / 3)
       } else {
         if (hasIndex) {
           const indexType = geometry.index!.data instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
@@ -605,10 +655,9 @@ export class WebGLRenderer3D {
         } else {
           gl.drawArrays(gl.TRIANGLES, start, count)
         }
+        this._state.info.calls++
+        this._state.info.triangles += Math.floor(count / 3)
       }
-
-      this._state.info.calls++
-      this._state.info.triangles += Math.floor(count / 3)
     }
   }
 
@@ -738,6 +787,8 @@ export class WebGLRenderer3D {
     if (cam) {
       const ce = cam.matrixWorld.elements
       program.setUniform3f('u_cameraPos', ce[12], ce[13], ce[14])
+      // Alias used by sky/star shaders (and custom ShaderMaterial authors)
+      program.setUniform3f('u_cameraPosition', ce[12], ce[13], ce[14])
     }
 
     // ── Directional light (first one found) ──
@@ -1389,6 +1440,8 @@ void main() {
     this._postProcess?.dispose()
     this._ssaoPass?.dispose()
     this._fxaaPass?.dispose()
+    this._dofPass?.dispose()
+    this._motionBlurPass?.dispose()
     this._gbufferProgram?.dispose()
 
     if (this._hdrFBO) {

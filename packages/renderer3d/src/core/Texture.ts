@@ -19,6 +19,9 @@ export class Texture {
   readonly handle: WebGLTexture
   private _width = 0
   private _height = 0
+  private _internalFormat: GLenum = 0
+  private _format: GLenum = 0
+  private _type: GLenum = 0
 
   constructor(private readonly gl: WebGL2RenderingContext) {
     const tex = gl.createTexture()
@@ -110,6 +113,10 @@ export class Texture {
     const format = opts?.format ?? gl.RGBA
     const type = opts?.type ?? gl.UNSIGNED_BYTE
 
+    this._internalFormat = internalFormat
+    this._format = format
+    this._type = type
+
     gl.bindTexture(gl.TEXTURE_2D, this.handle)
     gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, data)
     this._width = width
@@ -124,8 +131,11 @@ export class Texture {
   resize(w: number, h: number): void {
     if (this._width === w && this._height === h) return
     const { gl } = this
+    const internalFormat = this._internalFormat || gl.RGBA8
+    const format = this._format || gl.RGBA
+    const type = this._type || gl.UNSIGNED_BYTE
     gl.bindTexture(gl.TEXTURE_2D, this.handle)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, w, h, 0, format, type, null)
     this._width = w
     this._height = h
   }
