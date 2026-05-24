@@ -586,3 +586,17 @@ export type { Scene3DControls } from './hooks/useScene3D'
 
 export { useAnimation3D } from './hooks/useAnimation3D'
 export type { Animation3DControls } from './hooks/useAnimation3D'
+
+export { useRaycaster } from './hooks/useRaycaster'
+export type { UseRaycasterResult } from './hooks/useRaycaster'
+
+// Line and sprite scene objects
+export { LineObject } from './components/LineObject'
+export type { LineObjectProps } from './components/LineObject'
+
+export { SpriteObject } from './components/SpriteObject'
+export type { SpriteObjectProps } from './components/SpriteObject'
+
+// Low-level renderer3d primitives (re-exported for advanced use)
+export { Raycaster, Line3D, LineSegments, LineLoop, Sprite3D } from '@cubeforge/renderer3d'
+export type { Intersection } from '@cubeforge/renderer3d'
