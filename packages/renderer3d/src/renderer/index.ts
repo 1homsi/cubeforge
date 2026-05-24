@@ -26,3 +26,5 @@ export type { DebugOptions } from './DebugRenderer3D'
 
 export { CascadeShadowMap } from './CascadeShadowMap'
 export type { CSMOptions } from './CascadeShadowMap'
+
+export { OcclusionCulling } from './OcclusionCulling'

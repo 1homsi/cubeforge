@@ -27,6 +27,7 @@ import { PostProcess } from './PostProcess'
 import { SSAOPass, SSAOOptions } from './SSAO'
 import { FXAAPass } from './FXAA'
 import { DOFPass, DOFOptions } from './DOF'
+import { OcclusionCulling } from './OcclusionCulling'
 import { GBUFFER_NORMAL_VERT, GBUFFER_NORMAL_FRAG } from '../shaders'
 
 // ---------------------------------------------------------------------------
@@ -96,6 +97,8 @@ export class WebGLRenderer3D {
     fxaa: { enabled: boolean }
     dof: { enabled: boolean; options: DOFOptions }
   }
+  /** GPU occlusion culling settings. */
+  occlusionCulling: { enabled: boolean }
   pixelRatio: number
   autoClear = true
   autoClearColor = true
@@ -133,6 +136,9 @@ export class WebGLRenderer3D {
 
   /** Intermediate LDR FBO used when FXAA is enabled (composite target). */
   private _ldrFBO: Framebuffer | null = null
+
+  // ── Occlusion culling ─────────────────────────────────────────────────────
+  readonly _occlusionCulling: OcclusionCulling
 
   // ── Cached identity light-space matrix (used when no shadow light present) ──
   private readonly _identityMat = new Mat4()
@@ -186,10 +192,13 @@ export class WebGLRenderer3D {
       dof: { enabled: false, options: {} },
     }
 
+    this.occlusionCulling = { enabled: false }
+
     // Internal subsystems
     this._state = new RenderState(this.gl)
     this._queue = new RenderQueue()
     this._shadowMap = new ShadowMapRenderer(this.gl, this._state)
+    this._occlusionCulling = new OcclusionCulling(this.gl)
 
     if (options.postProcess) {
       this._postProcess = new PostProcess(this.gl, canvas.width, canvas.height)
@@ -283,6 +292,11 @@ export class WebGLRenderer3D {
 
     const { lights } = this._queue
 
+    // ── Occlusion culling — beginFrame (read last round's results) ──
+    this._occlusionCulling.enabled = this.occlusionCulling.enabled
+    const allMeshes = [...this._queue.opaque, ...this._queue.transparent].map((i) => i.object)
+    const visibleIds = this._occlusionCulling.beginFrame(allMeshes)
+
     // ── 4. Shadow pass ──
     if (this.shadowMap.enabled) {
       this._shadowMap.render(scene, lights)
@@ -323,7 +337,13 @@ export class WebGLRenderer3D {
 
     // ── Render opaque ──
     for (const item of this._queue.opaque) {
+      if (this.occlusionCulling.enabled && !visibleIds.has(item.object.id)) continue
       this._renderObject(item, camera, lights)
+    }
+
+    // ── Issue occlusion queries after opaque pass (depth buffer populated) ──
+    if (this.occlusionCulling.enabled) {
+      this._occlusionCulling.issueQueries(allMeshes, camera, this._state)
     }
 
     // ── Render transparent ──
@@ -332,6 +352,7 @@ export class WebGLRenderer3D {
     this._state.glState.depthWrite(false)
 
     for (const item of this._queue.transparent) {
+      if (this.occlusionCulling.enabled && !visibleIds.has(item.object.id)) continue
       this._renderObject(item, camera, lights)
     }
 
@@ -460,6 +481,11 @@ export class WebGLRenderer3D {
           vignette: ppc.vignette,
         })
       }
+    }
+
+    // ── Occlusion culling — endFrame ──
+    if (this.occlusionCulling.enabled) {
+      this._occlusionCulling.endFrame()
     }
 
     // Unbind program + VAO
