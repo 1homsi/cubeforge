@@ -11,7 +11,7 @@ import { Scene, Camera } from '../scene'
 import { BufferGeometry } from '../geometry'
 import { Material } from '../material'
 import { Light } from '../lights'
-import { Mesh } from '../objects'
+import { Mesh, Sprite3D, Line3D } from '../objects'
 
 // ---------------------------------------------------------------------------
 // RenderItem
@@ -105,6 +105,8 @@ export class RenderQueue {
   opaque: RenderItem[] = []
   transparent: RenderItem[] = []
   lights: Light[] = []
+  sprites: Sprite3D[] = []
+  lines: Line3D[] = []
 
   /** Combined view-projection matrix for frustum extraction (set during extractFromScene) */
   private _vpMatrix = new Mat4()
@@ -113,6 +115,8 @@ export class RenderQueue {
     this.opaque.length = 0
     this.transparent.length = 0
     this.lights.length = 0
+    this.sprites.length = 0
+    this.lines.length = 0
   }
 
   push(item: RenderItem): void {
@@ -155,6 +159,18 @@ export class RenderQueue {
       // Collect lights
       if ((obj as unknown as { isLight?: boolean }).isLight || ('intensity' in obj && 'color' in obj)) {
         this.lights.push(obj as unknown as Light)
+        return
+      }
+
+      // Collect Sprite3D objects
+      if ((obj as unknown as { isSprite?: boolean }).isSprite) {
+        this.sprites.push(obj as unknown as Sprite3D)
+        return
+      }
+
+      // Collect Line3D / LineSegments / LineLoop objects
+      if ((obj as unknown as { isLine?: boolean }).isLine) {
+        this.lines.push(obj as unknown as Line3D)
         return
       }
 

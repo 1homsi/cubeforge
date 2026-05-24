@@ -12,12 +12,13 @@
  *   6. Post-process — bloom + composite to screen
  */
 
-import { createContext, ShaderProgram, Texture, Framebuffer } from '../core'
+import { createContext, ShaderProgram, Texture, Framebuffer, GLBuffer, VAO } from '../core'
 import { Mat4 } from '../math'
 import { Scene, Camera } from '../scene'
-import { Material, MeshStandardMaterial, MeshBasicMaterial, ShaderMaterial } from '../material'
+import { Material, MeshStandardMaterial, MeshBasicMaterial, ShaderMaterial, LineMaterial } from '../material'
 import { Light, AmbientLight, DirectionalLight, PointLight } from '../lights'
-import { Mesh, InstancedMesh, SkinnedMesh } from '../objects'
+import { Mesh, InstancedMesh, SkinnedMesh, Sprite3D, Line3D, LineSegments, LineLoop } from '../objects'
+import { SPRITE_VERT, SPRITE_FRAG } from '../shaders'
 
 import { RenderInfo, RenderState } from './RenderState'
 import { RenderQueue, RenderItem } from './RenderQueue'
@@ -116,6 +117,18 @@ export class WebGLRenderer3D {
 
   // ── Start time for u_time uniform ──
   private readonly _startTime = performance.now()
+
+  // ── Line render pass resources ────────────────────────────────────────────
+  private _lineProgram: ShaderProgram | null = null
+  private _lineVAO: VAO | null = null
+  private _lineBuffer: GLBuffer | null = null
+
+  // ── Sprite render pass resources ─────────────────────────────────────────
+  /** Compiled sprite shader variants keyed by "USE_MAP" flag */
+  private _spritePrograms = new Map<string, ShaderProgram>()
+  /** Reusable unit-quad VAO for sprite rendering */
+  private _spriteQuadVAO: VAO | null = null
+  private _spriteQuadBuffer: GLBuffer | null = null
 
   // ---------------------------------------------------------------------------
   // Constructor
@@ -295,6 +308,16 @@ export class WebGLRenderer3D {
 
     // Restore depth write
     this._state.glState.depthWrite(true)
+
+    // ── Render lines ──
+    if (this._queue.lines.length > 0) {
+      this._renderLines(this._queue.lines, camera)
+    }
+
+    // ── Render sprites (back-to-front, sorted by distance to camera) ──
+    if (this._queue.sprites.length > 0) {
+      this._renderSprites(this._queue.sprites, camera)
+    }
 
     // ── 6. Post-process ──
     if (usePostProcess && this._hdrFBO && this._hdrTex && this._postProcess) {
@@ -799,6 +822,237 @@ export class WebGLRenderer3D {
   }
 
   // ---------------------------------------------------------------------------
+  // Line render pass
+  // ---------------------------------------------------------------------------
+
+  private _getLineProgram(): ShaderProgram {
+    if (this._lineProgram) return this._lineProgram
+
+    const { gl } = this
+    const vert = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_modelMatrix;
+uniform mat4 u_viewMatrix;
+uniform mat4 u_projectionMatrix;
+void main() {
+  gl_Position = u_projectionMatrix * u_viewMatrix * u_modelMatrix * vec4(a_position, 1.0);
+}
+`
+    const frag = `#version 300 es
+precision highp float;
+uniform vec3 u_color;
+uniform float u_opacity;
+out vec4 fragColor;
+void main() {
+  fragColor = vec4(u_color, u_opacity);
+}
+`
+    this._lineProgram = new ShaderProgram(gl, vert, frag)
+    return this._lineProgram
+  }
+
+  private _renderLines(lines: Line3D[], camera: Camera): void {
+    const { gl } = this
+    const glState = this._state.glState
+
+    const program = this._getLineProgram()
+    glState.useProgram(program.handle)
+
+    // Lines respect depth test but typically do not write depth
+    gl.enable(gl.DEPTH_TEST)
+    glState.depthWrite(false)
+    gl.disable(gl.CULL_FACE)
+
+    for (const line of lines) {
+      if (!line.visible) continue
+
+      const posAttr = line.geometry.getAttribute('position')
+      if (!posAttr || posAttr.count === 0) continue
+
+      // Upload / reuse position buffer
+      if (!this._lineVAO) {
+        this._lineVAO = new VAO(gl)
+        this._lineBuffer = new GLBuffer(gl, gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW)
+      }
+
+      this._lineVAO.bind()
+      this._lineBuffer!.bind()
+      this._lineBuffer!.upload(posAttr.data as unknown as ArrayBuffer)
+      gl.enableVertexAttribArray(0)
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
+
+      // Matrices
+      const modelMat = line.matrixWorld
+      const viewMat = camera.matrixWorldInverse
+      const projMat = camera.projectionMatrix
+      program.setUniformMat4fv('u_modelMatrix', modelMat.elements)
+      program.setUniformMat4fv('u_viewMatrix', viewMat.elements)
+      program.setUniformMat4fv('u_projectionMatrix', projMat.elements)
+
+      // Color / opacity from LineMaterial (or fallback)
+      const mat = line.material
+      if (mat instanceof LineMaterial) {
+        program.setUniform3f('u_color', mat.color.x, mat.color.y, mat.color.z)
+        program.setUniform1f('u_opacity', 1.0)
+      } else {
+        program.setUniform3f('u_color', 1, 1, 1)
+        program.setUniform1f('u_opacity', 1.0)
+      }
+
+      // Choose primitive type based on Line3D subclass
+      let primitive: GLenum = gl.LINE_STRIP
+      if (line instanceof LineSegments) {
+        primitive = gl.LINES
+      } else if (line instanceof LineLoop) {
+        primitive = gl.LINE_LOOP
+      }
+
+      gl.drawArrays(primitive, 0, posAttr.count)
+      this._state.info.calls++
+
+      gl.bindVertexArray(null)
+    }
+
+    glState.depthWrite(true)
+    gl.enable(gl.CULL_FACE)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sprite render pass
+  // ---------------------------------------------------------------------------
+
+  private _getSpriteProgram(useMap: boolean): ShaderProgram {
+    const key = useMap ? 'MAP' : ''
+    let program = this._spritePrograms.get(key)
+    if (program) return program
+
+    const { gl } = this
+    const defines = useMap ? '#define USE_MAP\n' : ''
+    // Inject define after #version line
+    const injectDefine = (src: string, def: string): string => {
+      if (!def) return src
+      const nl = src.indexOf('\n')
+      return nl === -1 ? src + '\n' + def : src.slice(0, nl + 1) + def + src.slice(nl + 1)
+    }
+    program = new ShaderProgram(gl, injectDefine(SPRITE_VERT, defines), injectDefine(SPRITE_FRAG, defines))
+    this._spritePrograms.set(key, program)
+    return program
+  }
+
+  private _ensureSpriteQuad(): void {
+    if (this._spriteQuadVAO) return
+
+    const { gl } = this
+    // Unit quad: 2 triangles covering [-0.5, 0.5] on X and Y
+    // Vertex layout: vec2 a_position (location 0)
+    const verts = new Float32Array([-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5])
+
+    this._spriteQuadVAO = new VAO(gl)
+    this._spriteQuadBuffer = new GLBuffer(gl, gl.ARRAY_BUFFER, gl.STATIC_DRAW)
+
+    this._spriteQuadVAO.bind()
+    this._spriteQuadBuffer.bind()
+    this._spriteQuadBuffer.upload(verts as unknown as ArrayBuffer)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+    gl.bindVertexArray(null)
+  }
+
+  private _renderSprites(sprites: Sprite3D[], camera: Camera): void {
+    const { gl } = this
+    const glState = this._state.glState
+
+    this._ensureSpriteQuad()
+
+    // Sort back-to-front by distance to camera
+    const camE = camera.matrixWorld.elements
+    const camPx = camE[12],
+      camPy = camE[13],
+      camPz = camE[14]
+    const fwdX = -camE[8],
+      fwdY = -camE[9],
+      fwdZ = -camE[10]
+
+    const sorted = sprites.slice().sort((a, b) => {
+      const ae = a.matrixWorld.elements
+      const be = b.matrixWorld.elements
+      const adist = (ae[12] - camPx) * fwdX + (ae[13] - camPy) * fwdY + (ae[14] - camPz) * fwdZ
+      const bdist = (be[12] - camPx) * fwdX + (be[13] - camPy) * fwdY + (be[14] - camPz) * fwdZ
+      return bdist - adist // back-to-front
+    })
+
+    gl.enable(gl.BLEND)
+    gl.enable(gl.DEPTH_TEST)
+
+    this._spriteQuadVAO!.bind()
+
+    for (const sprite of sorted) {
+      if (!sprite.visible) continue
+
+      const mat = sprite.material
+      const useMap = mat.map !== null
+
+      const program = this._getSpriteProgram(useMap)
+      glState.useProgram(program.handle)
+
+      // Depth test / depth write
+      if (mat.depthTest) {
+        glState.enable(gl.DEPTH_TEST)
+      } else {
+        glState.disable(gl.DEPTH_TEST)
+      }
+      glState.depthWrite(mat.depthWrite)
+
+      // Blending
+      glState.enable(gl.BLEND)
+      if (mat.blending === 'additive') {
+        glState.blendFunc(gl.SRC_ALPHA, gl.ONE)
+      } else {
+        glState.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+      }
+
+      // World-space center
+      const mwE = sprite.matrixWorld.elements
+      const cx = mwE[12],
+        cy = mwE[13],
+        cz = mwE[14]
+
+      // Scale: extract from matrixWorld columns
+      const sx = Math.sqrt(mwE[0] ** 2 + mwE[1] ** 2 + mwE[2] ** 2)
+      const sy = Math.sqrt(mwE[4] ** 2 + mwE[5] ** 2 + mwE[6] ** 2)
+
+      // Size attenuation: 1.0 = perspective, 0.0 = fixed screen size
+      const sizeAttenuation = mat.sizeAttenuation ? 1.0 : 0.0
+
+      program.setUniformMat4fv('u_viewMatrix', camera.matrixWorldInverse.elements)
+      program.setUniformMat4fv('u_projectionMatrix', camera.projectionMatrix.elements)
+      program.setUniform3f('u_center', cx, cy, cz)
+      program.setUniform2f('u_scale', sx, sy)
+      program.setUniform2f('u_center_pivot', sprite.center.x, sprite.center.y)
+      program.setUniform1f('u_rotation', mat.rotation)
+      program.setUniform1f('u_sizeAttenuation', sizeAttenuation)
+      program.setUniform3f('u_color', mat.color.x, mat.color.y, mat.color.z)
+      program.setUniform1f('u_opacity', mat.opacity)
+
+      if (useMap && mat.map) {
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, mat.map.handle)
+        program.setUniform1i('u_map', 0)
+      }
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+      this._state.info.calls++
+    }
+
+    gl.bindVertexArray(null)
+    glState.depthWrite(true)
+    glState.enable(gl.DEPTH_TEST)
+    gl.disable(gl.BLEND)
+    gl.enable(gl.CULL_FACE)
+  }
+
+  // ---------------------------------------------------------------------------
   // Context loss
   // ---------------------------------------------------------------------------
 
@@ -831,5 +1085,21 @@ export class WebGLRenderer3D {
       this._hdrFBO = null
       this._hdrTex = null
     }
+
+    // Line pass resources
+    this._lineProgram?.dispose()
+    this._lineProgram = null
+    this._lineVAO?.dispose()
+    this._lineVAO = null
+    this._lineBuffer?.dispose()
+    this._lineBuffer = null
+
+    // Sprite pass resources
+    for (const prog of this._spritePrograms.values()) prog.dispose()
+    this._spritePrograms.clear()
+    this._spriteQuadVAO?.dispose()
+    this._spriteQuadVAO = null
+    this._spriteQuadBuffer?.dispose()
+    this._spriteQuadBuffer = null
   }
 }

@@ -28,6 +28,10 @@ export { WATER_FRAG } from './water.frag'
 export { PARTICLE_VERT } from './particle.vert'
 export { PARTICLE_FRAG } from './particle.frag'
 
+// ── Sprites (billboard quads) ─────────────────────────────────────────────────
+export { SPRITE_VERT } from './sprite.vert'
+export { SPRITE_FRAG } from './sprite.frag'
+
 // ── Post-processing ───────────────────────────────────────────────────────────
 export { BLOOM_VERT } from './post/bloom.vert'
 export { BLOOM_FRAG } from './post/bloom.frag'
