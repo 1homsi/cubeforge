@@ -28,3 +28,6 @@ export { CascadeShadowMap } from './CascadeShadowMap'
 export type { CSMOptions } from './CascadeShadowMap'
 
 export { OcclusionCulling } from './OcclusionCulling'
+
+export { MotionBlurPass } from './MotionBlur'
+export type { MotionBlurOptions } from './MotionBlur'

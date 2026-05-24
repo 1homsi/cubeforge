@@ -59,6 +59,9 @@ export { GBUFFER_NORMAL_FRAG } from './post/gbuffer_normal.frag'
 // ── Depth of Field ────────────────────────────────────────────────────────────
 export { DOF_FRAG } from './post/dof.frag'
 
+// ── Motion Blur ───────────────────────────────────────────────────────────────
+export { MOTION_BLUR_FRAG } from './post/motion_blur.frag'
+
 // ── Batched mesh ──────────────────────────────────────────────────────────────
 export { BATCH_VERT } from './batch.vert'
 
