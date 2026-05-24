@@ -577,6 +577,10 @@ export type { ProceduralBuilding3DProps } from './components/ProceduralBuilding3
 export { Weather3D } from './components/Weather3D'
 export type { Weather3DProps } from './components/Weather3D'
 
+// Environment
+export { EnvironmentMap3D } from './components/EnvironmentMap3D'
+export type { EnvironmentMap3DProps } from './components/EnvironmentMap3D'
+
 // Hooks
 export { useCamera3D } from './hooks/useCamera3D'
 export type { Camera3DControls } from './hooks/useCamera3D'
@@ -589,6 +593,11 @@ export type { Animation3DControls } from './hooks/useAnimation3D'
 
 export { useRaycaster } from './hooks/useRaycaster'
 export type { UseRaycasterResult } from './hooks/useRaycaster'
+
+export { useRenderSystem3D, registerRenderSystem3D } from './hooks/useRenderSystem3D'
+
+export { usePointerLock } from './hooks/usePointerLock'
+export type { UsePointerLockResult } from './hooks/usePointerLock'
 
 // Line and sprite scene objects
 export { LineObject } from './components/LineObject'
