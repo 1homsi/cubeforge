@@ -59,8 +59,43 @@ function copyTemplateDir(src, dest, projectName) {
     }
   }
 }
+var TEMPLATES = ["default", "puzzle", "turn-based", "editor"];
+var TEMPLATE_DESCRIPTIONS = {
+  default: "Action platformer with physics, coins, and save/load",
+  puzzle: "Grid-based sliding puzzle (onDemand loop, drag-and-snap, undo/redo)",
+  "turn-based": "Tic-tac-toe with turn manager, hover, and accessibility",
+  editor: "Scene editor with selection, transform handles, save/load"
+};
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let projectName;
+  let template;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--template" || a === "-t") {
+      const next = args[++i];
+      if (!next || !TEMPLATES.includes(next)) {
+        process.stderr.write(`Error: --template must be one of: ${TEMPLATES.join(", ")}
+`);
+        process.exit(1);
+      }
+      template = next;
+    } else if (a.startsWith("--template=")) {
+      const val = a.slice("--template=".length);
+      if (!TEMPLATES.includes(val)) {
+        process.stderr.write(`Error: --template must be one of: ${TEMPLATES.join(", ")}
+`);
+        process.exit(1);
+      }
+      template = val;
+    } else if (!projectName) {
+      projectName = a;
+    }
+  }
+  return { projectName, template };
+}
 async function main() {
-  let projectName = process.argv[2];
+  let { projectName, template } = parseArgs();
   if (!projectName) {
     projectName = await prompt("Project name: ");
   }
@@ -68,15 +103,35 @@ async function main() {
     process.stderr.write("Error: project name is required.\n");
     process.exit(1);
   }
+  if (!template) {
+    process.stdout.write("\nAvailable templates:\n");
+    for (const t of TEMPLATES) {
+      process.stdout.write(`  ${t.padEnd(12)} \u2014 ${TEMPLATE_DESCRIPTIONS[t]}
+`);
+    }
+    const answer = await prompt("\nTemplate (default): ");
+    const chosen = answer || "default";
+    if (!TEMPLATES.includes(chosen)) {
+      process.stderr.write(`Error: unknown template "${chosen}".
+`);
+      process.exit(1);
+    }
+    template = chosen;
+  }
   const targetDir = path.resolve(process.cwd(), projectName);
   if (fs.existsSync(targetDir)) {
     process.stderr.write(`Error: directory "${projectName}" already exists.
 `);
     process.exit(1);
   }
-  const templatesDir = path.join(import_meta.dirname, "..", "templates", "default");
+  const templatesDir = path.join(import_meta.dirname, "..", "templates", template);
+  if (!fs.existsSync(templatesDir)) {
+    process.stderr.write(`Error: template "${template}" not found at ${templatesDir}
+`);
+    process.exit(1);
+  }
   process.stdout.write(`
-Creating new Cubeforge game in ${targetDir}...
+Creating new Cubeforge game in ${targetDir} (template: ${template})...
 `);
   copyTemplateDir(templatesDir, targetDir, projectName);
   process.stdout.write(`
