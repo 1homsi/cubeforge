@@ -24,6 +24,9 @@ import { RenderInfo, RenderState } from './RenderState'
 import { RenderQueue, RenderItem } from './RenderQueue'
 import { ShadowMapRenderer } from './ShadowMap'
 import { PostProcess } from './PostProcess'
+import { SSAOPass, SSAOOptions } from './SSAO'
+import { FXAAPass } from './FXAA'
+import { GBUFFER_NORMAL_VERT, GBUFFER_NORMAL_FRAG } from '../shaders'
 
 // ---------------------------------------------------------------------------
 // Public configuration types
@@ -88,6 +91,8 @@ export class WebGLRenderer3D {
     toneMapping: 'none' | 'reinhard' | 'aces'
     exposure: number
     vignette: number
+    ssao: { enabled: boolean; options: SSAOOptions }
+    fxaa: { enabled: boolean }
   }
   pixelRatio: number
   autoClear = true
@@ -107,10 +112,24 @@ export class WebGLRenderer3D {
   private readonly _queue: RenderQueue
   private readonly _shadowMap: ShadowMapRenderer
   private _postProcess: PostProcess | null = null
+  private _ssaoPass: SSAOPass | null = null
+  private _fxaaPass: FXAAPass | null = null
 
   /** HDR framebuffer used when post-processing is enabled. */
   private _hdrFBO: Framebuffer | null = null
   private _hdrTex: Texture | null = null
+
+  /**
+   * G-buffer FBO holding view-space normals (RGBA8, packed [0,1]).
+   * Only allocated when SSAO is enabled.
+   */
+  private _gbufferFBO: Framebuffer | null = null
+  private _gbufferNormalTex: Texture | null = null
+  private _gbufferDepthTex: Texture | null = null
+  private _gbufferProgram: ShaderProgram | null = null
+
+  /** Intermediate LDR FBO used when FXAA is enabled (composite target). */
+  private _ldrFBO: Framebuffer | null = null
 
   // ── Cached identity light-space matrix (used when no shadow light present) ──
   private readonly _identityMat = new Mat4()
@@ -159,6 +178,8 @@ export class WebGLRenderer3D {
       toneMapping: 'aces',
       exposure: 1.0,
       vignette: 0.3,
+      ssao: { enabled: false, options: {} },
+      fxaa: { enabled: false },
     }
 
     // Internal subsystems
@@ -198,6 +219,9 @@ export class WebGLRenderer3D {
 
     this._rebuildHDRFBO(pw, ph)
     this._postProcess?.resize(pw, ph)
+    this._ssaoPass?.resize(pw, ph)
+    this._fxaaPass?.resize(pw, ph)
+    this._rebuildGBufferFBO(pw, ph)
   }
 
   setPixelRatio(ratio: number): void {
@@ -332,6 +356,22 @@ export class WebGLRenderer3D {
       const pp = this._postProcess
       const ppc = this.postProcessing
 
+      // ── 6a. SSAO (before bloom, modulates ambient) ──
+      let aoTex: Texture | null = null
+      if (ppc.ssao.enabled && this._gbufferFBO && this._gbufferNormalTex && this._gbufferDepthTex) {
+        // Ensure SSAOPass is created.
+        if (!this._ssaoPass) {
+          this._ssaoPass = new SSAOPass(gl, this.canvas.width, this.canvas.height, ppc.ssao.options)
+        }
+        // Run G-buffer normal pass so SSAO has normals.
+        this._runGBufferPass(scene, camera)
+
+        const aoFBO = this._ssaoPass.render(this._gbufferDepthTex, this._gbufferNormalTex, camera)
+        aoTex = aoFBO.colorTexture
+      }
+      void aoTex // aoTex is available for future composite integration
+
+      // ── 6b. Bloom ──
       let bloomTex: Texture = this._hdrTex // default: no bloom = use scene itself
 
       if (ppc.bloom.enabled) {
@@ -340,12 +380,42 @@ export class WebGLRenderer3D {
 
       const tonemapMode = ppc.toneMapping === 'aces' ? 1 : ppc.toneMapping === 'reinhard' ? 0 : 2
 
-      pp.composite(this._hdrTex, bloomTex, {
-        exposure: ppc.exposure,
-        bloomStrength: ppc.bloom.enabled ? ppc.bloom.strength : 0,
-        tonemapMode,
-        vignette: ppc.vignette,
-      })
+      // ── 6c. Composite (tone map + bloom + vignette) ──
+      if (ppc.fxaa.enabled) {
+        // Composite to an intermediate texture, then apply FXAA to the screen.
+        // For simplicity, composite to the bloom ping-pong buffer instead of
+        // allocating a dedicated LDR FBO.  We create a small helper FBO on demand.
+        if (!this._fxaaPass) {
+          this._fxaaPass = new FXAAPass(gl, this.canvas.width, this.canvas.height)
+        }
+        if (!this._ldrFBO) {
+          this._ldrFBO = this._makeLDRFBO(this.canvas.width, this.canvas.height)
+        }
+
+        // Composite to LDR FBO.
+        this._ldrFBO.bind()
+        gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+        pp.composite(this._hdrTex, bloomTex, {
+          exposure: ppc.exposure,
+          bloomStrength: ppc.bloom.enabled ? ppc.bloom.strength : 0,
+          tonemapMode,
+          vignette: ppc.vignette,
+        })
+        this._ldrFBO.unbind()
+
+        // FXAA to screen.
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
+        gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+        this._fxaaPass.render(this._ldrFBO.colorTexture)
+      } else {
+        pp.composite(this._hdrTex, bloomTex, {
+          exposure: ppc.exposure,
+          bloomStrength: ppc.bloom.enabled ? ppc.bloom.strength : 0,
+          tonemapMode,
+          vignette: ppc.vignette,
+        })
+      }
     }
 
     // Unbind program + VAO
@@ -822,6 +892,141 @@ export class WebGLRenderer3D {
   }
 
   // ---------------------------------------------------------------------------
+  // G-buffer (normals + depth for SSAO)
+  // ---------------------------------------------------------------------------
+
+  private _rebuildGBufferFBO(w: number, h: number): void {
+    if (this._gbufferFBO) {
+      this._gbufferFBO.dispose()
+      this._gbufferNormalTex?.dispose()
+      this._gbufferDepthTex?.dispose()
+      this._gbufferFBO = null
+      this._gbufferNormalTex = null
+      this._gbufferDepthTex = null
+    }
+    if (this._ldrFBO) {
+      this._ldrFBO.dispose()
+      this._ldrFBO = null
+    }
+
+    if (!this.postProcessing.enabled) return
+
+    const { gl } = this
+
+    // Normal texture (RGBA8 — packed view-space normals).
+    const normalTex = Texture.createEmpty(gl, w, h, {
+      internalFormat: gl.RGBA8,
+      format: gl.RGBA,
+      type: gl.UNSIGNED_BYTE,
+      minFilter: gl.NEAREST,
+      magFilter: gl.NEAREST,
+      wrapS: gl.CLAMP_TO_EDGE,
+      wrapT: gl.CLAMP_TO_EDGE,
+    })
+
+    // Depth texture (DEPTH_COMPONENT24 — used by SSAO for reconstruction).
+    const depthTex = new Texture(gl)
+    gl.bindTexture(gl.TEXTURE_2D, depthTex.handle)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+
+    const fbo = new Framebuffer(gl, w, h)
+    fbo.attachColor(normalTex, 0)
+    fbo.attachDepth(depthTex)
+    fbo.check()
+
+    this._gbufferFBO = fbo
+    this._gbufferNormalTex = normalTex
+    this._gbufferDepthTex = depthTex
+  }
+
+  /**
+   * Render the scene into the G-buffer (normals + depth) for SSAO consumption.
+   * This is a lightweight depth+normal prepass — no lighting, no textures.
+   */
+  private _runGBufferPass(_scene: Scene, camera: Camera): void {
+    if (!this._gbufferFBO || !this._gbufferNormalTex) return
+    const { gl } = this
+
+    if (!this._gbufferProgram) {
+      this._gbufferProgram = new ShaderProgram(gl, GBUFFER_NORMAL_VERT, GBUFFER_NORMAL_FRAG)
+    }
+
+    this._gbufferFBO.bind()
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+    gl.clearColor(0, 0, 0, 1)
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+    gl.enable(gl.DEPTH_TEST)
+    gl.depthFunc(gl.LEQUAL)
+    gl.enable(gl.CULL_FACE)
+    gl.cullFace(gl.BACK)
+    gl.disable(gl.BLEND)
+
+    const prog = this._gbufferProgram
+    this._state.glState.useProgram(prog.handle)
+
+    // Iterate opaque render items and draw them with the gbuffer shader.
+    for (const item of this._queue.opaque) {
+      const { object, geometry } = item
+      if (!object.visible) continue
+
+      const posAttr = geometry.getAttribute('position')
+      const normAttr = geometry.getAttribute('normal')
+      if (!posAttr || !normAttr) continue
+
+      const modelMat = object.matrixWorld
+      const viewMat = camera.matrixWorldInverse
+      const projMat = camera.projectionMatrix
+
+      prog.setUniformMat4fv('u_modelMatrix', modelMat.elements)
+      prog.setUniformMat4fv('u_viewMatrix', viewMat.elements)
+      prog.setUniformMat4fv('u_projectionMatrix', projMat.elements)
+      computeNormalMatrix(modelMat, _normalMatrix)
+      prog.setUniformMat3fv('u_normalMatrix', _normalMatrix)
+
+      const vao = this._state.getGeometryVAO(geometry, prog)
+      vao.bind()
+
+      const hasIndex = geometry.index !== null
+      const start = item.groupStart
+      const count = item.groupCount
+
+      if (hasIndex) {
+        const indexType = geometry.index!.data instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+        const byteOffset = start * (indexType === gl.UNSIGNED_INT ? 4 : 2)
+        gl.drawElements(gl.TRIANGLES, count, indexType, byteOffset)
+      } else {
+        gl.drawArrays(gl.TRIANGLES, start, count)
+      }
+    }
+
+    gl.bindVertexArray(null)
+    this._gbufferFBO.unbind()
+  }
+
+  /** Create an LDR FBO for the FXAA composite target. */
+  private _makeLDRFBO(w: number, h: number): Framebuffer {
+    const { gl } = this
+    const fbo = new Framebuffer(gl, w, h)
+    const tex = Texture.createEmpty(gl, w, h, {
+      internalFormat: gl.RGBA8,
+      format: gl.RGBA,
+      type: gl.UNSIGNED_BYTE,
+      minFilter: gl.LINEAR,
+      magFilter: gl.LINEAR,
+      wrapS: gl.CLAMP_TO_EDGE,
+      wrapT: gl.CLAMP_TO_EDGE,
+    })
+    fbo.attachColor(tex, 0)
+    fbo.check()
+    return fbo
+  }
+
+  // ---------------------------------------------------------------------------
   // Line render pass
   // ---------------------------------------------------------------------------
 
@@ -1079,11 +1284,26 @@ void main() {
     this._state.dispose()
     this._shadowMap.dispose()
     this._postProcess?.dispose()
+    this._ssaoPass?.dispose()
+    this._fxaaPass?.dispose()
+    this._gbufferProgram?.dispose()
 
     if (this._hdrFBO) {
       this._hdrFBO.dispose()
       this._hdrFBO = null
       this._hdrTex = null
+    }
+    if (this._gbufferFBO) {
+      this._gbufferFBO.dispose()
+      this._gbufferNormalTex?.dispose()
+      this._gbufferDepthTex?.dispose()
+      this._gbufferFBO = null
+      this._gbufferNormalTex = null
+      this._gbufferDepthTex = null
+    }
+    if (this._ldrFBO) {
+      this._ldrFBO.dispose()
+      this._ldrFBO = null
     }
 
     // Line pass resources

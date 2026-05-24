@@ -12,3 +12,8 @@ export { ShadowMapRenderer } from './ShadowMap'
 
 export { PostProcess } from './PostProcess'
 export type { CompositeParams } from './PostProcess'
+
+export { SSAOPass } from './SSAO'
+export type { SSAOOptions } from './SSAO'
+
+export { FXAAPass } from './FXAA'
