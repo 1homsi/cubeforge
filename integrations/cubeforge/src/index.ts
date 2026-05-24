@@ -613,3 +613,22 @@ export type { DebugOverlay3DProps } from './components/DebugOverlay3D'
 // Low-level renderer3d primitives (re-exported for advanced use)
 export { Raycaster, Line3D, LineSegments, LineLoop, Sprite3D } from '@cubeforge/renderer3d'
 export type { Intersection } from '@cubeforge/renderer3d'
+
+// LOD (Level of Detail)
+export { LOD } from '@cubeforge/renderer3d'
+export type { LODLevel } from '@cubeforge/renderer3d'
+
+// DOF (Depth of Field post-process pass)
+export { DOFPass } from '@cubeforge/renderer3d'
+export type { DOFOptions } from '@cubeforge/renderer3d'
+
+// 3D Audio occlusion
+export { AudioOcclusion } from '@cubeforge/renderer3d'
+export type { AudioSource3D, AudioOcclusionOptions } from '@cubeforge/renderer3d'
+
+export { AudioSource3DComponent } from './components/AudioSource3D'
+export type { AudioSource3DProps } from './components/AudioSource3D'
+
+export { useAudioOcclusion } from './hooks/useAudioOcclusion'
+
+export { AudioOcclusionContext } from './context/AudioOcclusionContext'
