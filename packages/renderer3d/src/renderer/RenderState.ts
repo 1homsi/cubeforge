@@ -10,6 +10,11 @@ import { Light, DirectionalLight } from '../lights'
 import { Camera, Scene } from '../scene'
 import { STANDARD_VERT, STANDARD_FRAG, SKINNED_VERT } from '../shaders'
 
+/** First attribute location reserved for morph target position data. */
+const MORPH_ATTRIB_BASE = 11
+/** Maximum morph targets supported per mesh. */
+const MAX_MORPH_TARGETS = 8
+
 // ---------------------------------------------------------------------------
 // Public interfaces
 // ---------------------------------------------------------------------------
@@ -74,18 +79,18 @@ export class RenderState {
    * Build a cache key and return (compiling if necessary) a ShaderProgram for
    * the given material + light configuration.
    */
-  getShader(material: Material, lights: Light[], isSkinned = false): ShaderProgram {
-    const key = this._shaderKey(material, lights, isSkinned)
+  getShader(material: Material, lights: Light[], isSkinned = false, morphCount = 0): ShaderProgram {
+    const key = this._shaderKey(material, lights, isSkinned, morphCount)
     let program = this._shaderCache.get(key)
     if (program) return program
 
-    program = this._compileForMaterial(material, lights, isSkinned)
+    program = this._compileForMaterial(material, lights, isSkinned, morphCount)
     this._shaderCache.set(key, program)
     return program
   }
 
-  private _shaderKey(material: Material, lights: Light[], isSkinned: boolean): string {
-    const parts: string[] = [material.type, isSkinned ? 'S' : '']
+  private _shaderKey(material: Material, lights: Light[], isSkinned: boolean, morphCount: number): string {
+    const parts: string[] = [material.type, isSkinned ? 'S' : '', morphCount > 0 ? `M${morphCount}` : '']
 
     if (material instanceof MeshStandardMaterial) {
       if (material.map) parts.push('A')
@@ -94,6 +99,7 @@ export class RenderState {
       if (material.aoMap) parts.push('AO')
       if (material.emissiveMap) parts.push('E')
       if (material.flatShading) parts.push('FS')
+      if (material.irradianceMap && material.prefilteredEnvMap && material.brdfLUT) parts.push('IBL')
     }
 
     // Encode light config: any fog, any shadow
@@ -112,7 +118,7 @@ export class RenderState {
     return parts.join('|')
   }
 
-  private _buildDefines(material: Material, lights: Light[], _isSkinned: boolean): string {
+  private _buildDefines(material: Material, lights: Light[], _isSkinned: boolean, morphCount: number): string {
     const lines: string[] = ['#version 300 es']
     const scene = this.currentScene
 
@@ -123,6 +129,7 @@ export class RenderState {
       if (material.aoMap) lines.push('#define USE_AO_MAP')
       if (material.emissiveMap) lines.push('#define USE_EMISSIVE_MAP')
       if (material.flatShading) lines.push('#define USE_FLAT_SHADING')
+      if (material.irradianceMap && material.prefilteredEnvMap && material.brdfLUT) lines.push('#define USE_IBL')
     }
 
     if (scene?.fog) lines.push('#define USE_FOG')
@@ -130,7 +137,35 @@ export class RenderState {
     const hasShadow = lights.some((l) => l instanceof DirectionalLight && l.castShadow && l.shadow?.map)
     if (hasShadow) lines.push('#define USE_SHADOW_MAP')
 
+    if (morphCount > 0) {
+      lines.push('#define USE_MORPHTARGETS')
+      lines.push(`#define MORPHTARGETS_COUNT ${morphCount}`)
+    }
+
     return lines.slice(1).join('\n') // strip the leading #version we added
+  }
+
+  /**
+   * Build the morph target attribute declarations (inserted after #version)
+   * and the unrolled MORPHTARGETS_APPLY accumulation block.
+   * Morph position attrs: locations MORPH_ATTRIB_BASE + i*2
+   * Morph normal attrs:   locations MORPH_ATTRIB_BASE + i*2 + 1
+   */
+  private _buildMorphPreamble(morphCount: number): { attrDecls: string; applyBlock: string } {
+    const decls: string[] = []
+    const apply: string[] = []
+    for (let i = 0; i < morphCount; i++) {
+      const posLoc = MORPH_ATTRIB_BASE + i * 2
+      const nrmLoc = MORPH_ATTRIB_BASE + i * 2 + 1
+      decls.push(`layout(location = ${posLoc}) in vec3 a_morphPosition${i};`)
+      decls.push(`layout(location = ${nrmLoc}) in vec3 a_morphNormal${i};`)
+      apply.push(`  morphedPosition += u_morphTargetInfluences[${i}] * (a_morphPosition${i} - a_position);`)
+      apply.push(`  morphedNormal   += u_morphTargetInfluences[${i}] * (a_morphNormal${i}   - a_normal);`)
+    }
+    return {
+      attrDecls: decls.join('\n'),
+      applyBlock: apply.join('\n'),
+    }
   }
 
   private _injectDefines(src: string, defines: string): string {
@@ -140,7 +175,12 @@ export class RenderState {
     return src.slice(0, newlineIdx + 1) + defines + '\n' + src.slice(newlineIdx + 1)
   }
 
-  private _compileForMaterial(material: Material, lights: Light[], isSkinned: boolean): ShaderProgram {
+  private _compileForMaterial(
+    material: Material,
+    lights: Light[],
+    isSkinned: boolean,
+    morphCount: number,
+  ): ShaderProgram {
     const { gl } = this
 
     if (material instanceof ShaderMaterial) {
@@ -149,20 +189,37 @@ export class RenderState {
       return new ShaderProgram(gl, vert, frag)
     }
 
-    const defines = this._buildDefines(material, lights, isSkinned)
+    const defines = this._buildDefines(material, lights, isSkinned, morphCount)
 
     if (material instanceof MeshStandardMaterial || material instanceof MeshBasicMaterial) {
       const vertSrc = isSkinned ? SKINNED_VERT : STANDARD_VERT
       const fragSrc = STANDARD_FRAG
-      return new ShaderProgram(gl, this._injectDefines(vertSrc, defines), this._injectDefines(fragSrc, defines))
+      const vertWithDefines = this._injectDefines(vertSrc, defines)
+      const fragWithDefines = this._injectDefines(fragSrc, defines)
+      const finalVert = morphCount > 0 ? this._injectMorphPreamble(vertWithDefines, morphCount) : vertWithDefines
+      return new ShaderProgram(gl, finalVert, fragWithDefines)
     }
 
     // Fallback: standard shader
-    return new ShaderProgram(
-      gl,
-      this._injectDefines(STANDARD_VERT, defines),
-      this._injectDefines(STANDARD_FRAG, defines),
-    )
+    const vertWithDefines = this._injectDefines(STANDARD_VERT, defines)
+    const finalVert = morphCount > 0 ? this._injectMorphPreamble(vertWithDefines, morphCount) : vertWithDefines
+    return new ShaderProgram(gl, finalVert, this._injectDefines(STANDARD_FRAG, defines))
+  }
+
+  /**
+   * Inject morph target attribute declarations after the #version line,
+   * and replace the MORPHTARGETS_APPLY placeholder with the unrolled block.
+   */
+  private _injectMorphPreamble(src: string, morphCount: number): string {
+    const { attrDecls, applyBlock } = this._buildMorphPreamble(morphCount)
+    // Insert attribute declarations after the first newline (#version line)
+    const newlineIdx = src.indexOf('\n')
+    const withDecls =
+      newlineIdx === -1
+        ? src + '\n' + attrDecls
+        : src.slice(0, newlineIdx + 1) + attrDecls + '\n' + src.slice(newlineIdx + 1)
+    // Replace MORPHTARGETS_APPLY placeholder with the unrolled accumulation
+    return withDecls.replace('MORPHTARGETS_APPLY', applyBlock)
   }
 
   // -------------------------------------------------------------------------
@@ -240,6 +297,50 @@ export class RenderState {
 
       const glType = this._glTypeForAttribute(attr)
       vao.setAttribute(loc, buf, attr.itemSize, glType, attr.normalized, 0, 0)
+    }
+
+    // ── Morph target attribute buffers ──
+    // morphAttributes is a Map<'position'|'normal', BufferAttribute[]>
+    const morphPositions = geometry.morphAttributes.get('position') ?? []
+    const morphNormals = geometry.morphAttributes.get('normal') ?? []
+    const morphCount = Math.min(morphPositions.length, MAX_MORPH_TARGETS)
+
+    for (let i = 0; i < morphCount; i++) {
+      const posAttr = morphPositions[i]
+      if (posAttr) {
+        const posKey = `__morphPosition${i}__`
+        const posLoc = MORPH_ATTRIB_BASE + i * 2
+        const posVersion = attributeVersions.get(posKey) ?? -1
+        let posBuf = attributeBuffers.get(posKey)
+        if (!posBuf || posVersion !== posAttr.version) {
+          if (!posBuf) {
+            posBuf = new GLBuffer(gl, gl.ARRAY_BUFFER, posAttr.usage)
+            attributeBuffers.set(posKey, posBuf)
+          }
+          posBuf.bind()
+          posBuf.upload(posAttr.data as unknown as ArrayBuffer)
+          attributeVersions.set(posKey, posAttr.version)
+        }
+        vao.setAttribute(posLoc, posBuf, posAttr.itemSize, gl.FLOAT, false, 0, 0)
+      }
+
+      const nrmAttr = morphNormals[i]
+      if (nrmAttr) {
+        const nrmKey = `__morphNormal${i}__`
+        const nrmLoc = MORPH_ATTRIB_BASE + i * 2 + 1
+        const nrmVersion = attributeVersions.get(nrmKey) ?? -1
+        let nrmBuf = attributeBuffers.get(nrmKey)
+        if (!nrmBuf || nrmVersion !== nrmAttr.version) {
+          if (!nrmBuf) {
+            nrmBuf = new GLBuffer(gl, gl.ARRAY_BUFFER, nrmAttr.usage)
+            attributeBuffers.set(nrmKey, nrmBuf)
+          }
+          nrmBuf.bind()
+          nrmBuf.upload(nrmAttr.data as unknown as ArrayBuffer)
+          attributeVersions.set(nrmKey, nrmAttr.version)
+        }
+        vao.setAttribute(nrmLoc, nrmBuf, nrmAttr.itemSize, gl.FLOAT, false, 0, 0)
+      }
     }
 
     return vao

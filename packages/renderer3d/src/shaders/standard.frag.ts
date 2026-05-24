@@ -2,7 +2,7 @@
 // Supports up to 4 point lights + 1 directional light + ambient
 // Optional maps via #define: USE_ALBEDO_MAP, USE_NORMAL_MAP, USE_METALLIC_ROUGHNESS_MAP,
 //                            USE_AO_MAP, USE_EMISSIVE_MAP
-// Optional features: USE_FOG, USE_SHADOW_MAP, USE_FLAT_SHADING
+// Optional features: USE_FOG, USE_SHADOW_MAP, USE_FLAT_SHADING, USE_IBL
 export const STANDARD_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 precision highp sampler2DShadow;
@@ -42,6 +42,15 @@ uniform sampler2D u_aoMap;
 #endif
 #ifdef USE_EMISSIVE_MAP
 uniform sampler2D u_emissiveMap;
+#endif
+
+// ── IBL uniforms ─────────────────────────────────────────────────────────────
+#ifdef USE_IBL
+uniform samplerCube u_irradianceMap;      // diffuse IBL
+uniform samplerCube u_prefilteredEnvMap;  // specular IBL (prefiltered mip chain)
+uniform sampler2D   u_brdfLUT;            // BRDF split-sum LUT
+uniform float       u_envMapIntensity;
+#define MAX_MIP_LEVELS 5.0
 #endif
 
 // ── Lighting uniforms ────────────────────────────────────────────────────────
@@ -234,6 +243,22 @@ void main() {
   vec3 ambient = u_ambientColor * albedo * ao;
 
   vec3 color = ambient + Lo;
+
+#ifdef USE_IBL
+  // ── Diffuse IBL ──
+  vec3 irradiance = texture(u_irradianceMap, N).rgb;
+  vec3 iblDiffuse = irradiance * albedo * (1.0 - metalness) * ao;
+
+  // ── Specular IBL ──
+  float NdotV_ibl = max(dot(N, V), 0.001);
+  vec3 R = reflect(-V, N);
+  vec3 prefilteredColor = textureLod(u_prefilteredEnvMap, R, roughness * MAX_MIP_LEVELS).rgb;
+  vec2 brdf = texture(u_brdfLUT, vec2(NdotV_ibl, roughness)).rg;
+  vec3 F0_ibl = mix(vec3(0.04), albedo, metalness);
+  vec3 iblSpecular = prefilteredColor * (F0_ibl * brdf.r + brdf.g);
+
+  color += (iblDiffuse + iblSpecular) * u_envMapIntensity;
+#endif
 
   // ── Emissive ──
   vec3 emissive = u_emissive * u_emissiveIntensity;

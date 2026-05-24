@@ -55,6 +55,16 @@ export class MeshStandardMaterial extends Material {
   /** Multiplier for environment map contribution */
   envMapIntensity = 1
 
+  // ── IBL (Image-Based Lighting) ────────────────────────────────────────────────
+  /** Irradiance cube map for diffuse IBL (convolved environment) */
+  irradianceMap: WebGLTexture | null = null
+
+  /** Prefiltered environment cube map for specular IBL (mip chain) */
+  prefilteredEnvMap: WebGLTexture | null = null
+
+  /** BRDF split-sum LUT (2D texture, uv = NdotV × roughness) */
+  brdfLUT: WebGLTexture | null = null
+
   // ── Shading flags ─────────────────────────────────────────────────────────────
   /** When true, use flat (faceted) shading — disables normal maps */
   flatShading = false

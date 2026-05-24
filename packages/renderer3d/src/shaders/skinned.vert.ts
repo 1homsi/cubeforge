@@ -1,6 +1,8 @@
 // Skinned vertex shader — standard.vert extended with joint/weight skinning
 // Bone matrices are stored in a float texture: 4 RGBA pixels per bone = one mat4
 // layout: boneTexture[boneIndex * 4 + col], col ∈ {0,1,2,3}
+// Optional features: USE_MORPHTARGETS (injected dynamically with MORPHTARGETS_COUNT
+// and per-target attribute declarations by RenderState before compilation)
 export const SKINNED_VERT = /* glsl */ `#version 300 es
 precision highp float;
 precision highp sampler2D;
@@ -23,6 +25,11 @@ uniform mat4 u_lightSpaceMatrix;
 uniform sampler2D u_boneTexture;
 uniform int       u_boneCount;
 
+// ── Morph target uniforms ─────────────────────────────────────────────────────
+#ifdef USE_MORPHTARGETS
+uniform float u_morphTargetInfluences[MORPHTARGETS_COUNT];
+#endif
+
 // ── Outputs ──────────────────────────────────────────────────────────────────
 out vec3 v_worldPos;
 out vec3 v_normal;
@@ -43,6 +50,20 @@ mat4 getBoneMatrix(uint boneIndex) {
 }
 
 void main() {
+  // ── Morph targets (applied before skinning) ──
+#ifdef USE_MORPHTARGETS
+  vec3 morphedPosition = a_position;
+  vec3 morphedNormal   = a_normal;
+  // Per-target contributions are unrolled via the MORPHTARGETS_APPLY block
+  // that RenderState injects immediately below.
+  MORPHTARGETS_APPLY
+  #define SKIN_POSITION morphedPosition
+  #define SKIN_NORMAL   morphedNormal
+#else
+  #define SKIN_POSITION a_position
+  #define SKIN_NORMAL   a_normal
+#endif
+
   // ── Skin matrix (linear blend skinning) ──
   mat4 skinMat =
     a_weights.x * getBoneMatrix(a_joints.x) +
@@ -50,8 +71,8 @@ void main() {
     a_weights.z * getBoneMatrix(a_joints.z) +
     a_weights.w * getBoneMatrix(a_joints.w);
 
-  vec4 skinnedPos    = skinMat * vec4(a_position, 1.0);
-  vec3 skinnedNormal = mat3(skinMat) * a_normal;
+  vec4 skinnedPos    = skinMat * vec4(SKIN_POSITION, 1.0);
+  vec3 skinnedNormal = mat3(skinMat) * SKIN_NORMAL;
   vec3 skinnedTangent= mat3(skinMat) * a_tangent.xyz;
 
   vec4 worldPos4 = u_modelMatrix * skinnedPos;

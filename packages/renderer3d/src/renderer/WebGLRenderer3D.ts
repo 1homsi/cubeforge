@@ -436,8 +436,12 @@ export class WebGLRenderer3D {
     const isSkinned = !!(object as SkinnedMesh).isSkinnedMesh
     const isInstanced = !!(object as InstancedMesh).isInstancedMesh
 
+    // ── Morph target count (clamped to MAX_MORPH_TARGETS = 8) ──
+    const morphPositions = geometry.morphAttributes.get('position')
+    const morphCount = morphPositions ? Math.min(morphPositions.length, 8) : 0
+
     // ── Get / compile shader ──
-    const program = this._state.getShader(material, lights, isSkinned)
+    const program = this._state.getShader(material, lights, isSkinned, morphCount)
 
     // ── Apply GL state from material ──
     this._applyMaterialState(material)
@@ -475,6 +479,17 @@ export class WebGLRenderer3D {
     // ── Skinning ──
     if (isSkinned) {
       this._setSkinnedUniforms(program, object as SkinnedMesh)
+    }
+
+    // ── Morph target influences ──
+    if (morphCount > 0) {
+      const mesh = object as Mesh
+      const influences = mesh.morphTargetInfluences
+      const influenceArr = new Float32Array(morphCount)
+      for (let i = 0; i < morphCount; i++) {
+        influenceArr[i] = influences[i] ?? 0
+      }
+      program.setUniform1fv('u_morphTargetInfluences', influenceArr)
     }
 
     // ── Custom ShaderMaterial uniforms ──
@@ -573,6 +588,24 @@ export class WebGLRenderer3D {
       }
       if (material.emissiveMap) {
         textureUnit = this._bindMaterialTexture(program, 'u_emissiveMap', material.emissiveMap.handle, textureUnit)
+      }
+
+      // ── IBL textures (fixed units 8, 9, 10 — above shadow at 7 and bones at 6) ──
+      if (material.irradianceMap && material.prefilteredEnvMap && material.brdfLUT) {
+        const { gl } = this
+        gl.activeTexture(gl.TEXTURE8)
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, material.irradianceMap)
+        program.setUniform1i('u_irradianceMap', 8)
+
+        gl.activeTexture(gl.TEXTURE9)
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, material.prefilteredEnvMap)
+        program.setUniform1i('u_prefilteredEnvMap', 9)
+
+        gl.activeTexture(gl.TEXTURE10)
+        gl.bindTexture(gl.TEXTURE_2D, material.brdfLUT)
+        program.setUniform1i('u_brdfLUT', 10)
+
+        program.setUniform1f('u_envMapIntensity', material.envMapIntensity)
       }
 
       return

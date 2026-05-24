@@ -10,6 +10,13 @@ export class Mesh extends Object3D {
   geometry: BufferGeometry
   material: Material | Material[]
 
+  /**
+   * Per-morph-target blend weights. Populated by the GLTFLoader when morph
+   * targets are present; otherwise empty. Indices correspond to
+   * geometry.morphAttributes entries.
+   */
+  morphTargetInfluences: number[] = []
+
   constructor(geometry: BufferGeometry, material: Material | Material[]) {
     super()
     this.geometry = geometry
