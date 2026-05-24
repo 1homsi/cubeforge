@@ -1,0 +1,39 @@
+{
+  "name": "@cubeforge/renderer3d",
+  "version": "0.0.1",
+  "description": "Zero-dependency WebGL2 3D renderer for CubeForge",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@cubeforge/core": "workspace:*"
+  },
+  "keywords": [
+    "game-engine",
+    "renderer",
+    "3d",
+    "webgl2",
+    "cubeforge"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/cubeforge"
+  },
+  "private": true
+}
