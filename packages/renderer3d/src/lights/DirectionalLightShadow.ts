@@ -1,5 +1,6 @@
 import { OrthographicCamera } from '../scene'
 import { LightShadow } from './LightShadow'
+import type { CascadeShadowMap } from '../renderer/CascadeShadowMap'
 
 export class DirectionalLightShadow extends LightShadow {
   declare camera: OrthographicCamera
@@ -7,6 +8,12 @@ export class DirectionalLightShadow extends LightShadow {
   right: number
   top: number
   bottom: number
+
+  /**
+   * Optional Cascade Shadow Map.  When set, ShadowMapRenderer will delegate
+   * to CascadeShadowMap.render() instead of the basic single-map path.
+   */
+  csm: CascadeShadowMap | null = null
 
   constructor() {
     super(new OrthographicCamera(-10, 10, 10, -10, 0.5, 500))

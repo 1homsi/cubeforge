@@ -12,9 +12,10 @@
  */
 
 import { Texture, Framebuffer, ShaderProgram } from '../core'
-import { Mat4 } from '../math'
+import { Mat4, Vec3 } from '../math'
 import { Scene } from '../scene'
 import { Light, DirectionalLight, SpotLight } from '../lights'
+import { DirectionalLightShadow } from '../lights'
 import { Mesh, SkinnedMesh } from '../objects'
 import { SHADOW_VERT, SHADOW_FRAG, SKINNED_VERT } from '../shaders'
 import { RenderState } from './RenderState'
@@ -54,6 +55,26 @@ export class ShadowMapRenderer {
 
       const shadow = light.shadow
       if (!shadow) continue
+
+      // ── CSM path: delegate to CascadeShadowMap when configured ───────────────
+      if (light instanceof DirectionalLight && shadow instanceof DirectionalLightShadow && shadow.csm !== null) {
+        const csm = shadow.csm
+        // We need the camera and light direction; the camera is stored on the
+        // RenderState.  Derive light direction from the light's target.
+        const camera = this.state.currentCamera
+        if (camera) {
+          const lightPos = new Vec3()
+          light.matrixWorld.getPosition(lightPos)
+          const targetPos = new Vec3()
+          light.target.getWorldPosition(targetPos)
+          const lightDir = new Vec3(targetPos.x - lightPos.x, targetPos.y - lightPos.y, targetPos.z - lightPos.z)
+          csm.update(camera, lightDir)
+          csm.render(gl, scene, this.state)
+        }
+        // Restore viewport (caller resets it, but be safe)
+        gl.cullFace(gl.BACK)
+        continue
+      }
 
       // ── Ensure framebuffer is created ──
       if (!shadow.map) {

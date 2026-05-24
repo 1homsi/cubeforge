@@ -17,3 +17,9 @@ export { SSAOPass } from './SSAO'
 export type { SSAOOptions } from './SSAO'
 
 export { FXAAPass } from './FXAA'
+
+export { DebugRenderer3D } from './DebugRenderer3D'
+export type { DebugOptions } from './DebugRenderer3D'
+
+export { CascadeShadowMap } from './CascadeShadowMap'
+export type { CSMOptions } from './CascadeShadowMap'
