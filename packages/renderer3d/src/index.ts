@@ -31,3 +31,9 @@ export * from './renderer'
 // ECS components + system
 export * from './components'
 export * from './systems'
+
+// Controls
+export * from './controls'
+
+// Effects
+export * from './effects'
