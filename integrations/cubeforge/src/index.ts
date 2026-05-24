@@ -606,6 +606,10 @@ export type { LineObjectProps } from './components/LineObject'
 export { SpriteObject } from './components/SpriteObject'
 export type { SpriteObjectProps } from './components/SpriteObject'
 
+// Debug overlay (dev-mode 3D scene helpers)
+export { DebugOverlay3D } from './components/DebugOverlay3D'
+export type { DebugOverlay3DProps } from './components/DebugOverlay3D'
+
 // Low-level renderer3d primitives (re-exported for advanced use)
 export { Raycaster, Line3D, LineSegments, LineLoop, Sprite3D } from '@cubeforge/renderer3d'
 export type { Intersection } from '@cubeforge/renderer3d'
