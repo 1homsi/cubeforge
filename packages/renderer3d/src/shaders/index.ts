@@ -37,3 +37,21 @@ export { BLOOM_VERT } from './post/bloom.vert'
 export { BLOOM_FRAG } from './post/bloom.frag'
 export { COMPOSITE_VERT } from './post/composite.vert'
 export { COMPOSITE_FRAG } from './post/composite.frag'
+
+// ── Environment map (IBL) ────────────────────────────────────────────────────
+export { EQUIRECT_TO_CUBEMAP_VERT } from './post/equirect_to_cubemap.vert'
+export { EQUIRECT_TO_CUBEMAP_FRAG } from './post/equirect_to_cubemap.frag'
+export { IRRADIANCE_FRAG } from './post/irradiance.frag'
+export { PREFILTER_FRAG } from './post/prefilter.frag'
+export { BRDF_FRAG } from './post/brdf.frag'
+
+// ── SSAO ──────────────────────────────────────────────────────────────────────
+export { SSAO_FRAG } from './post/ssao.frag'
+
+// ── FXAA ──────────────────────────────────────────────────────────────────────
+export { FXAA_VERT } from './post/fxaa.vert'
+export { FXAA_FRAG } from './post/fxaa.frag'
+
+// ── G-buffer normals ──────────────────────────────────────────────────────────
+export { GBUFFER_NORMAL_VERT } from './post/gbuffer_normal.vert'
+export { GBUFFER_NORMAL_FRAG } from './post/gbuffer_normal.frag'
