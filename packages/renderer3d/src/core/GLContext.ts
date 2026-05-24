@@ -5,10 +5,7 @@ export class GLError extends Error {
   }
 }
 
-export function createContext(
-  canvas: HTMLCanvasElement,
-  options?: WebGLContextAttributes,
-): WebGL2RenderingContext {
+export function createContext(canvas: HTMLCanvasElement, options?: WebGLContextAttributes): WebGL2RenderingContext {
   const gl = canvas.getContext('webgl2', options)
   if (!gl) {
     throw new GLError(

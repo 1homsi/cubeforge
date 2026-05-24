@@ -43,42 +43,52 @@ function extractFrustumPlanes(vp: Mat4): Float32Array {
   const planes = new Float32Array(24) // 6 planes × 4 components
 
   // Left:   col3 + col0
-  planes[0]  = e[3]  + e[0];  planes[1]  = e[7]  + e[4]
-  planes[2]  = e[11] + e[8];  planes[3]  = e[15] + e[12]
+  planes[0] = e[3] + e[0]
+  planes[1] = e[7] + e[4]
+  planes[2] = e[11] + e[8]
+  planes[3] = e[15] + e[12]
   // Right:  col3 - col0
-  planes[4]  = e[3]  - e[0];  planes[5]  = e[7]  - e[4]
-  planes[6]  = e[11] - e[8];  planes[7]  = e[15] - e[12]
+  planes[4] = e[3] - e[0]
+  planes[5] = e[7] - e[4]
+  planes[6] = e[11] - e[8]
+  planes[7] = e[15] - e[12]
   // Bottom: col3 + col1
-  planes[8]  = e[3]  + e[1];  planes[9]  = e[7]  + e[5]
-  planes[10] = e[11] + e[9];  planes[11] = e[15] + e[13]
+  planes[8] = e[3] + e[1]
+  planes[9] = e[7] + e[5]
+  planes[10] = e[11] + e[9]
+  planes[11] = e[15] + e[13]
   // Top:    col3 - col1
-  planes[12] = e[3]  - e[1];  planes[13] = e[7]  - e[5]
-  planes[14] = e[11] - e[9];  planes[15] = e[15] - e[13]
+  planes[12] = e[3] - e[1]
+  planes[13] = e[7] - e[5]
+  planes[14] = e[11] - e[9]
+  planes[15] = e[15] - e[13]
   // Near:   col3 + col2
-  planes[16] = e[3]  + e[2];  planes[17] = e[7]  + e[6]
-  planes[18] = e[11] + e[10]; planes[19] = e[15] + e[14]
+  planes[16] = e[3] + e[2]
+  planes[17] = e[7] + e[6]
+  planes[18] = e[11] + e[10]
+  planes[19] = e[15] + e[14]
   // Far:    col3 - col2
-  planes[20] = e[3]  - e[2];  planes[21] = e[7]  - e[6]
-  planes[22] = e[11] - e[10]; planes[23] = e[15] - e[14]
+  planes[20] = e[3] - e[2]
+  planes[21] = e[7] - e[6]
+  planes[22] = e[11] - e[10]
+  planes[23] = e[15] - e[14]
 
   // Normalize each plane
   for (let i = 0; i < 6; i++) {
     const o = i * 4
     const len = Math.sqrt(planes[o] ** 2 + planes[o + 1] ** 2 + planes[o + 2] ** 2)
     if (len > 0) {
-      planes[o] /= len; planes[o + 1] /= len
-      planes[o + 2] /= len; planes[o + 3] /= len
+      planes[o] /= len
+      planes[o + 1] /= len
+      planes[o + 2] /= len
+      planes[o + 3] /= len
     }
   }
 
   return planes
 }
 
-function sphereInFrustum(
-  planes: Float32Array,
-  cx: number, cy: number, cz: number,
-  radius: number,
-): boolean {
+function sphereInFrustum(planes: Float32Array, cx: number, cy: number, cz: number, radius: number): boolean {
   for (let i = 0; i < 6; i++) {
     const o = i * 4
     const dist = planes[o] * cx + planes[o + 1] * cy + planes[o + 2] * cz + planes[o + 3]
@@ -127,10 +137,7 @@ export class RenderQueue {
     this.clear()
 
     // Build VP matrix for frustum culling
-    this._vpMatrix.multiplyMatrices(
-      camera.projectionMatrix,
-      camera.matrixWorldInverse,
-    )
+    this._vpMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
     const frustumPlanes = extractFrustumPlanes(this._vpMatrix)
 
     // Camera world position for depth calculation
@@ -146,8 +153,7 @@ export class RenderQueue {
 
     scene.traverseVisible((obj) => {
       // Collect lights
-      if ((obj as unknown as { isLight?: boolean }).isLight ||
-          'intensity' in obj && 'color' in obj) {
+      if ((obj as unknown as { isLight?: boolean }).isLight || ('intensity' in obj && 'color' in obj)) {
         this.lights.push(obj as unknown as Light)
         return
       }
@@ -170,8 +176,8 @@ export class RenderQueue {
         const mw = mesh.matrixWorld.elements
 
         // Transform sphere center to world space
-        const wcx = mw[0] * bs.center.x + mw[4] * bs.center.y + mw[8]  * bs.center.z + mw[12]
-        const wcy = mw[1] * bs.center.x + mw[5] * bs.center.y + mw[9]  * bs.center.z + mw[13]
+        const wcx = mw[0] * bs.center.x + mw[4] * bs.center.y + mw[8] * bs.center.z + mw[12]
+        const wcy = mw[1] * bs.center.x + mw[5] * bs.center.y + mw[9] * bs.center.z + mw[13]
         const wcz = mw[2] * bs.center.x + mw[6] * bs.center.y + mw[10] * bs.center.z + mw[14]
 
         // Scale radius by max scale component
@@ -185,8 +191,12 @@ export class RenderQueue {
 
       // ── Compute view-space depth (dot product of (pos - cam) with forward) ──
       const mw2 = mesh.matrixWorld.elements
-      const wx = mw2[12], wy = mw2[13], wz = mw2[14]
-      const dx = wx - camPx, dy = wy - camPy, dz = wz - camPz
+      const wx = mw2[12],
+        wy = mw2[13],
+        wz = mw2[14]
+      const dx = wx - camPx,
+        dy = wy - camPy,
+        dz = wz - camPz
       const z = dx * fwdX + dy * fwdY + dz * fwdZ
 
       // ── Push render items ──
@@ -213,9 +223,12 @@ export class RenderQueue {
 
         const posAttr = geometry.getAttribute('position')
         const totalVerts = posAttr?.count ?? 0
-        const drawCount = geometry.drawRange.count === Infinity
-          ? (geometry.index ? geometry.index.count : totalVerts)
-          : geometry.drawRange.count
+        const drawCount =
+          geometry.drawRange.count === Infinity
+            ? geometry.index
+              ? geometry.index.count
+              : totalVerts
+            : geometry.drawRange.count
 
         this.push({
           object: mesh,

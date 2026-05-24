@@ -26,7 +26,7 @@ export class MeshDepthMaterial extends Material {
     super(name)
     // Depth material never needs alpha blending
     this.transparent = false
-    this.depthWrite  = true
-    this.depthTest   = true
+    this.depthWrite = true
+    this.depthTest = true
   }
 }

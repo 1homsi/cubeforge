@@ -64,16 +64,16 @@ export class MeshStandardMaterial extends Material {
 
     // Inline Vec3 creation to avoid a circular import risk at construction time.
     // The renderer reads .x/.y/.z directly.
-    this.color    = { x: 1, y: 1, z: 1 } as Vec3
+    this.color = { x: 1, y: 1, z: 1 } as Vec3
     this.emissive = { x: 0, y: 0, z: 0 } as Vec3
   }
 
   override clone(): this {
     const copy = super.clone()
     // Deep-copy value types
-    copy.color         = { ...this.color } as Vec3
-    copy.emissive      = { ...this.emissive } as Vec3
-    copy.normalScale   = { ...this.normalScale }
+    copy.color = { ...this.color } as Vec3
+    copy.emissive = { ...this.emissive } as Vec3
+    copy.normalScale = { ...this.normalScale }
     // Texture references are shared (the renderer owns them)
     return copy
   }

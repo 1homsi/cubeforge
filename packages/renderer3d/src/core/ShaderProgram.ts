@@ -25,7 +25,11 @@ export class ShaderProgram {
   private readonly _uniformLocations = new Map<string, WebGLUniformLocation | null>()
   private readonly _warnedUniforms = new Set<string>()
 
-  constructor(private readonly gl: WebGL2RenderingContext, vertSrc: string, fragSrc: string) {
+  constructor(
+    private readonly gl: WebGL2RenderingContext,
+    vertSrc: string,
+    fragSrc: string,
+  ) {
     const vert = compileShader(gl, gl.VERTEX_SHADER, vertSrc)
     const frag = compileShader(gl, gl.FRAGMENT_SHADER, fragSrc)
 

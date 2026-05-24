@@ -39,13 +39,7 @@ export class Framebuffer {
   attachColor(texture: Texture, attachment = 0): void {
     const { gl } = this
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.handle)
-    gl.framebufferTexture2D(
-      gl.DRAW_FRAMEBUFFER,
-      gl.COLOR_ATTACHMENT0 + attachment,
-      gl.TEXTURE_2D,
-      texture.handle,
-      0,
-    )
+    gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + attachment, gl.TEXTURE_2D, texture.handle, 0)
     this._colorTextures[attachment] = texture
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
   }
@@ -53,13 +47,7 @@ export class Framebuffer {
   attachDepth(texture: Texture): void {
     const { gl } = this
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.handle)
-    gl.framebufferTexture2D(
-      gl.DRAW_FRAMEBUFFER,
-      gl.DEPTH_ATTACHMENT,
-      gl.TEXTURE_2D,
-      texture.handle,
-      0,
-    )
+    gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, texture.handle, 0)
     this._depthTexture = texture
     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
   }

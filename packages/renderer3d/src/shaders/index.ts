@@ -29,7 +29,7 @@ export { PARTICLE_VERT } from './particle.vert'
 export { PARTICLE_FRAG } from './particle.frag'
 
 // ── Post-processing ───────────────────────────────────────────────────────────
-export { BLOOM_VERT }      from './post/bloom.vert'
-export { BLOOM_FRAG }      from './post/bloom.frag'
-export { COMPOSITE_VERT }  from './post/composite.vert'
-export { COMPOSITE_FRAG }  from './post/composite.frag'
+export { BLOOM_VERT } from './post/bloom.vert'
+export { BLOOM_FRAG } from './post/bloom.frag'
+export { COMPOSITE_VERT } from './post/composite.vert'
+export { COMPOSITE_FRAG } from './post/composite.frag'

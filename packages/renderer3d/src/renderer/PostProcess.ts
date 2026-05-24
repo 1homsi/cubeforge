@@ -11,10 +11,7 @@
  */
 
 import { Texture, Framebuffer, ShaderProgram } from '../core'
-import {
-  BLOOM_VERT, BLOOM_FRAG,
-  COMPOSITE_VERT, COMPOSITE_FRAG,
-} from '../shaders'
+import { BLOOM_VERT, BLOOM_FRAG, COMPOSITE_VERT, COMPOSITE_FRAG } from '../shaders'
 
 // ---------------------------------------------------------------------------
 // Composite parameters
@@ -58,17 +55,17 @@ export class PostProcess {
     this._height = height
 
     // Build shader programs
-    this._extractProgram   = this._buildExtractProgram()
-    this._blurProgram      = this._buildBlurProgram()
+    this._extractProgram = this._buildExtractProgram()
+    this._blurProgram = this._buildBlurProgram()
     this._compositeProgram = new ShaderProgram(gl, COMPOSITE_VERT, COMPOSITE_FRAG)
 
     // Create framebuffers at half resolution for bloom (common practice)
-    const bw = Math.max(1, width  >> 1)
+    const bw = Math.max(1, width >> 1)
     const bh = Math.max(1, height >> 1)
 
     this._bloomExtractFBO = this._makeFBO(bw, bh)
-    this._pingFBO         = this._makeFBO(bw, bh)
-    this._pongFBO         = this._makeFBO(bw, bh)
+    this._pingFBO = this._makeFBO(bw, bh)
+    this._pongFBO = this._makeFBO(bw, bh)
   }
 
   // ---------------------------------------------------------------------------
@@ -77,7 +74,7 @@ export class PostProcess {
 
   resize(w: number, h: number): void {
     if (this._width === w && this._height === h) return
-    this._width  = w
+    this._width = w
     this._height = h
 
     const bw = Math.max(1, w >> 1)
@@ -92,13 +89,7 @@ export class PostProcess {
    * Run bloom: extract bright pixels from `sceneTexture`, apply iterative
    * two-pass Gaussian blur, and return the final blurred bloom Texture.
    */
-  renderBloom(
-    sceneTexture: Texture,
-    _strength: number,
-    threshold: number,
-    radius: number,
-    passes = 5,
-  ): Texture {
+  renderBloom(sceneTexture: Texture, _strength: number, threshold: number, radius: number, passes = 5): Texture {
     const { gl } = this
 
     gl.disable(gl.DEPTH_TEST)
@@ -122,9 +113,9 @@ export class PostProcess {
     this._bloomExtractFBO.unbind()
 
     // ── Steps 2-3: Iterative ping-pong Gaussian blur ──
-    let readFBO  = this._bloomExtractFBO
+    let readFBO = this._bloomExtractFBO
     let writeFBO = this._pingFBO
-    let altFBO   = this._pongFBO
+    let altFBO = this._pongFBO
 
     gl.useProgram(this._blurProgram.handle)
     this._blurProgram.setUniform1f('u_blurScale', radius)
@@ -164,11 +155,7 @@ export class PostProcess {
    * Composite the scene and bloom textures to the currently bound framebuffer
    * (pass null FBO to render to screen).
    */
-  composite(
-    sceneTexture: Texture,
-    bloomTexture: Texture,
-    params: CompositeParams,
-  ): void {
+  composite(sceneTexture: Texture, bloomTexture: Texture, params: CompositeParams): void {
     const { gl } = this
 
     gl.disable(gl.DEPTH_TEST)
@@ -178,17 +165,17 @@ export class PostProcess {
 
     this._bindTexture(sceneTexture, 0)
     this._bindTexture(bloomTexture, 1)
-    this._compositeProgram.setUniform1i('u_hdrBuffer',    0)
+    this._compositeProgram.setUniform1i('u_hdrBuffer', 0)
     this._compositeProgram.setUniform1i('u_bloomTexture', 1)
 
-    this._compositeProgram.setUniform1f('u_exposure',       params.exposure)
-    this._compositeProgram.setUniform1f('u_bloomStrength',  params.bloomStrength)
-    this._compositeProgram.setUniform1i('u_tonemapMode',    params.tonemapMode)
+    this._compositeProgram.setUniform1f('u_exposure', params.exposure)
+    this._compositeProgram.setUniform1f('u_bloomStrength', params.bloomStrength)
+    this._compositeProgram.setUniform1i('u_tonemapMode', params.tonemapMode)
     this._compositeProgram.setUniform1f('u_vignetteStrength', params.vignette)
     this._compositeProgram.setUniform1f('u_vignetteRadius', params.vignetteRadius ?? 0.75)
-    this._compositeProgram.setUniform1f('u_saturation',     params.saturation    ?? 1.0)
-    this._compositeProgram.setUniform1f('u_contrast',       params.contrast      ?? 1.0)
-    this._compositeProgram.setUniform1f('u_brightness',     params.brightness    ?? 0.0)
+    this._compositeProgram.setUniform1f('u_saturation', params.saturation ?? 1.0)
+    this._compositeProgram.setUniform1f('u_contrast', params.contrast ?? 1.0)
+    this._compositeProgram.setUniform1f('u_brightness', params.brightness ?? 0.0)
 
     this._drawFullscreenTriangle()
   }
@@ -229,12 +216,12 @@ export class PostProcess {
     const fbo = new Framebuffer(gl, width, height)
     const tex = Texture.createEmpty(gl, width, height, {
       internalFormat: gl.RGBA16F,
-      format:         gl.RGBA,
-      type:           gl.HALF_FLOAT,
-      minFilter:      gl.LINEAR,
-      magFilter:      gl.LINEAR,
-      wrapS:          gl.CLAMP_TO_EDGE,
-      wrapT:          gl.CLAMP_TO_EDGE,
+      format: gl.RGBA,
+      type: gl.HALF_FLOAT,
+      minFilter: gl.LINEAR,
+      magFilter: gl.LINEAR,
+      wrapS: gl.CLAMP_TO_EDGE,
+      wrapT: gl.CLAMP_TO_EDGE,
     })
     fbo.attachColor(tex, 0)
     fbo.check()

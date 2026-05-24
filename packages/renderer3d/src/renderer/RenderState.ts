@@ -8,10 +8,7 @@ import { Material, MeshStandardMaterial, MeshBasicMaterial, ShaderMaterial } fro
 import { BufferGeometry, BufferAttribute } from '../geometry'
 import { Light, DirectionalLight } from '../lights'
 import { Camera, Scene } from '../scene'
-import {
-  STANDARD_VERT, STANDARD_FRAG,
-  SKINNED_VERT,
-} from '../shaders'
+import { STANDARD_VERT, STANDARD_FRAG, SKINNED_VERT } from '../shaders'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -91,22 +88,20 @@ export class RenderState {
     const parts: string[] = [material.type, isSkinned ? 'S' : '']
 
     if (material instanceof MeshStandardMaterial) {
-      if (material.map)              parts.push('A')
-      if (material.normalMap)        parts.push('N')
+      if (material.map) parts.push('A')
+      if (material.normalMap) parts.push('N')
       if (material.metalnessMap || material.roughnessMap) parts.push('MR')
-      if (material.aoMap)            parts.push('AO')
-      if (material.emissiveMap)      parts.push('E')
-      if (material.flatShading)      parts.push('FS')
+      if (material.aoMap) parts.push('AO')
+      if (material.emissiveMap) parts.push('E')
+      if (material.flatShading) parts.push('FS')
     }
 
     // Encode light config: any fog, any shadow
     const scene = this.currentScene
-    if (scene?.fog)                  parts.push('FOG')
+    if (scene?.fog) parts.push('FOG')
 
     // Shadow define: check if any directional light casts shadows
-    const hasShadow = lights.some(
-      l => l instanceof DirectionalLight && l.castShadow && l.shadow?.map,
-    )
+    const hasShadow = lights.some((l) => l instanceof DirectionalLight && l.castShadow && l.shadow?.map)
     if (hasShadow) parts.push('SH')
 
     if (material instanceof ShaderMaterial) {
@@ -117,29 +112,23 @@ export class RenderState {
     return parts.join('|')
   }
 
-  private _buildDefines(
-    material: Material,
-    lights: Light[],
-    _isSkinned: boolean,
-  ): string {
+  private _buildDefines(material: Material, lights: Light[], _isSkinned: boolean): string {
     const lines: string[] = ['#version 300 es']
     const scene = this.currentScene
 
     if (material instanceof MeshStandardMaterial) {
-      if (material.map)              lines.push('#define USE_ALBEDO_MAP')
-      if (material.normalMap)        lines.push('#define USE_NORMAL_MAP')
+      if (material.map) lines.push('#define USE_ALBEDO_MAP')
+      if (material.normalMap) lines.push('#define USE_NORMAL_MAP')
       if (material.metalnessMap || material.roughnessMap) lines.push('#define USE_METALLIC_ROUGHNESS_MAP')
-      if (material.aoMap)            lines.push('#define USE_AO_MAP')
-      if (material.emissiveMap)      lines.push('#define USE_EMISSIVE_MAP')
-      if (material.flatShading)      lines.push('#define USE_FLAT_SHADING')
+      if (material.aoMap) lines.push('#define USE_AO_MAP')
+      if (material.emissiveMap) lines.push('#define USE_EMISSIVE_MAP')
+      if (material.flatShading) lines.push('#define USE_FLAT_SHADING')
     }
 
-    if (scene?.fog)                  lines.push('#define USE_FOG')
+    if (scene?.fog) lines.push('#define USE_FOG')
 
-    const hasShadow = lights.some(
-      l => l instanceof DirectionalLight && l.castShadow && l.shadow?.map,
-    )
-    if (hasShadow)                   lines.push('#define USE_SHADOW_MAP')
+    const hasShadow = lights.some((l) => l instanceof DirectionalLight && l.castShadow && l.shadow?.map)
+    if (hasShadow) lines.push('#define USE_SHADOW_MAP')
 
     return lines.slice(1).join('\n') // strip the leading #version we added
   }
@@ -151,11 +140,7 @@ export class RenderState {
     return src.slice(0, newlineIdx + 1) + defines + '\n' + src.slice(newlineIdx + 1)
   }
 
-  private _compileForMaterial(
-    material: Material,
-    lights: Light[],
-    isSkinned: boolean,
-  ): ShaderProgram {
+  private _compileForMaterial(material: Material, lights: Light[], isSkinned: boolean): ShaderProgram {
     const { gl } = this
 
     if (material instanceof ShaderMaterial) {
@@ -169,11 +154,7 @@ export class RenderState {
     if (material instanceof MeshStandardMaterial || material instanceof MeshBasicMaterial) {
       const vertSrc = isSkinned ? SKINNED_VERT : STANDARD_VERT
       const fragSrc = STANDARD_FRAG
-      return new ShaderProgram(
-        gl,
-        this._injectDefines(vertSrc, defines),
-        this._injectDefines(fragSrc, defines),
-      )
+      return new ShaderProgram(gl, this._injectDefines(vertSrc, defines), this._injectDefines(fragSrc, defines))
     }
 
     // Fallback: standard shader
@@ -192,10 +173,7 @@ export class RenderState {
    * Upload geometry to the GPU if not already cached, or sync any attributes
    * that have `needsUpdate` (version change). Returns the bound VAO.
    */
-  getGeometryVAO(
-    geometry: BufferGeometry,
-    program: ShaderProgram,
-  ): VAO {
+  getGeometryVAO(geometry: BufferGeometry, program: ShaderProgram): VAO {
     const { gl } = this
     let entry = this._geometryCache.get(geometry.id)
 
@@ -232,11 +210,11 @@ export class RenderState {
     // ── Attribute buffers ──
     const attrLocations: Record<string, number> = {
       position: 0,
-      normal:   1,
-      uv:       2,
-      tangent:  3,
-      skinIndex: 4,   // a_joints in SKINNED_VERT uses location 4
-      skinWeight: 5,  // a_weights uses location 5
+      normal: 1,
+      uv: 2,
+      tangent: 3,
+      skinIndex: 4, // a_joints in SKINNED_VERT uses location 4
+      skinWeight: 5, // a_weights uses location 5
       instanceMatrix: 6,
     }
 
@@ -269,9 +247,9 @@ export class RenderState {
 
   private _glTypeForAttribute(attr: BufferAttribute): GLenum {
     const { gl } = this
-    if (attr.data instanceof Float32Array)   return gl.FLOAT
-    if (attr.data instanceof Uint16Array)    return gl.UNSIGNED_SHORT
-    if (attr.data instanceof Uint32Array)    return gl.UNSIGNED_INT
+    if (attr.data instanceof Float32Array) return gl.FLOAT
+    if (attr.data instanceof Uint16Array) return gl.UNSIGNED_SHORT
+    if (attr.data instanceof Uint32Array) return gl.UNSIGNED_INT
     return gl.FLOAT
   }
 
@@ -283,12 +261,7 @@ export class RenderState {
    * Upload per-instance matrix data as 4 consecutive vec4 attribute slots
    * starting at location `baseLocation` (default 6).
    */
-  uploadInstanceMatrix(
-    entry: GeometryGPUEntry,
-    data: Float32Array,
-    _instanceCount: number,
-    baseLocation = 6,
-  ): void {
+  uploadInstanceMatrix(entry: GeometryGPUEntry, data: Float32Array, _instanceCount: number, baseLocation = 6): void {
     const { gl } = this
     const { vao } = entry
 
@@ -310,11 +283,7 @@ export class RenderState {
     }
   }
 
-  uploadInstanceColor(
-    entry: GeometryGPUEntry,
-    data: Float32Array,
-    colorLocation = 10,
-  ): void {
+  uploadInstanceColor(entry: GeometryGPUEntry, data: Float32Array, colorLocation = 10): void {
     const { gl } = this
     const { vao } = entry
 

@@ -45,7 +45,7 @@ export class ShadowMapRenderer {
   render(scene: Scene, lights: Light[]): void {
     const { gl } = this
 
-    const shadowProgram        = this._getShadowProgram(false)
+    const shadowProgram = this._getShadowProgram(false)
     const shadowSkinnedProgram = this._getShadowProgram(true)
 
     for (const light of lights) {
@@ -57,20 +57,13 @@ export class ShadowMapRenderer {
 
       // ── Ensure framebuffer is created ──
       if (!shadow.map) {
-        shadow.map = this._createShadowFramebuffer(
-          shadow.mapSize.width,
-          shadow.mapSize.height,
-        )
+        shadow.map = this._createShadowFramebuffer(shadow.mapSize.width, shadow.mapSize.height)
       }
 
       // ── Update light camera ──
       if (light instanceof DirectionalLight) {
         // Update the shadow camera to match the light transform
-        shadow.camera.position.set(
-          light.position.x,
-          light.position.y,
-          light.position.z,
-        )
+        shadow.camera.position.set(light.position.x, light.position.y, light.position.z)
         const target = light.target
         shadow.camera.lookAt(target.position)
         shadow.camera.updateMatrixWorld(true)
@@ -103,7 +96,7 @@ export class ShadowMapRenderer {
         if (!mesh.isMesh || !mesh.castShadow) return
 
         const isSkinned = !!(mesh as SkinnedMesh).isSkinnedMesh
-        const program   = isSkinned ? shadowSkinnedProgram : shadowProgram
+        const program = isSkinned ? shadowSkinnedProgram : shadowProgram
 
         this.state.glState.useProgram(program.handle)
 
@@ -129,17 +122,18 @@ export class ShadowMapRenderer {
         vao.bind()
 
         // Draw
-        const geo     = mesh.geometry
-        const hasIdx  = geo.index !== null
-        const start   = geo.drawRange.start
-        const count   = geo.drawRange.count === Infinity
-          ? (hasIdx ? geo.index!.count : (geo.getAttribute('position')?.count ?? 0))
-          : geo.drawRange.count
+        const geo = mesh.geometry
+        const hasIdx = geo.index !== null
+        const start = geo.drawRange.start
+        const count =
+          geo.drawRange.count === Infinity
+            ? hasIdx
+              ? geo.index!.count
+              : (geo.getAttribute('position')?.count ?? 0)
+            : geo.drawRange.count
 
         if (hasIdx) {
-          const indexType = geo.index!.data instanceof Uint32Array
-            ? gl.UNSIGNED_INT
-            : gl.UNSIGNED_SHORT
+          const indexType = geo.index!.data instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
           gl.drawElements(gl.TRIANGLES, count, indexType, start * (indexType === gl.UNSIGNED_INT ? 4 : 2))
         } else {
           gl.drawArrays(gl.TRIANGLES, start, count)
@@ -171,11 +165,7 @@ export class ShadowMapRenderer {
     if (skinned) {
       if (!this._shadowSkinnedProgram) {
         // Use the full skinned vert with the minimal shadow frag
-        this._shadowSkinnedProgram = new ShaderProgram(
-          this.gl,
-          SKINNED_VERT,
-          SHADOW_SKINNED_FRAG,
-        )
+        this._shadowSkinnedProgram = new ShaderProgram(this.gl, SKINNED_VERT, SHADOW_SKINNED_FRAG)
       }
       return this._shadowSkinnedProgram
     }

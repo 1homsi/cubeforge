@@ -3,7 +3,7 @@
 let _materialIdCounter = 0
 
 export type BlendingMode = 'none' | 'normal' | 'additive' | 'multiply'
-export type SideMode     = 'front' | 'back' | 'double'
+export type SideMode = 'front' | 'back' | 'double'
 
 export abstract class Material {
   /** Unique auto-incrementing id */
@@ -60,7 +60,7 @@ export abstract class Material {
   }
 
   constructor(name = '') {
-    this.id   = _materialIdCounter++
+    this.id = _materialIdCounter++
     this.name = name
   }
 
@@ -79,7 +79,7 @@ export abstract class Material {
     const copy = Object.create(Object.getPrototypeOf(this)) as this
     Object.assign(copy, this)
     ;(copy as { id: number }).id = _materialIdCounter++
-    copy.version      = 0
+    copy.version = 0
     copy._needsUpdate = false
     return copy
   }

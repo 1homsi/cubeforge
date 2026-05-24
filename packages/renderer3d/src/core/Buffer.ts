@@ -13,11 +13,7 @@ export class GLBuffer {
     this.handle = buf
   }
 
-  static createVBO(
-    gl: WebGL2RenderingContext,
-    data?: BufferSource,
-    usage: GLenum = gl.STATIC_DRAW,
-  ): GLBuffer {
+  static createVBO(gl: WebGL2RenderingContext, data?: BufferSource, usage: GLenum = gl.STATIC_DRAW): GLBuffer {
     const buf = new GLBuffer(gl, gl.ARRAY_BUFFER, usage)
     if (data !== undefined) {
       buf.bind()
@@ -26,11 +22,7 @@ export class GLBuffer {
     return buf
   }
 
-  static createIBO(
-    gl: WebGL2RenderingContext,
-    data?: BufferSource,
-    usage: GLenum = gl.STATIC_DRAW,
-  ): GLBuffer {
+  static createIBO(gl: WebGL2RenderingContext, data?: BufferSource, usage: GLenum = gl.STATIC_DRAW): GLBuffer {
     const buf = new GLBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, usage)
     if (data !== undefined) {
       buf.bind()
@@ -97,7 +89,14 @@ export class VAO {
     gl.bindVertexArray(this.handle)
     buffer.bind()
     gl.enableVertexAttribArray(index)
-    if (type === gl.INT || type === gl.UNSIGNED_INT || type === gl.SHORT || type === gl.UNSIGNED_SHORT || type === gl.BYTE || type === gl.UNSIGNED_BYTE) {
+    if (
+      type === gl.INT ||
+      type === gl.UNSIGNED_INT ||
+      type === gl.SHORT ||
+      type === gl.UNSIGNED_SHORT ||
+      type === gl.BYTE ||
+      type === gl.UNSIGNED_BYTE
+    ) {
       gl.vertexAttribIPointer(index, size, type, stride, offset)
     } else {
       gl.vertexAttribPointer(index, size, type, normalized, stride, offset)

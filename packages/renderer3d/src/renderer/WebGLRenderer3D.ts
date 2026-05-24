@@ -15,18 +15,8 @@
 import { createContext, ShaderProgram, Texture, Framebuffer } from '../core'
 import { Mat4 } from '../math'
 import { Scene, Camera } from '../scene'
-import {
-  Material,
-  MeshStandardMaterial,
-  MeshBasicMaterial,
-  ShaderMaterial,
-} from '../material'
-import {
-  Light,
-  AmbientLight,
-  DirectionalLight,
-  PointLight,
-} from '../lights'
+import { Material, MeshStandardMaterial, MeshBasicMaterial, ShaderMaterial } from '../material'
+import { Light, AmbientLight, DirectionalLight, PointLight } from '../lights'
 import { Mesh, InstancedMesh, SkinnedMesh } from '../objects'
 
 import { RenderInfo, RenderState } from './RenderState'
@@ -69,9 +59,15 @@ function computeNormalMatrix(modelMat: Mat4, out: Float32Array): Float32Array {
   // We only need the 3×3 rotation/scale part.
   _mat4A.copy(modelMat).invert().transpose()
   const e = _mat4A.elements
-  out[0] = e[0]; out[1] = e[1]; out[2] = e[2]
-  out[3] = e[4]; out[4] = e[5]; out[5] = e[6]
-  out[6] = e[8]; out[7] = e[9]; out[8] = e[10]
+  out[0] = e[0]
+  out[1] = e[1]
+  out[2] = e[2]
+  out[3] = e[4]
+  out[4] = e[5]
+  out[5] = e[6]
+  out[6] = e[8]
+  out[7] = e[9]
+  out[8] = e[10]
   return out
 }
 
@@ -93,7 +89,7 @@ export class WebGLRenderer3D {
     vignette: number
   }
   pixelRatio: number
-  autoClear      = true
+  autoClear = true
   autoClearColor = true
   autoClearDepth = true
 
@@ -103,17 +99,17 @@ export class WebGLRenderer3D {
   }
 
   // ── Private state ─────────────────────────────────────────────────────────
-  private _width  = 0
+  private _width = 0
   private _height = 0
 
-  private readonly _state:      RenderState
-  private readonly _queue:      RenderQueue
-  private readonly _shadowMap:  ShadowMapRenderer
+  private readonly _state: RenderState
+  private readonly _queue: RenderQueue
+  private readonly _shadowMap: ShadowMapRenderer
   private _postProcess: PostProcess | null = null
 
   /** HDR framebuffer used when post-processing is enabled. */
-  private _hdrFBO:  Framebuffer | null = null
-  private _hdrTex:  Texture     | null = null
+  private _hdrFBO: Framebuffer | null = null
+  private _hdrTex: Texture | null = null
 
   // ── Cached identity light-space matrix (used when no shadow light present) ──
   private readonly _identityMat = new Mat4()
@@ -131,9 +127,9 @@ export class WebGLRenderer3D {
     this.canvas = canvas
     this.gl = createContext(canvas, {
       antialias: options.antialias ?? true,
-      alpha:     options.alpha    ?? false,
-      depth:     true,
-      stencil:   false,
+      alpha: options.alpha ?? false,
+      depth: true,
+      stencil: false,
       powerPreference: 'high-performance',
     })
 
@@ -141,20 +137,20 @@ export class WebGLRenderer3D {
 
     this.shadowMap = {
       enabled: options.shadowMap ?? true,
-      type:    'pcf',
+      type: 'pcf',
     }
 
     this.postProcessing = {
-      enabled:     options.postProcess ?? false,
-      bloom:       { enabled: true, strength: 0.04, threshold: 1.0, radius: 1.0 },
+      enabled: options.postProcess ?? false,
+      bloom: { enabled: true, strength: 0.04, threshold: 1.0, radius: 1.0 },
       toneMapping: 'aces',
-      exposure:    1.0,
-      vignette:    0.3,
+      exposure: 1.0,
+      vignette: 0.3,
     }
 
     // Internal subsystems
-    this._state   = new RenderState(this.gl)
-    this._queue   = new RenderQueue()
+    this._state = new RenderState(this.gl)
+    this._queue = new RenderQueue()
     this._shadowMap = new ShadowMapRenderer(this.gl, this._state)
 
     if (options.postProcess) {
@@ -162,7 +158,7 @@ export class WebGLRenderer3D {
     }
 
     // Initial size
-    const w = canvas.width  || canvas.clientWidth  || 1
+    const w = canvas.width || canvas.clientWidth || 1
     const h = canvas.height || canvas.clientHeight || 1
     this.setSize(w, h)
 
@@ -176,13 +172,13 @@ export class WebGLRenderer3D {
   // ---------------------------------------------------------------------------
 
   setSize(width: number, height: number): void {
-    this._width  = width
+    this._width = width
     this._height = height
 
-    const pw = Math.floor(width  * this.pixelRatio)
+    const pw = Math.floor(width * this.pixelRatio)
     const ph = Math.floor(height * this.pixelRatio)
 
-    this.canvas.width  = pw
+    this.canvas.width = pw
     this.canvas.height = ph
 
     this.gl.viewport(0, 0, pw, ph)
@@ -207,8 +203,8 @@ export class WebGLRenderer3D {
   clear(color = true, depth = true, stencil = false): void {
     const { gl } = this
     let mask = 0
-    if (color)   mask |= gl.COLOR_BUFFER_BIT
-    if (depth)   mask |= gl.DEPTH_BUFFER_BIT
+    if (color) mask |= gl.COLOR_BUFFER_BIT
+    if (depth) mask |= gl.DEPTH_BUFFER_BIT
     if (stencil) mask |= gl.STENCIL_BUFFER_BIT
     if (mask) gl.clear(mask)
   }
@@ -234,7 +230,7 @@ export class WebGLRenderer3D {
 
     // Store for shader use
     this._state.currentCamera = camera
-    this._state.currentScene  = scene
+    this._state.currentScene = scene
 
     // Reset per-frame info
     this._state.resetInfo()
@@ -316,23 +312,16 @@ export class WebGLRenderer3D {
       let bloomTex: Texture = this._hdrTex // default: no bloom = use scene itself
 
       if (ppc.bloom.enabled) {
-        bloomTex = pp.renderBloom(
-          this._hdrTex,
-          ppc.bloom.strength,
-          ppc.bloom.threshold,
-          ppc.bloom.radius,
-        )
+        bloomTex = pp.renderBloom(this._hdrTex, ppc.bloom.strength, ppc.bloom.threshold, ppc.bloom.radius)
       }
 
-      const tonemapMode =
-        ppc.toneMapping === 'aces'     ? 1 :
-        ppc.toneMapping === 'reinhard' ? 0 : 2
+      const tonemapMode = ppc.toneMapping === 'aces' ? 1 : ppc.toneMapping === 'reinhard' ? 0 : 2
 
       pp.composite(this._hdrTex, bloomTex, {
-        exposure:     ppc.exposure,
+        exposure: ppc.exposure,
         bloomStrength: ppc.bloom.enabled ? ppc.bloom.strength : 0,
         tonemapMode,
-        vignette:     ppc.vignette,
+        vignette: ppc.vignette,
       })
     }
 
@@ -351,7 +340,7 @@ export class WebGLRenderer3D {
 
     if (!material.visible) return
 
-    const isSkinned  = !!(object as SkinnedMesh).isSkinnedMesh
+    const isSkinned = !!(object as SkinnedMesh).isSkinnedMesh
     const isInstanced = !!(object as InstancedMesh).isInstancedMesh
 
     // ── Get / compile shader ──
@@ -378,11 +367,7 @@ export class WebGLRenderer3D {
           6, // base attrib location for mat4 columns
         )
         if (im.instanceColor) {
-          this._state.uploadInstanceColor(
-            entry,
-            im.instanceColor.data as Float32Array,
-            10,
-          )
+          this._state.uploadInstanceColor(entry, im.instanceColor.data as Float32Array, 10)
         }
       }
     }
@@ -407,15 +392,14 @@ export class WebGLRenderer3D {
     // ── Draw ──
     vao.bind()
 
-    const hasIndex   = geometry.index !== null
-    const start      = item.groupStart
-    const count      = item.groupCount
+    const hasIndex = geometry.index !== null
+    const start = item.groupStart
+    const count = item.groupCount
 
     if (isInstanced) {
       const im = object as InstancedMesh
       if (hasIndex) {
-        const indexType = geometry.index!.data instanceof Uint32Array
-          ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+        const indexType = geometry.index!.data instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
         const byteOffset = start * (indexType === gl.UNSIGNED_INT ? 4 : 2)
         gl.drawElementsInstanced(gl.TRIANGLES, count, indexType, byteOffset, im.count)
       } else {
@@ -429,8 +413,7 @@ export class WebGLRenderer3D {
     } else {
       if (material.wireframe) {
         if (hasIndex) {
-          const indexType = geometry.index!.data instanceof Uint32Array
-            ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+          const indexType = geometry.index!.data instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
           const byteOffset = start * (indexType === gl.UNSIGNED_INT ? 4 : 2)
           gl.drawElements(gl.LINES, count, indexType, byteOffset)
         } else {
@@ -438,8 +421,7 @@ export class WebGLRenderer3D {
         }
       } else {
         if (hasIndex) {
-          const indexType = geometry.index!.data instanceof Uint32Array
-            ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+          const indexType = geometry.index!.data instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
           const byteOffset = start * (indexType === gl.UNSIGNED_INT ? 4 : 2)
           gl.drawElements(gl.TRIANGLES, count, indexType, byteOffset)
         } else {
@@ -456,18 +438,14 @@ export class WebGLRenderer3D {
   // Uniform helpers
   // ---------------------------------------------------------------------------
 
-  private _setMatrixUniforms(
-    program: ShaderProgram,
-    object: Mesh,
-    camera: Camera,
-  ): void {
+  private _setMatrixUniforms(program: ShaderProgram, object: Mesh, camera: Camera): void {
     const modelMat = object.matrixWorld
-    const viewMat  = camera.matrixWorldInverse
-    const projMat  = camera.projectionMatrix
+    const viewMat = camera.matrixWorldInverse
+    const projMat = camera.projectionMatrix
 
-    program.setUniformMat4fv('u_modelMatrix',      modelMat.elements)
-    program.setUniformMat4fv('u_viewMatrix',        viewMat.elements)
-    program.setUniformMat4fv('u_projectionMatrix',  projMat.elements)
+    program.setUniformMat4fv('u_modelMatrix', modelMat.elements)
+    program.setUniformMat4fv('u_viewMatrix', viewMat.elements)
+    program.setUniformMat4fv('u_projectionMatrix', projMat.elements)
 
     // Normal matrix: transpose(inverse(modelMatrix)) — upper-left 3×3
     computeNormalMatrix(modelMat, _normalMatrix)
@@ -478,14 +456,14 @@ export class WebGLRenderer3D {
     let textureUnit = 0
 
     if (material instanceof MeshStandardMaterial) {
-      program.setUniform3f('u_color',          material.color.x, material.color.y, material.color.z)
-      program.setUniform1f('u_metalness',      material.metalness)
-      program.setUniform1f('u_roughness',      material.roughness)
+      program.setUniform3f('u_color', material.color.x, material.color.y, material.color.z)
+      program.setUniform1f('u_metalness', material.metalness)
+      program.setUniform1f('u_roughness', material.roughness)
       program.setUniform1f('u_aoMapIntensity', material.aoMapIntensity)
-      program.setUniform3f('u_emissive',       material.emissive.x, material.emissive.y, material.emissive.z)
+      program.setUniform3f('u_emissive', material.emissive.x, material.emissive.y, material.emissive.z)
       program.setUniform1f('u_emissiveIntensity', material.emissiveIntensity)
-      program.setUniform2f('u_normalScale',    material.normalScale.x, material.normalScale.y)
-      program.setUniform1f('u_opacity',        material.opacity)
+      program.setUniform2f('u_normalScale', material.normalScale.x, material.normalScale.y)
+      program.setUniform1f('u_opacity', material.opacity)
 
       if (material.map) {
         textureUnit = this._bindMaterialTexture(program, 'u_albedoMap', material.map.handle, textureUnit)
@@ -508,7 +486,7 @@ export class WebGLRenderer3D {
     }
 
     if (material instanceof MeshBasicMaterial) {
-      program.setUniform3f('u_color',   material.color.x, material.color.y, material.color.z)
+      program.setUniform3f('u_color', material.color.x, material.color.y, material.color.z)
       program.setUniform1f('u_opacity', 1.0)
       // Zero out PBR scalars so the lighting math still runs but produces flat output
       program.setUniform1f('u_metalness', 0.0)
@@ -545,7 +523,9 @@ export class WebGLRenderer3D {
 
     // ── Ambient ──
     const ambient = scene?.ambientColor ?? { x: 0.1, y: 0.1, z: 0.1 }
-    let ar = ambient.x, ag = ambient.y, ab = ambient.z
+    let ar = ambient.x,
+      ag = ambient.y,
+      ab = ambient.z
 
     // Accumulate additional AmbientLight contributions
     for (const light of lights) {
@@ -571,19 +551,21 @@ export class WebGLRenderer3D {
         // Direction from light toward scene (i.e. negative of light's forward)
         const le = light.matrixWorld.elements
         // Column 2 of the world matrix is the -Z (forward) direction
-        const dx = -le[8], dy = -le[9], dz = -le[10]
+        const dx = -le[8],
+          dy = -le[9],
+          dz = -le[10]
         // Normalize
         const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1
-        program.setUniform3f('u_dirLightDir',       dx / len, dy / len, dz / len)
-        program.setUniform3f('u_dirLightColor',     light.color.x, light.color.y, light.color.z)
+        program.setUniform3f('u_dirLightDir', dx / len, dy / len, dz / len)
+        program.setUniform3f('u_dirLightColor', light.color.x, light.color.y, light.color.z)
         program.setUniform1f('u_dirLightIntensity', light.intensity)
         dirSet = true
         break
       }
     }
     if (!dirSet) {
-      program.setUniform3f('u_dirLightDir',       0, -1, 0)
-      program.setUniform3f('u_dirLightColor',     0, 0, 0)
+      program.setUniform3f('u_dirLightDir', 0, -1, 0)
+      program.setUniform3f('u_dirLightColor', 0, 0, 0)
       program.setUniform1f('u_dirLightIntensity', 0)
     }
 
@@ -604,20 +586,20 @@ export class WebGLRenderer3D {
     for (let i = 0; i < pointLights.length; i++) {
       const pl = pointLights[i]
       const pe = pl.matrixWorld.elements
-      posArr[i * 3]     = pe[12]
+      posArr[i * 3] = pe[12]
       posArr[i * 3 + 1] = pe[13]
       posArr[i * 3 + 2] = pe[14]
-      colArr[i * 3]     = pl.color.x
+      colArr[i * 3] = pl.color.x
       colArr[i * 3 + 1] = pl.color.y
       colArr[i * 3 + 2] = pl.color.z
-      intArr[i]          = pl.intensity
-      rngArr[i]          = pl.distance
+      intArr[i] = pl.intensity
+      rngArr[i] = pl.distance
     }
 
-    program.setUniform3fv('u_pointLightPos',       posArr)
-    program.setUniform3fv('u_pointLightColor',     colArr)
+    program.setUniform3fv('u_pointLightPos', posArr)
+    program.setUniform3fv('u_pointLightColor', colArr)
     program.setUniform1fv('u_pointLightIntensity', intArr)
-    program.setUniform1fv('u_pointLightRange',     rngArr)
+    program.setUniform1fv('u_pointLightRange', rngArr)
   }
 
   private _setSceneUniforms(program: ShaderProgram): void {
@@ -627,8 +609,8 @@ export class WebGLRenderer3D {
 
     if (scene?.fog) {
       program.setUniform3f('u_fogColor', scene.fog.color.x, scene.fog.color.y, scene.fog.color.z)
-      program.setUniform1f('u_fogNear',  scene.fog.near)
-      program.setUniform1f('u_fogFar',   scene.fog.far)
+      program.setUniform1f('u_fogNear', scene.fog.near)
+      program.setUniform1f('u_fogFar', scene.fog.far)
     }
   }
 
@@ -642,16 +624,13 @@ export class WebGLRenderer3D {
       if (!shadow || !shadow.map) continue
 
       // Light-space matrix
-      const lightSpaceMat = _mat4B.multiplyMatrices(
-        shadow.camera.projectionMatrix,
-        shadow.camera.matrixWorldInverse,
-      )
+      const lightSpaceMat = _mat4B.multiplyMatrices(shadow.camera.projectionMatrix, shadow.camera.matrixWorldInverse)
       program.setUniformMat4fv('u_lightSpaceMatrix', lightSpaceMat.elements)
       program.setUniform1f('u_shadowBias', shadow.bias)
 
       // Bind shadow depth texture
       const shadowMap = shadow.map
-      const depthTex  = shadowMap.depthTexture
+      const depthTex = shadowMap.depthTexture
       if (depthTex) {
         const unit = 7 // reserve a fixed unit for the shadow map
         this._state.glState.bindTexture(unit, gl.TEXTURE_2D, depthTex.handle)
@@ -674,7 +653,7 @@ export class WebGLRenderer3D {
       const unit = 6 // dedicated unit for bone texture
       this._state.glState.bindTexture(unit, gl.TEXTURE_2D, mesh.skeleton.boneTexture)
       program.setUniform1i('u_boneTexture', unit)
-      program.setUniform1i('u_boneCount',   mesh.skeleton.bones.length)
+      program.setUniform1i('u_boneCount', mesh.skeleton.bones.length)
     }
   }
 
@@ -707,16 +686,23 @@ export class WebGLRenderer3D {
       }
       if (Array.isArray(value)) {
         switch (value.length) {
-          case 2: program.setUniform2f(name, value[0], value[1]); break
-          case 3: program.setUniform3f(name, value[0], value[1], value[2]); break
-          case 4: program.setUniform4f(name, value[0], value[1], value[2], value[3]); break
-          default: program.setUniform1fv(name, new Float32Array(value as number[])); break
+          case 2:
+            program.setUniform2f(name, value[0], value[1])
+            break
+          case 3:
+            program.setUniform3f(name, value[0], value[1], value[2])
+            break
+          case 4:
+            program.setUniform4f(name, value[0], value[1], value[2], value[3])
+            break
+          default:
+            program.setUniform1fv(name, new Float32Array(value as number[]))
+            break
         }
         continue
       }
       // WebGLTexture or object with .handle (Texture class)
-      const handle = (value as { handle?: WebGLTexture }).handle
-        ?? (value instanceof WebGLTexture ? value : null)
+      const handle = (value as { handle?: WebGLTexture }).handle ?? (value instanceof WebGLTexture ? value : null)
       if (handle) {
         gl.activeTexture(gl.TEXTURE0 + textureUnit)
         gl.bindTexture(gl.TEXTURE_2D, handle as WebGLTexture)
@@ -787,22 +773,21 @@ export class WebGLRenderer3D {
     const { gl } = this
 
     // Check for float texture support
-    const canHalfFloat = !!gl.getExtension('EXT_color_buffer_float') ||
-                         !!gl.getExtension('EXT_color_buffer_half_float')
+    const canHalfFloat = !!gl.getExtension('EXT_color_buffer_float') || !!gl.getExtension('EXT_color_buffer_half_float')
 
     const internalFormat = canHalfFloat ? gl.RGBA16F : gl.RGBA8
-    const type           = canHalfFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE
+    const type = canHalfFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE
 
     const fbo = new Framebuffer(gl, w, h)
 
     const colorTex = Texture.createEmpty(gl, w, h, {
       internalFormat,
-      format:    gl.RGBA,
+      format: gl.RGBA,
       type,
       minFilter: gl.LINEAR,
       magFilter: gl.LINEAR,
-      wrapS:     gl.CLAMP_TO_EDGE,
-      wrapT:     gl.CLAMP_TO_EDGE,
+      wrapS: gl.CLAMP_TO_EDGE,
+      wrapT: gl.CLAMP_TO_EDGE,
     })
 
     fbo.attachColor(colorTex, 0)

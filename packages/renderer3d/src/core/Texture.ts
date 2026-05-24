@@ -34,22 +34,13 @@ export class Texture {
     return this._height
   }
 
-  static fromImage(
-    gl: WebGL2RenderingContext,
-    img: HTMLImageElement | ImageBitmap,
-    opts?: TextureOptions,
-  ): Texture {
+  static fromImage(gl: WebGL2RenderingContext, img: HTMLImageElement | ImageBitmap, opts?: TextureOptions): Texture {
     const tex = new Texture(gl)
     tex.upload(img, opts)
     return tex
   }
 
-  static createEmpty(
-    gl: WebGL2RenderingContext,
-    w: number,
-    h: number,
-    opts?: TextureOptions,
-  ): Texture {
+  static createEmpty(gl: WebGL2RenderingContext, w: number, h: number, opts?: TextureOptions): Texture {
     const tex = new Texture(gl)
     tex.uploadData(null, w, h, opts)
     return tex

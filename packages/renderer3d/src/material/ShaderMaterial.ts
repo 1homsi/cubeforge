@@ -75,20 +75,22 @@ export class ShaderMaterial extends Material {
    */
   glslVersion: '300 es' | '100'
 
-  constructor(options: {
-    vertexShader?: string
-    fragmentShader?: string
-    uniforms?: Record<string, Uniform>
-    defines?: Record<string, string | number | boolean>
-    glslVersion?: '300 es' | '100'
-    name?: string
-  } = {}) {
+  constructor(
+    options: {
+      vertexShader?: string
+      fragmentShader?: string
+      uniforms?: Record<string, Uniform>
+      defines?: Record<string, string | number | boolean>
+      glslVersion?: '300 es' | '100'
+      name?: string
+    } = {},
+  ) {
     super(options.name ?? '')
-    this.vertexShader   = options.vertexShader   ?? 'void main() { gl_Position = vec4(0.0); }'
+    this.vertexShader = options.vertexShader ?? 'void main() { gl_Position = vec4(0.0); }'
     this.fragmentShader = options.fragmentShader ?? 'void main() {}'
-    this.uniforms       = options.uniforms       ?? {}
-    this.defines        = options.defines        ?? {}
-    this.glslVersion    = options.glslVersion    ?? '300 es'
+    this.uniforms = options.uniforms ?? {}
+    this.defines = options.defines ?? {}
+    this.glslVersion = options.glslVersion ?? '300 es'
   }
 
   /**
@@ -120,17 +122,13 @@ export class ShaderMaterial extends Material {
     // Find the end of the #version line and insert after it
     const versionEnd = shaderSource.indexOf('\n')
     if (versionEnd === -1) return definesBlock + '\n' + shaderSource
-    return shaderSource.slice(0, versionEnd + 1) +
-           definesBlock + '\n' +
-           shaderSource.slice(versionEnd + 1)
+    return shaderSource.slice(0, versionEnd + 1) + definesBlock + '\n' + shaderSource.slice(versionEnd + 1)
   }
 
   override clone(): this {
     const copy = super.clone()
     // Deep-copy mutable objects
-    copy.uniforms = Object.fromEntries(
-      Object.entries(this.uniforms).map(([k, u]) => [k, { value: u.value }])
-    )
+    copy.uniforms = Object.fromEntries(Object.entries(this.uniforms).map(([k, u]) => [k, { value: u.value }]))
     copy.defines = { ...this.defines }
     return copy
   }
