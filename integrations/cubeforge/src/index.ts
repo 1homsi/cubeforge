@@ -577,6 +577,9 @@ export type { ProceduralBuilding3DProps } from './components/ProceduralBuilding3
 export { Weather3D } from './components/Weather3D'
 export type { Weather3DProps } from './components/Weather3D'
 
+export { Sky3D } from './components/Sky3D'
+export type { Sky3DProps } from './components/Sky3D'
+
 // Environment
 export { EnvironmentMap3D } from './components/EnvironmentMap3D'
 export type { EnvironmentMap3DProps } from './components/EnvironmentMap3D'
@@ -630,5 +633,17 @@ export { AudioSource3DComponent } from './components/AudioSource3D'
 export type { AudioSource3DProps } from './components/AudioSource3D'
 
 export { useAudioOcclusion } from './hooks/useAudioOcclusion'
+
+// Motion blur post-process pass
+export { MotionBlurPass } from '@cubeforge/renderer3d'
+export type { MotionBlurOptions } from '@cubeforge/renderer3d'
+
+// 3D navigation mesh + A* pathfinding
+export { NavigationMesh3D } from '@cubeforge/renderer3d'
+export type { NavMeshPolygon } from '@cubeforge/renderer3d'
+
+// Sky system (low-level, re-exported for advanced use)
+export { SkySystem } from '@cubeforge/renderer3d'
+export type { SkyOptions } from '@cubeforge/renderer3d'
 
 export { AudioOcclusionContext } from './context/AudioOcclusionContext'
