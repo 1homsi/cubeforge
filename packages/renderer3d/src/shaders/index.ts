@@ -58,3 +58,12 @@ export { GBUFFER_NORMAL_FRAG } from './post/gbuffer_normal.frag'
 
 // ── Depth of Field ────────────────────────────────────────────────────────────
 export { DOF_FRAG } from './post/dof.frag'
+
+// ── Batched mesh ──────────────────────────────────────────────────────────────
+export { BATCH_VERT } from './batch.vert'
+
+// ── Procedural sky ────────────────────────────────────────────────────────────
+export { SKY_VERT } from './sky.vert'
+export { SKY_FRAG } from './sky.frag'
+export { STARS_VERT } from './stars.vert'
+export { STARS_FRAG } from './stars.frag'

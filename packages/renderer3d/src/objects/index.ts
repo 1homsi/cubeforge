@@ -1,6 +1,7 @@
 export { Bone, Skeleton } from './Skeleton'
 export { Mesh } from './Mesh'
 export { InstancedMesh } from './InstancedMesh'
+export { BatchedMesh } from './BatchedMesh'
 export { SkinnedMesh } from './SkinnedMesh'
 export { Raycaster } from './Raycaster'
 export type { Intersection } from './Raycaster'
