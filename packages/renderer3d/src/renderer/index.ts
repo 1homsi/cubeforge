@@ -18,6 +18,9 @@ export type { SSAOOptions } from './SSAO'
 
 export { FXAAPass } from './FXAA'
 
+export { DOFPass } from './DOF'
+export type { DOFOptions } from './DOF'
+
 export { DebugRenderer3D } from './DebugRenderer3D'
 export type { DebugOptions } from './DebugRenderer3D'
 

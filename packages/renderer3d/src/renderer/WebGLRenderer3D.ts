@@ -26,6 +26,7 @@ import { ShadowMapRenderer } from './ShadowMap'
 import { PostProcess } from './PostProcess'
 import { SSAOPass, SSAOOptions } from './SSAO'
 import { FXAAPass } from './FXAA'
+import { DOFPass, DOFOptions } from './DOF'
 import { GBUFFER_NORMAL_VERT, GBUFFER_NORMAL_FRAG } from '../shaders'
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,7 @@ export class WebGLRenderer3D {
     vignette: number
     ssao: { enabled: boolean; options: SSAOOptions }
     fxaa: { enabled: boolean }
+    dof: { enabled: boolean; options: DOFOptions }
   }
   pixelRatio: number
   autoClear = true
@@ -114,6 +116,7 @@ export class WebGLRenderer3D {
   private _postProcess: PostProcess | null = null
   private _ssaoPass: SSAOPass | null = null
   private _fxaaPass: FXAAPass | null = null
+  private _dofPass: DOFPass | null = null
 
   /** HDR framebuffer used when post-processing is enabled. */
   private _hdrFBO: Framebuffer | null = null
@@ -180,6 +183,7 @@ export class WebGLRenderer3D {
       vignette: 0.3,
       ssao: { enabled: false, options: {} },
       fxaa: { enabled: false },
+      dof: { enabled: false, options: {} },
     }
 
     // Internal subsystems
@@ -221,6 +225,7 @@ export class WebGLRenderer3D {
     this._postProcess?.resize(pw, ph)
     this._ssaoPass?.resize(pw, ph)
     this._fxaaPass?.resize(pw, ph)
+    this._dofPass?.resize(pw, ph)
     this._rebuildGBufferFBO(pw, ph)
   }
 
@@ -378,6 +383,43 @@ export class WebGLRenderer3D {
         bloomTex = pp.renderBloom(this._hdrTex, ppc.bloom.strength, ppc.bloom.threshold, ppc.bloom.radius)
       }
 
+      // ── 6b-2. DOF (after bloom, before composite) ──
+      // When DOF is enabled we need a depth texture. Prefer the G-buffer depth
+      // (available when SSAO is also active); otherwise capture one lazily.
+      let hdrTexForComposite: Texture = this._hdrTex
+      if (ppc.dof.enabled) {
+        // Ensure DOFPass is created
+        if (!this._dofPass) {
+          this._dofPass = new DOFPass(gl, this.canvas.width, this.canvas.height, ppc.dof.options)
+        } else {
+          // Propagate options in case they changed
+          Object.assign(this._dofPass.options, ppc.dof.options)
+        }
+
+        // Acquire depth texture: use G-buffer if available, otherwise run G-buffer pass now.
+        if (!this._gbufferDepthTex) {
+          this._runGBufferPass(scene, camera)
+        }
+
+        if (this._gbufferDepthTex) {
+          // DOF renders into a new intermediate FBO. We allocate a temporary
+          // LDR FBO (reusing the existing _ldrFBO if FXAA isn't using it, or
+          // just render DOF to a dedicated buffer embedded in DOFPass itself).
+          // DOFPass.render writes to the currently bound FBO — bind _ldrFBO.
+          if (!this._ldrFBO) {
+            this._ldrFBO = this._makeLDRFBO(this.canvas.width, this.canvas.height)
+          }
+          this._ldrFBO.bind()
+          gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+          this._dofPass.render(this._hdrTex, this._gbufferDepthTex, camera)
+          this._ldrFBO.unbind()
+          // Use the DOF output as the color source for the composite step.
+          // We temporarily swap _hdrTex reference only for the composite call.
+          hdrTexForComposite = this._ldrFBO.colorTexture
+        }
+      }
+
       const tonemapMode = ppc.toneMapping === 'aces' ? 1 : ppc.toneMapping === 'reinhard' ? 0 : 2
 
       // ── 6c. Composite (tone map + bloom + vignette) ──
@@ -388,6 +430,8 @@ export class WebGLRenderer3D {
         if (!this._fxaaPass) {
           this._fxaaPass = new FXAAPass(gl, this.canvas.width, this.canvas.height)
         }
+        // When DOF already used _ldrFBO we need a separate buffer for composite.
+        // Re-use the same _ldrFBO since DOF output is already in hdrTexForComposite.
         if (!this._ldrFBO) {
           this._ldrFBO = this._makeLDRFBO(this.canvas.width, this.canvas.height)
         }
@@ -396,7 +440,7 @@ export class WebGLRenderer3D {
         this._ldrFBO.bind()
         gl.viewport(0, 0, this.canvas.width, this.canvas.height)
         gl.clear(gl.COLOR_BUFFER_BIT)
-        pp.composite(this._hdrTex, bloomTex, {
+        pp.composite(hdrTexForComposite, bloomTex, {
           exposure: ppc.exposure,
           bloomStrength: ppc.bloom.enabled ? ppc.bloom.strength : 0,
           tonemapMode,
@@ -409,7 +453,7 @@ export class WebGLRenderer3D {
         gl.viewport(0, 0, this.canvas.width, this.canvas.height)
         this._fxaaPass.render(this._ldrFBO.colorTexture)
       } else {
-        pp.composite(this._hdrTex, bloomTex, {
+        pp.composite(hdrTexForComposite, bloomTex, {
           exposure: ppc.exposure,
           bloomStrength: ppc.bloom.enabled ? ppc.bloom.strength : 0,
           tonemapMode,

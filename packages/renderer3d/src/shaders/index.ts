@@ -55,3 +55,6 @@ export { FXAA_FRAG } from './post/fxaa.frag'
 // ── G-buffer normals ──────────────────────────────────────────────────────────
 export { GBUFFER_NORMAL_VERT } from './post/gbuffer_normal.vert'
 export { GBUFFER_NORMAL_FRAG } from './post/gbuffer_normal.frag'
+
+// ── Depth of Field ────────────────────────────────────────────────────────────
+export { DOF_FRAG } from './post/dof.frag'
