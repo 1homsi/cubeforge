@@ -40,6 +40,7 @@
     "@cubeforge/net": "workspace:*",
     "@cubeforge/physics": "workspace:*",
     "@cubeforge/renderer": "workspace:*",
+    "@cubeforge/renderer3d": "workspace:*",
     "tsup": "^8.0.0"
   },
   "keywords": [

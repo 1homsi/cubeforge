@@ -519,3 +519,70 @@ export type {
   EditorState,
   EntityInfo,
 } from '@cubeforge/editor'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3D — @cubeforge/renderer3d React integration
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Context
+export { Engine3DContext, ParentObject3DContext } from './context3d'
+export type { Engine3DState } from './context3d'
+
+// Root component
+export { Game3D } from './components/Game3D'
+export type { Game3DProps } from './components/Game3D'
+
+// Scene graph
+export { Transform3D } from './components/Transform3D'
+export type { Transform3DProps } from './components/Transform3D'
+
+// Mesh
+export { Mesh3D } from './components/Mesh3D'
+export type { Mesh3DProps } from './components/Mesh3D'
+
+export { InstancedMesh3D } from './components/InstancedMesh3D'
+export type { InstancedMesh3DProps } from './components/InstancedMesh3D'
+
+// Camera
+export { Camera3D } from './components/Camera3D'
+export type { Camera3DProps } from './components/Camera3D'
+
+export { FlyCamera3D } from './components/FlyCamera3D'
+export type { FlyCamera3DProps } from './components/FlyCamera3D'
+
+// Lights
+export { AmbientLight3D } from './components/AmbientLight3D'
+export type { AmbientLight3DProps } from './components/AmbientLight3D'
+
+export { DirectionalLight3D } from './components/DirectionalLight3D'
+export type { DirectionalLight3DProps } from './components/DirectionalLight3D'
+
+export { PointLight3D } from './components/PointLight3D'
+export type { PointLight3DProps } from './components/PointLight3D'
+
+export { SpotLight3D } from './components/SpotLight3D'
+export type { SpotLight3DProps } from './components/SpotLight3D'
+
+// Models & procedural geometry
+export { GLTFModel } from './components/GLTFModel'
+export type { GLTFModelProps } from './components/GLTFModel'
+
+export { Terrain3D } from './components/Terrain3D'
+export type { Terrain3DProps } from './components/Terrain3D'
+
+export { ProceduralBuilding3D } from './components/ProceduralBuilding3D'
+export type { ProceduralBuilding3DProps } from './components/ProceduralBuilding3D'
+
+// Effects
+export { Weather3D } from './components/Weather3D'
+export type { Weather3DProps } from './components/Weather3D'
+
+// Hooks
+export { useCamera3D } from './hooks/useCamera3D'
+export type { Camera3DControls } from './hooks/useCamera3D'
+
+export { useScene3D } from './hooks/useScene3D'
+export type { Scene3DControls } from './hooks/useScene3D'
+
+export { useAnimation3D } from './hooks/useAnimation3D'
+export type { Animation3DControls } from './hooks/useAnimation3D'
