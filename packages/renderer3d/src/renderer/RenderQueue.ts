@@ -12,6 +12,7 @@ import { BufferGeometry } from '../geometry'
 import { Material } from '../material'
 import { Light } from '../lights'
 import { Mesh, Sprite3D, Line3D } from '../objects'
+import { LOD } from '../objects/LOD'
 
 // ---------------------------------------------------------------------------
 // RenderItem
@@ -156,6 +157,15 @@ export class RenderQueue {
     const fwdZ = -camWorldE[10]
 
     scene.traverseVisible((obj) => {
+      // LOD node — update visibility of its children, then continue traversal
+      // so only the active level's meshes get added to the queue.
+      if ((obj as unknown as { isLOD?: boolean }).isLOD) {
+        const lod = obj as unknown as LOD
+        lod.update(camera)
+        // Do not return — traversal continues into the LOD's now-updated children
+        return
+      }
+
       // Collect lights
       if ((obj as unknown as { isLight?: boolean }).isLight || ('intensity' in obj && 'color' in obj)) {
         this.lights.push(obj as unknown as Light)
