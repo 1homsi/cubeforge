@@ -96,9 +96,9 @@ export class SkySystem {
       },
     })
     // Sky shader bypasses the model matrix — it places the dome centred on the
-    // camera using `a_position + u_cameraPosition`.  The camera is always inside
-    // the sphere, so we must render the back faces.
-    this._skyMat.side = 'back'
+    // camera using `a_position + u_cameraPosition`.  Render both faces so the
+    // sky is visible regardless of sphere winding direction.
+    this._skyMat.side = 'double'
     this._skyMat.depthWrite = false
 
     this._skyMesh = new Mesh(skyGeo, this._skyMat)

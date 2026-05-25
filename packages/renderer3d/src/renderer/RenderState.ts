@@ -111,7 +111,9 @@ export class RenderState {
     if (hasShadow) parts.push('SH')
 
     if (material instanceof ShaderMaterial) {
-      // Custom shader — include its defines in the key
+      // Use material.id so different ShaderMaterials (e.g. sky vs. stars) each
+      // get their own compiled program even when defines are identical.
+      parts.push(`sm${material.id}`)
       parts.push(JSON.stringify(material.defines))
     }
 

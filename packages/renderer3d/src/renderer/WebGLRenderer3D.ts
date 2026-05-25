@@ -795,15 +795,15 @@ export class WebGLRenderer3D {
     let dirSet = false
     for (const light of lights) {
       if (light instanceof DirectionalLight) {
-        // Direction from light toward scene (i.e. negative of light's forward)
+        // Direction from light position toward the scene origin.
+        // The fragment shader's calcDirLight negates this to get the L vector
+        // (surface → light), so we pass normalize(-position) here.
         const le = light.matrixWorld.elements
-        // Column 2 of the world matrix is the -Z (forward) direction
-        const dx = -le[8],
-          dy = -le[9],
-          dz = -le[10]
-        // Normalize
-        const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1
-        program.setUniform3f('u_dirLightDir', dx / len, dy / len, dz / len)
+        const px = le[12],
+          py = le[13],
+          pz = le[14]
+        const len = Math.sqrt(px * px + py * py + pz * pz) || 1
+        program.setUniform3f('u_dirLightDir', -px / len, -py / len, -pz / len)
         program.setUniform3f('u_dirLightColor', light.color.x, light.color.y, light.color.z)
         program.setUniform1f('u_dirLightIntensity', light.intensity)
         dirSet = true
