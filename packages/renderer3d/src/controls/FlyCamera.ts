@@ -168,6 +168,7 @@ export class FlyCamera {
   private _onKeyUp: (e: KeyboardEvent) => void
   private _onPointerLockChange: () => void
   private _onPointerLockError: () => void
+  private _onCanvasClick: () => void
 
   constructor(camera: PerspectiveCamera, canvas: HTMLCanvasElement, opts: FlyCameraOptions = {}) {
     this.camera = camera
@@ -212,12 +213,18 @@ export class FlyCamera {
     this._onKeyUp = (e: KeyboardEvent) => this._handleKeyUp(e)
     this._onPointerLockChange = () => this._handlePointerLockChange()
     this._onPointerLockError = () => this._handlePointerLockError()
+    this._onCanvasClick = () => {
+      if (this.enabled && !this._locked) {
+        this._canvas.requestPointerLock()
+      }
+    }
 
     document.addEventListener('mousemove', this._onMouseMove)
     document.addEventListener('keydown', this._onKeyDown)
     document.addEventListener('keyup', this._onKeyUp)
     document.addEventListener('pointerlockchange', this._onPointerLockChange)
     document.addEventListener('pointerlockerror', this._onPointerLockError)
+    this._canvas.addEventListener('click', this._onCanvasClick)
   }
 
   // ---------------------------------------------------------------------------
@@ -289,6 +296,7 @@ export class FlyCamera {
     document.removeEventListener('keyup', this._onKeyUp)
     document.removeEventListener('pointerlockchange', this._onPointerLockChange)
     document.removeEventListener('pointerlockerror', this._onPointerLockError)
+    this._canvas.removeEventListener('click', this._onCanvasClick)
     if (this._locked) {
       document.exitPointerLock()
     }

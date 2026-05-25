@@ -83,27 +83,26 @@ void main() {
   float zenithSecSun = 1.0 / (max(sunCosZenith, 0.03) + 0.15 * pow(93.885 - degrees(acos(max(sunCosZenith,-1.0))), -1.253));
   vec3 Fexsun = exp(-(betaR * RAYLEIGH_ZENITH_SIZE + betaM * MIE_ZENITH_SIZE) * zenithSecSun);
 
-  vec3 Lin = pow(
-    sunE * ((betaRTheta + betaMTheta) / (betaR + betaM)) * (1.0 - Fex),
-    vec3(1.5)
-  );
+  vec3 Lin = sunE * ((betaRTheta + betaMTheta) / (betaR + betaM)) * (1.0 - Fex);
   Lin *= mix(
     vec3(1.0),
     pow(sunE * ((betaRTheta + betaMTheta) / (betaR + betaM)) * Fexsun, vec3(0.5)),
     clamp(pow(1.0 - sunCosZenith, 5.0), 0.0, 1.0)
   );
 
-  // Night-time sky base
-  vec3 L0 = vec3(0.1) * Fex;
+  // Night-time sky base (subtle blue-tint when below horizon)
+  vec3 L0 = vec3(0.02) * Fex;
 
   // Sun disc
   float sunAngularDiameterCos = SUN_ANGULAR_DIAMETER;
   float sundisk = smoothstep(sunAngularDiameterCos, sunAngularDiameterCos + 0.00002, cosTheta);
   L0 += sunE * 19000.0 * Fex * sundisk;
 
-  vec3 color = (Lin + L0) * 0.04;
+  // Filmic tone mapping — works without an HDR pipeline
+  vec3 color = (Lin + L0) * 1.5;
+  color = vec3(1.0) - exp(-color);
 
-  // Approximate gamma correction
+  // Gamma correction
   color = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
 
   fragColor = vec4(color, 1.0);
