@@ -5,3 +5,4 @@ coverage/
 *.js.map
 bun.lock
 examples/
+.pipeline/

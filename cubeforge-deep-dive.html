@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cubeforge — How It Was Built (Deep Dive)</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg: #090910;
+  --surface: #111120;
+  --surface2: #181828;
+  --surface3: #1e1e36;
+  --accent: #4fc3f7;
+  --accent2: #a78bfa;
+  --accent3: #34d399;
+  --accent4: #fb923c;
+  --accent5: #f472b6;
+  --red: #f87171;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --border: #1e1e3a;
+  --border2: #2a2a50;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.65;
+  overflow-x: hidden;
+}
+
+/* ── NAV ── */
+.nav {
+  position: fixed; top:0; left:0; right:0; z-index:200;
+  background: #090910ee; backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border2);
+  display: flex; align-items: center; gap:0;
+  overflow-x: auto; padding: 0 20px;
+}
+.nav-logo { font-weight:800; font-size:1rem; color:var(--accent); padding: 14px 20px 14px 0; white-space:nowrap; border-right: 1px solid var(--border2); margin-right: 4px; }
+.nav a { color:var(--muted); text-decoration:none; font-size:12.5px; padding:16px 14px; white-space:nowrap; transition:color .15s; }
+.nav a:hover { color:var(--text); }
+
+/* ── HERO ── */
+.hero {
+  min-height: 70vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 120px 24px 60px;
+  background: radial-gradient(ellipse at 50% 0%, #1a1a4a 0%, var(--bg) 65%);
+}
+.hero-tag { display:inline-flex; align-items:center; gap:8px; background:#1e1e40; border:1px solid var(--border2); border-radius:999px; padding:5px 14px; font-size:12px; color:var(--accent2); margin-bottom:20px; }
+.hero h1 { font-size: clamp(2rem, 6vw, 4rem); font-weight:800; letter-spacing:-0.03em; line-height:1.15; margin-bottom:16px; }
+.grad { background: linear-gradient(135deg, #fff 20%, var(--accent) 55%, var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.hero-sub { color:var(--muted); font-size:clamp(.95rem,2.5vw,1.2rem); max-width:620px; }
+
+/* ── LAYOUT ── */
+.page { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+/* ── SECTION ── */
+.section { padding: 80px 0 40px; }
+.section + .section { border-top: 1px solid var(--border); }
+.tag { font-size:11px; text-transform:uppercase; letter-spacing:.15em; color:var(--accent); margin-bottom:8px; }
+.sec-title { font-size: clamp(1.5rem,3.5vw,2.2rem); font-weight:700; margin-bottom:12px; letter-spacing:-.02em; }
+.sec-desc { color:var(--muted); font-size:.98rem; max-width:700px; margin-bottom:36px; }
+
+/* ── CARDS ── */
+.card { background:var(--surface); border:1px solid var(--border2); border-radius:14px; padding:24px; }
+.card + .card { margin-top:16px; }
+.card:hover { border-color:#3a3a6a; }
+.card-title { font-weight:700; font-size:1rem; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+.card-desc { color:var(--muted); font-size:.9rem; }
+.file-path { font-family:monospace; font-size:11px; color:#4a4a80; margin-bottom:10px; }
+
+/* ── CODE ── */
+pre, .code {
+  background: #07070f;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 18px 20px;
+  font-family: 'Fira Code','Consolas',monospace;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: #cdd6f4;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+.kw { color: #cba6f7; }
+.fn { color: #89b4fa; }
+.str { color: #a6e3a1; }
+.num { color: #fab387; }
+.cm { color: #444466; font-style:italic; }
+.type { color: #89dceb; }
+.prop { color: #f5c2e7; }
+.tag-kw { color: #4fc3f7; }
+.dec { color: #f38ba8; }
+
+/* ── GRID ── */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media(max-width:720px) { .grid-2,.grid-3 { grid-template-columns:1fr; } }
+
+/* ── FLOW DIAGRAM ── */
+.flow { display:flex; flex-direction:column; gap:0; }
+.flow-row { display:flex; align-items:stretch; gap:12px; margin:4px 0; }
+.flow-box {
+  border-radius:10px; padding:12px 18px; font-size:13px; font-weight:600;
+  flex:1; cursor:default; transition:transform .15s, box-shadow .15s;
+  border: 1px solid transparent;
+}
+.flow-box:hover { transform:scale(1.02); }
+.flow-arrow { color:var(--muted); text-align:center; font-size:20px; padding:4px 0; }
+.fb-blue   { background:#0e2240; border-color:#1e4080; color:#60aeff; }
+.fb-purple { background:#1a0e3a; border-color:#3a1e6a; color:#b89eff; }
+.fb-green  { background:#082a1a; border-color:#154a2a; color:#4dddaa; }
+.fb-orange { background:#2a1400; border-color:#4a2800; color:#ffa060; }
+.fb-pink   { background:#2a0a1a; border-color:#4a1a2a; color:#ff80b0; }
+.fb-red    { background:#2a0808; border-color:#4a1818; color:#ff8080; }
+.flow-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; padding:2px 4px; }
+
+/* ── TABS ── */
+.tabs { display:flex; gap:4px; border-bottom:1px solid var(--border2); margin-bottom:20px; overflow-x:auto; }
+.tab-btn { padding:10px 18px; border:none; background:none; color:var(--muted); font-size:13px; cursor:pointer; border-bottom:2px solid transparent; transition:color .15s,border-color .15s; white-space:nowrap; font-family:inherit; }
+.tab-btn.active { color:var(--accent); border-color:var(--accent); }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+/* ── PILL ── */
+.pill { display:inline-block; border-radius:5px; padding:2px 8px; font-size:11px; font-weight:600; margin:2px; }
+.pill-blue   { background:#1e3a5f; color:var(--accent); }
+.pill-purple { background:#2d1b5e; color:#a78bfa; }
+.pill-green  { background:#0f3a2a; color:#34d399; }
+.pill-orange { background:#3a200f; color:#fb923c; }
+.pill-pink   { background:#3a1028; color:#f472b6; }
+.pill-red    { background:#3a1010; color:#f87171; }
+
+/* ── PROCESS STEPS ── */
+.process { position:relative; padding-left:40px; }
+.process::before { content:''; position:absolute; left:14px; top:24px; bottom:24px; width:2px; background:linear-gradient(180deg,var(--accent),var(--accent2)); }
+.step { position:relative; padding:20px 0; }
+.step::before { content:attr(data-n); position:absolute; left:-40px; top:22px; width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; text-align:center; line-height:28px; }
+.step h4 { font-size:1rem; font-weight:700; margin-bottom:6px; }
+.step p { color:var(--muted); font-size:.9rem; }
+
+/* ── COMPARISON TABLE ── */
+.ct { width:100%; border-collapse:collapse; font-size:13px; }
+.ct th { padding:12px 16px; text-align:left; border-bottom:2px solid var(--border2); color:var(--muted); font-weight:600; }
+.ct td { padding:10px 16px; border-bottom:1px solid var(--border); vertical-align:top; }
+.ct tr:hover td { background:var(--surface2); }
+.mono { font-family:monospace; font-size:12px; color:var(--accent2); }
+
+/* ── CALLOUT ── */
+.callout { border-radius:10px; padding:16px 20px; margin:16px 0; font-size:.9rem; }
+.callout-blue  { background:#0e2240; border-left:3px solid var(--accent); }
+.callout-green { background:#082a1a; border-left:3px solid var(--accent3); }
+.callout-orange{ background:#2a1400; border-left:3px solid var(--accent4); }
+.callout strong { color:var(--text); }
+
+/* ── MINI MAP ── */
+#minimap { position:fixed; right:20px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:6px; z-index:100; }
+.mm-dot { width:8px; height:8px; border-radius:50%; background:var(--border2); cursor:pointer; transition:background .2s,transform .2s; }
+.mm-dot.active { background:var(--accent); transform:scale(1.4); }
+.mm-dot:hover { background:var(--muted); }
+
+@media(max-width:900px){ #minimap{display:none} }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">⚡ Cubeforge Deep Dive</div>
+  <a href="#overview">Overview</a>
+  <a href="#ecs">ECS</a>
+  <a href="#gameloop">Game Loop</a>
+  <a href="#physics">Physics</a>
+  <a href="#renderer">Renderer</a>
+  <a href="#input">Input</a>
+  <a href="#audio">Audio</a>
+  <a href="#net">Multiplayer</a>
+  <a href="#react">React Bridge</a>
+  <a href="#contribute">Contribute</a>
+</nav>
+
+<!-- MINIMAP -->
+<div id="minimap">
+  <div class="mm-dot" data-section="overview" title="Overview"></div>
+  <div class="mm-dot" data-section="ecs" title="ECS"></div>
+  <div class="mm-dot" data-section="gameloop" title="Game Loop"></div>
+  <div class="mm-dot" data-section="physics" title="Physics"></div>
+  <div class="mm-dot" data-section="renderer" title="Renderer"></div>
+  <div class="mm-dot" data-section="input" title="Input"></div>
+  <div class="mm-dot" data-section="audio" title="Audio"></div>
+  <div class="mm-dot" data-section="net" title="Multiplayer"></div>
+  <div class="mm-dot" data-section="react" title="React Bridge"></div>
+  <div class="mm-dot" data-section="contribute" title="Contribute"></div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">🔬 Technical Deep Dive — For Contributors</div>
+  <h1><span class="grad">How Cubeforge<br>Was Actually Built</span></h1>
+  <p class="hero-sub">A complete walkthrough of the real code — every system, every pattern, every design decision — so you can understand it and start contributing.</p>
+</div>
+
+<div class="page">
+
+<!-- ═══════════════════════════════════════════ OVERVIEW ════ -->
+<section class="section" id="overview">
+  <div class="tag">Big Picture</div>
+  <h2 class="sec-title">The Architecture in One View</h2>
+  <p class="sec-desc">Before diving into individual files, here's how all the pieces fit together. Every arrow is a real dependency in the code.</p>
+
+  <div class="flow" style="margin-bottom:32px">
+    <div class="flow-label">↓ You write this</div>
+    <div class="flow-row">
+      <div class="flow-box fb-purple">Your Game Code — JSX Components like &lt;Player /&gt;, &lt;Enemy /&gt;, &lt;World /&gt;</div>
+    </div>
+    <div class="flow-arrow">↓ React renders your components into the engine</div>
+    <div class="flow-row">
+      <div class="flow-box fb-blue">React Bridge Layer — integrations/cubeforge — &lt;Game&gt;, &lt;Entity&gt;, &lt;Sprite&gt; as React components</div>
+    </div>
+    <div class="flow-arrow">↓ Creates entities and registers components in the ECS</div>
+    <div class="flow-row">
+      <div class="flow-box fb-blue" style="flex:2">ECS World — packages/core/src/ecs/world.ts — stores all entities and components</div>
+      <div class="flow-box fb-blue">Game Loop — loop/gameLoop.ts — 60 fps timer</div>
+      <div class="flow-box fb-blue">Event Bus — events/eventBus.ts — system communication</div>
+    </div>
+    <div class="flow-arrow">↓ Every frame, systems read the ECS and do their jobs</div>
+    <div class="flow-row">
+      <div class="flow-box fb-green">Script System — runs your update() functions</div>
+      <div class="flow-box fb-orange">Physics System — gravity, collision, rigid bodies</div>
+      <div class="flow-box fb-purple">Render System — draws everything to canvas</div>
+      <div class="flow-box fb-pink">Input System — keyboard / mouse / gamepad</div>
+    </div>
+    <div class="flow-arrow">↓ Optional modules plug in</div>
+    <div class="flow-row">
+      <div class="flow-box fb-pink">Audio — Web Audio API</div>
+      <div class="flow-box fb-blue">WebGL2 Renderer — GPU instancing</div>
+      <div class="flow-box fb-red">Net — WebSocket multiplayer + rollback</div>
+    </div>
+    <div class="flow-arrow">↓ Output</div>
+    <div class="flow-row">
+      <div class="flow-box fb-green">HTML &lt;canvas&gt; — the player sees this — rendered at 60 fps</div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">🗂 Folder Structure</div>
+      <pre style="margin:8px 0 0;font-size:11px">cubeforge/
+├─ packages/
+│  ├─ core/          ← ECS, loop, events
+│  ├─ physics/       ← gravity, collision
+│  ├─ renderer/      ← canvas2D drawing
+│  ├─ webgl-renderer/← GPU drawing
+│  ├─ input/         ← keyboard/mouse
+│  ├─ audio/         ← Web Audio API
+│  └─ net/           ← multiplayer
+└─ integrations/
+   └─ cubeforge/     ← React components</pre>
+    </div>
+    <div class="card">
+      <div class="card-title">🧠 Key Insight: ECS</div>
+      <p class="card-desc" style="margin-bottom:8px">The whole engine is built on an ECS (Entity-Component-System). Think of it like a spreadsheet: rows are entities, columns are components, and systems scan the rows they care about every frame.</p>
+      <span class="pill pill-blue">O(1) creation</span>
+      <span class="pill pill-purple">Cache-friendly</span>
+      <span class="pill pill-green">Archetype pattern</span>
+    </div>
+    <div class="card">
+      <div class="card-title">📦 Tech Stack</div>
+      <div style="font-size:13px;color:var(--muted)">
+        <p>Language: <strong style="color:var(--text)">TypeScript</strong></p>
+        <p>UI layer: <strong style="color:var(--text)">React 18</strong></p>
+        <p>Rendering: <strong style="color:var(--text)">Canvas 2D + WebGL2</strong></p>
+        <p>Build: <strong style="color:var(--text)">pnpm workspaces</strong></p>
+        <p>Tests: <strong style="color:var(--text)">Vitest</strong></p>
+        <p>Types: <strong style="color:var(--text)">strict TypeScript</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ ECS ════ -->
+<section class="section" id="ecs">
+  <div class="tag">Core System</div>
+  <h2 class="sec-title">The ECS — Entity Component System</h2>
+  <p class="sec-desc">This is the most important file in the whole project. Everything else depends on it. File: <code style="color:var(--accent2)">packages/core/src/ecs/world.ts</code></p>
+
+  <div class="callout callout-blue">
+    <strong>Plain-English Version:</strong> Imagine a giant spreadsheet. Each row is a "thing" in your game (a player, an enemy, a coin). Each column is a piece of data (position, velocity, color). Systems scan specific columns every frame to do their work — the physics system looks at "has velocity" rows, the render system looks at "has sprite" rows. That's ECS.
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('ecs', 'ecs-arch')">Architecture</button>
+    <button class="tab-btn" onclick="switchTab('ecs', 'ecs-archetype')">Archetype Pattern</button>
+    <button class="tab-btn" onclick="switchTab('ecs', 'ecs-query')">Query Cache</button>
+    <button class="tab-btn" onclick="switchTab('ecs', 'ecs-det')">Determinism</button>
+  </div>
+
+  <div id="ecs-arch" class="tab-panel active">
+    <div class="grid-2">
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">How entities are created</h4>
+        <pre><span class="cm">// An entity is just a number (ID)</span>
+<span class="kw">type</span> <span class="type">EntityId</span> = <span class="type">number</span>
+
+<span class="cm">// Creating an entity:</span>
+<span class="kw">const</span> playerId = world.<span class="fn">createEntity</span>()
+<span class="cm">// Returns e.g. 1, 2, 3... just a number</span>
+
+<span class="cm">// Adding components to it:</span>
+world.<span class="fn">addComponent</span>(playerId, {
+  type: <span class="str">'Transform'</span>,
+  x: <span class="num">100</span>, y: <span class="num">300</span>, rotation: <span class="num">0</span>
+})
+world.<span class="fn">addComponent</span>(playerId, {
+  type: <span class="str">'RigidBody'</span>,
+  vx: <span class="num">0</span>, vy: <span class="num">0</span>, gravityScale: <span class="num">1</span>
+})
+
+<span class="cm">// Destroying it later:</span>
+world.<span class="fn">destroyEntity</span>(playerId)
+<span class="cm">// That's it — all components removed automatically</span></pre>
+      </div>
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">How systems query entities</h4>
+        <pre><span class="cm">// Physics system asks: "give me all entities
+// that have BOTH Transform AND RigidBody"</span>
+<span class="kw">const</span> bodies = world.<span class="fn">query</span>([
+  <span class="str">'Transform'</span>,
+  <span class="str">'RigidBody'</span>
+])
+
+<span class="cm">// Returns array of entity IDs — fast!</span>
+<span class="kw">for</span> (<span class="kw">const</span> id <span class="kw">of</span> bodies) {
+  <span class="kw">const</span> rb = world.<span class="fn">getComponent</span>&lt;<span class="type">RigidBodyComponent</span>&gt;(
+    id, <span class="str">'RigidBody'</span>
+  )
+  rb.vy += GRAVITY * dt <span class="cm">// apply gravity</span>
+}
+
+<span class="cm">// The query result is CACHED — repeated calls
+// are O(1) until a component change invalidates it</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="ecs-archetype" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px">The ECS uses an <strong style="color:var(--text)">Archetype Pattern</strong> — a clever optimization that groups entities with identical component sets together in memory. This is how big game engines like Unity's DOTS work.</p>
+    <div class="grid-2">
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">What an Archetype is</h4>
+        <pre><span class="cm">// These 3 entities share the same archetype:
+// { Transform, RigidBody, Sprite }
+//
+// Entity 1: player    ← archetype A
+// Entity 2: enemy     ← archetype A
+// Entity 3: coin      ← archetype A
+//
+// This entity has a different archetype:
+// { Transform, Sprite }  ← no RigidBody
+// Entity 4: background   ← archetype B
+//
+// When physics queries [Transform, RigidBody]:
+// → scans archetype A  ✓  (has both)
+// → skips archetype B  ✗  (missing RigidBody)
+//
+// Result: no per-entity scan needed at all!</span></pre>
+      </div>
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">Archetype in world.ts</h4>
+        <pre><span class="cm">// Simplified from the actual code:</span>
+<span class="kw">interface</span> <span class="type">Archetype</span> {
+  <span class="prop">key</span>: <span class="type">string</span>         <span class="cm">// e.g. "RigidBody|Sprite|Transform"</span>
+  <span class="prop">componentTypes</span>: <span class="type">Set</span>&lt;<span class="type">string</span>&gt;
+  <span class="prop">entities</span>: <span class="type">Set</span>&lt;<span class="type">EntityId</span>&gt;
+  <span class="prop">components</span>: <span class="type">Map</span>&lt;<span class="type">string</span>, <span class="type">Map</span>&lt;<span class="type">EntityId</span>, <span class="type">Component</span>&gt;&gt;
+}
+
+<span class="cm">// When you add a component, the entity moves
+// to the matching archetype (or a new one is created)</span>
+world.<span class="fn">addComponent</span>(id, { type: <span class="str">'RigidBody'</span> })
+<span class="cm">// → finds archetype { Transform, RigidBody }
+// → moves entity there
+// → old archetype loses this entity</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="ecs-query" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px">Every <code style="color:var(--accent2)">world.query()</code> result is cached. Calling the same query 100 times costs the same as calling it once — until a component changes.</p>
+    <pre><span class="cm">// First call — scans archetypes, builds result list, caches it</span>
+<span class="kw">const</span> result1 = world.<span class="fn">query</span>([<span class="str">'Transform'</span>, <span class="str">'RigidBody'</span>])
+
+<span class="cm">// Second call — returns cached list instantly (no scan)</span>
+<span class="kw">const</span> result2 = world.<span class="fn">query</span>([<span class="str">'Transform'</span>, <span class="str">'RigidBody'</span>])
+
+<span class="cm">// Component mutated (e.g. player moved):</span>
+world.<span class="fn">markDirty</span>(playerId, <span class="str">'Transform'</span>)
+<span class="cm">// → only caches that include 'Transform' are invalidated
+// → other queries (e.g. ['Sprite','Text']) stay cached</span>
+
+<span class="cm">// Next call rebuilds ONLY the invalidated cache entry</span>
+<span class="kw">const</span> result3 = world.<span class="fn">query</span>([<span class="str">'Transform'</span>, <span class="str">'RigidBody'</span>]) <span class="cm">// rebuilt</span></pre>
+  </div>
+
+  <div id="ecs-det" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px">The ECS supports <strong style="color:var(--text)">deterministic mode</strong> — given the same seed, the game will always play out identically. This is critical for replays, multiplayer, and debugging.</p>
+    <div class="grid-2">
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">Seeded RNG (LCG algorithm)</h4>
+        <pre><span class="cm">// Linear Congruential Generator
+// — a classic fast RNG used in games</span>
+world.<span class="fn">setDeterministicSeed</span>(<span class="num">42</span>)
+
+<span class="cm">// Now Math.random() is replaced with
+// a seeded version that produces the
+// same sequence every time:</span>
+world.<span class="fn">random</span>() <span class="cm">// → always 0.374... with seed 42</span>
+world.<span class="fn">random</span>() <span class="cm">// → always 0.821... next call</span>
+
+<span class="cm">// Use it in scripts for reproducibility:</span>
+<span class="kw">const</span> spawnX = world.<span class="fn">random</span>() * <span class="num">700</span></pre>
+      </div>
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">World Snapshots</h4>
+        <pre><span class="cm">// Save entire world state to a plain object:</span>
+<span class="kw">const</span> snap = world.<span class="fn">snapshot</span>()
+<span class="cm">// → { entities: [...], components: {...}, tick: 1234 }</span>
+
+<span class="cm">// Restore it (used by multiplayer rollback):</span>
+world.<span class="fn">restore</span>(snap)
+<span class="cm">// → world is exactly as it was at tick 1234</span>
+
+<span class="cm">// ClientPrediction uses this to:
+// 1. Save snapshot every frame
+// 2. When server says "you were wrong at tick 50"
+// 3. Restore snapshot from tick 50
+// 4. Re-simulate forward to current tick
+// 5. Player never sees a jump/glitch</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ GAME LOOP ════ -->
+<section class="section" id="gameloop">
+  <div class="tag">Timing</div>
+  <h2 class="sec-title">The Game Loop</h2>
+  <p class="sec-desc">File: <code style="color:var(--accent2)">packages/core/src/loop/gameLoop.ts</code> — The heartbeat of the engine. Runs 60 times per second.</p>
+
+  <div class="callout callout-blue">
+    <strong>The "spiral of death" problem:</strong> If the browser tab is hidden for 10 seconds, delta time would be 10 seconds, and everything would teleport. The GameLoop caps delta at 100ms to prevent this — a missed frame just plays a bit slow, not broken.
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">How the loop works</h4>
+      <pre><span class="cm">// requestAnimationFrame = browser's built-in
+// "call me just before the next screen paint"
+// Gives ~16.67ms between calls at 60fps</span>
+
+<span class="kw">class</span> <span class="type">GameLoop</span> {
+  <span class="fn">start</span>() {
+    <span class="kw">this</span>.running = <span class="kw">true</span>
+    <span class="kw">this</span>.lastTime = performance.<span class="fn">now</span>()
+    requestAnimationFrame(<span class="kw">this</span>.frame)
+  }
+
+  <span class="kw">private</span> frame = (time: <span class="type">number</span>) => {
+    <span class="cm">// Cap at 100ms — prevents spiral of death</span>
+    <span class="kw">const</span> dt = <span class="type">Math</span>.<span class="fn">min</span>(
+      (time - <span class="kw">this</span>.lastTime) / <span class="num">1000</span>,
+      <span class="num">0.1</span>
+    )
+    <span class="kw">this</span>.lastTime = time
+
+    <span class="cm">// Hit-pause: freeze sim for e.g. 0.1s on hit</span>
+    <span class="kw">if</span> (<span class="kw">this</span>.hitPauseTimer > <span class="num">0</span>) {
+      <span class="kw">this</span>.hitPauseTimer -= dt
+    } <span class="kw">else</span> {
+      <span class="kw">this</span>.onTick(dt) <span class="cm">// ← runs physics, scripts, render</span>
+    }
+
+    requestAnimationFrame(<span class="kw">this</span>.frame) <span class="cm">// ← schedules next frame</span>
+  }
+}</pre>
+    </div>
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">Special features</h4>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">⏸ Hit Pause</div>
+        <p class="card-desc">Call <code style="color:var(--accent2)">gameLoop.hitPause(0.08)</code> to freeze the simulation for 80ms. Used for satisfying "game feel" moments — enemy death, big explosion. The screen freezes briefly then resumes.</p>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">🔒 Fixed Timestep</div>
+        <p class="card-desc">Pass <code style="color:var(--accent2)">fixedDt: 1/60</code> to always tick at exactly 1/60s. This makes physics fully reproducible regardless of real frame rate — essential for deterministic multiplayer.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">⏯ Pause / Resume</div>
+        <p class="card-desc">Separate from start/stop — pause keeps state but stops ticking. Resume continues from where it left off. The game component wires this to window focus/blur automatically.</p>
+      </div>
+    </div>
+  </div>
+
+  <h4 style="margin:24px 0 10px;color:var(--accent)">Order of operations every frame</h4>
+  <div class="flow-row" style="gap:8px;flex-wrap:wrap">
+    <div class="flow-box fb-pink" style="flex:none;padding:8px 14px;font-size:12px">1. Input.flush()</div>
+    <div style="color:var(--muted);display:flex;align-items:center">→</div>
+    <div class="flow-box fb-green" style="flex:none;padding:8px 14px;font-size:12px">2. ScriptSystem.update(dt)</div>
+    <div style="color:var(--muted);display:flex;align-items:center">→</div>
+    <div class="flow-box fb-orange" style="flex:none;padding:8px 14px;font-size:12px">3. PhysicsSystem.update(dt)</div>
+    <div style="color:var(--muted);display:flex;align-items:center">→</div>
+    <div class="flow-box fb-blue" style="flex:none;padding:8px 14px;font-size:12px">4. TweenSystem.update(dt)</div>
+    <div style="color:var(--muted);display:flex;align-items:center">→</div>
+    <div class="flow-box fb-purple" style="flex:none;padding:8px 14px;font-size:12px">5. RenderSystem.draw()</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ PHYSICS ════ -->
+<section class="section" id="physics">
+  <div class="tag">Simulation</div>
+  <h2 class="sec-title">The Physics System</h2>
+  <p class="sec-desc">File: <code style="color:var(--accent2)">packages/physics/src/physicsSystem.ts</code> — Gravity, collision detection, and response. Runs at a fixed 60 Hz.</p>
+
+  <div class="callout callout-orange">
+    <strong>AABB collision</strong> — "Axis-Aligned Bounding Box." Every entity's hitbox is a rectangle that never rotates. This is simpler and faster than rotated shapes, and works perfectly for 2D games.
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('phys', 'phys-flow')">Step-by-step</button>
+    <button class="tab-btn" onclick="switchTab('phys', 'phys-rb')">RigidBody Data</button>
+    <button class="tab-btn" onclick="switchTab('phys', 'phys-special')">Special Features</button>
+    <button class="tab-btn" onclick="switchTab('phys', 'phys-events')">Collision Events</button>
+  </div>
+
+  <div id="phys-flow" class="tab-panel active">
+    <p style="color:var(--muted);margin-bottom:14px">Every physics tick (1/60 second), the system does this for every entity that has a <code style="color:var(--accent2)">RigidBody</code> and a <code style="color:var(--accent2)">BoxCollider</code>:</p>
+    <div class="process">
+      <div class="step" data-n="1">
+        <h4>Skip sleeping bodies</h4>
+        <p>If a body hasn't moved in several frames and isn't being pushed, mark it "sleeping" and skip it entirely. Big performance win for levels with many static-ish objects.</p>
+      </div>
+      <div class="step" data-n="2">
+        <h4>Apply gravity</h4>
+        <pre style="margin-top:8px"><span class="cm">// gravityScale lets per-entity gravity tuning
+// (e.g. a feather falls slower than a rock)</span>
+rb.vy += gravity * rb.gravityScale * dt</pre>
+      </div>
+      <div class="step" data-n="3">
+        <h4>Integrate velocity → move the entity</h4>
+        <pre style="margin-top:8px">transform.x += rb.vx * dt
+transform.y += rb.vy * dt</pre>
+      </div>
+      <div class="step" data-n="4">
+        <h4>CCD sweep (if enabled)</h4>
+        <p>For fast-moving objects (bullets, fast enemies), a <strong>swept AABB</strong> test checks the entire path traveled this frame, not just the endpoint. Prevents "tunneling" through walls.</p>
+      </div>
+      <div class="step" data-n="5">
+        <h4>Broad-phase: find potential collisions</h4>
+        <p>Uses archetype queries (not spatial hash by default) to get all collidable entities. Then checks AABB overlap in pairs. Only entities that overlap proceed to narrow phase.</p>
+      </div>
+      <div class="step" data-n="6">
+        <h4>Narrow-phase: resolve collision</h4>
+        <pre style="margin-top:8px"><span class="cm">// Calculate overlap depth on both axes</span>
+<span class="kw">const</span> overlapX = ...
+<span class="kw">const</span> overlapY = ...
+
+<span class="cm">// Push entities apart on the SMALLER overlap axis</span>
+<span class="cm">// (minimum translation vector)</span>
+<span class="kw">if</span> (overlapX &lt; overlapY) {
+  <span class="cm">// Push horizontally</span>
+  transform.x += overlapX * side
+  rb.vx = <span class="num">0</span>
+} <span class="kw">else</span> {
+  <span class="cm">// Push vertically (landing on platform)</span>
+  transform.y = platform.y - entity.height
+  rb.vy = <span class="num">0</span>
+  rb.onGround = <span class="kw">true</span>
+}</pre>
+      </div>
+      <div class="step" data-n="7">
+        <h4>Apply friction and bounce</h4>
+        <p>When on the ground, horizontal velocity is multiplied by <code style="color:var(--accent2)">1 - friction</code> each frame. Bounce coefficient determines how much velocity is preserved on impact (0 = stop, 1 = elastic).</p>
+      </div>
+      <div class="step" data-n="8">
+        <h4>Fire collision events</h4>
+        <p>After resolving, emits <code style="color:var(--accent2)">'collision'</code> events on the EventBus so your game scripts can react (play a sound, decrease health, collect a coin).</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="phys-rb" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px">The <code style="color:var(--accent2)">RigidBodyComponent</code> is the data packet every physics-enabled entity carries. It's defined in <code style="color:var(--accent2)">packages/physics/src/components/rigidbody.ts</code>.</p>
+    <pre><span class="kw">interface</span> <span class="type">RigidBodyComponent</span> {
+  <span class="cm">// Velocity</span>
+  <span class="prop">vx</span>: <span class="type">number</span>          <span class="cm">// horizontal speed (pixels/sec)</span>
+  <span class="prop">vy</span>: <span class="type">number</span>          <span class="cm">// vertical speed (pixels/sec)</span>
+
+  <span class="cm">// Physical properties</span>
+  <span class="prop">mass</span>: <span class="type">number</span>        <span class="cm">// affects impulse response</span>
+  <span class="prop">gravityScale</span>: <span class="type">number</span>  <span class="cm">// 0 = no gravity, 2 = double gravity</span>
+  <span class="prop">bounce</span>: <span class="type">number</span>      <span class="cm">// 0 = no bounce, 1 = perfect elastic</span>
+  <span class="prop">friction</span>: <span class="type">number</span>    <span class="cm">// ground friction multiplier</span>
+
+  <span class="cm">// State flags</span>
+  <span class="prop">isStatic</span>: <span class="type">boolean</span>   <span class="cm">// true = never moves (platforms, walls)</span>
+  <span class="prop">onGround</span>: <span class="type">boolean</span>   <span class="cm">// set by physics, read in scripts for jumping</span>
+  <span class="prop">isNearGround</span>: <span class="type">boolean</span> <span class="cm">// within ~2px — enables "coyote time" jumps</span>
+  <span class="prop">isKinematic</span>: <span class="type">boolean</span> <span class="cm">// skips gravity — you control movement manually</span>
+
+  <span class="cm">// Axis locking</span>
+  <span class="prop">lockX</span>: <span class="type">boolean</span>       <span class="cm">// can't move horizontally (fixed-column runner)</span>
+  <span class="prop">lockY</span>: <span class="type">boolean</span>       <span class="cm">// can't move vertically</span>
+
+  <span class="cm">// One-way platforms</span>
+  <span class="prop">dropThrough</span>: <span class="type">number</span>  <span class="cm">// countdown: skip one-way blocking for N steps</span>
+
+  <span class="cm">// Angular</span>
+  <span class="prop">angularVelocity</span>: <span class="type">number</span>
+  <span class="prop">angularDamping</span>: <span class="type">number</span>
+
+  <span class="cm">// Performance</span>
+  <span class="prop">sleeping</span>: <span class="type">boolean</span>    <span class="cm">// physics skips sleeping bodies</span>
+}</pre>
+  </div>
+
+  <div id="phys-special" class="tab-panel">
+    <div class="grid-2">
+      <div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">🪜 One-Way Platforms</div>
+          <p class="card-desc" style="margin-bottom:8px">Tag a platform as one-way → collider only blocks from above. Jump up through it, land on top. Set <code style="color:var(--accent2)">rb.dropThrough = 3</code> to fall through it.</p>
+          <pre style="font-size:11px">&lt;<span class="tag-kw">BoxCollider</span> <span class="prop">oneWay</span>={<span class="kw">true</span>} /&gt;</pre>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">🏔 Slope Handling</div>
+          <p class="card-desc">Slope colliders let the player walk up angled surfaces. Physics applies slope friction and adjusts velocity direction to follow the surface normal.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🕳 Kinematic Bodies</div>
+          <p class="card-desc">Skip gravity and velocity integration. You move them with <code style="color:var(--accent2)">useKinematicBody()</code> hook — ideal for elevators, moving platforms, doors.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">🐇 Coyote Time</div>
+          <p class="card-desc">When <code style="color:var(--accent2)">rb.isNearGround</code> is true (within 2px of ground), the player can still jump even if they've just walked off a ledge. Makes platformers feel less frustrating.</p>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">💫 Collision Layers</div>
+          <p class="card-desc">Each collider has a <code style="color:var(--accent2)">layer</code> (bitmask) and <code style="color:var(--accent2)">mask</code>. Only colliders whose layer matches another's mask interact. Bullets pass through walls but not enemies, for example.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🎯 CCD (Continuous Collision)</div>
+          <p class="card-desc">Fast objects (bullets, falling items) can pass through thin walls in a single frame. CCD sweeps a path between frames and catches these missed collisions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="phys-events" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px">The physics system fires events on the <strong>EventBus</strong> so your scripts can react without polling.</p>
+    <pre><span class="cm">// In your game script, listen for collisions:</span>
+eventBus.<span class="fn">on</span>(<span class="str">'collision'</span>, ({ a, b, normal }) => {
+  <span class="cm">// 'a' and 'b' are entity IDs</span>
+  <span class="kw">const</span> tagsA = world.<span class="fn">getComponent</span>&lt;<span class="type">TagComponent</span>&gt;(a, <span class="str">'Tag'</span>)
+  <span class="kw">const</span> tagsB = world.<span class="fn">getComponent</span>&lt;<span class="type">TagComponent</span>&gt;(b, <span class="str">'Tag'</span>)
+
+  <span class="kw">if</span> (tagsA?.tags.includes(<span class="str">'player'</span>) && tagsB?.tags.includes(<span class="str">'enemy'</span>)) {
+    <span class="fn">decreaseHealth</span>()
+    <span class="fn">playHitSound</span>()
+  }
+})
+
+<span class="cm">// When entities stop touching:</span>
+eventBus.<span class="fn">on</span>(<span class="str">'collisionEnd'</span>, ({ a, b }) => {
+  <span class="cm">// e.g. player left a moving platform</span>
+})</pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ RENDERER ════ -->
+<section class="section" id="renderer">
+  <div class="tag">Visual Output</div>
+  <h2 class="sec-title">The Rendering System</h2>
+  <p class="sec-desc">Two renderers: <code style="color:var(--accent2)">packages/renderer/src/renderSystem.ts</code> (Canvas 2D) and <code style="color:var(--accent2)">packages/webgl-renderer/src/webglRenderSystem.ts</code> (GPU).</p>
+
+  <div class="grid-2" style="margin-bottom:20px">
+    <div class="card">
+      <div class="card-title">🖌 Canvas 2D Renderer</div>
+      <p class="card-desc">Standard HTML5 canvas. Easy to debug, good for most games. Draws each sprite one at a time using the browser's 2D drawing API. Used automatically in simple setups.</p>
+      <span class="pill pill-green">Easy to understand</span>
+      <span class="pill pill-blue">Good for &lt;500 sprites</span>
+    </div>
+    <div class="card">
+      <div class="card-title">⚡ WebGL2 Renderer</div>
+      <p class="card-desc">GPU-accelerated. Batches all sprites into a single draw call using <strong>instancing</strong> — sends data for all 8192 sprites to the GPU in one shot. Dramatically faster for large worlds.</p>
+      <span class="pill pill-orange">8192 sprites per draw call</span>
+      <span class="pill pill-purple">GLSL shaders</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('rend', 'rend-passes')">Render Passes</button>
+    <button class="tab-btn" onclick="switchTab('rend', 'rend-camera')">Camera System</button>
+    <button class="tab-btn" onclick="switchTab('rend', 'rend-anim')">Animator</button>
+    <button class="tab-btn" onclick="switchTab('rend', 'rend-webgl')">WebGL Shaders</button>
+  </div>
+
+  <div id="rend-passes" class="tab-panel active">
+    <p style="color:var(--muted);margin-bottom:14px">Every frame, the renderer draws in this exact order (painter's algorithm — later draws go on top):</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-blue" style="flex:none;width:220px;padding:8px 14px;font-size:12px">1. Clear canvas</div><span style="color:var(--muted);font-size:13px">Fill background color</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-green" style="flex:none;width:220px;padding:8px 14px;font-size:12px">2. Parallax layers</div><span style="color:var(--muted);font-size:13px">Background scrolls at fraction of camera speed — creates depth illusion</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-purple" style="flex:none;width:220px;padding:8px 14px;font-size:12px">3. Apply camera transform</div><span style="color:var(--muted);font-size:13px">Shift canvas origin to follow player; apply zoom</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-blue" style="flex:none;width:220px;padding:8px 14px;font-size:12px">4. Sprites</div><span style="color:var(--muted);font-size:13px">Sorted by zIndex + render layer; supports flip, tint, blend modes, tiling, frame sprites</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-orange" style="flex:none;width:220px;padding:8px 14px;font-size:12px">5. Shapes</div><span style="color:var(--muted);font-size:13px">Circles, polygons, lines drawn with canvas paths</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-green" style="flex:none;width:220px;padding:8px 14px;font-size:12px">6. Text</div><span style="color:var(--muted);font-size:13px">Word-wrapped, shadow, stroke, custom font size/align</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-pink" style="flex:none;width:220px;padding:8px 14px;font-size:12px">7. Particles</div><span style="color:var(--muted);font-size:13px">Per-particle: size-over-life, rotation, gravity, attractors</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-blue" style="flex:none;width:220px;padding:8px 14px;font-size:12px">8. Trails</div><span style="color:var(--muted);font-size:13px">Fading polyline following entity movement</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-red" style="flex:none;width:220px;padding:8px 14px;font-size:12px">9. Debug overlays</div><span style="color:var(--muted);font-size:13px">Collider wireframes, FPS counter, nav grid (only in &lt;Game debug&gt;)</span></div>
+      <div style="display:flex;align-items:center;gap:12px"><div class="flow-box fb-purple" style="flex:none;width:220px;padding:8px 14px;font-size:12px">10. Post-process</div><span style="color:var(--muted);font-size:13px">Screen-space effects: blur, vignette, color grading</span></div>
+    </div>
+  </div>
+
+  <div id="rend-camera" class="tab-panel">
+    <div class="grid-2">
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">How camera follow works</h4>
+        <pre><span class="cm">// Camera doesn't "teleport" to player.
+// It lerps (linear interpolates) toward it.</span>
+
+<span class="cm">// Every frame:</span>
+camera.x += (target.x - camera.x) * smoothing
+camera.y += (target.y - camera.y) * smoothing
+
+<span class="cm">// smoothing = 0.85 means "move 85% of the
+// remaining distance each frame"
+// Result: smooth, organic camera movement</span>
+
+<span class="cm">// Dead zone: camera only starts following
+// when player leaves a center rectangle</span>
+<span class="kw">if</span> (Math.<span class="fn">abs</span>(playerX - camera.x) > deadZoneW) {
+  <span class="cm">// start following</span>
+}</pre>
+      </div>
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">Camera shake</h4>
+        <pre><span class="cm">// Shake is applied as an offset on top of
+// the smooth follow position.
+// It uses quadratic ease-out to fade:</span>
+
+<span class="kw">const</span> progress = shakeTime / shakeDuration
+<span class="kw">const</span> strength = shakeMagnitude * (1 - progress * progress)
+
+camera.offsetX = (<span class="type">Math</span>.<span class="fn">random</span>() * 2 - 1) * strength
+camera.offsetY = (<span class="type">Math</span>.<span class="fn">random</span>() * 2 - 1) * strength
+
+<span class="cm">// Result: violent shaking that smoothly
+// decelerates to stillness</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="rend-anim" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px">The animation system is a <strong>state machine</strong> — exactly like Unity's Animator. You define states (idle, run, jump) and conditions that trigger transitions.</p>
+    <pre><span class="cm">// Before rendering, the Animator evaluates transitions:</span>
+<span class="kw">for</span> (<span class="kw">const</span> transition <span class="kw">of</span> currentState.transitions) {
+  <span class="cm">// Check all conditions for this transition</span>
+  <span class="kw">if</span> (transition.conditions.<span class="fn">every</span>(c => <span class="fn">evaluateCondition</span>(c))) {
+    <span class="cm">// Check exit time (don't interrupt too early)</span>
+    <span class="kw">if</span> (!transition.hasExitTime || animProgress >= transition.exitTime) {
+      <span class="cm">// Transition to new state</span>
+      currentState = transition.target
+      animTime = <span class="num">0</span>
+
+      <span class="cm">// Fire enter/exit callbacks</span>
+      prevState.onExit?.()
+      currentState.onEnter?.()
+      <span class="kw">break</span>
+    }
+  }
+}
+
+<span class="cm">// Then play the current animation clip:</span>
+<span class="kw">const</span> frame = <span class="type">Math</span>.<span class="fn">floor</span>(animTime * fps) % totalFrames</pre>
+  </div>
+
+  <div id="rend-webgl" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px">The WebGL renderer uses <strong>instanced rendering</strong> — it uploads data for all sprites at once and the GPU draws them in parallel.</p>
+    <div class="grid-2">
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">Vertex Shader (runs on GPU)</h4>
+        <pre style="font-size:11px"><span class="cm">// This runs once per vertex, per instance
+// "per instance" = per sprite in the batch</span>
+attribute vec2 a_position;   <span class="cm">// quad corners</span>
+attribute vec2 a_texCoord;   <span class="cm">// UV coordinates</span>
+
+<span class="cm">// Per-instance data (one per sprite)</span>
+attribute vec4 a_transform;  <span class="cm">// x, y, scaleX, scaleY</span>
+attribute float a_rotation;  <span class="cm">// rotation angle</span>
+attribute vec4 a_tint;       <span class="cm">// color tint</span>
+
+void main() {
+  <span class="cm">// Apply transform to position quad corners</span>
+  vec2 pos = rotate(a_position * a_transform.zw,
+                    a_rotation) + a_transform.xy;
+  gl_Position = u_matrix * vec4(pos, 0, 1);
+}</pre>
+      </div>
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">How batching works</h4>
+        <pre style="font-size:11px"><span class="cm">// 1. Every frame, build a Float32Array with
+//    all sprite data packed together:</span>
+buffer[i*STRIDE + 0] = sprite.x
+buffer[i*STRIDE + 1] = sprite.y
+buffer[i*STRIDE + 2] = sprite.scaleX
+<span class="cm">// ... etc for all 8192 sprites</span>
+
+<span class="cm">// 2. Upload entire buffer to GPU once:</span>
+gl.<span class="fn">bufferData</span>(ARRAY_BUFFER, buffer, DYNAMIC_DRAW)
+
+<span class="cm">// 3. Draw ALL sprites in ONE GPU call:</span>
+gl.<span class="fn">drawArraysInstanced</span>(TRIANGLE_STRIP, 0, 4, count)
+<span class="cm">// GPU draws 4 vertices × count instances
+// in parallel — extremely fast!</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ INPUT ════ -->
+<section class="section" id="input">
+  <div class="tag">Controls</div>
+  <h2 class="sec-title">The Input System</h2>
+  <p class="sec-desc">Files: <code style="color:var(--accent2)">packages/input/src/inputManager.ts</code>, <code style="color:var(--accent2)">keyboard.ts</code>, <code style="color:var(--accent2)">mouse.ts</code>, <code style="color:var(--accent2)">touch.ts</code></p>
+
+  <div class="grid-2">
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">Transient state — the key insight</h4>
+      <pre><span class="cm">// "Transient" means: only true for ONE frame</span>
+
+<span class="cm">// Frame 1: player presses Space</span>
+keyboard.justPressed.add(<span class="str">'Space'</span>)
+keyboard.held.add(<span class="str">'Space'</span>)
+
+<span class="cm">// After frame 1: flush() is called</span>
+keyboard.justPressed.clear()  <span class="cm">// ← cleared!</span>
+<span class="cm">// held still contains 'Space'</span>
+
+<span class="cm">// Frame 2: Space still held</span>
+input.<span class="fn">isPressed</span>(<span class="str">'Space'</span>)  <span class="cm">→ false  (only first frame)</span>
+input.<span class="fn">isDown</span>(<span class="str">'Space'</span>)    <span class="cm">→ true   (still held)</span>
+
+<span class="cm">// Frame 3: player releases Space</span>
+keyboard.justReleased.add(<span class="str">'Space'</span>)
+keyboard.held.delete(<span class="str">'Space'</span>)
+
+input.<span class="fn">isReleased</span>(<span class="str">'Space'</span>) <span class="cm">→ true  (only this frame)</span></pre>
+    </div>
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">Advanced features</h4>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">🎮 Input Contexts</div>
+        <p class="card-desc">Switch between control schemes (e.g. "menu" vs "gameplay"). In menu context, WASD navigates; in gameplay context, WASD moves the player. Prevents input bleeds.</p>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">🎯 Combo Detection</div>
+        <p class="card-desc">Define sequences like <code style="color:var(--accent2)">['↓', '→', 'A']</code> and get notified when the player executes them within a time window. For fighting game moves.</p>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">📼 Recording & Playback</div>
+        <p class="card-desc">Record a session of inputs to a buffer, then play them back deterministically. Used for demos, automated testing, and replays.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">👥 Per-Player Input</div>
+        <p class="card-desc">In multiplayer games, each player gets their own <code style="color:var(--accent2)">PlayerInput</code> instance mapped to a specific gamepad or keyboard region.</p>
+      </div>
+    </div>
+  </div>
+
+  <h4 style="margin:24px 0 10px;color:var(--accent)">How to use it in a script</h4>
+  <pre><span class="cm">// Your script receives (entityId, world, input, dt)
+// 'input' is the InputManager</span>
+<span class="kw">function</span> <span class="fn">movePlayer</span>(id: <span class="type">EntityId</span>, world: <span class="type">ECSWorld</span>, input: <span class="type">InputManager</span>, dt: <span class="type">number</span>) {
+  <span class="kw">const</span> rb = world.<span class="fn">getComponent</span>&lt;<span class="type">RigidBodyComponent</span>&gt;(id, <span class="str">'RigidBody'</span>)!
+
+  <span class="cm">// Movement: isDown = true while key is held</span>
+  <span class="kw">if</span> (input.<span class="fn">isDown</span>(<span class="str">'ArrowLeft'</span>))  rb.vx = -<span class="num">200</span>
+  <span class="kw">if</span> (input.<span class="fn">isDown</span>(<span class="str">'ArrowRight'</span>)) rb.vx =  <span class="num">200</span>
+
+  <span class="cm">// Jump: isPressed = true ONLY on first frame of press</span>
+  <span class="cm">// Prevents holding Space from repeatedly jumping</span>
+  <span class="kw">if</span> (input.<span class="fn">isPressed</span>(<span class="str">'Space'</span>) && rb.onGround) {
+    rb.vy = -<span class="num">500</span>
+  }
+
+  <span class="cm">// Axis helper: -1, 0, or +1</span>
+  <span class="kw">const</span> axis = input.<span class="fn">getAxis</span>(<span class="str">'ArrowRight'</span>, <span class="str">'ArrowLeft'</span>)
+  rb.vx = axis * <span class="num">200</span>
+}</pre>
+</section>
+
+<!-- ═══════════════════════════════════════════ AUDIO ════ -->
+<section class="section" id="audio">
+  <div class="tag">Sound</div>
+  <h2 class="sec-title">The Audio System</h2>
+  <p class="sec-desc">File: <code style="color:var(--accent2)">packages/audio/src/useSound.ts</code> — A React hook wrapping the Web Audio API with pooling, groups, and fades.</p>
+
+  <div class="grid-2">
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">Gain node hierarchy</h4>
+      <pre><span class="cm">// Web Audio API uses a node graph:
+//
+//   AudioContext (hardware output)
+//        ↑
+//   Master GainNode  ← global volume
+//        ↑
+//   Group GainNode   ← 'sfx' or 'music' volume
+//        ↑
+//   Instance GainNode ← per-sound volume
+//        ↑
+//   AudioBufferSourceNode ← the actual audio
+//
+// Fade in/out just ramps the gain value smoothly:</span>
+gainNode.gain.<span class="fn">linearRampToValueAtTime</span>(
+  <span class="num">1.0</span>,                             <span class="cm">// target value</span>
+  audioCtx.currentTime + duration  <span class="cm">// time to reach it</span>
+)</pre>
+    </div>
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">Instance pooling</h4>
+      <pre><span class="cm">// AudioBufferSourceNode can only play ONCE.
+// To play the same sound many times rapidly
+// (e.g. gunshots), you need multiple instances.
+//
+// The pool pre-creates N AudioBufferSourceNodes
+// and recycles them:
+//
+// pool: [node1, node2, node3, node4]
+//          ↑ free  ↑ free  ↑ playing  ↑ free
+//
+// play() → grab next free node → start it
+// When it ends → return to free pool
+//
+// maxInstances (default 4) prevents 200
+// simultaneous gunshot sounds</span>
+
+sound.<span class="fn">play</span>()            <span class="cm">// grabs node from pool</span>
+sound.<span class="fn">fadeOut</span>(<span class="num">0.5</span>)     <span class="cm">// ramp gain to 0 over 0.5s</span>
+sound.<span class="fn">crossfadeTo</span>(newSrc, <span class="num">1.0</span>) <span class="cm">// music transition</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ NET ════ -->
+<section class="section" id="net">
+  <div class="tag">Multiplayer</div>
+  <h2 class="sec-title">The Networking System</h2>
+  <p class="sec-desc">Files: <code style="color:var(--accent2)">packages/net/src/room.ts</code>, <code style="color:var(--accent2)">clientPrediction.ts</code>, <code style="color:var(--accent2)">syncEntity.ts</code></p>
+
+  <div class="callout callout-blue">
+    <strong>The lag problem:</strong> In a multiplayer game, your input takes ~50ms to reach the server and come back. If you wait for the server's response before moving the player, everything feels laggy. The solution is "client-side prediction" — move immediately and correct if the server disagrees.
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('net', 'net-room')">Room</button>
+    <button class="tab-btn" onclick="switchTab('net', 'net-pred')">Client Prediction</button>
+    <button class="tab-btn" onclick="switchTab('net', 'net-sync')">syncEntity</button>
+  </div>
+
+  <div id="net-room" class="tab-panel active">
+    <p style="color:var(--muted);margin-bottom:14px">The <code style="color:var(--accent2)">Room</code> class is a thin wrapper over a WebSocket transport. It handles JSON serialization and peer identification.</p>
+    <pre><span class="cm">// Room wraps any transport (WebSocket, mock, etc.)
+// All messages are JSON on the wire:</span>
+<span class="kw">interface</span> <span class="type">NetMessage</span> {
+  type: <span class="type">string</span>      <span class="cm">// e.g. 'player:input', 'entity:state'</span>
+  payload: <span class="type">unknown</span>  <span class="cm">// any data</span>
+  peerId?: <span class="type">string</span>   <span class="cm">// who sent it (set by server relay)</span>
+  tick?: <span class="type">number</span>     <span class="cm">// simulation tick (for ordering)</span>
+}
+
+<span class="cm">// Create a room:</span>
+<span class="kw">const</span> room = <span class="kw">new</span> <span class="fn">Room</span>({
+  transport: <span class="kw">new</span> <span class="fn">WsTransport</span>(<span class="str">'wss://yourserver.com/game'</span>),
+  onPeerMessage: (peerId, msg) => {
+    <span class="cm">// Another player sent something</span>
+  }
+})
+
+<span class="kw">await</span> room.<span class="fn">connect</span>()
+room.<span class="fn">send</span>({ type: <span class="str">'player:input'</span>, payload: { vx: <span class="num">200</span> } })
+room.<span class="fn">onMessage</span>(msg => console.<span class="fn">log</span>(<span class="str">'received:'</span>, msg))</pre>
+  </div>
+
+  <div id="net-pred" class="tab-panel">
+    <div class="grid-2">
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">How rollback works</h4>
+        <div class="process">
+          <div class="step" data-n="1">
+            <h4>Save snapshot every frame</h4>
+            <p>ClientPrediction keeps a circular buffer of the last 60 world snapshots — one per frame.</p>
+          </div>
+          <div class="step" data-n="2">
+            <h4>Player acts immediately</h4>
+            <p>When you press right, the player moves right NOW without waiting for the server. The game feels instant.</p>
+          </div>
+          <div class="step" data-n="3">
+            <h4>Server correction arrives</h4>
+            <p>"At tick 50 your position was wrong." The server's simulation takes precedence.</p>
+          </div>
+          <div class="step" data-n="4">
+            <h4>Rollback + resimulate</h4>
+            <p>Restore snapshot from tick 50, re-apply all inputs since then. Player is now in the correct position. If the correction is small, the player barely notices a snap.</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h4 style="margin-bottom:10px;color:var(--accent)">Code</h4>
+        <pre><span class="kw">class</span> <span class="type">ClientPrediction</span> {
+  <span class="cm">// Circular buffer of 60 snapshots</span>
+  <span class="kw">private</span> buffer = <span class="kw">new</span> <span class="type">Map</span>&lt;<span class="type">number</span>, <span class="type">WorldSnapshot</span>&gt;()
+
+  <span class="fn">saveFrame</span>(tick: <span class="type">number</span>) {
+    <span class="kw">this</span>.buffer.<span class="fn">set</span>(tick, world.<span class="fn">snapshot</span>())
+    <span class="cm">// Evict frames older than bufferSize</span>
+    <span class="kw">if</span> (<span class="kw">this</span>.buffer.size > <span class="num">60</span>) {
+      <span class="kw">const</span> oldest = Math.<span class="fn">min</span>(...<span class="kw">this</span>.buffer.keys())
+      <span class="kw">this</span>.buffer.<span class="fn">delete</span>(oldest)
+    }
+  }
+
+  <span class="fn">applyCorrection</span>(serverSnap, tick) {
+    world.<span class="fn">restore</span>(serverSnap) <span class="cm">// ← rollback</span>
+    <span class="cm">// Caller then re-runs simulation forward</span>
+    <span class="cm">// from tick to current tick</span>
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="net-sync" class="tab-panel">
+    <p style="color:var(--muted);margin-bottom:14px"><code style="color:var(--accent2)">syncEntity</code> syncs a specific ECS entity's components across all players. The <strong>owner</strong> sends state at 20Hz; non-owners apply it.</p>
+    <pre><span class="cm">// Player 1 (owner) — sends their player's position</span>
+<span class="kw">const</span> sync = <span class="fn">syncEntity</span>({
+  entityId: myPlayerId,
+  world,
+  room,
+  ownerId: <span class="str">'player1'</span>,
+  myId: <span class="str">'player1'</span>,         <span class="cm">// I am the owner</span>
+  components: [<span class="str">'Transform'</span>, <span class="str">'RigidBody'</span>],
+  tickRate: <span class="num">20</span>,             <span class="cm">// send 20 times per second</span>
+})
+sync.<span class="fn">start</span>()
+
+<span class="cm">// Player 2 (non-owner) — receives and applies</span>
+<span class="kw">const</span> sync2 = <span class="fn">syncEntity</span>({
+  entityId: player1Entity,
+  world, room,
+  ownerId: <span class="str">'player1'</span>,
+  myId: <span class="str">'player2'</span>,          <span class="cm">// I am NOT the owner</span>
+  components: [<span class="str">'Transform'</span>, <span class="str">'RigidBody'</span>],
+})
+<span class="cm">// When a message arrives:
+// → applyRemoteState() does a shallow-merge
+//   (preserves ECS object references, just
+//    updates the number values)</span></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ REACT ════ -->
+<section class="section" id="react">
+  <div class="tag">The Bridge</div>
+  <h2 class="sec-title">How React Talks to the Game Engine</h2>
+  <p class="sec-desc">The most creative part of the project. File: <code style="color:var(--accent2)">integrations/cubeforge/src/</code></p>
+
+  <div class="callout callout-green">
+    <strong>The core idea:</strong> React is normally used to build UIs. Your friend figured out how to make it drive a game engine. When React mounts a <code>&lt;Sprite /&gt;</code> component, it adds a Sprite to the ECS. When React unmounts it (e.g. coin collected), the ECS entity is destroyed. React's tree IS the game world.
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">React Context = engine access</h4>
+      <pre><span class="cm">// EngineContext is created once by &lt;Game&gt;
+// and provided to all children via React's
+// Context API:</span>
+
+<span class="kw">interface</span> <span class="type">EngineState</span> {
+  world: <span class="type">ECSWorld</span>
+  loop: <span class="type">GameLoop</span>
+  input: <span class="type">InputManager</span>
+  events: <span class="type">EventBus</span>
+  assets: <span class="type">AssetManager</span>
+  renderer: <span class="type">RenderSystem</span>
+}
+
+<span class="cm">// Any component can access the engine:</span>
+<span class="kw">const</span> { world, input } = <span class="fn">useContext</span>(<span class="type">EngineContext</span>)
+
+<span class="cm">// EntityContext holds the current entity ID:</span>
+<span class="kw">const</span> entityId = <span class="fn">useContext</span>(<span class="type">EntityContext</span>)</pre>
+    </div>
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">How &lt;Entity&gt; works</h4>
+      <pre><span class="cm">// When React renders &lt;Entity id="player"&gt;:</span>
+<span class="kw">function</span> <span class="fn">Entity</span>({ id, children }) {
+  <span class="kw">const</span> { world } = <span class="fn">useContext</span>(<span class="type">EngineContext</span>)
+
+  <span class="kw">const</span> entityId = <span class="fn">useMemo</span>(() => {
+    <span class="kw">return</span> world.<span class="fn">createEntity</span>()  <span class="cm">// ← entity created!</span>
+  }, [])
+
+  <span class="fn">useEffect</span>(() => {
+    <span class="kw">return</span> () => world.<span class="fn">destroyEntity</span>(entityId) <span class="cm">// ← cleanup!</span>
+  }, [])
+
+  <span class="cm">// Provide entityId to children via context</span>
+  <span class="kw">return</span> (
+    &lt;<span class="tag-kw">EntityContext</span>.Provider value={entityId}&gt;
+      {children}   <span class="cm">// &lt;Sprite&gt;, &lt;RigidBody&gt;, etc.</span>
+    &lt;/<span class="tag-kw">EntityContext</span>.Provider&gt;
+  )
+}</pre>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:16px">
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">How &lt;Sprite&gt; works</h4>
+      <pre><span class="cm">// &lt;Sprite&gt; adds/removes SpriteComponent
+// from the ECS entity when mounted/unmounted</span>
+<span class="kw">function</span> <span class="fn">Sprite</span>({ width, height, color }) {
+  <span class="kw">const</span> { world } = <span class="fn">useContext</span>(<span class="type">EngineContext</span>)
+  <span class="kw">const</span> entityId = <span class="fn">useContext</span>(<span class="type">EntityContext</span>)
+
+  <span class="fn">useEffect</span>(() => {
+    world.<span class="fn">addComponent</span>(entityId, {
+      type: <span class="str">'Sprite'</span>, width, height, color
+    })
+    <span class="kw">return</span> () => world.<span class="fn">removeComponent</span>(entityId, <span class="str">'Sprite'</span>)
+  }, [])
+
+  <span class="cm">// Sync prop changes to the ECS</span>
+  <span class="fn">useEffect</span>(() => {
+    <span class="kw">const</span> c = world.<span class="fn">getComponent</span>(entityId, <span class="str">'Sprite'</span>)
+    <span class="kw">if</span> (c) { c.width = width; c.height = height; c.color = color }
+  }, [width, height, color])
+
+  <span class="kw">return null</span> <span class="cm">// renders nothing to DOM!</span>
+}</pre>
+    </div>
+    <div>
+      <h4 style="margin-bottom:10px;color:var(--accent)">What &lt;Game&gt; bootstraps</h4>
+      <pre><span class="cm">// Game.tsx is the "main function" of the engine.
+// It creates and wires together:</span>
+<span class="kw">const</span> world    = <span class="kw">new</span> <span class="fn">ECSWorld</span>()
+<span class="kw">const</span> loop     = <span class="kw">new</span> <span class="fn">GameLoop</span>(tick)
+<span class="kw">const</span> input    = <span class="kw">new</span> <span class="fn">InputManager</span>()
+<span class="kw">const</span> events   = <span class="kw">new</span> <span class="fn">EventBus</span>()
+<span class="kw">const</span> physics  = <span class="kw">new</span> <span class="fn">PhysicsSystem</span>(world, events, gravity)
+<span class="kw">const</span> renderer = <span class="kw">new</span> <span class="fn">WebGLRenderSystem</span>(canvas, world)
+<span class="kw">const</span> scripts  = <span class="kw">new</span> <span class="fn">ScriptSystem</span>(world, input)
+
+<span class="kw">function</span> <span class="fn">tick</span>(dt) {
+  input.<span class="fn">flush</span>()          <span class="cm">// 1. clear transient state</span>
+  scripts.<span class="fn">update</span>(dt)    <span class="cm">// 2. run user scripts</span>
+  physics.<span class="fn">update</span>(dt)    <span class="cm">// 3. simulate physics</span>
+  renderer.<span class="fn">draw</span>()       <span class="cm">// 4. draw everything</span>
+}
+
+loop.<span class="fn">start</span>()
+input.<span class="fn">attach</span>(canvas)</pre>
+    </div>
+  </div>
+
+  <h4 style="margin:24px 0 10px;color:var(--accent)">Additional engine features</h4>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">🕰 Time-Travel DevTools</div>
+      <p class="card-desc"><code style="color:var(--accent2)">&lt;Game devtools&gt;</code> adds a frame scrubber and entity inspector. Records world snapshots and lets you rewind — like browser DevTools but for your game.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">♿ Accessibility</div>
+      <p class="card-desc">The accessibility module generates ARIA descriptions of game entities for screen readers and logs state changes — rare in game engines.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔌 Plugins</div>
+      <p class="card-desc">Pass <code style="color:var(--accent2)">plugins={[myPlugin]}</code> to Game. Each plugin receives the engine state and can register new systems, components, or hooks. The HMR plugin enables hot-reload without losing game state.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🗺 Pathfinding</div>
+      <p class="card-desc"><code style="color:var(--accent2)">packages/core/src/nav/pathfind.ts</code> — A* pathfinding on a nav grid. Enemies can navigate around obstacles without you writing the algorithm.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🎬 Tweens</div>
+      <p class="card-desc"><code style="color:var(--accent2)">tween(0, 100, 1.0, Ease.easeOutBounce, v => entity.x = v)</code> — 20+ easing functions, chainable via TweenTimeline. For smooth non-physics animations.</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🗂 Tilemap Merging</div>
+      <p class="card-desc"><code style="color:var(--accent2)">tilemapMerge.ts</code> — Collapses adjacent same-type tiles into single large colliders. Reduces physics entities from 200 to 10 for a tiled level.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════ CONTRIBUTE ════ -->
+<section class="section" id="contribute">
+  <div class="tag">Next Steps</div>
+  <h2 class="sec-title">Where to Start Contributing</h2>
+  <p class="sec-desc">Now that you understand the codebase, here's a practical guide to getting started — from easiest to most complex.</p>
+
+  <div class="grid-2">
+    <div>
+      <div class="card" style="border-color:#0f3a2a;margin-bottom:12px">
+        <div class="card-title" style="color:var(--accent3)">🟢 Easy — Good First Issues</div>
+        <div style="font-size:.9rem;color:var(--muted)">
+          <p style="margin-bottom:6px">• Add a new easing function to <code style="color:var(--accent2)">tween.ts</code></p>
+          <p style="margin-bottom:6px">• Add a new Sprite blend mode to the WebGL renderer</p>
+          <p style="margin-bottom:6px">• Write missing tests in <code style="color:var(--accent2)">packages/*/src/__tests__</code></p>
+          <p style="margin-bottom:6px">• Add a new keyboard shortcut in the DevTools</p>
+          <p>• Improve TypeScript types in a component interface</p>
+        </div>
+      </div>
+      <div class="card" style="border-color:#2a1400;margin-bottom:12px">
+        <div class="card-title" style="color:var(--accent4)">🟡 Medium</div>
+        <div style="font-size:.9rem;color:var(--muted)">
+          <p style="margin-bottom:6px">• Add a new collider type (e.g. PolygonCollider)</p>
+          <p style="margin-bottom:6px">• Extend the Animator with blend trees</p>
+          <p style="margin-bottom:6px">• Add a <code style="color:var(--accent2)">useKinematicBody</code> hook improvement</p>
+          <p style="margin-bottom:6px">• Add spatial audio to <code style="color:var(--accent2)">useSpatialSound.ts</code></p>
+          <p>• Build a new example game</p>
+        </div>
+      </div>
+      <div class="card" style="border-color:#3a1010">
+        <div class="card-title" style="color:var(--red)">🔴 Hard</div>
+        <div style="font-size:.9rem;color:var(--muted)">
+          <p style="margin-bottom:6px">• Improve physics broadphase (integrate SpatialHash)</p>
+          <p style="margin-bottom:6px">• Add WebRTC transport to <code style="color:var(--accent2)">@cubeforge/net</code></p>
+          <p style="margin-bottom:6px">• Implement a constraint/joint solver</p>
+          <p>• Add 3D support (new renderer package)</p>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">📁 Most Important Files to Read First</div>
+        <table class="ct" style="font-size:12px">
+          <tr><td class="mono">core/src/ecs/world.ts</td><td style="color:var(--muted)">The heart of the engine</td></tr>
+          <tr><td class="mono">integrations/cubeforge/src/Game.tsx</td><td style="color:var(--muted)">Engine bootstrap</td></tr>
+          <tr><td class="mono">physics/src/physicsSystem.ts</td><td style="color:var(--muted)">Physics update loop</td></tr>
+          <tr><td class="mono">renderer/src/renderSystem.ts</td><td style="color:var(--muted)">Drawing pipeline</td></tr>
+          <tr><td class="mono">input/src/inputManager.ts</td><td style="color:var(--muted)">Input hub</td></tr>
+        </table>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">🧪 How to run tests</div>
+        <pre style="font-size:12px">cd cubeforge
+pnpm install
+pnpm test        <span class="cm"># run vitest</span>
+pnpm typecheck   <span class="cm"># TypeScript check</span></pre>
+      </div>
+      <div class="card">
+        <div class="card-title">📐 Design Principles to Follow</div>
+        <div style="font-size:.9rem;color:var(--muted)">
+          <p style="margin-bottom:4px">• <strong style="color:var(--text)">Data-only components</strong> — no logic in components, only data</p>
+          <p style="margin-bottom:4px">• <strong style="color:var(--text)">Systems read/write ECS</strong> — logic lives in systems</p>
+          <p style="margin-bottom:4px">• <strong style="color:var(--text)">React hook = ECS bridge</strong> — mount → add, unmount → remove</p>
+          <p style="margin-bottom:4px">• <strong style="color:var(--text)">Zero runtime deps</strong> — the engine imports nothing outside itself</p>
+          <p>• <strong style="color:var(--text)">TypeScript strict</strong> — no <code>any</code>, full inference</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /page -->
+
+<footer style="text-align:center;padding:40px 20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;margin-top:40px">
+  <p style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:8px">Cubeforge Codebase Deep Dive</p>
+  <p>Every system, every file, every design decision — explained for contributors.</p>
+</footer>
+
+<script>
+function switchTab(group, id) {
+  document.querySelectorAll(`#${group}-arch, #${group}-archetype, #${group}-query, #${group}-det,
+    #phys-flow, #phys-rb, #phys-special, #phys-events,
+    #rend-passes, #rend-camera, #rend-anim, #rend-webgl,
+    #net-room, #net-pred, #net-sync`).forEach(p => p.classList.remove('active'))
+  document.getElementById(id)?.classList.add('active')
+
+  // Find the tab button group
+  const panel = document.getElementById(id)
+  const container = panel?.parentElement
+  if (!container) return
+  container.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'))
+  const target = Array.from(container.querySelectorAll('.tab-btn')).find(b => {
+    return b.getAttribute('onclick')?.includes(`'${id}'`) || b.getAttribute('onclick')?.includes(`"${id}"`)
+  })
+  target?.classList.add('active')
+}
+
+// Mini-map scroll tracking
+const sections = ['overview','ecs','gameloop','physics','renderer','input','audio','net','react','contribute']
+const dots = document.querySelectorAll('.mm-dot')
+
+function updateMinimap() {
+  let current = sections[0]
+  sections.forEach(id => {
+    const el = document.getElementById(id)
+    if (el && window.scrollY >= el.offsetTop - 200) current = id
+  })
+  dots.forEach(d => {
+    d.classList.toggle('active', d.dataset.section === current)
+  })
+}
+
+dots.forEach(d => {
+  d.addEventListener('click', () => {
+    document.getElementById(d.dataset.section)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+})
+
+window.addEventListener('scroll', updateMinimap, { passive: true })
+updateMinimap()
+</script>
+</body>
+</html>

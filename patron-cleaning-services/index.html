@@ -1,0 +1,1603 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Patron Cleaning Services offers trusted residential, commercial, office, deep, move-in/move-out, window, and carpet cleaning across Winnipeg and surrounding Manitoba areas."
+    />
+    <title>Patron Cleaning Services | Professional Cleaning in Manitoba</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700&family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      referrerpolicy="no-referrer"
+    />
+    <style>
+      :root {
+        --primary: #0f172a;
+        --secondary: #06b6d4;
+        --accent: #f59e0b;
+        --bg: #f8fafc;
+        --text: #334155;
+        --white: #ffffff;
+        --radius: 8px;
+        --section-padding: 80px;
+        --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
+        --shadow-header: 0 4px 16px rgba(15, 23, 42, 0.09);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        font-family: 'Open Sans', 'Roboto', sans-serif;
+        color: var(--text);
+        background: var(--bg);
+        line-height: 1.6;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        margin: 0 0 16px;
+        color: var(--primary);
+        font-family: 'Montserrat', 'Inter', sans-serif;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 0 0 16px;
+      }
+
+      img {
+        max-width: 100%;
+        display: block;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .container {
+        width: min(1120px, 92%);
+        margin: 0 auto;
+      }
+
+      section {
+        padding: var(--section-padding) 0;
+      }
+
+      .section-title {
+        text-align: center;
+        margin-bottom: 12px;
+        font-size: clamp(1.8rem, 3vw, 2.5rem);
+      }
+
+      .section-lead {
+        text-align: center;
+        max-width: 760px;
+        margin: 0 auto 42px;
+        color: #475569;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        border-radius: var(--radius);
+        padding: 12px 22px;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          transform 0.22s ease,
+          box-shadow 0.22s ease,
+          background-color 0.22s ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #111827;
+        box-shadow: 0 12px 26px rgba(245, 158, 11, 0.35);
+      }
+
+      .btn-primary:hover {
+        background: #d68d0d;
+      }
+
+      .btn-secondary {
+        background: var(--secondary);
+        color: var(--white);
+        box-shadow: 0 12px 26px rgba(6, 182, 212, 0.28);
+      }
+
+      .btn-secondary:hover {
+        background: #069ab5;
+      }
+
+      .btn-outline {
+        background: transparent;
+        border: 2px solid rgba(255, 255, 255, 0.55);
+        color: var(--white);
+      }
+
+      .btn-outline:hover {
+        border-color: var(--white);
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        background: rgba(15, 23, 42, 0.97);
+        color: var(--white);
+        box-shadow: var(--shadow-header);
+        backdrop-filter: blur(7px);
+      }
+
+      .header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 78px;
+        gap: 20px;
+      }
+
+      .logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-family: 'Montserrat', 'Inter', sans-serif;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        font-size: 1.1rem;
+      }
+
+      .logo-badge {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: inline-grid;
+        place-items: center;
+        background: linear-gradient(135deg, var(--secondary), #67e8f9);
+        color: var(--primary);
+      }
+
+      .main-nav {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+      }
+
+      .main-nav a {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: #e2e8f0;
+        transition: color 0.2s ease;
+      }
+
+      .main-nav a:hover {
+        color: var(--secondary);
+      }
+
+      .header-cta {
+        display: flex;
+        gap: 10px;
+      }
+
+      .call-btn {
+        background: rgba(255, 255, 255, 0.12);
+        color: var(--white);
+      }
+
+      .menu-toggle {
+        display: none;
+        border: 0;
+        background: transparent;
+        color: var(--white);
+        font-size: 1.25rem;
+        cursor: pointer;
+      }
+
+      .hero {
+        color: var(--white);
+        padding: 110px 0 90px;
+        background:
+          linear-gradient(110deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.75)),
+          url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1800&q=80')
+            center/cover no-repeat;
+      }
+
+      .hero-inner {
+        max-width: 760px;
+      }
+
+      .hero h1 {
+        color: var(--white);
+        font-size: clamp(2rem, 5vw, 3.35rem);
+        margin-bottom: 18px;
+      }
+
+      .hero p {
+        font-size: 1.08rem;
+        color: #e2e8f0;
+        margin-bottom: 28px;
+      }
+
+      .hero-ctas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .about {
+        background: var(--white);
+      }
+
+      .about-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .about-card {
+        background: linear-gradient(180deg, #e0f2fe 0%, #f8fafc 100%);
+        border-radius: var(--radius);
+        padding: 34px;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .about-points {
+        margin: 20px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 10px;
+      }
+
+      .about-points li {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .about-points i {
+        color: var(--secondary);
+      }
+
+      .services-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .service-card {
+        background: var(--white);
+        border-radius: var(--radius);
+        padding: 22px;
+        box-shadow: var(--shadow-soft);
+        transition: transform 0.24s ease;
+      }
+
+      .service-card:hover {
+        transform: translateY(-5px);
+      }
+
+      .service-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: inline-grid;
+        place-items: center;
+        margin-bottom: 14px;
+        background: rgba(6, 182, 212, 0.15);
+        color: #0891b2;
+        font-size: 1.15rem;
+      }
+
+      .service-card h3 {
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+      }
+
+      .gallery {
+        background: var(--white);
+      }
+
+      .comparison-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .comparison-card {
+        background: #f8fafc;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-soft);
+        padding: 16px;
+      }
+
+      .comparison-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: var(--radius);
+        aspect-ratio: 5 / 3;
+        cursor: pointer;
+      }
+
+      .comparison-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        position: absolute;
+        inset: 0;
+      }
+
+      .after-wrap {
+        position: absolute;
+        inset: 0;
+        width: 50%;
+        overflow: hidden;
+      }
+
+      .comparison-range {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        appearance: none;
+        background: transparent;
+        margin: 0;
+        z-index: 3;
+        cursor: ew-resize;
+      }
+
+      .comparison-range::-webkit-slider-thumb {
+        appearance: none;
+        width: 22px;
+        height: 22px;
+        background: var(--accent);
+        border-radius: 50%;
+        border: 2px solid #fff;
+      }
+
+      .comparison-range::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+        background: var(--accent);
+        border-radius: 50%;
+        border: 2px solid #fff;
+      }
+
+      .divider {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        left: 50%;
+        background: #fff;
+        z-index: 2;
+        box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2);
+      }
+
+      .badge {
+        position: absolute;
+        top: 12px;
+        z-index: 2;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #f8fafc;
+        background: rgba(15, 23, 42, 0.68);
+        padding: 5px 10px;
+        border-radius: 999px;
+      }
+
+      .badge.before {
+        left: 10px;
+      }
+
+      .badge.after {
+        right: 10px;
+      }
+
+      .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .price-card {
+        background: var(--white);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-soft);
+        padding: 28px 24px;
+        position: relative;
+      }
+
+      .price-card.featured {
+        border: 2px solid var(--secondary);
+      }
+
+      .pill {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        text-transform: uppercase;
+        color: var(--secondary);
+        margin-bottom: 8px;
+      }
+
+      .price {
+        font-size: 2.2rem;
+        color: var(--primary);
+        margin: 12px 0;
+      }
+
+      .price span {
+        font-size: 0.95rem;
+        color: #64748b;
+      }
+
+      .price-list {
+        list-style: none;
+        margin: 18px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 9px;
+      }
+
+      .price-list li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .price-list i {
+        color: var(--secondary);
+      }
+
+      .team {
+        background: var(--white);
+      }
+
+      .team-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .team-card {
+        text-align: center;
+        background: #f8fafc;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-soft);
+        padding: 20px;
+      }
+
+      .team-photo {
+        width: 112px;
+        height: 112px;
+        border-radius: 50%;
+        margin: 0 auto 14px;
+        object-fit: cover;
+        border: 4px solid #e2e8f0;
+      }
+
+      .team-card p {
+        margin: 0;
+        color: #475569;
+      }
+
+      .testimonials {
+        position: relative;
+      }
+
+      .carousel {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .testimonial-track {
+        display: flex;
+        transition: transform 0.4s ease;
+      }
+
+      .testimonial {
+        flex: 0 0 100%;
+        background: var(--white);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-soft);
+        padding: 34px 30px;
+        text-align: center;
+      }
+
+      .stars {
+        color: var(--accent);
+        margin-bottom: 12px;
+      }
+
+      .testimonial h4 {
+        margin: 14px 0 4px;
+      }
+
+      .testimonial small {
+        color: #64748b;
+        font-weight: 600;
+      }
+
+      .carousel-controls {
+        margin-top: 18px;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      .carousel-controls button {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: 0;
+        cursor: pointer;
+        background: var(--primary);
+        color: var(--white);
+      }
+
+      .faq {
+        background: var(--white);
+      }
+
+      .faq-list {
+        max-width: 900px;
+        margin: 0 auto;
+        display: grid;
+        gap: 12px;
+      }
+
+      .faq-item {
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: var(--shadow-soft);
+        background: #f8fafc;
+      }
+
+      .faq-question {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--primary);
+        padding: 18px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .faq-answer {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        padding: 0 18px;
+        color: #475569;
+      }
+
+      .faq-item.active .faq-answer {
+        max-height: 220px;
+        padding-bottom: 18px;
+      }
+
+      .contact-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 22px;
+      }
+
+      .panel {
+        background: var(--white);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-soft);
+        padding: 26px;
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      label {
+        display: block;
+        font-weight: 700;
+        margin-bottom: 5px;
+        font-size: 0.92rem;
+        color: #0f172a;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: var(--radius);
+        padding: 11px 12px;
+        font: inherit;
+        color: #0f172a;
+        background: #fff;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: var(--secondary);
+        outline: 2px solid rgba(6, 182, 212, 0.12);
+      }
+
+      textarea {
+        min-height: 130px;
+        resize: vertical;
+      }
+
+      .feedback {
+        display: none;
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+
+      .feedback.success {
+        display: block;
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .feedback.error {
+        display: block;
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .contact-list {
+        list-style: none;
+        margin: 20px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 14px;
+      }
+
+      .contact-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .contact-list i {
+        margin-top: 4px;
+        color: var(--secondary);
+      }
+
+      .footer {
+        background: #020617;
+        color: #cbd5e1;
+        padding: 42px 0 26px;
+      }
+
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr;
+        gap: 20px;
+      }
+
+      .footer h4 {
+        color: #f8fafc;
+        margin-bottom: 12px;
+      }
+
+      .footer-links {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .footer-links a:hover {
+        color: var(--secondary);
+      }
+
+      .footer-bottom {
+        border-top: 1px solid rgba(148, 163, 184, 0.25);
+        margin-top: 20px;
+        padding-top: 18px;
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .lightbox {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.92);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1500;
+        padding: 16px;
+      }
+
+      .lightbox.open {
+        display: flex;
+      }
+
+      .lightbox img {
+        max-width: min(1100px, 95vw);
+        max-height: 85vh;
+        border-radius: var(--radius);
+      }
+
+      .lightbox button {
+        position: absolute;
+        right: 20px;
+        top: 20px;
+        background: #0f172a;
+        border: 0;
+        color: #f8fafc;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+
+      @media (max-width: 1024px) {
+        .services-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .comparison-grid,
+        .team-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 860px) {
+        .main-nav,
+        .header-cta {
+          display: none;
+        }
+
+        .menu-toggle {
+          display: inline-flex;
+        }
+
+        .header-inner {
+          position: relative;
+        }
+
+        .main-nav.open {
+          position: absolute;
+          top: 78px;
+          left: 0;
+          right: 0;
+          display: grid;
+          gap: 10px;
+          background: #0f172a;
+          padding: 14px;
+          border-radius: var(--radius);
+          box-shadow: var(--shadow-soft);
+        }
+
+        .header-cta.open {
+          position: absolute;
+          top: 345px;
+          left: 0;
+          right: 0;
+          display: flex;
+          gap: 10px;
+          background: #0f172a;
+          padding: 0 14px 14px;
+          border-radius: 0 0 var(--radius) var(--radius);
+        }
+
+        .about-grid,
+        .pricing-grid,
+        .contact-grid,
+        .footer-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .services-grid,
+        .comparison-grid,
+        .team-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        :root {
+          --section-padding: 40px;
+        }
+
+        .hero {
+          padding-top: 88px;
+          padding-bottom: 68px;
+        }
+
+        .hero p {
+          font-size: 1rem;
+        }
+
+        .services-grid,
+        .comparison-grid,
+        .team-grid,
+        .form-row {
+          grid-template-columns: 1fr;
+        }
+
+        .header-cta.open {
+          top: 380px;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="logo" href="#home" aria-label="Patron Cleaning Services Home">
+          <span class="logo-badge"><i class="fa-solid fa-sparkles"></i></span>
+          Patron Cleaning Services
+        </a>
+
+        <nav class="main-nav" id="mainNav" aria-label="Primary Navigation">
+          <a href="#about">About</a>
+          <a href="#services">Services</a>
+          <a href="#gallery">Results</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#team">Team</a>
+          <a href="#testimonials">Testimonials</a>
+          <a href="#faq">FAQ</a>
+          <a href="#contact">Contact</a>
+        </nav>
+
+        <div class="header-cta" id="headerCta">
+          <a class="btn call-btn" href="tel:81601347"><i class="fa-solid fa-phone"></i> 81 601347</a>
+          <a class="btn btn-primary" href="#contact">Get a Quote</a>
+        </div>
+
+        <button
+          class="menu-toggle"
+          id="menuToggle"
+          aria-label="Open menu"
+          aria-expanded="false"
+          aria-controls="mainNav"
+        >
+          <i class="fa-solid fa-bars"></i>
+        </button>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero">
+        <div class="container hero-inner">
+          <h1>Manitoba's Premier Professional Cleaning Service</h1>
+          <p>
+            Patron Cleaning Services delivers dependable, detail-focused residential and commercial cleaning across
+            Winnipeg and surrounding areas. Book confidently with trained professionals, transparent pricing, and
+            reliable scheduling.
+          </p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="#contact">Request a Free Quote</a>
+            <a class="btn btn-outline" href="tel:81601347"><i class="fa-solid fa-phone"></i> Call 81 601347</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="about" id="about">
+        <div class="container">
+          <h2 class="section-title">Trusted Cleaning Experts in Manitoba</h2>
+          <p class="section-lead">
+            We help families, offices, and businesses maintain spotless spaces with dependable service and consistent
+            quality. From routine upkeep to deep restoration work, our teams are equipped to deliver professional
+            results.
+          </p>
+          <div class="about-grid">
+            <div>
+              <h3>Why clients choose Patron Cleaning Services</h3>
+              <p>
+                Based in Manitoba and serving Winnipeg plus surrounding communities, we combine structured cleaning
+                checklists, quality control reviews, and clear communication before and after every visit.
+              </p>
+              <ul class="about-points">
+                <li><i class="fa-solid fa-circle-check"></i> Fully insured, trained professionals</li>
+                <li>
+                  <i class="fa-solid fa-circle-check"></i> Flexible scheduling Monday to Friday, 9:00 AM to 6:00 PM
+                </li>
+                <li>
+                  <i class="fa-solid fa-circle-check"></i> Customized plans for homes, offices, and commercial sites
+                </li>
+              </ul>
+            </div>
+            <div class="about-card">
+              <h3>Our commitment</h3>
+              <p>
+                Every project receives the same attention to detail: safe products, organized execution, and clean
+                finishes that last. We focus on reliability so your team or household can focus on what matters most.
+              </p>
+              <a class="btn btn-secondary" href="#contact">Book Your Preferred Time</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="services">
+        <div class="container">
+          <h2 class="section-title">Our Cleaning Services</h2>
+          <p class="section-lead">Complete service coverage for homes, businesses, and specialty cleaning needs.</p>
+          <div class="services-grid">
+            <article class="service-card">
+              <span class="service-icon"><i class="fa-solid fa-house"></i></span>
+              <h3>Residential Cleaning</h3>
+              <p>Regular home cleaning visits tailored to your lifestyle, schedule, and priorities.</p>
+            </article>
+            <article class="service-card">
+              <span class="service-icon"><i class="fa-solid fa-building"></i></span>
+              <h3>Commercial Cleaning</h3>
+              <p>High-standard cleaning for retail, hospitality, and multi-use commercial properties.</p>
+            </article>
+            <article class="service-card">
+              <span class="service-icon"><i class="fa-solid fa-briefcase"></i></span>
+              <h3>Office Cleaning</h3>
+              <p>Clean, hygienic workspaces that support employee wellness and professional impressions.</p>
+            </article>
+            <article class="service-card">
+              <span class="service-icon"><i class="fa-solid fa-truck-moving"></i></span>
+              <h3>Move-in/Move-out Cleaning</h3>
+              <p>Top-to-bottom turnover cleaning for smoother transitions into or out of any property.</p>
+            </article>
+            <article class="service-card">
+              <span class="service-icon"><i class="fa-solid fa-broom-ball"></i></span>
+              <h3>Deep Cleaning</h3>
+              <p>Detailed intensive cleaning for neglected areas, seasonal resets, or one-time refreshes.</p>
+            </article>
+            <article class="service-card">
+              <span class="service-icon"><i class="fa-solid fa-window-maximize"></i></span>
+              <h3>Window Cleaning</h3>
+              <p>Interior and exterior window cleaning for clearer views and brighter environments.</p>
+            </article>
+            <article class="service-card">
+              <span class="service-icon"><i class="fa-solid fa-couch"></i></span>
+              <h3>Carpet &amp; Upholstery Cleaning</h3>
+              <p>Specialized fabric care and stain treatment to restore freshness and comfort.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="gallery" id="gallery">
+        <div class="container">
+          <h2 class="section-title">Before &amp; After Results</h2>
+          <p class="section-lead">
+            Drag the slider to compare cleaning transformations. Click any image for lightbox view.
+          </p>
+          <div class="comparison-grid">
+            <article class="comparison-card">
+              <div
+                class="comparison-container"
+                data-lightbox="https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=1800&q=80"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=800&q=80"
+                  alt="Before cleaning kitchen"
+                />
+                <div class="after-wrap">
+                  <img
+                    src="https://images.unsplash.com/photo-1523419409543-39f6f5f11df8?auto=format&fit=crop&w=800&q=80"
+                    alt="After cleaning kitchen"
+                  />
+                </div>
+                <span class="badge before">Before</span>
+                <span class="badge after">After</span>
+                <span class="divider" aria-hidden="true"></span>
+                <input
+                  class="comparison-range"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="50"
+                  aria-label="Kitchen before and after comparison"
+                />
+              </div>
+              <p><strong>Residential Kitchen Deep Clean</strong></p>
+            </article>
+
+            <article class="comparison-card">
+              <div
+                class="comparison-container"
+                data-lightbox="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1800&q=80"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1568992687947-868a62a9f521?auto=format&fit=crop&w=800&q=80"
+                  alt="Before office cleaning"
+                />
+                <div class="after-wrap">
+                  <img
+                    src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80"
+                    alt="After office cleaning"
+                  />
+                </div>
+                <span class="badge before">Before</span>
+                <span class="badge after">After</span>
+                <span class="divider" aria-hidden="true"></span>
+                <input
+                  class="comparison-range"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="50"
+                  aria-label="Office before and after comparison"
+                />
+              </div>
+              <p><strong>Office Floor &amp; Desk Refresh</strong></p>
+            </article>
+
+            <article class="comparison-card">
+              <div
+                class="comparison-container"
+                data-lightbox="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1800&q=80"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=800&q=80"
+                  alt="Before move-out cleaning"
+                />
+                <div class="after-wrap">
+                  <img
+                    src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80"
+                    alt="After move-out cleaning"
+                  />
+                </div>
+                <span class="badge before">Before</span>
+                <span class="badge after">After</span>
+                <span class="divider" aria-hidden="true"></span>
+                <input
+                  class="comparison-range"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="50"
+                  aria-label="Move-out cleaning comparison"
+                />
+              </div>
+              <p><strong>Move-Out Full Property Turnover</strong></p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing">
+        <div class="container">
+          <h2 class="section-title">Pricing Packages</h2>
+          <p class="section-lead">Transparent, scalable options for homes and businesses in Manitoba.</p>
+          <div class="pricing-grid">
+            <article class="price-card">
+              <span class="pill">Standard</span>
+              <h3>Standard Clean</h3>
+              <p class="price">$149 <span>/ visit</span></p>
+              <p>Best for routine maintenance of apartments and houses.</p>
+              <ul class="price-list">
+                <li><i class="fa-solid fa-check"></i> Kitchen &amp; bathroom sanitization</li>
+                <li><i class="fa-solid fa-check"></i> Dusting, vacuuming, mopping</li>
+                <li><i class="fa-solid fa-check"></i> Surface wipe-down and tidying</li>
+                <li><i class="fa-solid fa-check"></i> Up to 3 bedrooms</li>
+              </ul>
+            </article>
+
+            <article class="price-card featured">
+              <span class="pill">Deep Clean</span>
+              <h3>Deep Cleaning Package</h3>
+              <p class="price">$249 <span>/ visit</span></p>
+              <p>Ideal for first-time service, seasonal resets, or post-event recovery.</p>
+              <ul class="price-list">
+                <li><i class="fa-solid fa-check"></i> Full standard cleaning scope</li>
+                <li><i class="fa-solid fa-check"></i> Baseboards, vents, interior detail work</li>
+                <li><i class="fa-solid fa-check"></i> Appliance exterior and targeted scrubbing</li>
+                <li><i class="fa-solid fa-check"></i> Extra time for tough build-up areas</li>
+              </ul>
+            </article>
+
+            <article class="price-card">
+              <span class="pill">Commercial</span>
+              <h3>Commercial Plan</h3>
+              <p class="price">Custom <span>quote</span></p>
+              <p>Flexible contracts for offices, shops, and multi-unit facilities.</p>
+              <ul class="price-list">
+                <li><i class="fa-solid fa-check"></i> Daily, weekly, or custom schedules</li>
+                <li><i class="fa-solid fa-check"></i> Restroom and common-area maintenance</li>
+                <li><i class="fa-solid fa-check"></i> Dedicated quality assurance checklists</li>
+                <li><i class="fa-solid fa-check"></i> On-site scope assessment in Winnipeg area</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="team" id="team">
+        <div class="container">
+          <h2 class="section-title">Meet Our Team</h2>
+          <p class="section-lead">Professional, respectful staff committed to outstanding service quality.</p>
+          <div class="team-grid">
+            <article class="team-card">
+              <img
+                class="team-photo"
+                src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80"
+                alt="Sarah Khan, Operations Manager"
+              />
+              <h3>Sarah Khan</h3>
+              <p>Operations Manager</p>
+            </article>
+            <article class="team-card">
+              <img
+                class="team-photo"
+                src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80"
+                alt="Daniel Brooks, Senior Cleaning Specialist"
+              />
+              <h3>Daniel Brooks</h3>
+              <p>Senior Cleaning Specialist</p>
+            </article>
+            <article class="team-card">
+              <img
+                class="team-photo"
+                src="https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=300&q=80"
+                alt="Maya Patel, Client Coordinator"
+              />
+              <h3>Maya Patel</h3>
+              <p>Client Coordinator</p>
+            </article>
+            <article class="team-card">
+              <img
+                class="team-photo"
+                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80"
+                alt="Ethan Reid, Commercial Lead"
+              />
+              <h3>Ethan Reid</h3>
+              <p>Commercial Lead</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="testimonials" id="testimonials">
+        <div class="container">
+          <h2 class="section-title">What Clients Say</h2>
+          <p class="section-lead">Trusted by homeowners and businesses across Manitoba.</p>
+
+          <div class="carousel" aria-live="polite">
+            <div class="testimonial-track" id="testimonialTrack">
+              <article class="testimonial">
+                <div class="stars" aria-label="5 star rating">
+                  <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i
+                  ><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                </div>
+                <p>
+                  “Patron Cleaning Services has transformed our office environment. They are punctual, professional, and
+                  very detail-oriented.”
+                </p>
+                <h4>Amanda L.</h4>
+                <small>Office Manager, Winnipeg</small>
+              </article>
+              <article class="testimonial">
+                <div class="stars" aria-label="5 star rating">
+                  <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i
+                  ><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                </div>
+                <p>
+                  “The move-out cleaning package was excellent. We got our place inspection-ready in one visit and saved
+                  a lot of stress.”
+                </p>
+                <h4>Marcus T.</h4>
+                <small>Residential Client, Manitoba</small>
+              </article>
+              <article class="testimonial">
+                <div class="stars" aria-label="5 star rating">
+                  <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i
+                  ><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                </div>
+                <p>
+                  “Excellent communication and consistent quality. Their deep cleaning service made our home feel brand
+                  new.”
+                </p>
+                <h4>Rania H.</h4>
+                <small>Homeowner, Winnipeg Area</small>
+              </article>
+            </div>
+          </div>
+
+          <div class="carousel-controls">
+            <button id="testimonialPrev" aria-label="Previous testimonial">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button id="testimonialNext" aria-label="Next testimonial">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="faq" id="faq">
+        <div class="container">
+          <h2 class="section-title">Frequently Asked Questions</h2>
+          <p class="section-lead">Quick answers about scheduling, pricing, and service expectations.</p>
+
+          <div class="faq-list">
+            <article class="faq-item">
+              <button class="faq-question" type="button">
+                What areas do you serve?
+                <i class="fa-solid fa-plus"></i>
+              </button>
+              <div class="faq-answer">
+                <p>We serve Winnipeg and surrounding areas throughout Manitoba, Canada.</p>
+              </div>
+            </article>
+
+            <article class="faq-item">
+              <button class="faq-question" type="button">
+                Do I need to provide cleaning supplies?
+                <i class="fa-solid fa-plus"></i>
+              </button>
+              <div class="faq-answer">
+                <p>
+                  No. Our team arrives with professional equipment and supplies, unless you request specific products.
+                </p>
+              </div>
+            </article>
+
+            <article class="faq-item">
+              <button class="faq-question" type="button">
+                How do booking and quote requests work?
+                <i class="fa-solid fa-plus"></i>
+              </button>
+              <div class="faq-answer">
+                <p>
+                  Submit the online form with your service type and preferred date/time. We confirm details and send
+                  your quote promptly.
+                </p>
+              </div>
+            </article>
+
+            <article class="faq-item">
+              <button class="faq-question" type="button">
+                What are your business hours?
+                <i class="fa-solid fa-plus"></i>
+              </button>
+              <div class="faq-answer">
+                <p>Our office hours are Monday to Friday, 9:00 AM to 6:00 PM.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="contact">
+        <div class="container">
+          <h2 class="section-title">Contact &amp; Booking</h2>
+          <p class="section-lead">Request a quote and reserve your preferred cleaning date in one step.</p>
+
+          <div class="contact-grid">
+            <div class="panel">
+              <h3>Request a Quote</h3>
+              <form id="quoteForm" novalidate>
+                <div class="form-row">
+                  <div>
+                    <label for="name">Name</label>
+                    <input id="name" name="name" type="text" autocomplete="name" required />
+                  </div>
+                  <div>
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" autocomplete="email" required />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div>
+                    <label for="phone">Phone</label>
+                    <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="81 601347" required />
+                  </div>
+                  <div>
+                    <label for="address">Address</label>
+                    <input id="address" name="address" type="text" autocomplete="street-address" required />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div>
+                    <label for="service">Service Type</label>
+                    <select id="service" name="service" required>
+                      <option value="">Select a service</option>
+                      <option>Residential Cleaning</option>
+                      <option>Commercial Cleaning</option>
+                      <option>Office Cleaning</option>
+                      <option>Move-in/Move-out Cleaning</option>
+                      <option>Deep Cleaning</option>
+                      <option>Window Cleaning</option>
+                      <option>Carpet &amp; Upholstery Cleaning</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="serviceDate">Preferred Date</label>
+                    <input id="serviceDate" name="serviceDate" type="date" required />
+                  </div>
+                </div>
+
+                <div>
+                  <label for="serviceTime">Preferred Time</label>
+                  <input id="serviceTime" name="serviceTime" type="time" required />
+                </div>
+
+                <div>
+                  <label for="notes">Special Instructions</label>
+                  <textarea
+                    id="notes"
+                    name="notes"
+                    placeholder="Tell us about property size, priorities, access notes, or any special requests."
+                  ></textarea>
+                </div>
+
+                <button class="btn btn-primary" type="submit">Submit Quote &amp; Booking Request</button>
+                <p id="formFeedback" class="feedback" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+
+            <aside class="panel">
+              <h3>Contact Information</h3>
+              <p>Reach us directly for quick questions or urgent scheduling support.</p>
+              <ul class="contact-list">
+                <li>
+                  <i class="fa-solid fa-phone"></i>
+                  <div>
+                    <strong>Phone</strong><br />
+                    <a href="tel:81601347">81 601347</a>
+                  </div>
+                </li>
+                <li>
+                  <i class="fa-solid fa-envelope"></i>
+                  <div>
+                    <strong>Email</strong><br />
+                    <a href="mailto:mousahabib@gmail.com">mousahabib@gmail.com</a>
+                  </div>
+                </li>
+                <li>
+                  <i class="fa-solid fa-clock"></i>
+                  <div>
+                    <strong>Business Hours</strong><br />
+                    Mon-Fri, 9am-6pm
+                  </div>
+                </li>
+                <li>
+                  <i class="fa-solid fa-location-dot"></i>
+                  <div>
+                    <strong>Service Area</strong><br />
+                    Winnipeg and surrounding areas, Manitoba, Canada
+                  </div>
+                </li>
+              </ul>
+              <p style="margin-top: 16px">
+                <a class="btn btn-secondary" href="tel:81601347"><i class="fa-solid fa-phone"></i> Call to Book Now</a>
+              </p>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <h4>Patron Cleaning Services</h4>
+            <p>
+              Professional and reliable cleaning solutions for homes and businesses in Manitoba, Canada. We proudly
+              serve Winnipeg and nearby communities.
+            </p>
+          </div>
+          <div>
+            <h4>Quick Links</h4>
+            <ul class="footer-links">
+              <li><a href="#about">About</a></li>
+              <li><a href="#services">Services</a></li>
+              <li><a href="#pricing">Pricing</a></li>
+              <li><a href="#contact">Booking</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>Business Details</h4>
+            <ul class="footer-links">
+              <li><a href="tel:81601347">Phone: 81 601347</a></li>
+              <li><a href="mailto:mousahabib@gmail.com">Email: mousahabib@gmail.com</a></li>
+              <li>Hours: Mon-Fri, 9am-6pm</li>
+              <li>Address: Winnipeg, Manitoba, Canada</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <span>&copy; <span id="year"></span> Patron Cleaning Services. All rights reserved.</span>
+          <span>Professional Cleaning Services in Manitoba, Canada</span>
+        </div>
+      </div>
+    </footer>
+
+    <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-label="Image preview">
+      <button type="button" id="lightboxClose" aria-label="Close image"><i class="fa-solid fa-xmark"></i></button>
+      <img id="lightboxImage" src="" alt="Expanded before and after cleaning result" />
+    </div>
+
+    <script>
+      const menuToggle = document.getElementById('menuToggle')
+      const mainNav = document.getElementById('mainNav')
+      const headerCta = document.getElementById('headerCta')
+
+      menuToggle.addEventListener('click', () => {
+        const expanded = menuToggle.getAttribute('aria-expanded') === 'true'
+        menuToggle.setAttribute('aria-expanded', String(!expanded))
+        mainNav.classList.toggle('open')
+        headerCta.classList.toggle('open')
+      })
+
+      document.querySelectorAll('.main-nav a').forEach((link) => {
+        link.addEventListener('click', () => {
+          mainNav.classList.remove('open')
+          headerCta.classList.remove('open')
+          menuToggle.setAttribute('aria-expanded', 'false')
+        })
+      })
+
+      document.querySelectorAll('.comparison-container').forEach((container) => {
+        const slider = container.querySelector('.comparison-range')
+        const afterWrap = container.querySelector('.after-wrap')
+        const divider = container.querySelector('.divider')
+
+        const update = () => {
+          const value = slider.value
+          afterWrap.style.width = value + '%'
+          divider.style.left = value + '%'
+        }
+
+        slider.addEventListener('input', update)
+        update()
+      })
+
+      const lightbox = document.getElementById('lightbox')
+      const lightboxImage = document.getElementById('lightboxImage')
+      const lightboxClose = document.getElementById('lightboxClose')
+
+      document.querySelectorAll('.comparison-container').forEach((item) => {
+        item.addEventListener('click', (event) => {
+          if (event.target.classList.contains('comparison-range')) {
+            return
+          }
+          lightboxImage.src = item.dataset.lightbox
+          lightbox.classList.add('open')
+          lightbox.setAttribute('aria-hidden', 'false')
+        })
+      })
+
+      const closeLightbox = () => {
+        lightbox.classList.remove('open')
+        lightbox.setAttribute('aria-hidden', 'true')
+        lightboxImage.src = ''
+      }
+
+      lightboxClose.addEventListener('click', closeLightbox)
+      lightbox.addEventListener('click', (event) => {
+        if (event.target === lightbox) closeLightbox()
+      })
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && lightbox.classList.contains('open')) {
+          closeLightbox()
+        }
+      })
+
+      const testimonialTrack = document.getElementById('testimonialTrack')
+      const testimonials = Array.from(document.querySelectorAll('.testimonial'))
+      const prevBtn = document.getElementById('testimonialPrev')
+      const nextBtn = document.getElementById('testimonialNext')
+      let currentIndex = 0
+
+      const renderTestimonials = () => {
+        testimonialTrack.style.transform = `translateX(-${currentIndex * 100}%)`
+      }
+
+      prevBtn.addEventListener('click', () => {
+        currentIndex = (currentIndex - 1 + testimonials.length) % testimonials.length
+        renderTestimonials()
+      })
+
+      nextBtn.addEventListener('click', () => {
+        currentIndex = (currentIndex + 1) % testimonials.length
+        renderTestimonials()
+      })
+
+      setInterval(() => {
+        currentIndex = (currentIndex + 1) % testimonials.length
+        renderTestimonials()
+      }, 6000)
+
+      const faqItems = document.querySelectorAll('.faq-item')
+      faqItems.forEach((item) => {
+        const button = item.querySelector('.faq-question')
+        const icon = button.querySelector('i')
+
+        button.addEventListener('click', () => {
+          const isActive = item.classList.contains('active')
+          faqItems.forEach((faq) => {
+            faq.classList.remove('active')
+            faq.querySelector('.faq-question i').classList.replace('fa-minus', 'fa-plus')
+          })
+          if (!isActive) {
+            item.classList.add('active')
+            icon.classList.replace('fa-plus', 'fa-minus')
+          }
+        })
+      })
+
+      const quoteForm = document.getElementById('quoteForm')
+      const feedback = document.getElementById('formFeedback')
+      const serviceDateInput = document.getElementById('serviceDate')
+
+      serviceDateInput.min = new Date().toISOString().split('T')[0]
+
+      quoteForm.addEventListener('submit', (event) => {
+        event.preventDefault()
+        feedback.className = 'feedback'
+
+        if (!quoteForm.checkValidity()) {
+          feedback.textContent = 'Please complete all required fields with valid details.'
+          feedback.classList.add('error')
+          quoteForm.reportValidity()
+          return
+        }
+
+        feedback.textContent =
+          'Thank you. Your quote and booking request has been submitted successfully. We will contact you soon.'
+        feedback.classList.add('success')
+        quoteForm.reset()
+        serviceDateInput.min = new Date().toISOString().split('T')[0]
+      })
+
+      document.getElementById('year').textContent = new Date().getFullYear()
+    </script>
+  </body>
+</html>
