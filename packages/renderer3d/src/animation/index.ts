@@ -205,6 +205,82 @@ function interpolateQuat(track: KeyframeTrack, t: number): [number, number, numb
   return [rx, ry, rz, rw]
 }
 
+function getScalarTrackValueSize(track: KeyframeTrack, fallbackSize: number): number {
+  const { times, values, interpolation } = track
+  const divisor = interpolation === 'CUBICSPLINE' ? 3 : 1
+  const rawSize = times.length > 0 ? values.length / times.length / divisor : fallbackSize
+  return Number.isInteger(rawSize) && rawSize > 0 ? rawSize : Math.max(1, fallbackSize)
+}
+
+/**
+ * Interpolate an arbitrary-length scalar track, used by GLTF morph weights.
+ * GLTF stores morph weights as one scalar per target for each keyframe.
+ */
+function interpolateScalars(track: KeyframeTrack, t: number, valueSize: number): number[] {
+  const { times, values, interpolation } = track
+  const n = times.length
+  const out = new Array<number>(valueSize).fill(0)
+
+  if (n === 0) return out
+
+  const copyValue = (keyIndex: number, offsetWithinKey: number): number[] => {
+    const base = keyIndex * valueSize * (interpolation === 'CUBICSPLINE' ? 3 : 1) + offsetWithinKey
+    for (let i = 0; i < valueSize; i++) {
+      out[i] = values[base + i] ?? 0
+    }
+    return out
+  }
+
+  if (n === 1) {
+    return copyValue(0, interpolation === 'CUBICSPLINE' ? valueSize : 0)
+  }
+
+  if (t <= times[0]!) {
+    return copyValue(0, interpolation === 'CUBICSPLINE' ? valueSize : 0)
+  }
+
+  if (t >= times[n - 1]!) {
+    return copyValue(n - 1, interpolation === 'CUBICSPLINE' ? valueSize : 0)
+  }
+
+  const i0 = findKeyframe(times, t)
+  const i1 = Math.min(i0 + 1, n - 1)
+  const t0 = times[i0]!
+  const t1 = times[i1]!
+  const dt = t1 - t0
+  const alpha = dt > 0 ? (t - t0) / dt : 0
+
+  if (interpolation === 'STEP') {
+    return copyValue(i0, 0)
+  }
+
+  if (interpolation === 'LINEAR') {
+    const b0 = i0 * valueSize
+    const b1 = i1 * valueSize
+    for (let i = 0; i < valueSize; i++) {
+      const v0 = values[b0 + i] ?? 0
+      const v1 = values[b1 + i] ?? 0
+      out[i] = v0 + (v1 - v0) * alpha
+    }
+    return out
+  }
+
+  const stride = valueSize * 3
+  const b0 = i0 * stride
+  const b1 = i1 * stride
+  const [h00, h10, h01, h11] = hermite(alpha)
+
+  for (let i = 0; i < valueSize; i++) {
+    out[i] =
+      h00 * (values[b0 + valueSize + i] ?? 0) +
+      h10 * dt * (values[b0 + valueSize * 2 + i] ?? 0) +
+      h01 * (values[b1 + valueSize + i] ?? 0) +
+      h11 * dt * (values[b1 + i] ?? 0)
+  }
+
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // AnimationAction
 // ---------------------------------------------------------------------------
@@ -360,6 +436,8 @@ interface BlendResult {
   quatZ: number
   quatW: number
   totalWeight: number
+  morphValues: number[] | null
+  morphWeight: number
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +504,8 @@ export class AnimationMixer {
             quatZ: 0,
             quatW: 0,
             totalWeight: 0,
+            morphValues: null,
+            morphWeight: 0,
           })
         }
 
@@ -455,15 +535,19 @@ export class AnimationMixer {
           blend.quatW += w * weight * sign
           blend.totalWeight += weight
         } else if (property === 'morphTargetInfluences') {
-          // Apply directly – blending morph targets by weighted average
           const node = this._findNode(nodeName)
           if (node) {
             const influences = (node as unknown as { morphTargetInfluences?: number[] }).morphTargetInfluences
             if (influences) {
-              const [x, y, z] = interpolateVec3(track, t)
-              influences[0] = (influences[0] ?? 0) + x * weight
-              influences[1] = (influences[1] ?? 0) + y * weight
-              influences[2] = (influences[2] ?? 0) + z * weight
+              const valueSize = getScalarTrackValueSize(track, influences.length)
+              const values = interpolateScalars(track, t, valueSize)
+              if (blend.morphValues === null || blend.morphValues.length < values.length) {
+                blend.morphValues = new Array<number>(values.length).fill(0)
+              }
+              for (let i = 0; i < values.length; i++) {
+                blend.morphValues[i] += values[i]! * weight
+              }
+              blend.morphWeight += weight
             }
           }
         }
@@ -492,6 +576,16 @@ export class AnimationMixer {
         )
         if (len > 0) {
           node.quaternion.set(blend.quatX / len, blend.quatY / len, blend.quatZ / len, blend.quatW / len)
+        }
+      }
+
+      if (blend.morphValues && blend.morphWeight > 0) {
+        const influences = (node as unknown as { morphTargetInfluences?: number[] }).morphTargetInfluences
+        if (influences) {
+          const invWeight = 1 / blend.morphWeight
+          for (let i = 0; i < blend.morphValues.length; i++) {
+            influences[i] = blend.morphValues[i]! * invWeight
+          }
         }
       }
     }

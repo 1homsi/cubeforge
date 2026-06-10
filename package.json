@@ -12,13 +12,6 @@
     "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "prepare": "git config core.hooksPath .githooks"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"],
-    "overrides": {
-      "react": "^19.2.6",
-      "react-dom": "^19.2.6"
-    }
-  },
   "devDependencies": {
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
