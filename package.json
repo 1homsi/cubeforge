@@ -3,8 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter demo dev",
-    "dev:platformer": "pnpm --filter platformer-example dev",
     "build": "pnpm --filter './packages/*' --filter 'cubeforge' run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
