@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-#!/usr/bin/env node
 "use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -28,7 +27,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var readline = __toESM(require("readline"));
-var import_meta = {};
 function prompt(question) {
   return new Promise((resolve2) => {
     const rl = readline.createInterface({
@@ -124,7 +122,7 @@ async function main() {
 `);
     process.exit(1);
   }
-  const templatesDir = path.join(import_meta.dirname, "..", "templates", template);
+  const templatesDir = path.join(__dirname, "..", "templates", template);
   if (!fs.existsSync(templatesDir)) {
     process.stderr.write(`Error: template "${template}" not found at ${templatesDir}
 `);

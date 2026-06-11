@@ -3,5 +3,6 @@ dist/
 coverage/
 .DS_Store
 *.js.map
+*.tsbuildinfo
 bun.lock
 examples/
