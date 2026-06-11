@@ -144,6 +144,7 @@ Most browser game engines are imperative — you create objects, call methods, a
 | `@cubeforge/core` | ECS, game loop, events, assets, tween, pathfinding, steering, deterministic RNG |
 | `@cubeforge/input` | Keyboard, mouse, gamepad, input contexts, player input, recording/playback |
 | `@cubeforge/renderer` | Camera, sprites, animations, particles, trails, parallax |
+| `@cubeforge/renderer3d` | WebGL2 3D renderer with PBR materials, glTF loading, batching, culling, shadows, sky/weather, and post-processing |
 | `@cubeforge/physics` | AABB collision, rigid bodies, kinematic mode, one-way platforms, fixed 60 Hz, spatial broadphase |
 | `@cubeforge/audio` | Web Audio API — useSound, volume groups, fade, duck, crossfade |
 | `@cubeforge/net` | Multiplayer — Room, syncEntity, useNetworkInput, ClientPrediction |

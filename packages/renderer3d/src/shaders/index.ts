@@ -1,0 +1,72 @@
+// Shader string constants — import and pass to ShaderProgram or ShaderMaterial
+
+// ── Standard (Blinn-Phong PBR) ────────────────────────────────────────────────
+export { STANDARD_VERT } from './standard.vert'
+export { STANDARD_FRAG } from './standard.frag'
+
+// ── Skinned (standard + joint/weight skinning) ────────────────────────────────
+export { SKINNED_VERT } from './skinned.vert'
+// Fragment: reuse STANDARD_FRAG — skinned geometry shares the same lighting model
+
+// ── Shadow map (depth-only, light's POV) ─────────────────────────────────────
+export { SHADOW_VERT } from './shadow.vert'
+export { SHADOW_FRAG } from './shadow.frag'
+
+// ── Depth pre-pass (camera's POV, populates depth buffer) ────────────────────
+export { DEPTH_VERT } from './depth.vert'
+export { DEPTH_FRAG } from './depth.frag'
+
+// ── Skybox (cubemap) ─────────────────────────────────────────────────────────
+export { SKYBOX_VERT } from './skybox.vert'
+export { SKYBOX_FRAG } from './skybox.frag'
+
+// ── Water ────────────────────────────────────────────────────────────────────
+export { WATER_VERT } from './water.vert'
+export { WATER_FRAG } from './water.frag'
+
+// ── Particles (point sprites) ─────────────────────────────────────────────────
+export { PARTICLE_VERT } from './particle.vert'
+export { PARTICLE_FRAG } from './particle.frag'
+
+// ── Sprites (billboard quads) ─────────────────────────────────────────────────
+export { SPRITE_VERT } from './sprite.vert'
+export { SPRITE_FRAG } from './sprite.frag'
+
+// ── Post-processing ───────────────────────────────────────────────────────────
+export { BLOOM_VERT } from './post/bloom.vert'
+export { BLOOM_FRAG } from './post/bloom.frag'
+export { COMPOSITE_VERT } from './post/composite.vert'
+export { COMPOSITE_FRAG } from './post/composite.frag'
+
+// ── Environment map (IBL) ────────────────────────────────────────────────────
+export { EQUIRECT_TO_CUBEMAP_VERT } from './post/equirect_to_cubemap.vert'
+export { EQUIRECT_TO_CUBEMAP_FRAG } from './post/equirect_to_cubemap.frag'
+export { IRRADIANCE_FRAG } from './post/irradiance.frag'
+export { PREFILTER_FRAG } from './post/prefilter.frag'
+export { BRDF_FRAG } from './post/brdf.frag'
+
+// ── SSAO ──────────────────────────────────────────────────────────────────────
+export { SSAO_FRAG } from './post/ssao.frag'
+
+// ── FXAA ──────────────────────────────────────────────────────────────────────
+export { FXAA_VERT } from './post/fxaa.vert'
+export { FXAA_FRAG } from './post/fxaa.frag'
+
+// ── G-buffer normals ──────────────────────────────────────────────────────────
+export { GBUFFER_NORMAL_VERT } from './post/gbuffer_normal.vert'
+export { GBUFFER_NORMAL_FRAG } from './post/gbuffer_normal.frag'
+
+// ── Depth of Field ────────────────────────────────────────────────────────────
+export { DOF_FRAG } from './post/dof.frag'
+
+// ── Motion Blur ───────────────────────────────────────────────────────────────
+export { MOTION_BLUR_FRAG } from './post/motion_blur.frag'
+
+// ── Batched mesh ──────────────────────────────────────────────────────────────
+export { BATCH_VERT } from './batch.vert'
+
+// ── Procedural sky ────────────────────────────────────────────────────────────
+export { SKY_VERT } from './sky.vert'
+export { SKY_FRAG } from './sky.frag'
+export { STARS_VERT } from './stars.vert'
+export { STARS_FRAG } from './stars.frag'

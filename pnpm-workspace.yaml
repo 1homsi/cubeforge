@@ -2,6 +2,10 @@ packages:
   - 'packages/*'
   - 'packages/create-cubeforge-game'
   - 'integrations/*'
+  - 'examples/demo3d'
+overrides:
+  react: ^19.2.6
+  react-dom: ^19.2.6
 allowBuilds:
   esbuild: true
 onlyBuiltDependencies:

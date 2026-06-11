@@ -3,5 +3,14 @@ dist/
 coverage/
 .DS_Store
 *.js.map
+*.tsbuildinfo
 bun.lock
-examples/
+examples/*
+!examples/demo3d/
+!examples/demo3d/index.html
+!examples/demo3d/package.json
+!examples/demo3d/vite.config.ts
+!examples/demo3d/src/
+!examples/demo3d/src/**
+examples/demo3d/dist/
+examples/demo3d/node_modules/

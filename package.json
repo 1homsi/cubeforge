@@ -8,11 +8,13 @@
     "build": "pnpm --filter './packages/*' --filter 'cubeforge' run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
-    "format": "prettier --write 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
-    "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
+    "format": "prettier --write 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}' 'examples/demo3d/src/**/*.{ts,tsx}'",
+    "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}' 'examples/demo3d/src/**/*.{ts,tsx}'",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
