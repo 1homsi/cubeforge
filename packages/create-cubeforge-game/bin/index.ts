@@ -106,7 +106,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const templatesDir = path.join(import.meta.dirname, '..', 'templates', template)
+  const templatesDir = path.join(__dirname, '..', 'templates', template)
   if (!fs.existsSync(templatesDir)) {
     process.stderr.write(`Error: template "${template}" not found at ${templatesDir}\n`)
     process.exit(1)

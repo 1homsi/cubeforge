@@ -29,6 +29,7 @@ import {
   DEFAULT_SAMPLING,
 } from './textureFilter'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
+import { updateParticlesInPlace } from './particlePool'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
@@ -171,6 +172,7 @@ interface Particle {
   gravity: number
   rotation?: number
   rotationSpeed?: number
+  currentSize?: number
   startSize?: number
   endSize?: number
   targetX?: number
@@ -1933,51 +1935,10 @@ export class RenderSystem implements System {
 
       const isFormation = pool.mode === 'formation'
 
-      // Update existing particles
-      pool.particles = pool.particles.filter((p: Particle) => {
-        if (isFormation) {
-          // Seek toward formation target
-          if (p.targetX !== undefined && p.targetY !== undefined) {
-            const seek = pool.seekStrength ?? 0.055
-            p.x += (p.targetX - p.x) * seek
-            p.y += (p.targetY - p.y) * seek
-          }
-          // Attractor/repulsion: direct positional push applied after seek
-          // so it visibly overrides the pull. strength < 0 = repulsion.
-          if (pool.attractors) {
-            for (const attr of pool.attractors) {
-              const adx = p.x - attr.x
-              const ady = p.y - attr.y
-              const dist = Math.sqrt(adx * adx + ady * ady)
-              if (dist < attr.radius && dist > 0) {
-                const magnitude = -attr.strength * (1 - dist / attr.radius) * dt
-                p.x += (adx / dist) * magnitude
-                p.y += (ady / dist) * magnitude
-              }
-            }
-          }
-          return true // formation particles never expire
-        }
-
-        p.life -= dt
-        // Attractor forces (supports negative strength = repulsion)
-        if (pool.attractors) {
-          for (const attr of pool.attractors) {
-            const adx = attr.x - p.x
-            const ady = attr.y - p.y
-            const dist = Math.sqrt(adx * adx + ady * ady)
-            if (dist < attr.radius && dist > 0) {
-              const force = attr.strength * (1 - dist / attr.radius)
-              p.vx += (adx / dist) * force * dt
-              p.vy += (ady / dist) * force * dt
-            }
-          }
-        }
-        p.x += p.vx * dt
-        p.y += p.vy * dt
-        p.vy += p.gravity * dt
-        if (p.rotationSpeed !== undefined) p.rotation = (p.rotation ?? 0) + p.rotationSpeed * dt
-        return p.life > 0
+      updateParticlesInPlace(pool.particles, dt, {
+        mode: pool.mode,
+        seekStrength: pool.seekStrength,
+        attractors: pool.attractors,
       })
 
       // Emit new particles

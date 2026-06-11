@@ -2,6 +2,7 @@ packages:
   - 'packages/*'
   - 'packages/create-cubeforge-game'
   - 'integrations/*'
-  - 'examples/*'
 allowBuilds:
   esbuild: true
+onlyBuiltDependencies:
+  - esbuild

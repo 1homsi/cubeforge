@@ -12,9 +12,6 @@
     "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "prepare": "git config core.hooksPath .githooks"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  },
   "devDependencies": {
     "@testing-library/react": "^16.0.0",
     "@types/node": "^20.0.0",

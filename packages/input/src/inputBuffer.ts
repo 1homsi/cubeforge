@@ -15,6 +15,8 @@ export interface InputBufferOptions {
 export class InputBuffer {
   private buffer: BufferedAction[] = []
   private frame = 0
+  private clockMode: 'auto' | 'manual' = 'auto'
+  private manualTime = 0
   private bufferWindow: number
   private maxSize: number
 
@@ -27,7 +29,7 @@ export class InputBuffer {
    * Record an action press. Call each frame for actions that are pressed.
    */
   record(action: string, timestamp?: number): void {
-    const ts = timestamp ?? performance.now() / 1000
+    const ts = this.resolveTime(timestamp)
 
     // Don't double-record the same action on the same frame
     for (let i = this.buffer.length - 1; i >= 0; i--) {
@@ -51,7 +53,7 @@ export class InputBuffer {
    * before landing should still trigger the jump.
    */
   consume(action: string, currentTime?: number): boolean {
-    const now = currentTime ?? performance.now() / 1000
+    const now = this.resolveTime(currentTime)
     for (let i = this.buffer.length - 1; i >= 0; i--) {
       const entry = this.buffer[i]
       if (entry.action === action && now - entry.timestamp <= this.bufferWindow) {
@@ -66,7 +68,7 @@ export class InputBuffer {
    * Check if an action exists in the buffer without consuming it.
    */
   has(action: string, currentTime?: number): boolean {
-    const now = currentTime ?? performance.now() / 1000
+    const now = this.resolveTime(currentTime)
     for (let i = this.buffer.length - 1; i >= 0; i--) {
       const entry = this.buffer[i]
       if (entry.action === action && now - entry.timestamp <= this.bufferWindow) {
@@ -79,9 +81,9 @@ export class InputBuffer {
   /**
    * Call at the start of each frame to increment frame counter and prune old entries.
    */
-  update(): void {
+  update(currentTime?: number): void {
     this.frame++
-    const now = performance.now() / 1000
+    const now = this.resolveTime(currentTime)
     // Prune expired entries
     let writeIdx = 0
     for (let i = 0; i < this.buffer.length; i++) {
@@ -95,5 +97,15 @@ export class InputBuffer {
   /** Clear all buffered inputs */
   clear(): void {
     this.buffer.length = 0
+  }
+
+  private resolveTime(timestamp: number | undefined): number {
+    if (timestamp !== undefined) {
+      this.clockMode = 'manual'
+      this.manualTime = timestamp
+      return timestamp
+    }
+    if (this.clockMode === 'manual') return this.manualTime
+    return performance.now() / 1000
   }
 }

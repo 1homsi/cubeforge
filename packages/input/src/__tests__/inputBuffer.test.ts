@@ -135,5 +135,12 @@ describe('InputBuffer', () => {
       expect(buf.consume('jump', 1.0)).toBe(true)
       expect(buf.consume('jump', 1.0)).toBe(true)
     })
+
+    it('accepts an explicit timestamp for deterministic pruning', () => {
+      const buf = new InputBuffer({ bufferWindow: 0.2 })
+      buf.record('jump', 1.0)
+      buf.update(1.3)
+      expect(buf.consume('jump', 1.3)).toBe(false)
+    })
   })
 })

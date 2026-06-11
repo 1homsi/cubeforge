@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { ParticleObjectPool } from '../particlePool'
+import { ParticleObjectPool, updateParticlesInPlace } from '../particlePool'
 import type { FullParticle } from '../particlePool'
+import type { Particle } from '../components/particle'
 
 describe('ParticleObjectPool', () => {
   it('acquire returns a particle with _active true', () => {
@@ -160,5 +161,86 @@ describe('Attractor', () => {
     // Particle is outside radius — velocity unchanged
     expect(p.vx).toBe(0)
     expect(p.vy).toBe(0)
+  })
+})
+
+describe('updateParticlesInPlace', () => {
+  function particle(overrides: Partial<Particle> = {}): Particle {
+    return {
+      x: 0,
+      y: 0,
+      vx: 10,
+      vy: 20,
+      life: 1,
+      maxLife: 1,
+      size: 10,
+      color: '#ffffff',
+      gravity: 100,
+      ...overrides,
+    }
+  }
+
+  it('compacts expired particles without replacing the array', () => {
+    const particles = [
+      particle({ color: 'alive-a', life: 1, vx: 10, vy: 0, gravity: 0 }),
+      particle({ color: 'dead', life: 0.1 }),
+      particle({ color: 'alive-b', life: 1, vx: 0, vy: 10, gravity: 0 }),
+    ]
+    const sameArray = particles
+
+    updateParticlesInPlace(particles, 0.2)
+
+    expect(particles).toBe(sameArray)
+    expect(particles).toHaveLength(2)
+    expect(particles.map((p) => p.color).sort()).toEqual(['alive-a', 'alive-b'])
+    const aliveA = particles.find((p) => p.color === 'alive-a')!
+    const aliveB = particles.find((p) => p.color === 'alive-b')!
+    expect(aliveA.life).toBeCloseTo(0.8)
+    expect(aliveA.x).toBeCloseTo(2)
+    expect(aliveB.y).toBeCloseTo(2)
+  })
+
+  it('updates attractors, rotation, and size over life for living particles', () => {
+    const particles = [
+      particle({
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        gravity: 0,
+        rotation: 0,
+        rotationSpeed: 2,
+        startSize: 10,
+        endSize: 2,
+      }),
+    ]
+
+    updateParticlesInPlace(particles, 0.25, {
+      attractors: [{ x: 100, y: 0, strength: 100, radius: 200 }],
+    })
+
+    expect(particles[0].vx).toBeGreaterThan(0)
+    expect(particles[0].x).toBeGreaterThan(0)
+    expect(particles[0].rotation).toBeCloseTo(0.5)
+    expect(particles[0].currentSize).toBeCloseTo(8)
+  })
+
+  it('keeps formation particles alive while seeking targets', () => {
+    const particles = [
+      particle({
+        x: 0,
+        y: 0,
+        life: 0,
+        targetX: 100,
+        targetY: 50,
+      }),
+    ]
+
+    updateParticlesInPlace(particles, 1, { mode: 'formation', seekStrength: 0.25 })
+
+    expect(particles).toHaveLength(1)
+    expect(particles[0].life).toBe(0)
+    expect(particles[0].x).toBeCloseTo(25)
+    expect(particles[0].y).toBeCloseTo(12.5)
   })
 })
