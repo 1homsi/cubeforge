@@ -172,6 +172,36 @@ describe('ECSWorld', () => {
       expect(result).toContain(id)
       expect(result).toContain(id2)
     })
+
+    it('prepared queries share cached results with normal queries', () => {
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Transform' })
+      world.addComponent(id, { type: 'Sprite' })
+
+      const prepared = world.prepareQuery('Sprite', 'Transform')
+      const preparedResult = world.queryPrepared(prepared)
+      const normalResult = world.query('Transform', 'Sprite')
+
+      expect(preparedResult).toBe(normalResult)
+      expect(preparedResult).toContain(id)
+    })
+
+    it('prepared queries refresh when matching component types change', () => {
+      const prepared = world.prepareQuery('Transform', 'Sprite')
+
+      const first = world.createEntity()
+      world.addComponent(first, { type: 'Transform' })
+      world.addComponent(first, { type: 'Sprite' })
+      expect(world.queryPrepared(prepared)).toEqual([first])
+
+      const second = world.createEntity()
+      world.addComponent(second, { type: 'Transform' })
+      world.addComponent(second, { type: 'Sprite' })
+
+      const result = world.queryPrepared(prepared)
+      expect(result).toContain(first)
+      expect(result).toContain(second)
+    })
   })
 
   describe('queryOne', () => {
@@ -184,6 +214,14 @@ describe('ECSWorld', () => {
     it('returns undefined when no entity matches', () => {
       world.createEntity()
       expect(world.queryOne('Ghost')).toBeUndefined()
+    })
+
+    it('supports prepared query handles', () => {
+      const prepared = world.prepareQuery('Unique')
+      const id = world.createEntity()
+      world.addComponent(id, { type: 'Unique' })
+
+      expect(world.queryOnePrepared(prepared)).toBe(id)
     })
   })
 

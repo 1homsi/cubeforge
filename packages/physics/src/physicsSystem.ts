@@ -19,7 +19,7 @@
  * Reference: Rapier (src/dynamics/solver), Box2D (b2ContactSolver)
  */
 
-import type { System, ECSWorld, EntityId } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, WorldQuery } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import type { EventBus } from '@cubeforge/core'
 import type { RigidBodyComponent } from './components/rigidbody'
@@ -299,6 +299,49 @@ export class PhysicsSystem implements System {
   private readonly FIXED_DT = 1 / 60
   private readonly MAX_ACCUMULATOR = 0.1
   private readonly config: PhysicsConfig
+  private readonly qBoxBody: WorldQuery = {
+    key: 'BoxCollider\x00RigidBody\x00Transform',
+    types: ['BoxCollider', 'RigidBody', 'Transform'],
+  }
+  private readonly qCircle: WorldQuery = { key: 'CircleCollider\x00Transform', types: ['CircleCollider', 'Transform'] }
+  private readonly qCircleBody: WorldQuery = {
+    key: 'CircleCollider\x00RigidBody\x00Transform',
+    types: ['CircleCollider', 'RigidBody', 'Transform'],
+  }
+  private readonly qCapsuleBody: WorldQuery = {
+    key: 'CapsuleCollider\x00RigidBody\x00Transform',
+    types: ['CapsuleCollider', 'RigidBody', 'Transform'],
+  }
+  private readonly qPolygonBody: WorldQuery = {
+    key: 'ConvexPolygonCollider\x00RigidBody\x00Transform',
+    types: ['ConvexPolygonCollider', 'RigidBody', 'Transform'],
+  }
+  private readonly qTriangleBody: WorldQuery = {
+    key: 'RigidBody\x00Transform\x00TriangleCollider',
+    types: ['RigidBody', 'Transform', 'TriangleCollider'],
+  }
+  private readonly qSegment: WorldQuery = {
+    key: 'SegmentCollider\x00Transform',
+    types: ['SegmentCollider', 'Transform'],
+  }
+  private readonly qHeightField: WorldQuery = {
+    key: 'HeightFieldCollider\x00Transform',
+    types: ['HeightFieldCollider', 'Transform'],
+  }
+  private readonly qHalfSpace: WorldQuery = {
+    key: 'HalfSpaceCollider\x00Transform',
+    types: ['HalfSpaceCollider', 'Transform'],
+  }
+  private readonly qTriMesh: WorldQuery = {
+    key: 'Transform\x00TriMeshCollider',
+    types: ['Transform', 'TriMeshCollider'],
+  }
+  private readonly qJoint: WorldQuery = { key: 'Joint', types: ['Joint'] }
+  private readonly qBoxCollider: WorldQuery = { key: 'BoxCollider\x00Transform', types: ['BoxCollider', 'Transform'] }
+  private readonly qCompound: WorldQuery = {
+    key: 'CompoundCollider\x00Transform',
+    types: ['CompoundCollider', 'Transform'],
+  }
 
   // Contact event tracking
   private activeTriggerPairs = new Map<string, [EntityId, EntityId]>()
@@ -490,9 +533,9 @@ export class PhysicsSystem implements System {
   private step(world: ECSWorld, dt: number): void {
     // ── Phase 0: Classify entities ────────────────────────────────────────
 
-    const allBox = world.query('Transform', 'RigidBody', 'BoxCollider')
-    const allCircle = world.query('Transform', 'CircleCollider')
-    const allCapsule = world.query('Transform', 'RigidBody', 'CapsuleCollider')
+    const allBox = world.queryPrepared(this.qBoxBody)
+    const allCircle = world.queryPrepared(this.qCircle)
+    const allCapsule = world.queryPrepared(this.qCapsuleBody)
 
     const dynamicBox: EntityId[] = []
     const staticBox: EntityId[] = []
@@ -520,12 +563,12 @@ export class PhysicsSystem implements System {
       if (!rb.isStatic) capsuleDynamics.push(id)
     }
 
-    const allPolygon = world.query('Transform', 'RigidBody', 'ConvexPolygonCollider')
-    const allTriangle = world.query('Transform', 'RigidBody', 'TriangleCollider')
-    const allSegment = world.query('Transform', 'SegmentCollider')
-    const allHeightField = world.query('Transform', 'HeightFieldCollider')
-    const allHalfSpace = world.query('Transform', 'HalfSpaceCollider')
-    const allTriMesh = world.query('Transform', 'TriMeshCollider')
+    const allPolygon = world.queryPrepared(this.qPolygonBody)
+    const allTriangle = world.queryPrepared(this.qTriangleBody)
+    const allSegment = world.queryPrepared(this.qSegment)
+    const allHeightField = world.queryPrepared(this.qHeightField)
+    const allHalfSpace = world.queryPrepared(this.qHalfSpace)
+    const allTriMesh = world.queryPrepared(this.qTriMesh)
 
     const dynamicPolygon: EntityId[] = []
     const staticPolygon: EntityId[] = []
@@ -623,9 +666,9 @@ export class PhysicsSystem implements System {
     // kinematic bodies push dynamic bodies through the solver.
 
     const allKinematics = [
-      ...world.query('Transform', 'RigidBody', 'BoxCollider'),
-      ...world.query('Transform', 'RigidBody', 'CircleCollider'),
-      ...world.query('Transform', 'RigidBody', 'CapsuleCollider'),
+      ...world.queryPrepared(this.qBoxBody),
+      ...world.queryPrepared(this.qCircleBody),
+      ...world.queryPrepared(this.qCapsuleBody),
     ].filter((id) => {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       return rb.isKinematic && rb.enabled
@@ -755,7 +798,7 @@ export class PhysicsSystem implements System {
     // the two connected bodies.
     const jointExcludedPairs = this._jointExcludedPairs
     jointExcludedPairs.clear()
-    for (const jid of world.query('Joint')) {
+    for (const jid of world.queryPrepared(this.qJoint)) {
       const j = world.getComponent<JointComponent>(jid, 'Joint')!
       if (!j.enabled || j.broken) continue
       if (!j.contactsEnabled) {
@@ -2855,7 +2898,7 @@ export class PhysicsSystem implements System {
 
     // ── Phase 11: Joint constraints ───────────────────────────────────────
 
-    const jointEntities = world.query('Joint')
+    const jointEntities = world.queryPrepared(this.qJoint)
     if (jointEntities.length > 0) {
       const JOINT_ITERATIONS = 4
       for (let iter = 0; iter < JOINT_ITERATIONS; iter++) {
@@ -3227,7 +3270,7 @@ export class PhysicsSystem implements System {
 
     // ── Phase 13: Trigger detection ───────────────────────────────────────
 
-    const allWithCollider = world.query('Transform', 'BoxCollider')
+    const allWithCollider = world.queryPrepared(this.qBoxCollider)
     const currentTriggerPairs = this._currentTriggerPairs
     currentTriggerPairs.clear()
     const triggerNormals = this._triggerNormals
@@ -3312,7 +3355,7 @@ export class PhysicsSystem implements System {
       }
 
       // Circle-AABB events
-      const allBoxes = world.query('Transform', 'BoxCollider')
+      const allBoxes = world.queryPrepared(this.qBoxCollider)
       for (const cid of allCircle) {
         const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
         if (!cc.enabled) continue
@@ -3367,12 +3410,12 @@ export class PhysicsSystem implements System {
 
     // ── Phase 15: Compound contact events ─────────────────────────────────
 
-    const allCompound = world.query('Transform', 'CompoundCollider')
+    const allCompound = world.queryPrepared(this.qCompound)
     if (allCompound.length > 0) {
       const currentCompoundPairs = this._currentCompoundPairs
       currentCompoundPairs.clear()
 
-      const allBoxEntities = world.query('Transform', 'BoxCollider')
+      const allBoxEntities = world.queryPrepared(this.qBoxCollider)
       for (const cid of allCompound) {
         const cc = world.getComponent<CompoundColliderComponent>(cid, 'CompoundCollider')!
         const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
@@ -3464,7 +3507,7 @@ export class PhysicsSystem implements System {
     if (allCapsule.length > 0) {
       const currentCapsulePairs = this._currentCapsulePairs
       currentCapsulePairs.clear()
-      const allBoxForCapsule = world.query('Transform', 'BoxCollider')
+      const allBoxForCapsule = world.queryPrepared(this.qBoxCollider)
 
       for (const cid of allCapsule) {
         const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
@@ -3522,7 +3565,7 @@ export class PhysicsSystem implements System {
       currentPolyPairs.clear()
 
       // Polygon/Triangle vs box
-      const allBoxForPoly = world.query('Transform', 'BoxCollider')
+      const allBoxForPoly = world.queryPrepared(this.qBoxCollider)
       for (const pid of allPolygonEntities) {
         const isPoly = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')
         const isTri = world.getComponent<TriangleColliderComponent>(pid, 'TriangleCollider')

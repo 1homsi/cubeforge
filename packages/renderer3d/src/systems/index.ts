@@ -1,4 +1,4 @@
-import type { System, ECSWorld, EntityId } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, WorldQuery } from '@cubeforge/core'
 import type { WebGLRenderer3D } from '../renderer'
 import type { Scene, Camera } from '../scene'
 import { Object3D } from '../scene'
@@ -15,6 +15,10 @@ export interface RenderSystem3DOptions {
 }
 
 export class RenderSystem3D implements System {
+  private readonly _transform3DQuery: WorldQuery = { key: 'Transform3D', types: ['Transform3D'] }
+  private readonly _mesh3DQuery: WorldQuery = { key: 'Mesh3D\x00Transform3D', types: ['Mesh3D', 'Transform3D'] }
+  private readonly _camera3DQuery: WorldQuery = { key: 'Camera3D', types: ['Camera3D'] }
+
   private _renderer: WebGLRenderer3D
   private _scene: Scene
   private _camera: Camera
@@ -30,6 +34,9 @@ export class RenderSystem3D implements System {
 
   /** Named material registry — populated via registerMaterial() */
   private _materialRegistry = new Map<string, Material>()
+
+  private readonly _transformEntityScratch = new Set<EntityId>()
+  private readonly _meshEntityScratch = new Set<EntityId>()
 
   constructor(opts: RenderSystem3DOptions) {
     this._renderer = opts.renderer
@@ -51,7 +58,9 @@ export class RenderSystem3D implements System {
 
   update(world: ECSWorld, _dt: number): void {
     // ── Step 1: Sync Transform3D entities to Object3D scene graph ─────────────
-    const transformEntities = new Set(world.query('Transform3D'))
+    const transformEntities = this._transformEntityScratch
+    transformEntities.clear()
+    for (const id of world.queryPrepared(this._transform3DQuery)) transformEntities.add(id)
 
     // Remove objects for destroyed entities
     for (const [id, obj] of this._objectMap) {
@@ -85,7 +94,9 @@ export class RenderSystem3D implements System {
     }
 
     // ── Step 2: Sync Mesh3D components ────────────────────────────────────────
-    const meshEntities = new Set(world.query('Transform3D', 'Mesh3D'))
+    const meshEntities = this._meshEntityScratch
+    meshEntities.clear()
+    for (const id of world.queryPrepared(this._mesh3DQuery)) meshEntities.add(id)
 
     // Remove meshes from entities that lost their Mesh3DComponent
     for (const [id, mesh] of this._meshMap) {
@@ -124,7 +135,7 @@ export class RenderSystem3D implements System {
     }
 
     // ── Step 3: Check for active Camera3D override ─────────────────────────────
-    const cameraEntities = world.query('Camera3D')
+    const cameraEntities = world.queryPrepared(this._camera3DQuery)
     for (const id of cameraEntities) {
       const camComp = world.getComponent<Camera3DComponent>(id, 'Camera3D')
       if (!camComp?.isActive) continue

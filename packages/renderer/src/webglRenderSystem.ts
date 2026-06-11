@@ -8,7 +8,7 @@
 // ║  Exported as `RenderSystem` from @cubeforge/renderer.                   ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, NavGrid, WorldQuery } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import {
   VERT_SRC,
@@ -502,6 +502,26 @@ export interface PostProcessOptions {
 export class RenderSystem implements System {
   /** Default background used when no Camera2D component exists */
   defaultBackground = '#1a1a2e'
+
+  private readonly qTransformSprite: WorldQuery = { key: 'Sprite\x00Transform', types: ['Sprite', 'Transform'] }
+  private readonly qAnimationState: WorldQuery = { key: 'AnimationState', types: ['AnimationState'] }
+  private readonly qParticlePool: WorldQuery = { key: 'ParticlePool', types: ['ParticlePool'] }
+  private readonly qSquashStretch: WorldQuery = { key: 'SquashStretch', types: ['SquashStretch'] }
+  private readonly qAnimatorAnimationState: WorldQuery = {
+    key: 'AnimationState\x00Animator',
+    types: ['AnimationState', 'Animator'],
+  }
+  private readonly qAnimationStateSprite: WorldQuery = {
+    key: 'AnimationState\x00Sprite',
+    types: ['AnimationState', 'Sprite'],
+  }
+  private readonly qParallaxLayer: WorldQuery = { key: 'ParallaxLayer', types: ['ParallaxLayer'] }
+  private readonly qTransformText: WorldQuery = { key: 'Text\x00Transform', types: ['Text', 'Transform'] }
+  private readonly qTransformParticlePool: WorldQuery = {
+    key: 'ParticlePool\x00Transform',
+    types: ['ParticlePool', 'Transform'],
+  }
+  private readonly qTransformTrail: WorldQuery = { key: 'Trail\x00Transform', types: ['Trail', 'Transform'] }
 
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
@@ -1243,7 +1263,7 @@ export class RenderSystem implements System {
     mix(shakeX * 1000)
     mix(shakeY * 1000)
 
-    for (const id of world.query('Transform', 'Sprite')) {
+    for (const id of world.queryPrepared(this.qTransformSprite)) {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const s = world.getComponent<SpriteComponent>(id, 'Sprite')!
       mix(id)
@@ -1258,17 +1278,17 @@ export class RenderSystem implements System {
     }
 
     // Any playing animation or live particle system = force dirty
-    for (const id of world.query('AnimationState')) {
+    for (const id of world.queryPrepared(this.qAnimationState)) {
       const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
       if (anim.playing) return -1
     }
-    for (const id of world.query('ParticlePool')) {
+    for (const id of world.queryPrepared(this.qParticlePool)) {
       const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
       if (pool.active || pool.particles.length > 0) return -1
     }
 
     // Squash/stretch not at rest = dirty
-    for (const id of world.query('SquashStretch')) {
+    for (const id of world.queryPrepared(this.qSquashStretch)) {
       const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
       mix(ss.currentScaleX * 1000)
       mix(ss.currentScaleY * 1000)
@@ -1466,7 +1486,7 @@ export class RenderSystem implements System {
     }
 
     // ── Animator evaluation pass (runs before animation so clips are resolved) ──
-    for (const id of world.query('Animator', 'AnimationState')) {
+    for (const id of world.queryPrepared(this.qAnimatorAnimationState)) {
       const animator = world.getComponent<AnimatorComponent>(id, 'Animator')!
       const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
       if (!animator.playing) continue
@@ -1529,7 +1549,7 @@ export class RenderSystem implements System {
     }
 
     // ── Animation clip resolution + playback pass ─────────────────────────────
-    for (const id of world.query('AnimationState', 'Sprite')) {
+    for (const id of world.queryPrepared(this.qAnimationStateSprite)) {
       const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
 
@@ -1575,7 +1595,7 @@ export class RenderSystem implements System {
     }
 
     // ── SquashStretch update ─────────────────────────────────────────────────
-    for (const id of world.query('SquashStretch')) {
+    for (const id of world.queryPrepared(this.qSquashStretch)) {
       const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
       let tScX: number
       let tScY: number
@@ -1637,7 +1657,7 @@ export class RenderSystem implements System {
     gl.clear(gl.COLOR_BUFFER_BIT)
 
     // ── Parallax pre-pass ─────────────────────────────────────────────────────
-    const parallaxEntities = world.query('ParallaxLayer')
+    const parallaxEntities = world.queryPrepared(this.qParallaxLayer)
     if (parallaxEntities.length > 0) {
       parallaxEntities.sort((a: EntityId, b: EntityId) => {
         const za = world.getComponent<ParallaxLayerComponent>(a, 'ParallaxLayer')!.zIndex
@@ -1701,7 +1721,7 @@ export class RenderSystem implements System {
     const viewT = camY - halfVH - 32 / zoom
     const viewB = camY + halfVH + 32 / zoom
 
-    const renderableIds = world.query('Transform', 'Sprite')
+    const renderableIds = world.queryPrepared(this.qTransformSprite)
     // Pre-extract sortable fields once per entity. The previous comparator
     // called world.getComponent twice and getTextureKey twice per
     // comparison, costing N*log(N) hash lookups + texture-key recomputes
@@ -1861,7 +1881,7 @@ export class RenderSystem implements System {
 
     // ── Text rendering pass ───────────────────────────────────────────────────
     // Text entities are rendered as textured quads using offscreen Canvas2D textures.
-    const textEntities = world.query('Transform', 'Text')
+    const textEntities = world.queryPrepared(this.qTransformText)
     textEntities.sort((a: EntityId, b: EntityId) => {
       const ta = world.getComponent<TextComponent>(a, 'Text')!
       const tb = world.getComponent<TextComponent>(b, 'Text')!
@@ -1911,7 +1931,7 @@ export class RenderSystem implements System {
     }
 
     // ── Particles ────────────────────────────────────────────────────────────
-    for (const id of world.query('Transform', 'ParticlePool')) {
+    for (const id of world.queryPrepared(this.qTransformParticlePool)) {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
 
@@ -2094,7 +2114,7 @@ export class RenderSystem implements System {
     }
 
     // ── Trail update + render pass ────────────────────────────────────────────
-    for (const id of world.query('Transform', 'Trail')) {
+    for (const id of world.queryPrepared(this.qTransformTrail)) {
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       const trail = world.getComponent<TrailComponent>(id, 'Trail')!
 

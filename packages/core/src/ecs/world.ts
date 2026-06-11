@@ -28,6 +28,18 @@ export interface DeltaSnapshot {
 }
 
 /**
+ * Pre-normalized ECS query descriptor.
+ *
+ * Use `world.prepareQuery(...)` once for render/physics systems that execute
+ * the same query every frame, then pass it to `queryPrepared` or
+ * `queryOnePrepared` to avoid repeated sort/key allocations on hot paths.
+ */
+export interface WorldQuery {
+  readonly key: string
+  readonly types: readonly string[]
+}
+
+/**
  * Merge a `DeltaSnapshot` onto a `baseline` WorldSnapshot, returning a new
  * full snapshot that reflects the current world state.
  *
@@ -71,7 +83,27 @@ interface Archetype {
   entities: EntityId[]
 }
 
+interface QueryCacheEntry {
+  readonly types: readonly string[]
+  readonly result: EntityId[]
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const EMPTY_QUERY_TYPES: readonly string[] = []
+
+function normalizeQueryTypes(types: readonly string[]): readonly string[] {
+  if (types.length === 0) return EMPTY_QUERY_TYPES
+  if (types.length === 1) return [types[0]]
+  return [...types].sort()
+}
+
+function archetypeMatches(arch: Archetype, types: readonly string[]): boolean {
+  for (let i = 0; i < types.length; i++) {
+    if (!arch.types.has(types[i])) return false
+  }
+  return true
+}
 
 /** Per-component structural comparison with early exit — avoids stringifying
  *  the whole entity and is not sensitive to JSON key-ordering. */
@@ -116,9 +148,9 @@ export class ECSWorld {
 
   private systems: System[] = []
 
-  // Query cache: query key → matching EntityId[]
+  // Query cache: query key → matching EntityId[] plus normalized query types.
   // Invalidated selectively when archetypes are added or entities move.
-  private queryCache = new Map<string, EntityId[]>()
+  private queryCache = new Map<string, QueryCacheEntry>()
 
   // Component types touched since last update() — used for selective cache invalidation
   private dirtyTypes = new Set<string>()
@@ -274,13 +306,20 @@ export class ECSWorld {
       this.dirtyAll = false
       this.dirtyTypes.clear()
     } else if (this.dirtyTypes.size > 0) {
-      for (const key of this.queryCache.keys()) {
-        if (key === '') {
+      for (const [key, entry] of this.queryCache) {
+        const keyTypes = entry.types
+        if (keyTypes.length === 0) {
           this.queryCache.delete(key)
           continue
         }
-        const keyTypes = key.split('\x00')
-        if (keyTypes.some((t) => this.dirtyTypes.has(t))) {
+        let affected = false
+        for (let i = 0; i < keyTypes.length; i++) {
+          if (this.dirtyTypes.has(keyTypes[i])) {
+            affected = true
+            break
+          }
+        }
+        if (affected) {
           this.queryCache.delete(key)
         }
       }
@@ -291,27 +330,42 @@ export class ECSWorld {
   // Returns all entities that have ALL of the requested component types.
   // Uses archetype superset matching — no per-entity scan.
   query(...types: string[]): EntityId[] {
+    return this.queryPrepared(this.prepareQuery(...types))
+  }
+
+  prepareQuery(...types: string[]): WorldQuery {
+    const normalized = normalizeQueryTypes(types)
+    return { key: normalized.join('\x00'), types: normalized }
+  }
+
+  queryPrepared(query: WorldQuery): EntityId[] {
     this.flushDirty()
 
-    const key = types.slice().sort().join('\x00')
-    const cached = this.queryCache.get(key)
-    if (cached) return cached
+    const cached = this.queryCache.get(query.key)
+    if (cached) return cached.result
 
     const result: EntityId[] = []
     for (const arch of this.archetypes.values()) {
       // Skip archetypes that don't have all requested types
-      if (types.every((t) => arch.types.has(t))) {
+      if (archetypeMatches(arch, query.types)) {
         for (const id of arch.entities) result.push(id)
       }
     }
-    this.queryCache.set(key, result)
+    this.queryCache.set(query.key, { types: query.types, result })
     return result
   }
 
   queryOne(...types: string[]): EntityId | undefined {
+    return this.queryOnePrepared(this.prepareQuery(...types))
+  }
+
+  queryOnePrepared(query: WorldQuery): EntityId | undefined {
     this.flushDirty()
+    const cached = this.queryCache.get(query.key)
+    if (cached) return cached.result[0]
+
     for (const arch of this.archetypes.values()) {
-      if (types.every((t) => arch.types.has(t))) {
+      if (archetypeMatches(arch, query.types)) {
         if (arch.entities.length > 0) return arch.entities[0]
       }
     }
