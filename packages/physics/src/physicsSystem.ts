@@ -389,6 +389,18 @@ export class PhysicsSystem implements System {
   private _currentCompoundPairs = new Map<string, [EntityId, EntityId]>()
   private _currentCapsulePairs = new Map<string, [EntityId, EntityId]>()
   private _currentPolygonPairs = new Map<string, [EntityId, EntityId]>()
+  private _dynamicBox: EntityId[] = []
+  private _staticBox: EntityId[] = []
+  private _kinematicBox: EntityId[] = []
+  private _dynamicCircle: EntityId[] = []
+  private _capsuleDynamics: EntityId[] = []
+  private _dynamicPolygon: EntityId[] = []
+  private _staticPolygon: EntityId[] = []
+  private _dynamicTriangle: EntityId[] = []
+  private _staticTriangle: EntityId[] = []
+  private _nonDynamic: EntityId[] = []
+  private _allKinematics: EntityId[] = []
+  private _allDynamics: EntityId[] = []
 
   constructor(
     private gravity: number,
@@ -537,9 +549,12 @@ export class PhysicsSystem implements System {
     const allCircle = world.queryPrepared(this.qCircle)
     const allCapsule = world.queryPrepared(this.qCapsuleBody)
 
-    const dynamicBox: EntityId[] = []
-    const staticBox: EntityId[] = []
-    const kinematicBox: EntityId[] = []
+    const dynamicBox = this._dynamicBox
+    const staticBox = this._staticBox
+    const kinematicBox = this._kinematicBox
+    dynamicBox.length = 0
+    staticBox.length = 0
+    kinematicBox.length = 0
 
     for (const id of allBox) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -549,14 +564,16 @@ export class PhysicsSystem implements System {
       else dynamicBox.push(id)
     }
 
-    const dynamicCircle: EntityId[] = []
+    const dynamicCircle = this._dynamicCircle
+    dynamicCircle.length = 0
     for (const id of allCircle) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
       if (rb && !rb.enabled) continue
       if (rb && !rb.isStatic && !rb.isKinematic) dynamicCircle.push(id)
     }
 
-    const capsuleDynamics: EntityId[] = []
+    const capsuleDynamics = this._capsuleDynamics
+    capsuleDynamics.length = 0
     for (const id of allCapsule) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       if (!rb.enabled) continue
@@ -570,8 +587,10 @@ export class PhysicsSystem implements System {
     const allHalfSpace = world.queryPrepared(this.qHalfSpace)
     const allTriMesh = world.queryPrepared(this.qTriMesh)
 
-    const dynamicPolygon: EntityId[] = []
-    const staticPolygon: EntityId[] = []
+    const dynamicPolygon = this._dynamicPolygon
+    const staticPolygon = this._staticPolygon
+    dynamicPolygon.length = 0
+    staticPolygon.length = 0
     for (const id of allPolygon) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       if (!rb.enabled) continue
@@ -579,8 +598,10 @@ export class PhysicsSystem implements System {
       else dynamicPolygon.push(id)
     }
 
-    const dynamicTriangle: EntityId[] = []
-    const staticTriangle: EntityId[] = []
+    const dynamicTriangle = this._dynamicTriangle
+    const staticTriangle = this._staticTriangle
+    dynamicTriangle.length = 0
+    staticTriangle.length = 0
     for (const id of allTriangle) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       if (!rb.enabled) continue
@@ -589,7 +610,10 @@ export class PhysicsSystem implements System {
     }
 
     // All static-like entities for spatial grid (statics + kinematics)
-    const nonDynamic = [...staticBox, ...kinematicBox]
+    const nonDynamic = this._nonDynamic
+    nonDynamic.length = 0
+    for (const id of staticBox) nonDynamic.push(id)
+    for (const id of kinematicBox) nonDynamic.push(id)
 
     // ── Prune dead entity pairs ───────────────────────────────────────────
 
@@ -665,14 +689,20 @@ export class PhysicsSystem implements System {
     // Compute velocity from kinematic position/rotation targets so that
     // kinematic bodies push dynamic bodies through the solver.
 
-    const allKinematics = [
-      ...world.queryPrepared(this.qBoxBody),
-      ...world.queryPrepared(this.qCircleBody),
-      ...world.queryPrepared(this.qCapsuleBody),
-    ].filter((id) => {
+    const allKinematics = this._allKinematics
+    allKinematics.length = 0
+    for (const id of world.queryPrepared(this.qBoxBody)) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      return rb.isKinematic && rb.enabled
-    })
+      if (rb.isKinematic && rb.enabled) allKinematics.push(id)
+    }
+    for (const id of world.queryPrepared(this.qCircleBody)) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (rb.isKinematic && rb.enabled) allKinematics.push(id)
+    }
+    for (const id of world.queryPrepared(this.qCapsuleBody)) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (rb.isKinematic && rb.enabled) allKinematics.push(id)
+    }
 
     for (const id of allKinematics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -692,7 +722,13 @@ export class PhysicsSystem implements System {
     // ── Phase 1: Force accumulation + velocity integration ────────────────
 
     // All dynamics: box, circle, capsule, polygon, triangle
-    const allDynamics = [...dynamicBox, ...dynamicCircle, ...capsuleDynamics, ...dynamicPolygon, ...dynamicTriangle]
+    const allDynamics = this._allDynamics
+    allDynamics.length = 0
+    for (const id of dynamicBox) allDynamics.push(id)
+    for (const id of dynamicCircle) allDynamics.push(id)
+    for (const id of capsuleDynamics) allDynamics.push(id)
+    for (const id of dynamicPolygon) allDynamics.push(id)
+    for (const id of dynamicTriangle) allDynamics.push(id)
 
     for (const id of allDynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
