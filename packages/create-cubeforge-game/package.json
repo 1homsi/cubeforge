@@ -16,7 +16,10 @@
   },
   "files": [
     "bin/index.js",
-    "templates"
+    "templates/default",
+    "templates/editor",
+    "templates/puzzle",
+    "templates/turn-based"
   ],
   "license": "MIT",
   "repository": {

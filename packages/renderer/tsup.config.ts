@@ -4,7 +4,7 @@ export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm'],
   dts: true,
-  external: ['react'],
+  external: ['@cubeforge/core'],
   outExtension: () => ({ js: '.mjs' }),
   clean: true,
   sourcemap: false,

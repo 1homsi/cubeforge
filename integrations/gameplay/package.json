@@ -2,22 +2,14 @@
   "name": "@cubeforge/gameplay",
   "version": "0.0.1",
   "description": "High-level gameplay hooks for Cubeforge (internal)",
-  "main": "./src/index.ts",
+  "main": "./dist/index.mjs",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsup"
   },
-  "publishConfig": {
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.mts",
-    "exports": {
-      ".": {
-        "import": "./dist/index.js",
-        "types": "./dist/index.d.mts"
-      }
-    }
-  },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@cubeforge/context": "workspace:*",
     "@cubeforge/core": "workspace:*",
@@ -26,7 +18,7 @@
     "@cubeforge/renderer": "workspace:*"
   },
   "peerDependencies": {
-    "react": "^18.0.0"
+    "react": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
     "tsup": "^8.0.0"
@@ -36,5 +28,14 @@
     "type": "git",
     "url": "https://github.com/1homsi/cubeforge"
   },
-  "private": true
+  "private": true,
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  }
 }

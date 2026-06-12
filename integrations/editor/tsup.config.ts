@@ -5,7 +5,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   external: ['react', 'react-dom', 'react/jsx-runtime'],
-  outExtension: () => ({ js: '.js' }),
+  outExtension: () => ({ js: '.mjs' }),
   esbuildOptions(options) {
     options.jsx = 'automatic'
     options.jsxDev = false

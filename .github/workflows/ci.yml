@@ -33,3 +33,6 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Packed package smoke test
+        run: node scripts/publish-packages.mjs smoke

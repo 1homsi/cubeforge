@@ -30,17 +30,6 @@
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
-    "@cubeforge/audio": "workspace:*",
-    "@cubeforge/context": "workspace:*",
-    "@cubeforge/core": "workspace:*",
-    "@cubeforge/devtools": "workspace:*",
-    "@cubeforge/editor": "workspace:*",
-    "@cubeforge/gameplay": "workspace:*",
-    "@cubeforge/input": "workspace:*",
-    "@cubeforge/net": "workspace:*",
-    "@cubeforge/physics": "workspace:*",
-    "@cubeforge/renderer": "workspace:*",
-    "@cubeforge/renderer3d": "workspace:*",
     "tsup": "^8.0.0"
   },
   "keywords": [
@@ -54,5 +43,18 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/1homsi/cubeforge"
+  },
+  "dependencies": {
+    "@cubeforge/audio": "workspace:*",
+    "@cubeforge/context": "workspace:*",
+    "@cubeforge/core": "workspace:*",
+    "@cubeforge/devtools": "workspace:*",
+    "@cubeforge/editor": "workspace:*",
+    "@cubeforge/gameplay": "workspace:*",
+    "@cubeforge/input": "workspace:*",
+    "@cubeforge/net": "workspace:*",
+    "@cubeforge/physics": "workspace:*",
+    "@cubeforge/renderer": "workspace:*",
+    "@cubeforge/renderer3d": "workspace:*"
   }
 }

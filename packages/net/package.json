@@ -2,14 +2,28 @@
   "name": "@cubeforge/net",
   "version": "0.0.6",
   "description": "Multiplayer helpers for Cubeforge",
-  "main": "./src/index.ts",
+  "main": "./dist/index.mjs",
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --external react --external cubeforge --clean --outDir dist",
     "typecheck": "tsc --noEmit"
   },
-  "publishConfig": { "main": "./dist/index.js", "types": "./dist/index.d.ts" },
-  "files": ["dist"],
-  "peerDependencies": { "cubeforge": "^0.0.6" },
-  "devDependencies": { "@cubeforge/core": "workspace:*" },
-  "license": "MIT"
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "license": "MIT",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "dependencies": {
+    "@cubeforge/core": "workspace:*"
+  }
 }

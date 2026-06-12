@@ -72,13 +72,6 @@ importers:
 
   integrations/cubeforge:
     dependencies:
-      react:
-        specifier: ^19.2.6
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.2.6
-        version: 19.2.6(react@19.2.6)
-    devDependencies:
       '@cubeforge/audio':
         specifier: workspace:*
         version: link:../../packages/audio
@@ -112,6 +105,13 @@ importers:
       '@cubeforge/renderer3d':
         specifier: workspace:*
         version: link:../../packages/renderer3d
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.6
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
@@ -210,13 +210,12 @@ importers:
 
   packages/net:
     dependencies:
-      cubeforge:
-        specifier: ^0.0.6
-        version: 0.0.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-    devDependencies:
       '@cubeforge/core':
         specifier: workspace:*
         version: link:../core
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
 
   packages/physics:
     dependencies:
@@ -896,12 +895,6 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
-
-  cubeforge@0.0.6:
-    resolution: {integrity: sha512-pur5VeYMN5z7tMZdZjEiPpDXgzc0caB9jMgjc9arrEqhuaTsNb+J6qjighNS4GDzO5L4WuwnQMaxtyExmEpxXA==}
-    peerDependencies:
-      react: ^19.2.6
-      react-dom: ^19.2.6
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -1846,11 +1839,6 @@ snapshots:
       which: 2.0.2
 
   csstype@3.2.3: {}
-
-  cubeforge@0.0.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
-    dependencies:
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
 
   debug@4.4.3:
     dependencies:
