@@ -38,6 +38,7 @@ export function Weather3D({ type, particleCount = 2000, windX = 0, windZ = 0, tr
 
     return () => {
       engine._frameListeners.delete(frameListener)
+      weather.dispose()
       weatherRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

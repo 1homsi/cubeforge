@@ -1,4 +1,4 @@
-import { useContext, useEffect } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import { AmbientLight, Vec3 } from '@cubeforge/renderer3d'
 import { Engine3DContext, ParentObject3DContext } from '../context3d'
 
@@ -17,21 +17,28 @@ export function AmbientLight3D({ color = [1, 1, 1], intensity = 1 }: AmbientLigh
     }
   }
 
+  const lightRef = useRef<AmbientLight | null>(null)
+
   useEffect(() => {
     if (!parent) return
 
     const light = new AmbientLight(new Vec3(color[0], color[1], color[2]), intensity)
+    lightRef.current = light
     parent.add(light)
 
     return () => {
       parent.remove(light)
+      lightRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Live-sync color and intensity
   useEffect(() => {
-    // Stateless component — re-mount via key to change color/intensity
+    const light = lightRef.current
+    if (!light) return
+    light.color.set(color[0], color[1], color[2])
+    light.intensity = intensity
   }, [color, intensity])
 
   return null

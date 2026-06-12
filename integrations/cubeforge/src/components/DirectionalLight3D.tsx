@@ -1,4 +1,4 @@
-import { useContext, useEffect } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import { DirectionalLight, Vec3 } from '@cubeforge/renderer3d'
 import { Engine3DContext, ParentObject3DContext } from '../context3d'
 
@@ -26,6 +26,8 @@ export function DirectionalLight3D({
     }
   }
 
+  const lightRef = useRef<DirectionalLight | null>(null)
+
   useEffect(() => {
     if (!parent) return
 
@@ -35,13 +37,27 @@ export function DirectionalLight3D({
     if (shadowMapSize !== undefined) {
       light.shadow.mapSize = { width: shadowMapSize, height: shadowMapSize }
     }
+    lightRef.current = light
     parent.add(light)
 
     return () => {
       parent.remove(light)
+      lightRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const light = lightRef.current
+    if (!light) return
+    light.color.set(color[0], color[1], color[2])
+    light.intensity = intensity
+    light.position.set(position[0], position[1], position[2])
+    light.castShadow = castShadow
+    if (shadowMapSize !== undefined) {
+      light.shadow.mapSize = { width: shadowMapSize, height: shadowMapSize }
+    }
+  }, [color, intensity, position, castShadow, shadowMapSize])
 
   return null
 }

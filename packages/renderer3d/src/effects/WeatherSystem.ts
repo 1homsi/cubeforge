@@ -339,7 +339,9 @@ export class WeatherSystem {
     const geo = new PlaneGeometry(1, 1)
 
     const color = type === 'snow' ? this._opts.snowColor : this._opts.rainColor
-    this._mat.color.set(color.x, color.y, color.z)
+    this._mat.color.x = color.x
+    this._mat.color.y = color.y
+    this._mat.color.z = color.z
 
     this._mesh = new InstancedMesh(geo, this._mat, count)
     this._mesh.frustumCulled = false

@@ -1,4 +1,4 @@
-import { useContext, useEffect } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import { SpotLight, Vec3 } from '@cubeforge/renderer3d'
 import { Engine3DContext, ParentObject3DContext } from '../context3d'
 
@@ -34,6 +34,8 @@ export function SpotLight3D({
     }
   }
 
+  const lightRef = useRef<SpotLight | null>(null)
+
   useEffect(() => {
     if (!parent) return
 
@@ -41,15 +43,31 @@ export function SpotLight3D({
     light.position.set(position[0], position[1], position[2])
     light.castShadow = castShadow
     if (target) light.target.position.set(target[0], target[1], target[2])
+    lightRef.current = light
     parent.add(light)
     parent.add(light.target)
 
     return () => {
       parent.remove(light)
       parent.remove(light.target)
+      lightRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const light = lightRef.current
+    if (!light) return
+    light.color.set(color[0], color[1], color[2])
+    light.intensity = intensity
+    light.position.set(position[0], position[1], position[2])
+    light.angle = angle
+    light.penumbra = penumbra
+    light.distance = distance
+    light.decay = decay
+    light.castShadow = castShadow
+    if (target) light.target.position.set(target[0], target[1], target[2])
+  }, [color, intensity, position, target, angle, penumbra, distance, decay, castShadow])
 
   return null
 }
