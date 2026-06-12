@@ -581,8 +581,8 @@ export function generateSegmentCircleManifold(
   const segCy = (segAy + segBy) / 2
 
   return {
-    normalX: -normalX, // from segment toward circle → flip since segment is A
-    normalY: -normalY,
+    normalX,
+    normalY,
     points: [
       {
         worldAx: closest.x,
@@ -667,8 +667,8 @@ export function generateSegmentBoxManifold(
   const segCenterY = (segAy + segBy) / 2
 
   return {
-    normalX: -contactNx,
-    normalY: -contactNy,
+    normalX: contactNx,
+    normalY: contactNy,
     points: [
       {
         worldAx: closestOnSeg.x,

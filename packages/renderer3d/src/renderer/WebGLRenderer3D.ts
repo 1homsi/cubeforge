@@ -1437,6 +1437,7 @@ void main() {
 
     this._state.dispose()
     this._shadowMap.dispose()
+    this._occlusionCulling.dispose()
     this._postProcess?.dispose()
     this._ssaoPass?.dispose()
     this._fxaaPass?.dispose()

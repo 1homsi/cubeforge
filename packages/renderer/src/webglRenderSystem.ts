@@ -69,6 +69,7 @@ interface SpriteComponent {
   opacity?: number
   tint?: string
   tintOpacity?: number
+  customDraw?: unknown
 }
 
 interface Camera2DComponent {
@@ -239,6 +240,15 @@ interface TextComponent {
   maxWidth?: number
   offsetX: number
   offsetY: number
+  strokeColor?: string
+  strokeWidth?: number
+  shadowColor?: string
+  shadowOffsetX?: number
+  shadowOffsetY?: number
+  shadowBlur?: number
+  wordWrap?: boolean
+  lineHeight?: number
+  opacity?: number
 }
 
 interface TrailComponent {
@@ -489,6 +499,224 @@ export interface PostProcessOptions {
   }
 }
 
+type SceneHashWorld = Pick<ECSWorld, 'query' | 'getComponent'>
+
+interface DynamicCanvasHashEntry {
+  version: number
+}
+
+interface WebGLSceneHashState {
+  world: SceneHashWorld
+  camX: number
+  camY: number
+  zoom: number
+  shakeX: number
+  shakeY: number
+  background: string
+  postProcessOptions: PostProcessOptions
+  textureRevision: number
+  overlayRevision: number
+  dynamicCanvases: Iterable<[string, DynamicCanvasHashEntry]>
+}
+
+/** Internal helper used by idle-frame skipping. Exported for regression tests. */
+export function computeWebGLSceneHash({
+  world,
+  camX,
+  camY,
+  zoom,
+  shakeX,
+  shakeY,
+  background,
+  postProcessOptions,
+  textureRevision,
+  overlayRevision,
+  dynamicCanvases,
+}: WebGLSceneHashState): number {
+  // FNV-1a 32-bit hash — fast, good avalanche, and cheap enough for static scenes.
+  let h = 2166136261
+  const mix = (n: number) => {
+    const i = Number.isFinite(n) ? n | 0 : 0
+    h = Math.imul(h ^ (i & 0xff), 16777619)
+    h = Math.imul(h ^ ((i >> 8) & 0xff), 16777619)
+    h = Math.imul(h ^ ((i >> 16) & 0xff), 16777619)
+    h = Math.imul(h ^ ((i >> 24) & 0xff), 16777619)
+  }
+  const mixBool = (value: unknown) => mix(value ? 1 : 0)
+  const mixString = (value: unknown) => {
+    const str = value == null ? '' : String(value)
+    mix(str.length)
+    for (let i = 0; i < str.length; i++) mix(str.charCodeAt(i))
+  }
+  const mixSampling = (sampling: Sampling | undefined) => {
+    if (typeof sampling === 'string') {
+      mixString(sampling)
+    } else if (sampling) {
+      mixString(sampling.min)
+      mixString(sampling.mag)
+    } else {
+      mixString(DEFAULT_SAMPLING)
+    }
+  }
+  const mixTransform = (id: EntityId) => {
+    const t = world.getComponent<TransformComponent>(id, 'Transform')!
+    mix(t.x * 100)
+    mix(t.y * 100)
+    mix(t.rotation * 1000)
+    mix(t.scaleX * 1000)
+    mix(t.scaleY * 1000)
+  }
+
+  mix(camX * 100)
+  mix(camY * 100)
+  mix(zoom * 1000)
+  mix(shakeX * 1000)
+  mix(shakeY * 1000)
+  mixString(background)
+  mix(textureRevision)
+  mix(overlayRevision)
+
+  const bloom = postProcessOptions.bloom
+  mixBool(bloom?.enabled)
+  mix((bloom?.threshold ?? 0.65) * 1000)
+  mix((bloom?.intensity ?? 0.6) * 1000)
+  const vignette = postProcessOptions.vignette
+  mixBool(vignette?.enabled)
+  mix((vignette?.intensity ?? 0.4) * 1000)
+  const chromaticAberration = postProcessOptions.chromaticAberration
+  mixBool(chromaticAberration?.enabled)
+  mix((chromaticAberration?.offset ?? 2) * 1000)
+  const scanlines = postProcessOptions.scanlines
+  mixBool(scanlines?.enabled)
+  mix((scanlines?.gap ?? 3) * 1000)
+  mix((scanlines?.opacity ?? 0.15) * 1000)
+
+  for (const [id, entry] of dynamicCanvases) {
+    mixString(id)
+    mix(entry.version)
+  }
+
+  for (const id of world.query('Transform', 'Sprite')) {
+    const s = world.getComponent<SpriteComponent>(id, 'Sprite')!
+    if (s.customDraw) return -1
+    mix(id)
+    mixTransform(id)
+    mix(s.width * 100)
+    mix(s.height * 100)
+    mixString(s.color)
+    mixString(s.src)
+    mixString(s.dynamicSrc)
+    mix(s.offsetX * 100)
+    mix(s.offsetY * 100)
+    mix(s.zIndex)
+    mixBool(s.visible)
+    mixBool(s.flipX)
+    mixBool(s.flipY)
+    mix(s.anchorX * 1000)
+    mix(s.anchorY * 1000)
+    mix(s.frameIndex)
+    mix((s.frameWidth ?? 0) * 100)
+    mix((s.frameHeight ?? 0) * 100)
+    mix(s.frameColumns ?? 0)
+    mix(s.frame?.sx ?? 0)
+    mix(s.frame?.sy ?? 0)
+    mix(s.frame?.sw ?? 0)
+    mix(s.frame?.sh ?? 0)
+    mixBool(s.tileX)
+    mixBool(s.tileY)
+    mix((s.tileSizeX ?? 0) * 100)
+    mix((s.tileSizeY ?? 0) * 100)
+    mixSampling(s.sampling)
+    mixString(s.blendMode)
+    mixString(s.layer)
+    mixString(s.shape)
+    mix((s.borderRadius ?? 0) * 100)
+    mixString(s.strokeColor)
+    mix((s.strokeWidth ?? 0) * 100)
+    mix(s.starPoints ?? 0)
+    mix((s.starInnerRadius ?? 0) * 1000)
+    mix((s.opacity ?? 1) * 255)
+    mixString(s.tint)
+    mix((s.tintOpacity ?? 0) * 255)
+  }
+
+  for (const id of world.query('Transform', 'Text')) {
+    const text = world.getComponent<TextComponent>(id, 'Text')!
+    mix(id)
+    mixTransform(id)
+    mixString(text.text)
+    mix((text.fontSize ?? 16) * 100)
+    mixString(text.fontFamily ?? 'monospace')
+    mixString(text.color ?? '#ffffff')
+    mixString(text.align)
+    mixString(text.baseline)
+    mix(text.zIndex)
+    mixBool(text.visible)
+    mix((text.maxWidth ?? 0) * 100)
+    mix(text.offsetX * 100)
+    mix(text.offsetY * 100)
+    mixString(text.strokeColor)
+    mix((text.strokeWidth ?? 0) * 100)
+    mixString(text.shadowColor)
+    mix((text.shadowOffsetX ?? 0) * 100)
+    mix((text.shadowOffsetY ?? 0) * 100)
+    mix((text.shadowBlur ?? 0) * 100)
+    mixBool(text.wordWrap)
+    mix((text.lineHeight ?? 1.2) * 1000)
+    mix((text.opacity ?? 1) * 255)
+  }
+
+  for (const id of world.query('ParallaxLayer')) {
+    const layer = world.getComponent<ParallaxLayerComponent>(id, 'ParallaxLayer')!
+    mix(id)
+    mixString(layer.src)
+    mix(layer.speedX * 1000)
+    mix(layer.speedY * 1000)
+    mixBool(layer.repeatX)
+    mixBool(layer.repeatY)
+    mix(layer.zIndex)
+    mix(layer.offsetX * 100)
+    mix(layer.offsetY * 100)
+    mix(layer.imageWidth)
+    mix(layer.imageHeight)
+  }
+
+  for (const id of world.query('Transform', 'Trail')) {
+    const trail = world.getComponent<TrailComponent>(id, 'Trail')!
+    mix(id)
+    mixTransform(id)
+    mix(trail.length)
+    mixString(trail.color)
+    mix(trail.width * 100)
+    mix(trail.points.length)
+    for (const point of trail.points) {
+      mix(point.x * 100)
+      mix(point.y * 100)
+    }
+    for (const color of trail.colorOverLife ?? []) mixString(color)
+    mix((trail.widthOverLife?.start ?? 0) * 100)
+    mix((trail.widthOverLife?.end ?? 0) * 100)
+  }
+
+  // Any playing animation or live particle system = force dirty.
+  for (const id of world.query('AnimationState')) {
+    const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
+    if (anim.playing) return -1
+  }
+  for (const id of world.query('ParticlePool')) {
+    const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
+    if (pool.active || pool.particles.length > 0) return -1
+  }
+
+  for (const id of world.query('SquashStretch')) {
+    const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
+    mix(ss.currentScaleX * 1000)
+    mix(ss.currentScaleY * 1000)
+  }
+
+  return h
+}
+
 // ── RenderSystem (WebGL2) ─────────────────────────────────────────────────────
 
 /**
@@ -597,8 +825,10 @@ export class RenderSystem implements System {
   // ── Dynamic canvas textures (texSubImage2D optimization) ─────────────────
   private readonly _dynamicCanvases = new Map<
     string,
-    { canvas: HTMLCanvasElement; tex: WebGLTexture; dirty: boolean }
+    { canvas: HTMLCanvasElement; tex: WebGLTexture; dirty: boolean; version: number }
   >()
+  private _textureRevision = 0
+  private _overlayRevision = 0
 
   // ── Idle frame skip ──────────────────────────────────────────────────────
   private _idleSkip = false
@@ -650,21 +880,25 @@ export class RenderSystem implements System {
   /** Overlay a nav grid: green = walkable, red = blocked. Pass null to clear. */
   setDebugNavGrid(grid: NavGrid | null): void {
     this.debugNavGrid = grid
+    this._overlayRevision++
   }
 
   /** Flash a point on the canvas for one frame (world-space coords). */
   flashContactPoint(x: number, y: number): void {
     this.contactFlashPoints.push({ x, y, ttl: 1 })
+    this._overlayRevision++
   }
 
   /** Highlight an entity's collider bounds for one or more frames (DevTools inspector). Pass null to clear. */
   setEntityHighlight(id: number | null): void {
     this._highlightEntityId = id
+    this._overlayRevision++
   }
 
   /** Configure native WebGL post-process effects for this render system. */
   setPostProcessOptions(opts: PostProcessOptions): void {
     this._ppOptions = opts
+    this._prevSceneHash = -1
   }
 
   /**
@@ -678,6 +912,7 @@ export class RenderSystem implements System {
    */
   setIdleFrameSkip(enabled: boolean): void {
     this._idleSkip = enabled
+    this._prevSceneHash = -1
   }
 
   /**
@@ -696,7 +931,7 @@ export class RenderSystem implements System {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    this._dynamicCanvases.set(id, { canvas, tex, dirty: false })
+    this._dynamicCanvases.set(id, { canvas, tex, dirty: false, version: ++this._textureRevision })
     this.textures.set(id, tex)
     this.touchTexture(id)
   }
@@ -708,7 +943,10 @@ export class RenderSystem implements System {
    */
   markDynamicCanvasDirty(id: string): void {
     const entry = this._dynamicCanvases.get(id)
-    if (entry) entry.dirty = true
+    if (entry) {
+      entry.dirty = true
+      entry.version = ++this._textureRevision
+    }
   }
 
   /** Remove a registered dynamic canvas and free its GPU texture. */
@@ -718,6 +956,7 @@ export class RenderSystem implements System {
     this.gl.deleteTexture(entry.tex)
     this._dynamicCanvases.delete(id)
     this.textures.delete(id)
+    this._textureRevision++
   }
 
   private get _anyPPEnabled(): boolean {
@@ -1028,6 +1267,7 @@ export class RenderSystem implements System {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       this.textures.set(src, tex)
       this.touchTexture(src)
+      this._textureRevision++
       return tex
     }
 
@@ -1048,6 +1288,7 @@ export class RenderSystem implements System {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
         this.textures.set(src, tex)
         this.touchTexture(src)
+        this._textureRevision++
       }
       img.onerror = () => {
         console.warn(`[WebGLRenderSystem] Failed to load image: ${imgSrc}`)
@@ -1079,6 +1320,7 @@ export class RenderSystem implements System {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
         this.parallaxTextures.set(src, tex)
+        this._textureRevision++
       }
       this.parallaxImageCache.set(src, img)
     }
@@ -1225,54 +1467,21 @@ export class RenderSystem implements System {
     zoom: number,
     shakeX: number,
     shakeY: number,
+    background: string,
   ): number {
-    // FNV-1a 32-bit hash — fast, good avalanche, zero allocations
-    let h = 2166136261
-    const mix = (n: number) => {
-      const i = n | 0
-      h = Math.imul(h ^ (i & 0xff), 16777619)
-      h = Math.imul(h ^ ((i >> 8) & 0xff), 16777619)
-      h = Math.imul(h ^ ((i >> 16) & 0xff), 16777619)
-      h = Math.imul(h ^ ((i >> 24) & 0xff), 16777619)
-    }
-    mix(camX * 100)
-    mix(camY * 100)
-    mix(zoom * 1000)
-    mix(shakeX * 1000)
-    mix(shakeY * 1000)
-
-    for (const id of world.query('Transform', 'Sprite')) {
-      const t = world.getComponent<TransformComponent>(id, 'Transform')!
-      const s = world.getComponent<SpriteComponent>(id, 'Sprite')!
-      mix(id)
-      mix(t.x * 100)
-      mix(t.y * 100)
-      mix(t.rotation * 1000)
-      mix(t.scaleX * 1000)
-      mix(t.scaleY * 1000)
-      mix(s.frameIndex)
-      mix(s.visible ? 1 : 0)
-      mix((s.opacity ?? 1) * 255)
-    }
-
-    // Any playing animation or live particle system = force dirty
-    for (const id of world.query('AnimationState')) {
-      const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
-      if (anim.playing) return -1
-    }
-    for (const id of world.query('ParticlePool')) {
-      const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
-      if (pool.active || pool.particles.length > 0) return -1
-    }
-
-    // Squash/stretch not at rest = dirty
-    for (const id of world.query('SquashStretch')) {
-      const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
-      mix(ss.currentScaleX * 1000)
-      mix(ss.currentScaleY * 1000)
-    }
-
-    return h
+    return computeWebGLSceneHash({
+      world,
+      camX,
+      camY,
+      zoom,
+      shakeX,
+      shakeY,
+      background,
+      postProcessOptions: this._ppOptions,
+      textureRevision: this._textureRevision,
+      overlayRevision: this._overlayRevision,
+      dynamicCanvases: this._dynamicCanvases,
+    })
   }
 
   private _ensureIdleFBO(w: number, h: number): void {
@@ -1296,6 +1505,7 @@ export class RenderSystem implements System {
     this._idleTex = tex
     this._idleFBOW = w
     this._idleFBOH = h
+    this._prevSceneHash = -1
   }
 
   // ── Instanced draw call ────────────────────────────────────────────────────
@@ -1609,7 +1819,7 @@ export class RenderSystem implements System {
     // blit the cached scene FBO to screen and skip all GPU draw calls.
     if (this._idleSkip) {
       this._ensureIdleFBO(W, H)
-      const hash = this._computeSceneHash(world, camX, camY, zoom, shakeX, shakeY)
+      const hash = this._computeSceneHash(world, camX, camY, zoom, shakeX, shakeY, background)
       if (hash !== -1 && hash === this._prevSceneHash) {
         gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this._idleFBO)
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)

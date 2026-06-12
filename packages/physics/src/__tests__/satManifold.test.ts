@@ -186,6 +186,7 @@ describe('generateSegmentCircleManifold', () => {
     const result = generateSegmentCircleManifold(0, 0, 100, 0, 50, -10, 15)
     expect(result).not.toBeNull()
     // Circle is above segment (negative Y), normal should have a component pointing from segment toward circle
+    expect(result!.normalY).toBeLessThan(0)
   })
 })
 
@@ -199,6 +200,12 @@ describe('generateSegmentBoxManifold', () => {
     // Horizontal segment passing through box
     const result = generateSegmentBoxManifold(-20, 0, 20, 0, 0, 0, 10, 10)
     expect(result).not.toBeNull()
+  })
+
+  it('normal points from segment toward box', () => {
+    const result = generateSegmentBoxManifold(0, 0, 100, 0, 50, -1, 10, 10)
+    expect(result).not.toBeNull()
+    expect(result!.normalY).toBeLessThan(0)
   })
 })
 
@@ -260,6 +267,7 @@ describe('generateHeightFieldCircleManifold', () => {
     const result = generateHeightFieldCircleManifold(0, 100, heights, 20, 1, 40, 97, 5)
     expect(result).not.toBeNull()
     expect(result!.points[0].penetration).toBeCloseTo(2, 0)
+    expect(result!.normalY).toBeLessThan(0)
   })
 
   it('detects circle on sloped heightfield', () => {
