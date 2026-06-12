@@ -244,6 +244,8 @@ describe('setNextKinematicPosition — kinematic position targeting', () => {
     const t = world.getComponent<TransformComponent>(id, 'Transform')!
     // Kinematic bodies with velocity set should move
     expect(rb.vx).toBeGreaterThan(0)
+    expect(t.x).toBeCloseTo(200)
+    expect(t.y).toBeCloseTo(100)
   })
 
   it('clears targets after use', () => {
@@ -261,6 +263,30 @@ describe('setNextKinematicPosition — kinematic position targeting', () => {
 
     expect(rb._nextKinematicX).toBeNull()
     expect(rb._nextKinematicY).toBeNull()
+  })
+
+  it('uses target velocity to push overlapping dynamic bodies', () => {
+    const { world, physics } = makeWorld(0)
+
+    const platform = world.createEntity()
+    world.addComponent(platform, createTransform(100, 100))
+    world.addComponent(platform, createRigidBody({ isKinematic: true }))
+    world.addComponent(platform, createBoxCollider(30, 30))
+
+    const box = world.createEntity()
+    world.addComponent(box, createTransform(135, 100))
+    world.addComponent(box, createRigidBody({ mass: 1 }))
+    world.addComponent(box, createBoxCollider(30, 30))
+
+    const platformRb = world.getComponent<RigidBodyComponent>(platform, 'RigidBody')!
+    const boxTransform = world.getComponent<TransformComponent>(box, 'Transform')!
+
+    setNextKinematicPosition(platformRb, 125, 100)
+    stepN(physics, world, 1)
+
+    const platformTransform = world.getComponent<TransformComponent>(platform, 'Transform')!
+    expect(platformTransform.x).toBeCloseTo(125)
+    expect(boxTransform.x).toBeGreaterThan(135)
   })
 })
 
@@ -281,7 +307,9 @@ describe('setNextKinematicRotation — kinematic rotation targeting', () => {
     stepN(physics, world, 1)
 
     // Angular velocity should have been set: (π/2 - 0) / dt
+    const t = world.getComponent<TransformComponent>(id, 'Transform')!
     expect(rb.angularVelocity).toBeGreaterThan(0)
+    expect(t.rotation).toBeCloseTo(Math.PI / 2)
     expect(rb._nextKinematicRotation).toBeNull()
   })
 })

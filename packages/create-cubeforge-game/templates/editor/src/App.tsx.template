@@ -18,7 +18,7 @@ import {
 type Piece = { id: number; x: number; y: number; color: string }
 
 const PALETTE = ['#4fc3f7', '#ef5350', '#8bc34a', '#ffc107', '#ab47bc']
-const STORAGE_KEY = '{{PROJECT_NAME}}:scene'
+const STORAGE_KEY = {{PROJECT_NAME_TS_STRING}} + ':scene'
 
 function Piece({ piece }: { piece: Piece }) {
   return (
@@ -56,7 +56,7 @@ function Toolbar({ onAdd }: { onAdd: (color: string) => void }) {
       console.warn('No saved scene found')
     }
   }
-  const exportPng = () => downloadCanvas(engine.canvas, '{{PROJECT_NAME}}.png')
+  const exportPng = () => downloadCanvas(engine.canvas, {{PROJECT_NAME_TS_STRING}} + '.png')
 
   return (
     <div style={toolbarStyle}>
@@ -92,7 +92,7 @@ export function App() {
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <h1 style={{ fontSize: 18, fontWeight: 500 }}>{`{{PROJECT_NAME}}`}</h1>
+      <h1 style={{ fontSize: 18, fontWeight: 500 }}>{ {{PROJECT_NAME_TS_STRING}} }</h1>
       <p style={{ fontSize: 13, color: '#78909c' }}>
         Click a colored swatch to spawn a piece. Drag the handle box to move, corners to resize,
         the round handle above to rotate. Ctrl+Z / Ctrl+Shift+Z to undo/redo. Snap to 10px grid.

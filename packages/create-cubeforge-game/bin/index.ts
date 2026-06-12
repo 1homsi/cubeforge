@@ -29,6 +29,48 @@ function toPackageName(projectName: string): string {
   return normalized || 'cubeforge-game'
 }
 
+function toJsStringLiteral(value: string): string {
+  return JSON.stringify(value)
+}
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function quoteForShell(value: string): string {
+  const quoted = /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
+  if (value.startsWith('-')) {
+    return `-- ${quoted}`
+  }
+
+  if (quoted === value) {
+    return value
+  }
+
+  return quoted
+}
+
+function renderTemplate(content: string, projectName: string, packageName: string): string {
+  const replacements: Record<string, string> = {
+    PACKAGE_NAME: packageName,
+    PROJECT_NAME_HTML: escapeHtmlText(projectName),
+    PROJECT_NAME_TS_STRING: toJsStringLiteral(projectName),
+  }
+
+  return content.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, name: string) => {
+    const replacement = replacements[name]
+    if (replacement === undefined) {
+      throw new Error(`Unknown template placeholder: ${match}`)
+    }
+    return replacement
+  })
+}
+
 function copyTemplateDir(src: string, dest: string, projectName: string, packageName: string): void {
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true })
@@ -43,7 +85,7 @@ function copyTemplateDir(src: string, dest: string, projectName: string, package
       copyTemplateDir(srcPath, destPath, projectName, packageName)
     } else {
       const content = fs.readFileSync(srcPath, 'utf8')
-      const replaced = content.replaceAll('{{PROJECT_NAME}}', projectName).replaceAll('{{PACKAGE_NAME}}', packageName)
+      const replaced = renderTemplate(content, projectName, packageName)
       fs.writeFileSync(destPath, replaced, 'utf8')
     }
   }
@@ -131,7 +173,7 @@ async function main(): Promise<void> {
 
   process.stdout.write(`\nDone! Your project "${projectName}" is ready.\n`)
   process.stdout.write('\nNext steps:\n')
-  process.stdout.write(`  cd ${projectName}\n`)
+  process.stdout.write(`  cd ${quoteForShell(projectName)}\n`)
   process.stdout.write('  npm install   # or bun install\n')
   process.stdout.write('  npm run dev   # or bun dev\n\n')
 }

@@ -98,7 +98,7 @@ function Game() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-      <h1 style={{ color: '#e0e7f1', fontSize: 18, fontWeight: 500 }}>{`{{PROJECT_NAME}}`}</h1>
+      <h1 style={{ color: '#e0e7f1', fontSize: 18, fontWeight: 500 }}>{ {{PROJECT_NAME_TS_STRING}} }</h1>
       <div style={{ color: '#78909c', fontSize: 14, fontFamily: 'monospace', height: 18 }}>
         {win ? `${win} wins!` : full ? 'Draw' : `Turn: ${turns.activePlayer}`}
       </div>

@@ -94,4 +94,51 @@ describe('create-cubeforge-game CLI', () => {
       rmSync(tmp, { recursive: true, force: true })
     }
   })
+
+  it('escapes display names for generated code, HTML, and shell commands', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'create-cubeforge-game-'))
+    const projectName = "Odd Name's `ticks` ${HOME} & Co"
+
+    try {
+      const output = execFileSync(process.execPath, [CLI_BIN, projectName, '--template', 'editor'], {
+        cwd: tmp,
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      })
+
+      const projectDir = join(tmp, projectName)
+      const pkg = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'))
+      const html = readFileSync(join(projectDir, 'index.html'), 'utf-8')
+      const app = readFileSync(join(projectDir, 'src', 'App.tsx'), 'utf-8')
+      const projectNameTsString = JSON.stringify(projectName)
+
+      expect(pkg.name).toBe('odd-name-s-ticks-home-co')
+      expect(html).toContain("<title>Odd Name&#39;s `ticks` ${HOME} &amp; Co</title>")
+      expect(app).toContain(`const STORAGE_KEY = ${projectNameTsString} + ':scene'`)
+      expect(app).toContain(`downloadCanvas(engine.canvas, ${projectNameTsString} + '.png')`)
+      expect(app).toContain(`>{ ${projectNameTsString} }</h1>`)
+      expect(app).not.toContain('{{PROJECT_NAME')
+      expect(html).not.toContain('{{PROJECT_NAME')
+      expect(output).toContain("  cd 'Odd Name'\\''s `ticks` ${HOME} & Co'\n")
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('prints an unambiguous cd command for names that look like options', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'create-cubeforge-game-'))
+    const projectName = '-starter'
+
+    try {
+      const output = execFileSync(process.execPath, [CLI_BIN, projectName, '--template', 'puzzle'], {
+        cwd: tmp,
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      })
+
+      expect(output).toContain('  cd -- -starter\n')
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
 })

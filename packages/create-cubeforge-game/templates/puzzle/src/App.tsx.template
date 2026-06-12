@@ -104,7 +104,7 @@ function BoardUI({ board, history }: { board: ReturnType<typeof useGrid<number>>
 export function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24 }}>
-      <h1 style={{ color: '#e0e7f1', fontSize: 18, fontWeight: 500 }}>{`{{PROJECT_NAME}}`}</h1>
+      <h1 style={{ color: '#e0e7f1', fontSize: 18, fontWeight: 500 }}>{ {{PROJECT_NAME_TS_STRING}} }</h1>
       <Stage width={BOARD_PX + 40} height={BOARD_PX + 40}>
         <BoardMount />
       </Stage>

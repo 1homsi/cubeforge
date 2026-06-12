@@ -44,6 +44,36 @@ function toPackageName(projectName) {
   const normalized = baseName.trim().toLowerCase().replace(/[^a-z0-9._~-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").replace(/^[._]+/g, "");
   return normalized || "cubeforge-game";
 }
+function toJsStringLiteral(value) {
+  return JSON.stringify(value);
+}
+function escapeHtmlText(value) {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+function quoteForShell(value) {
+  const quoted = /^[A-Za-z0-9_./:-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+  if (value.startsWith("-")) {
+    return `-- ${quoted}`;
+  }
+  if (quoted === value) {
+    return value;
+  }
+  return quoted;
+}
+function renderTemplate(content, projectName, packageName) {
+  const replacements = {
+    PACKAGE_NAME: packageName,
+    PROJECT_NAME_HTML: escapeHtmlText(projectName),
+    PROJECT_NAME_TS_STRING: toJsStringLiteral(projectName)
+  };
+  return content.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, name) => {
+    const replacement = replacements[name];
+    if (replacement === void 0) {
+      throw new Error(`Unknown template placeholder: ${match}`);
+    }
+    return replacement;
+  });
+}
 function copyTemplateDir(src, dest, projectName, packageName) {
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true });
@@ -57,7 +87,7 @@ function copyTemplateDir(src, dest, projectName, packageName) {
       copyTemplateDir(srcPath, destPath, projectName, packageName);
     } else {
       const content = fs.readFileSync(srcPath, "utf8");
-      const replaced = content.replaceAll("{{PROJECT_NAME}}", projectName).replaceAll("{{PACKAGE_NAME}}", packageName);
+      const replaced = renderTemplate(content, projectName, packageName);
       fs.writeFileSync(destPath, replaced, "utf8");
     }
   }
@@ -142,7 +172,7 @@ Creating new Cubeforge game in ${targetDir} (template: ${template})...
 Done! Your project "${projectName}" is ready.
 `);
   process.stdout.write("\nNext steps:\n");
-  process.stdout.write(`  cd ${projectName}
+  process.stdout.write(`  cd ${quoteForShell(projectName)}
 `);
   process.stdout.write("  npm install   # or bun install\n");
   process.stdout.write("  npm run dev   # or bun dev\n\n");

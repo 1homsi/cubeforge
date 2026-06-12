@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{PROJECT_NAME}}</title>
+  <title>{{PROJECT_NAME_HTML}}</title>
   <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { background: #0a0a0f; min-height: 100vh; font-family: system-ui, sans-serif; color: #e0e7f1; }</style>
 </head>
 <body>

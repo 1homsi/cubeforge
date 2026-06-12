@@ -552,6 +552,42 @@ export class PhysicsSystem implements System {
 
     this.pruneDeadPairs(world)
 
+    // ── Phase 0.5: Kinematic position-based mode ──────────────────────────
+    // Apply explicit kinematic targets before static deltas, spatial grids,
+    // and contacts are built. The computed velocity is preserved so dynamic
+    // bodies see the kinematic motion through the solver.
+
+    const allKinematics = world.query('Transform', 'RigidBody').filter((id) => {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      return rb.isKinematic && rb.enabled
+    })
+
+    for (const id of allKinematics) {
+      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      const t = world.getComponent<TransformComponent>(id, 'Transform')!
+      if (rb._nextKinematicX !== null || rb._nextKinematicY !== null) {
+        if (rb._nextKinematicX !== null) {
+          rb.vx = (rb._nextKinematicX - t.x) / dt
+          t.x = rb._nextKinematicX
+        } else {
+          rb.vx = 0
+        }
+        if (rb._nextKinematicY !== null) {
+          rb.vy = (rb._nextKinematicY - t.y) / dt
+          t.y = rb._nextKinematicY
+        } else {
+          rb.vy = 0
+        }
+        rb._nextKinematicX = null
+        rb._nextKinematicY = null
+      }
+      if (rb._nextKinematicRotation !== null) {
+        rb.angularVelocity = (rb._nextKinematicRotation - t.rotation) / dt
+        t.rotation = rb._nextKinematicRotation
+        rb._nextKinematicRotation = null
+      }
+    }
+
     // ── Platform carry ────────────────────────────────────────────────────
 
     const staticDelta = this._staticDelta
@@ -615,34 +651,6 @@ export class PhysicsSystem implements System {
           rb.sleepTimer = 0
           break
         }
-      }
-    }
-
-    // ── Phase 0.5: Kinematic position-based mode ──────────────────────────
-    // Compute velocity from kinematic position/rotation targets so that
-    // kinematic bodies push dynamic bodies through the solver.
-
-    const allKinematics = [
-      ...world.query('Transform', 'RigidBody', 'BoxCollider'),
-      ...world.query('Transform', 'RigidBody', 'CircleCollider'),
-      ...world.query('Transform', 'RigidBody', 'CapsuleCollider'),
-    ].filter((id) => {
-      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      return rb.isKinematic && rb.enabled
-    })
-
-    for (const id of allKinematics) {
-      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      const t = world.getComponent<TransformComponent>(id, 'Transform')!
-      if (rb._nextKinematicX !== null || rb._nextKinematicY !== null) {
-        rb.vx = rb._nextKinematicX !== null ? (rb._nextKinematicX - t.x) / dt : 0
-        rb.vy = rb._nextKinematicY !== null ? (rb._nextKinematicY - t.y) / dt : 0
-        rb._nextKinematicX = null
-        rb._nextKinematicY = null
-      }
-      if (rb._nextKinematicRotation !== null) {
-        rb.angularVelocity = (rb._nextKinematicRotation - t.rotation) / dt
-        rb._nextKinematicRotation = null
       }
     }
 
