@@ -17,6 +17,7 @@ export interface RenderSystem3DOptions {
 export class RenderSystem3D implements System {
   private _renderer: WebGLRenderer3D
   private _scene: Scene
+  private _defaultCamera: Camera
   private _camera: Camera
 
   /** Maps entity ID → the Object3D tracked in the scene graph */
@@ -34,6 +35,7 @@ export class RenderSystem3D implements System {
   constructor(opts: RenderSystem3DOptions) {
     this._renderer = opts.renderer
     this._scene = opts.scene
+    this._defaultCamera = opts.camera
     this._camera = opts.camera
   }
 
@@ -72,16 +74,54 @@ export class RenderSystem3D implements System {
       const transform = world.getComponent<Transform3DComponent>(id, 'Transform3D')
       if (!transform) continue
 
+      const cameraComp = world.getComponent<Camera3DComponent>(id, 'Camera3D')
+      const shouldBeCamera = cameraComp !== undefined
       let obj = this._objectMap.get(id)
       if (!obj) {
-        obj = new Object3D()
+        obj = shouldBeCamera
+          ? new PerspectiveCamera(
+              cameraComp.fov,
+              this._defaultCamera instanceof PerspectiveCamera ? this._defaultCamera.aspect : 1,
+              cameraComp.near,
+              cameraComp.far,
+            )
+          : new Object3D()
         this._scene.add(obj)
         this._objectMap.set(id, obj)
+      } else if (
+        (shouldBeCamera && !(obj instanceof PerspectiveCamera)) ||
+        (!shouldBeCamera && obj instanceof PerspectiveCamera)
+      ) {
+        const replacement = shouldBeCamera
+          ? new PerspectiveCamera(
+              cameraComp.fov,
+              obj instanceof PerspectiveCamera
+                ? obj.aspect
+                : this._defaultCamera instanceof PerspectiveCamera
+                  ? this._defaultCamera.aspect
+                  : 1,
+              cameraComp.near,
+              cameraComp.far,
+            )
+          : new Object3D()
+
+        while (obj.children.length > 0) replacement.add(obj.children[0]!)
+        obj.removeFromParent()
+        this._scene.add(replacement)
+        this._objectMap.set(id, replacement)
+        obj = replacement
       }
 
       obj.position.set(transform.x, transform.y, transform.z)
       obj.quaternion.set(transform.qx, transform.qy, transform.qz, transform.qw)
       obj.scale.set(transform.sx, transform.sy, transform.sz)
+
+      if (cameraComp && obj instanceof PerspectiveCamera) {
+        obj.fov = cameraComp.fov
+        obj.near = cameraComp.near
+        obj.far = cameraComp.far
+        obj.updateProjectionMatrix()
+      }
     }
 
     // ── Step 2: Sync Mesh3D components ────────────────────────────────────────
@@ -125,6 +165,7 @@ export class RenderSystem3D implements System {
 
     // ── Step 3: Check for active Camera3D override ─────────────────────────────
     const cameraEntities = world.query('Camera3D')
+    this._camera = this._defaultCamera
     for (const id of cameraEntities) {
       const camComp = world.getComponent<Camera3DComponent>(id, 'Camera3D')
       if (!camComp?.isActive) continue

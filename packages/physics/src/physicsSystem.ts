@@ -507,17 +507,24 @@ export class PhysicsSystem implements System {
     }
 
     const dynamicCircle: EntityId[] = []
+    const staticCircle: EntityId[] = []
     for (const id of allCircle) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
       if (rb && !rb.enabled) continue
-      if (rb && !rb.isStatic && !rb.isKinematic) dynamicCircle.push(id)
+      if (!rb) continue
+      if (rb.isStatic || rb.isKinematic) staticCircle.push(id)
+      else dynamicCircle.push(id)
     }
 
     const capsuleDynamics: EntityId[] = []
+    const contactCapsules: EntityId[] = []
     for (const id of allCapsule) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
       if (!rb.enabled) continue
-      if (!rb.isStatic) capsuleDynamics.push(id)
+      if (!rb.isStatic) {
+        contactCapsules.push(id)
+        if (!rb.isKinematic) capsuleDynamics.push(id)
+      }
     }
 
     const allPolygon = world.query('Transform', 'RigidBody', 'ConvexPolygonCollider')
@@ -777,6 +784,43 @@ export class PhysicsSystem implements System {
     const manifolds: ContactManifold[] = []
     const currentCollisionPairs = this._currentCollisionPairs
     currentCollisionPairs.clear()
+
+    type CollisionMaterial = Pick<
+      BoxColliderComponent,
+      'friction' | 'frictionCombineRule' | 'restitution' | 'restitutionCombineRule'
+    >
+    const addGeneratedManifold = (
+      entityA: EntityId,
+      entityB: EntityId,
+      result: { normalX: number; normalY: number; points: ContactManifold['points'] },
+      colliderA: CollisionMaterial,
+      colliderB: CollisionMaterial,
+    ): void => {
+      const key = pairKey(entityA, entityB)
+      const manifold: ContactManifold = {
+        entityA,
+        entityB,
+        normalX: result.normalX,
+        normalY: result.normalY,
+        points: result.points,
+        friction: combineCoefficients(
+          colliderA.friction,
+          colliderA.frictionCombineRule,
+          colliderB.friction,
+          colliderB.frictionCombineRule,
+        ),
+        restitution: combineCoefficients(
+          colliderA.restitution,
+          colliderA.restitutionCombineRule,
+          colliderB.restitution,
+          colliderB.restitutionCombineRule,
+        ),
+      }
+      const cached = this.manifoldCache.get(key)
+      if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
+      manifolds.push(manifold)
+      currentCollisionPairs.set(key, [entityA, entityB])
+    }
 
     // Dynamic box vs static/kinematic box
     for (const id of dynamicBox) {
@@ -1209,8 +1253,192 @@ export class PhysicsSystem implements System {
       }
     }
 
+    // ── Dynamic bodies vs static/kinematic circle geometry ───────────────
+    for (const sid of staticCircle) {
+      const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+      const sc = world.getComponent<CircleColliderComponent>(sid, 'CircleCollider')!
+      if (!sc.enabled || sc.isTrigger) continue
+      const sx = st.x + sc.offsetX
+      const sy = st.y + sc.offsetY
+
+      for (const cid of dynamicCircle) {
+        if (cid === sid) continue
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+        if (crb.sleeping) continue
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) continue
+        if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask, cc.group, sc.group)) continue
+
+        const result = generateCircleCircleManifold(ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius, sx, sy, sc.radius)
+        if (result) addGeneratedManifold(cid, sid, result, cc, sc)
+      }
+
+      for (const bid of dynamicBox) {
+        if (bid === sid) continue
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        if (brb.sleeping) continue
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(sc.layer, sc.mask, bc.layer, bc.mask, sc.group, bc.group)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generateCircleBoxManifold(sx, sy, sc.radius, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (result) addGeneratedManifold(sid, bid, result, sc, bc)
+      }
+
+      for (const pid of dynamicPolygon) {
+        if (pid === sid) continue
+        const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
+        if (prb.sleeping) continue
+        const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+        const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
+        if (!pc.enabled || pc.isTrigger) continue
+        if (!canInteract(pc.layer, pc.mask, sc.layer, sc.mask, pc.group, sc.group)) continue
+
+        const result = generatePolygonCircleManifold(pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY, sx, sy, sc.radius)
+        if (result) addGeneratedManifold(pid, sid, result, pc, sc)
+      }
+
+      for (const tid of dynamicTriangle) {
+        if (tid === sid) continue
+        const trb = world.getComponent<RigidBodyComponent>(tid, 'RigidBody')!
+        if (trb.sleeping) continue
+        const tt = world.getComponent<TransformComponent>(tid, 'Transform')!
+        const tc = world.getComponent<TriangleColliderComponent>(tid, 'TriangleCollider')!
+        if (!tc.enabled || tc.isTrigger) continue
+        if (!canInteract(tc.layer, tc.mask, sc.layer, sc.mask, tc.group, sc.group)) continue
+
+        const result = generatePolygonCircleManifold(
+          [tc.a, tc.b, tc.c],
+          tt.x,
+          tt.y,
+          tc.offsetX,
+          tc.offsetY,
+          sx,
+          sy,
+          sc.radius,
+        )
+        if (result) addGeneratedManifold(tid, sid, result, tc, sc)
+      }
+    }
+
+    const addStaticPolygonContacts = (
+      sid: EntityId,
+      sc: ConvexPolygonColliderComponent | TriangleColliderComponent,
+      vertices: { x: number; y: number }[],
+    ): void => {
+      if (!sc.enabled || sc.isTrigger) return
+      const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+
+      for (const cid of dynamicCircle) {
+        if (cid === sid) continue
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
+        if (crb.sleeping) continue
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) continue
+        if (!canInteract(sc.layer, sc.mask, cc.layer, cc.mask, sc.group, cc.group)) continue
+
+        const result = generatePolygonCircleManifold(
+          vertices,
+          st.x,
+          st.y,
+          sc.offsetX,
+          sc.offsetY,
+          ct.x + cc.offsetX,
+          ct.y + cc.offsetY,
+          cc.radius,
+        )
+        if (result) addGeneratedManifold(sid, cid, result, sc, cc)
+      }
+
+      for (const bid of dynamicBox) {
+        if (bid === sid) continue
+        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        if (brb.sleeping) continue
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) continue
+        if (!canInteract(sc.layer, sc.mask, bc.layer, bc.mask, sc.group, bc.group)) continue
+
+        const bAABB = getAABB(bt, bc)
+        const result = generatePolygonBoxManifold(
+          vertices,
+          st.x,
+          st.y,
+          sc.offsetX,
+          sc.offsetY,
+          bAABB.cx,
+          bAABB.cy,
+          bAABB.hw,
+          bAABB.hh,
+        )
+        if (result) addGeneratedManifold(sid, bid, result, sc, bc)
+      }
+
+      for (const pid of dynamicPolygon) {
+        if (pid === sid) continue
+        const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
+        if (prb.sleeping) continue
+        const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+        const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
+        if (!pc.enabled || pc.isTrigger) continue
+        if (!canInteract(pc.layer, pc.mask, sc.layer, sc.mask, pc.group, sc.group)) continue
+
+        const result = generatePolygonPolygonManifold(
+          pc.vertices,
+          pt.x,
+          pt.y,
+          pc.offsetX,
+          pc.offsetY,
+          vertices,
+          st.x,
+          st.y,
+          sc.offsetX,
+          sc.offsetY,
+        )
+        if (result) addGeneratedManifold(pid, sid, result, pc, sc)
+      }
+
+      for (const tid of dynamicTriangle) {
+        if (tid === sid) continue
+        const trb = world.getComponent<RigidBodyComponent>(tid, 'RigidBody')!
+        if (trb.sleeping) continue
+        const tt = world.getComponent<TransformComponent>(tid, 'Transform')!
+        const tc = world.getComponent<TriangleColliderComponent>(tid, 'TriangleCollider')!
+        if (!tc.enabled || tc.isTrigger) continue
+        if (!canInteract(tc.layer, tc.mask, sc.layer, sc.mask, tc.group, sc.group)) continue
+
+        const result = generatePolygonPolygonManifold(
+          [tc.a, tc.b, tc.c],
+          tt.x,
+          tt.y,
+          tc.offsetX,
+          tc.offsetY,
+          vertices,
+          st.x,
+          st.y,
+          sc.offsetX,
+          sc.offsetY,
+        )
+        if (result) addGeneratedManifold(tid, sid, result, tc, sc)
+      }
+    }
+
+    // ── Dynamic bodies vs static/kinematic polygon and triangle geometry ──
+    for (const sid of staticPolygon) {
+      const sc = world.getComponent<ConvexPolygonColliderComponent>(sid, 'ConvexPolygonCollider')!
+      addStaticPolygonContacts(sid, sc, sc.vertices)
+    }
+    for (const sid of staticTriangle) {
+      const sc = world.getComponent<TriangleColliderComponent>(sid, 'TriangleCollider')!
+      addStaticPolygonContacts(sid, sc, [sc.a, sc.b, sc.c])
+    }
+
     // ── Capsule vs static box (upgraded from AABB to proper manifold) ──────
-    for (const cid of capsuleDynamics) {
+    for (const cid of contactCapsules) {
       const rb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
       if (rb.sleeping) continue
       const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
@@ -1272,7 +1500,7 @@ export class PhysicsSystem implements System {
     }
 
     // ── Capsule vs dynamic box ───────────────────────────────────────────
-    for (const cid of capsuleDynamics) {
+    for (const cid of contactCapsules) {
       const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
       if (crb.sleeping) continue
       const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
@@ -1335,10 +1563,10 @@ export class PhysicsSystem implements System {
     }
 
     // ── Capsule vs capsule ───────────────────────────────────────────────
-    for (let i = 0; i < capsuleDynamics.length; i++) {
-      for (let j = i + 1; j < capsuleDynamics.length; j++) {
-        const ia = capsuleDynamics[i]
-        const ib = capsuleDynamics[j]
+    for (let i = 0; i < contactCapsules.length; i++) {
+      for (let j = i + 1; j < contactCapsules.length; j++) {
+        const ia = contactCapsules[i]
+        const ib = contactCapsules[j]
         const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
         const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
         const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
@@ -1400,7 +1628,7 @@ export class PhysicsSystem implements System {
     }
 
     // ── Capsule vs dynamic circle ────────────────────────────────────────
-    for (const cid of capsuleDynamics) {
+    for (const cid of contactCapsules) {
       const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
       if (crb.sleeping) continue
       const ct = world.getComponent<TransformComponent>(cid, 'Transform')!

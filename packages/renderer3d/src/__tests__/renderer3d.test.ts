@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { ECSWorld } from '@cubeforge/core'
 
 import {
   AnimationMixer,
@@ -9,9 +10,14 @@ import {
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  PerspectiveCamera,
   Raycaster,
+  RenderSystem3D,
+  Scene,
   Vec3,
+  createTransform3D,
 } from '../index'
+import type { Camera3DComponent, WebGLRenderer3D } from '../index'
 
 function expectVec3(vec: Vec3, x: number, y: number, z: number, precision = 5): void {
   expect(vec.x).toBeCloseTo(x, precision)
@@ -87,5 +93,45 @@ describe('@cubeforge/renderer3d', () => {
     expect(mesh.morphTargetInfluences).toEqual([0.5, 0.25, 0.125, 0.0625])
 
     action.stop()
+  })
+
+  it('uses active ECS Camera3D components as the render camera', () => {
+    const world = new ECSWorld()
+    const scene = new Scene()
+    const defaultCamera = new PerspectiveCamera(60, 1, 0.1, 1000)
+    const render = vi.fn()
+    const system = new RenderSystem3D({
+      renderer: { render } as unknown as WebGLRenderer3D,
+      scene,
+      camera: defaultCamera,
+    })
+
+    const cameraEntity = world.createEntity()
+    world.addComponent(cameraEntity, createTransform3D(1, 2, 3))
+    world.addComponent<Camera3DComponent>(cameraEntity, {
+      type: 'Camera3D',
+      fov: 75,
+      near: 0.5,
+      far: 500,
+      isActive: true,
+    })
+
+    system.update(world, 1 / 60)
+
+    const activeCamera = render.mock.calls.at(-1)?.[1]
+    expect(activeCamera).toBeInstanceOf(PerspectiveCamera)
+    expect(activeCamera).not.toBe(defaultCamera)
+    expect(activeCamera.fov).toBe(75)
+    expect(activeCamera.near).toBe(0.5)
+    expect(activeCamera.far).toBe(500)
+    expectVec3(activeCamera.position, 1, 2, 3)
+    expect(scene.children).toContain(activeCamera)
+
+    const cameraComp = world.getComponent<Camera3DComponent>(cameraEntity, 'Camera3D')!
+    cameraComp.isActive = false
+
+    system.update(world, 1 / 60)
+
+    expect(render.mock.calls.at(-1)?.[1]).toBe(defaultCamera)
   })
 })

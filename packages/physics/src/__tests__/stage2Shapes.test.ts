@@ -163,6 +163,54 @@ describe('Circle physics response', () => {
     // Friction should have generated some angular velocity
     expect(rb.angularVelocity).not.toBe(0)
   })
+
+  it('circle rests on a static circle collider', () => {
+    const world = makeWorld()
+    const events = new EventBus()
+    const physics = new PhysicsSystem(500, events)
+
+    const bumper = world.createEntity()
+    world.addComponent(bumper, createTransform(0, 200))
+    world.addComponent(bumper, createRigidBody({ isStatic: true }))
+    world.addComponent(bumper, createCircleCollider(50))
+
+    const circle = world.createEntity()
+    world.addComponent(circle, createTransform(0, 120))
+    world.addComponent(circle, createRigidBody())
+    world.addComponent(circle, createCircleCollider(10))
+
+    stepN(physics, world, 120)
+
+    const t = world.getComponent(circle, 'Transform') as any
+    const rb = world.getComponent(circle, 'RigidBody') as any
+    expect(t.y).toBeGreaterThan(130)
+    expect(t.y).toBeLessThan(155)
+    expect(Math.abs(rb.vy)).toBeLessThan(5)
+  })
+
+  it('box rests on a static circle collider', () => {
+    const world = makeWorld()
+    const events = new EventBus()
+    const physics = new PhysicsSystem(500, events)
+
+    const bumper = world.createEntity()
+    world.addComponent(bumper, createTransform(0, 200))
+    world.addComponent(bumper, createRigidBody({ isStatic: true }))
+    world.addComponent(bumper, createCircleCollider(50))
+
+    const box = world.createEntity()
+    world.addComponent(box, createTransform(0, 120))
+    world.addComponent(box, createRigidBody())
+    world.addComponent(box, createBoxCollider(30, 30))
+
+    stepN(physics, world, 120)
+
+    const t = world.getComponent(box, 'Transform') as any
+    const rb = world.getComponent(box, 'RigidBody') as any
+    expect(t.y).toBeGreaterThan(125)
+    expect(t.y).toBeLessThan(155)
+    expect(Math.abs(rb.vy)).toBeLessThan(5)
+  })
 })
 
 // ── Convex polygon tests ─────────────────────────────────────────────────────
@@ -248,6 +296,99 @@ describe('Convex polygon physics', () => {
     // They should have bounced apart
     expect(tPoly.x).toBeLessThan(tCircle.x)
   })
+
+  it('circle rests on a static polygon floor', () => {
+    const world = makeWorld()
+    const events = new EventBus()
+    const physics = new PhysicsSystem(500, events)
+
+    const floorVerts = [
+      { x: -200, y: -10 },
+      { x: 200, y: -10 },
+      { x: 200, y: 10 },
+      { x: -200, y: 10 },
+    ]
+
+    const floor = world.createEntity()
+    world.addComponent(floor, createTransform(0, 200))
+    world.addComponent(floor, createRigidBody({ isStatic: true }))
+    world.addComponent(floor, createConvexPolygonCollider(floorVerts))
+
+    const circle = world.createEntity()
+    world.addComponent(circle, createTransform(0, 150))
+    world.addComponent(circle, createRigidBody())
+    world.addComponent(circle, createCircleCollider(10))
+
+    stepN(physics, world, 120)
+
+    const t = world.getComponent(circle, 'Transform') as any
+    const rb = world.getComponent(circle, 'RigidBody') as any
+    expect(t.y).toBeGreaterThan(170)
+    expect(t.y).toBeLessThan(195)
+    expect(Math.abs(rb.vy)).toBeLessThan(5)
+  })
+
+  it('box rests on a static polygon floor', () => {
+    const world = makeWorld()
+    const events = new EventBus()
+    const physics = new PhysicsSystem(500, events)
+
+    const floorVerts = [
+      { x: -200, y: -10 },
+      { x: 200, y: -10 },
+      { x: 200, y: 10 },
+      { x: -200, y: 10 },
+    ]
+
+    const floor = world.createEntity()
+    world.addComponent(floor, createTransform(0, 200))
+    world.addComponent(floor, createRigidBody({ isStatic: true }))
+    world.addComponent(floor, createConvexPolygonCollider(floorVerts))
+
+    const box = world.createEntity()
+    world.addComponent(box, createTransform(0, 150))
+    world.addComponent(box, createRigidBody())
+    world.addComponent(box, createBoxCollider(30, 30))
+
+    stepN(physics, world, 120)
+
+    const t = world.getComponent(box, 'Transform') as any
+    const rb = world.getComponent(box, 'RigidBody') as any
+    expect(t.y).toBeGreaterThan(165)
+    expect(t.y).toBeLessThan(190)
+    expect(Math.abs(rb.vy)).toBeLessThan(5)
+  })
+
+  it('polygon rests on a static polygon floor', () => {
+    const world = makeWorld()
+    const events = new EventBus()
+    const physics = new PhysicsSystem(500, events)
+
+    const floorVerts = [
+      { x: -200, y: -10 },
+      { x: 200, y: -10 },
+      { x: 200, y: 10 },
+      { x: -200, y: 10 },
+    ]
+
+    const floor = world.createEntity()
+    world.addComponent(floor, createTransform(0, 200))
+    world.addComponent(floor, createRigidBody({ isStatic: true }))
+    world.addComponent(floor, createConvexPolygonCollider(floorVerts))
+
+    const poly = world.createEntity()
+    world.addComponent(poly, createTransform(0, 150))
+    world.addComponent(poly, createRigidBody())
+    world.addComponent(poly, createConvexPolygonCollider(square))
+
+    stepN(physics, world, 120)
+
+    const t = world.getComponent(poly, 'Transform') as any
+    const rb = world.getComponent(poly, 'RigidBody') as any
+    expect(t.y).toBeGreaterThan(165)
+    expect(t.y).toBeLessThan(190)
+    expect(Math.abs(rb.vy)).toBeLessThan(5)
+  })
 })
 
 // ── Triangle tests ───────────────────────────────────────────────────────────
@@ -273,6 +414,37 @@ describe('Triangle collider physics', () => {
     const t = world.getComponent(tri, 'Transform') as any
     expect(t.y).toBeLessThan(200)
     expect(t.y).toBeGreaterThan(150)
+  })
+
+  it('triangle rests on a static polygon floor', () => {
+    const world = makeWorld()
+    const events = new EventBus()
+    const physics = new PhysicsSystem(500, events)
+
+    const floorVerts = [
+      { x: -200, y: -10 },
+      { x: 200, y: -10 },
+      { x: 200, y: 10 },
+      { x: -200, y: 10 },
+    ]
+
+    const floor = world.createEntity()
+    world.addComponent(floor, createTransform(0, 200))
+    world.addComponent(floor, createRigidBody({ isStatic: true }))
+    world.addComponent(floor, createConvexPolygonCollider(floorVerts))
+
+    const tri = world.createEntity()
+    world.addComponent(tri, createTransform(0, 150))
+    world.addComponent(tri, createRigidBody())
+    world.addComponent(tri, createTriangleCollider({ x: 0, y: -20 }, { x: 17, y: 10 }, { x: -17, y: 10 }))
+
+    stepN(physics, world, 120)
+
+    const t = world.getComponent(tri, 'Transform') as any
+    const rb = world.getComponent(tri, 'RigidBody') as any
+    expect(t.y).toBeGreaterThan(165)
+    expect(t.y).toBeLessThan(195)
+    expect(Math.abs(rb.vy)).toBeLessThan(5)
   })
 })
 

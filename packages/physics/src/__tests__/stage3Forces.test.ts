@@ -4,6 +4,7 @@ import { createTransform } from '@cubeforge/core'
 import { createRigidBody } from '../components/rigidbody'
 import { createBoxCollider } from '../components/boxCollider'
 import { createCircleCollider } from '../components/circleCollider'
+import { createCapsuleCollider } from '../components/capsuleCollider'
 import { PhysicsSystem } from '../physicsSystem'
 import {
   addForce,
@@ -287,6 +288,24 @@ describe('setNextKinematicPosition — kinematic position targeting', () => {
     const platformTransform = world.getComponent<TransformComponent>(platform, 'Transform')!
     expect(platformTransform.x).toBeCloseTo(125)
     expect(boxTransform.x).toBeGreaterThan(135)
+  })
+
+  it('moves kinematic capsules to the target only once', () => {
+    const { world, physics } = makeWorld(0)
+
+    const id = world.createEntity()
+    world.addComponent(id, createTransform(0, 100))
+    world.addComponent(id, createRigidBody({ isKinematic: true }))
+    world.addComponent(id, createCapsuleCollider(20, 40))
+
+    const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+    setNextKinematicPosition(rb, 10, 100)
+
+    stepN(physics, world, 1)
+
+    const t = world.getComponent<TransformComponent>(id, 'Transform')!
+    expect(t.x).toBeCloseTo(10)
+    expect(t.y).toBeCloseTo(100)
   })
 })
 
