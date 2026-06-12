@@ -10,6 +10,22 @@
     "isolatedModules": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "exactOptionalPropertyTypes": false
+    "exactOptionalPropertyTypes": false,
+    "baseUrl": ".",
+    "paths": {
+      "@cubeforge/audio": ["packages/audio/src/index.ts"],
+      "@cubeforge/context": ["integrations/context/src/index.ts"],
+      "@cubeforge/core": ["packages/core/src/index.ts"],
+      "@cubeforge/devtools": ["integrations/devtools/src/index.ts"],
+      "@cubeforge/editor": ["integrations/editor/src/index.ts"],
+      "@cubeforge/gameplay": ["integrations/gameplay/src/index.ts"],
+      "@cubeforge/input": ["packages/input/src/index.ts"],
+      "@cubeforge/net": ["packages/net/src/index.ts"],
+      "@cubeforge/physics": ["packages/physics/src/index.ts"],
+      "@cubeforge/renderer": ["packages/renderer/src/index.ts"],
+      "@cubeforge/renderer3d": ["packages/renderer3d/src/index.ts"],
+      "cubeforge": ["integrations/cubeforge/src/index.ts"],
+      "cubeforge/advanced": ["integrations/cubeforge/src/advanced.ts"]
+    }
   }
 }
