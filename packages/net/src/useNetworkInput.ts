@@ -39,7 +39,7 @@ export function useNetworkInput(config: NetworkInputConfig): {
   const [localInput, setLocalInput] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(keys.map((k) => [k, false])),
   )
-  const [remoteInputs] = useState<Map<string, Record<string, boolean>>>(() => new Map())
+  const [remoteInputs, setRemoteInputs] = useState<Map<string, Record<string, boolean>>>(() => new Map())
   const localInputRef = useRef<Record<string, boolean>>(localInput)
 
   useEffect(() => {
@@ -96,7 +96,11 @@ export function useNetworkInput(config: NetworkInputConfig): {
     const unsubscribe = room.onMessage((msg) => {
       if (msg.type !== INPUT_MSG_TYPE) return
       if (!msg.peerId) return
-      remoteInputs.set(msg.peerId, msg.payload as Record<string, boolean>)
+      setRemoteInputs((prev) => {
+        const next = new Map(prev)
+        next.set(msg.peerId!, msg.payload as Record<string, boolean>)
+        return next
+      })
     })
 
     return () => {
@@ -104,7 +108,7 @@ export function useNetworkInput(config: NetworkInputConfig): {
       clearInterval(broadcastInterval)
       unsubscribe()
     }
-  }, [room, keys, input, remoteInputs, intervalMs])
+  }, [room, keys, input, intervalMs])
 
   return { localInput, remoteInputs }
 }

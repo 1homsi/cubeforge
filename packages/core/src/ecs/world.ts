@@ -75,6 +75,25 @@ interface Archetype {
 
 /** Per-component structural comparison with early exit — avoids stringifying
  *  the whole entity and is not sensitive to JSON key-ordering. */
+function _valuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== typeof b) return false
+  if (a === null || b === null || typeof a !== 'object') return false
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    return a.every((value, index) => _valuesEqual(value, b[index]))
+  }
+
+  const recordA = a as Record<string, unknown>
+  const recordB = b as Record<string, unknown>
+  const keysA = Object.keys(recordA)
+  if (keysA.length !== Object.keys(recordB).length) return false
+  return keysA.every(
+    (key) => Object.prototype.hasOwnProperty.call(recordB, key) && _valuesEqual(recordA[key], recordB[key]),
+  )
+}
+
 function _componentsChanged(a: Component[], b: Component[]): boolean {
   if (a.length !== b.length) return true
   for (let i = 0; i < a.length; i++) {
@@ -84,7 +103,7 @@ function _componentsChanged(a: Component[], b: Component[]): boolean {
     const keysA = Object.keys(ca)
     if (keysA.length !== Object.keys(cb).length) return true
     for (const k of keysA) {
-      if (ca[k] !== cb[k]) return true
+      if (!_valuesEqual(ca[k], cb[k])) return true
     }
   }
   return false

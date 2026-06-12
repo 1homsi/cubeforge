@@ -40,9 +40,9 @@ export interface WebRTCTransport extends BinaryNetTransport {
 
   /**
    * Apply an ICE candidate received from the remote peer via signaling.
-   * Call this for every candidate that arrives.
+   * Call this for every candidate that arrives, including `null` end-of-candidates markers.
    */
-  addIceCandidate(candidate: RTCIceCandidateInit): Promise<void>
+  addIceCandidate(candidate: RTCIceCandidateInit | null): Promise<void>
 
   /**
    * Register a handler that fires whenever a local ICE candidate is generated.
@@ -190,7 +190,11 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
       return answer
     },
 
-    async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
+    async addIceCandidate(candidate: RTCIceCandidateInit | null): Promise<void> {
+      if (candidate === null) {
+        await pc.addIceCandidate()
+        return
+      }
       await pc.addIceCandidate(new RTCIceCandidate(candidate))
     },
 

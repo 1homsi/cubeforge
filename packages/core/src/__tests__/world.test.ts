@@ -340,6 +340,24 @@ describe('Delta snapshot', () => {
     expect(delta.changed[0].id).toBe(e)
   })
 
+  it('does not include unchanged nested arrays or objects', () => {
+    const world = new ECSWorld()
+    const e = world.createEntity()
+    world.addComponent(e, {
+      type: 'Path',
+      points: [
+        { x: 0, y: 0 },
+        { x: 10, y: 5 },
+      ],
+      tags: ['patrol', 'enemy'],
+    })
+
+    const baseline = world.getSnapshot()
+    const delta = world.getDeltaSnapshot(baseline)
+
+    expect(delta.changed).toHaveLength(0)
+  })
+
   it('delta includes newly added entities', () => {
     const world = new ECSWorld()
     const baseline = world.getSnapshot()

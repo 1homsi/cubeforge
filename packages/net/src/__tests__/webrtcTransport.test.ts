@@ -136,6 +136,12 @@ describe('createWebRTCTransport', () => {
     expect(mockPC.addIceCandidate).toHaveBeenCalled()
   })
 
+  it('accepts null end-of-candidates markers', async () => {
+    const transport = createWebRTCTransport()
+    await transport.addIceCandidate(null)
+    expect(mockPC.addIceCandidate).toHaveBeenCalledWith()
+  })
+
   it('fires onConnect when the responding data channel opens', () => {
     const transport = createWebRTCTransport()
     const handler = vi.fn()

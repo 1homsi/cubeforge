@@ -126,6 +126,7 @@ export function Game3D({
     return () => {
       loop.stop()
       resizeObserver?.disconnect()
+      renderer.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

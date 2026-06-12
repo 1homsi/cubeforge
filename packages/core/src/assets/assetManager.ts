@@ -118,11 +118,13 @@ export class AssetManager {
     set.add(source)
     source.onended = () => {
       set!.delete(source)
+      if (set!.size === 0) this.activeSources.delete(src)
     }
   }
 
   playAudio(src: string, volume = 1): void {
-    const buffer = this.audio.get(src)
+    const resolved = this.resolve(src)
+    const buffer = this.audio.get(resolved)
     if (!buffer) return
     const ctx = this.getAudioContext()
     const source = ctx.createBufferSource()
@@ -131,12 +133,13 @@ export class AssetManager {
     gainNode.gain.value = volume
     source.connect(gainNode)
     gainNode.connect(ctx.destination)
-    this.trackSource(src, source)
+    this.trackSource(resolved, source)
     source.start()
   }
 
   playLoopAudio(src: string, volume = 1): AudioBufferSourceNode | null {
-    const buffer = this.audio.get(src)
+    const resolved = this.resolve(src)
+    const buffer = this.audio.get(resolved)
     if (!buffer) return null
     const ctx = this.getAudioContext()
     const source = ctx.createBufferSource()
@@ -146,13 +149,14 @@ export class AssetManager {
     gainNode.gain.value = volume
     source.connect(gainNode)
     gainNode.connect(ctx.destination)
-    this.trackSource(src, source)
+    this.trackSource(resolved, source)
     source.start()
     return source
   }
 
   stopAudio(src: string): void {
-    const set = this.activeSources.get(src)
+    const resolved = this.resolve(src)
+    const set = this.activeSources.get(resolved)
     if (!set) return
     for (const source of set) {
       try {
@@ -162,6 +166,7 @@ export class AssetManager {
       }
     }
     set.clear()
+    this.activeSources.delete(resolved)
   }
 
   stopAll(): void {

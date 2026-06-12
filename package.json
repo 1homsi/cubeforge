@@ -1,9 +1,9 @@
 {
-  "name": "cubeforge",
+  "name": "cubeforge-monorepo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter './packages/*' --filter 'cubeforge' run build",
+    "build": "pnpm --filter './packages/*' --filter './integrations/cubeforge' run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "vitest run",
     "format": "prettier --write 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",

@@ -16,7 +16,20 @@ function prompt(question: string): Promise<string> {
   })
 }
 
-function copyTemplateDir(src: string, dest: string, projectName: string): void {
+function toPackageName(projectName: string): string {
+  const baseName = path.basename(path.resolve(process.cwd(), projectName))
+  const normalized = baseName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._~-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/^[._]+/g, '')
+
+  return normalized || 'cubeforge-game'
+}
+
+function copyTemplateDir(src: string, dest: string, projectName: string, packageName: string): void {
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true })
   }
@@ -27,10 +40,10 @@ function copyTemplateDir(src: string, dest: string, projectName: string): void {
     const destName = entry.name.endsWith('.template') ? entry.name.slice(0, -'.template'.length) : entry.name
     const destPath = path.join(dest, destName)
     if (entry.isDirectory()) {
-      copyTemplateDir(srcPath, destPath, projectName)
+      copyTemplateDir(srcPath, destPath, projectName, packageName)
     } else {
       const content = fs.readFileSync(srcPath, 'utf8')
-      const replaced = content.replaceAll('{{PROJECT_NAME}}', projectName)
+      const replaced = content.replaceAll('{{PROJECT_NAME}}', projectName).replaceAll('{{PACKAGE_NAME}}', packageName)
       fs.writeFileSync(destPath, replaced, 'utf8')
     }
   }
@@ -100,6 +113,7 @@ async function main(): Promise<void> {
   }
 
   const targetDir = path.resolve(process.cwd(), projectName)
+  const packageName = toPackageName(projectName)
 
   if (fs.existsSync(targetDir)) {
     process.stderr.write(`Error: directory "${projectName}" already exists.\n`)
@@ -113,7 +127,7 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write(`\nCreating new Cubeforge game in ${targetDir} (template: ${template})...\n`)
-  copyTemplateDir(templatesDir, targetDir, projectName)
+  copyTemplateDir(templatesDir, targetDir, projectName, packageName)
 
   process.stdout.write(`\nDone! Your project "${projectName}" is ready.\n`)
   process.stdout.write('\nNext steps:\n')

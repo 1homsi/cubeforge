@@ -40,6 +40,17 @@ export function EnvironmentMap3D({
     let prefilteredEnvMap: WebGLTexture | null = null
     let brdfLUT: WebGLTexture | null = null
 
+    const disposeGeneratedTextures = () => {
+      if (envMap) gl.deleteTexture(envMap)
+      if (irradianceMap) gl.deleteTexture(irradianceMap)
+      if (prefilteredEnvMap) gl.deleteTexture(prefilteredEnvMap)
+      if (brdfLUT) gl.deleteTexture(brdfLUT)
+      envMap = null
+      irradianceMap = null
+      prefilteredEnvMap = null
+      brdfLUT = null
+    }
+
     loader
       .load(src)
       .then((cubemap) => {
@@ -99,9 +110,8 @@ export function EnvironmentMap3D({
         delete engine.scene.userData['envMap']
       }
 
+      disposeGeneratedTextures()
       loader.dispose()
-      // Note: individual WebGLTextures (envMap, irradiance, etc.) are owned
-      // and disposed by the EquirectangularLoader via dispose().
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src])

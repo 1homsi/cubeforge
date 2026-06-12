@@ -161,6 +161,7 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
   const groupRef = useRef(opts.group)
   const rateRef = useRef(opts.playbackRate ?? 1)
   const onEndedRef = useRef(opts.onEnded)
+  const acquiredSrcRef = useRef<string | null>(null)
   const maxInstances = opts.maxInstances ?? 4
 
   // Keep onEnded ref current without re-running the effect
@@ -170,7 +171,10 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     let cancelled = false
     loadBuffer(src)
       .then((buf) => {
-        if (!cancelled) bufferRef.current = buf
+        if (!cancelled) {
+          bufferRef.current = buf
+          acquiredSrcRef.current = src
+        }
       })
       .catch(console.error)
 
@@ -187,7 +191,12 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
       }
       activeInstances.current = []
       bufferRef.current = null
-      releaseBuffer(src)
+      if (acquiredSrcRef.current) {
+        releaseBuffer(acquiredSrcRef.current)
+        acquiredSrcRef.current = null
+      } else {
+        releaseBuffer(src)
+      }
     }
   }, [src])
 
@@ -328,6 +337,7 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     loadBuffer(newSrc)
       .then((buf) => {
         if (!buf) return
+        const previousSrc = acquiredSrcRef.current
         const ctx = getAudioCtx()
         if (ctx.state === 'suspended') void ctx.resume()
 
@@ -337,8 +347,13 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
         entry.source.start()
         activeInstances.current.push(entry)
         bufferRef.current = buf
+        acquiredSrcRef.current = newSrc
+        if (previousSrc) releaseBuffer(previousSrc)
       })
-      .catch(console.error)
+      .catch((err: unknown) => {
+        releaseBuffer(newSrc)
+        console.error(err)
+      })
   }
 
   return {

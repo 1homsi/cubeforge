@@ -5,7 +5,7 @@
     "rootDir": "./bin",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["bun-types", "node"]
+    "types": ["node"]
   },
   "include": ["bin"],
   "exclude": ["node_modules", "dist", "templates"]

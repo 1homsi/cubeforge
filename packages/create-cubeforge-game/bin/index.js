@@ -39,7 +39,12 @@ function prompt(question) {
     });
   });
 }
-function copyTemplateDir(src, dest, projectName) {
+function toPackageName(projectName) {
+  const baseName = path.basename(path.resolve(process.cwd(), projectName));
+  const normalized = baseName.trim().toLowerCase().replace(/[^a-z0-9._~-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "").replace(/^[._]+/g, "");
+  return normalized || "cubeforge-game";
+}
+function copyTemplateDir(src, dest, projectName, packageName) {
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true });
   }
@@ -49,10 +54,10 @@ function copyTemplateDir(src, dest, projectName) {
     const destName = entry.name.endsWith(".template") ? entry.name.slice(0, -".template".length) : entry.name;
     const destPath = path.join(dest, destName);
     if (entry.isDirectory()) {
-      copyTemplateDir(srcPath, destPath, projectName);
+      copyTemplateDir(srcPath, destPath, projectName, packageName);
     } else {
       const content = fs.readFileSync(srcPath, "utf8");
-      const replaced = content.replaceAll("{{PROJECT_NAME}}", projectName);
+      const replaced = content.replaceAll("{{PROJECT_NAME}}", projectName).replaceAll("{{PACKAGE_NAME}}", packageName);
       fs.writeFileSync(destPath, replaced, "utf8");
     }
   }
@@ -117,6 +122,7 @@ async function main() {
     template = chosen;
   }
   const targetDir = path.resolve(process.cwd(), projectName);
+  const packageName = toPackageName(projectName);
   if (fs.existsSync(targetDir)) {
     process.stderr.write(`Error: directory "${projectName}" already exists.
 `);
@@ -131,7 +137,7 @@ async function main() {
   process.stdout.write(`
 Creating new Cubeforge game in ${targetDir} (template: ${template})...
 `);
-  copyTemplateDir(templatesDir, targetDir, projectName);
+  copyTemplateDir(templatesDir, targetDir, projectName, packageName);
   process.stdout.write(`
 Done! Your project "${projectName}" is ready.
 `);

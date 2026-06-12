@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { readdirSync, readFileSync, existsSync, statSync } from 'fs'
+import { mkdtempSync, readdirSync, readFileSync, existsSync, statSync, rmSync } from 'fs'
 import { join, resolve } from 'path'
+import { tmpdir } from 'os'
+import { execFileSync } from 'child_process'
 
 const TEMPLATES_ROOT = resolve(__dirname, '..')
+const CLI_BIN = resolve(__dirname, '..', '..', 'bin', 'index.js')
 const TEMPLATE_NAMES = ['default', 'puzzle', 'turn-based', 'editor']
 
 function collectTemplateFiles(dir: string): string[] {
@@ -68,5 +71,27 @@ describe.each(TEMPLATE_NAMES)('%s template', (name) => {
   it('has an App.tsx.template and main.tsx.template', () => {
     expect(existsSync(join(dir, 'src', 'App.tsx.template'))).toBe(true)
     expect(existsSync(join(dir, 'src', 'main.tsx.template'))).toBe(true)
+  })
+})
+
+describe('create-cubeforge-game CLI', () => {
+  it('keeps display names while generating npm-safe package names', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'create-cubeforge-game-'))
+
+    try {
+      execFileSync(process.execPath, [CLI_BIN, 'My Game', '--template', 'puzzle'], {
+        cwd: tmp,
+        stdio: 'pipe',
+      })
+
+      const projectDir = join(tmp, 'My Game')
+      const pkg = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'))
+      const html = readFileSync(join(projectDir, 'index.html'), 'utf-8')
+
+      expect(pkg.name).toBe('my-game')
+      expect(html).toContain('<title>My Game</title>')
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
   })
 })

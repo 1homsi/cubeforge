@@ -168,6 +168,25 @@ describe('Audio system', () => {
       runCleanups()
       expect(_getBufferCache().has('/boom.wav')).toBe(false)
     })
+
+    it('releases the previous buffer after crossfade and the final buffer on unmount', async () => {
+      const { useSound, _getBufferCache, _getBufferRefCount } = await import('../useSound')
+
+      const controls = useSound('/intro.wav')
+      flushEffects()
+      await vi.waitFor(() => expect(_getBufferCache().has('/intro.wav')).toBe(true))
+
+      controls.crossfadeTo('/loop.wav', 0.25)
+      await vi.waitFor(() => expect(_getBufferCache().has('/loop.wav')).toBe(true))
+
+      expect(_getBufferCache().has('/intro.wav')).toBe(false)
+      expect(_getBufferRefCount().has('/intro.wav')).toBe(false)
+      expect(_getBufferRefCount().get('/loop.wav')).toBe(1)
+
+      runCleanups()
+      expect(_getBufferCache().has('/loop.wav')).toBe(false)
+      expect(_getBufferRefCount().has('/loop.wav')).toBe(false)
+    })
   })
 
   describe('maxInstances limits concurrent source nodes', () => {
