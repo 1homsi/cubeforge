@@ -571,12 +571,12 @@ export class WebGLRenderer3D {
       if (entry) {
         this._state.uploadInstanceMatrix(
           entry,
-          im.instanceMatrix.data as Float32Array,
+          im.instanceMatrix,
           im.count,
           6, // base attrib location for mat4 columns
         )
         if (im.instanceColor) {
-          this._state.uploadInstanceColor(entry, im.instanceColor.data as Float32Array, 10)
+          this._state.uploadInstanceColor(entry, im.instanceColor, 10)
         }
       }
     }

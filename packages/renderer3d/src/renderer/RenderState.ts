@@ -34,6 +34,13 @@ interface GeometryGPUEntry {
   /** Track attribute versions to detect needsUpdate */
   attributeVersions: Map<string, number>
   indexVersion: number
+  /** Identity + version of the last uploaded instance-matrix attribute (skip redundant re-uploads) */
+  instanceMatrixAttr: object | null
+  instanceMatrixVersion: number
+  instanceMatrixCount: number
+  /** Identity + version of the last uploaded instance-color attribute */
+  instanceColorAttr: object | null
+  instanceColorVersion: number
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +250,11 @@ export class RenderState {
         attributeBuffers: new Map(),
         attributeVersions: new Map(),
         indexVersion: -1,
+        instanceMatrixAttr: null,
+        instanceMatrixVersion: -1,
+        instanceMatrixCount: -1,
+        instanceColorAttr: null,
+        instanceColorVersion: -1,
       }
       this._geometryCache.set(geometry.id, entry)
     }
@@ -363,18 +375,38 @@ export class RenderState {
   /**
    * Upload per-instance matrix data as 4 consecutive vec4 attribute slots
    * starting at location `baseLocation` (default 6).
+   *
+   * The upload is skipped when the same {@link BufferAttribute} is re-drawn
+   * with an unchanged `version` and instance count, so static instance fleets
+   * cost zero bandwidth per frame — this is what lets thousands of characters
+   * stay on screen without saturating the GPU bus each frame.
    */
-  uploadInstanceMatrix(entry: GeometryGPUEntry, data: Float32Array, _instanceCount: number, baseLocation = 6): void {
+  uploadInstanceMatrix(entry: GeometryGPUEntry, attr: BufferAttribute, instanceCount: number, baseLocation = 6): void {
     const { gl } = this
     const { vao } = entry
+    const data = attr.data as Float32Array
 
     let buf = entry.attributeBuffers.get('__instanceMatrix__')
+    const isNew = !buf
     if (!buf) {
       buf = new GLBuffer(gl, gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW)
       entry.attributeBuffers.set('__instanceMatrix__', buf)
     }
+
+    // Fast path: same attribute, same version, same count → nothing to do.
+    if (
+      !isNew &&
+      entry.instanceMatrixAttr === attr &&
+      entry.instanceMatrixVersion === attr.version &&
+      entry.instanceMatrixCount === instanceCount
+    ) {
+      return
+    }
+
     buf.bind()
-    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW)
+    // Only stream the range actually used by the draw call.
+    const used = instanceCount > 0 ? data.subarray(0, instanceCount * 16) : data
+    gl.bufferData(gl.ARRAY_BUFFER, used, gl.DYNAMIC_DRAW)
 
     vao.bind()
     const stride = 16 * 4 // 16 floats × 4 bytes
@@ -384,17 +416,28 @@ export class RenderState {
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, stride, col * 16)
       gl.vertexAttribDivisor(loc, 1)
     }
+
+    entry.instanceMatrixAttr = attr
+    entry.instanceMatrixVersion = attr.version
+    entry.instanceMatrixCount = instanceCount
   }
 
-  uploadInstanceColor(entry: GeometryGPUEntry, data: Float32Array, colorLocation = 10): void {
+  uploadInstanceColor(entry: GeometryGPUEntry, attr: BufferAttribute, colorLocation = 10): void {
     const { gl } = this
     const { vao } = entry
+    const data = attr.data as Float32Array
 
     let buf = entry.attributeBuffers.get('__instanceColor__')
+    const isNew = !buf
     if (!buf) {
       buf = new GLBuffer(gl, gl.ARRAY_BUFFER, gl.DYNAMIC_DRAW)
       entry.attributeBuffers.set('__instanceColor__', buf)
     }
+
+    if (!isNew && entry.instanceColorAttr === attr && entry.instanceColorVersion === attr.version) {
+      return
+    }
+
     buf.bind()
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW)
 
@@ -402,6 +445,9 @@ export class RenderState {
     gl.enableVertexAttribArray(colorLocation)
     gl.vertexAttribPointer(colorLocation, 3, gl.FLOAT, false, 0, 0)
     gl.vertexAttribDivisor(colorLocation, 1)
+
+    entry.instanceColorAttr = attr
+    entry.instanceColorVersion = attr.version
   }
 
   getGeometryEntry(geometryId: number): GeometryGPUEntry | undefined {

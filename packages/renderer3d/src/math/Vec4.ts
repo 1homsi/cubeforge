@@ -72,6 +72,83 @@ export class Vec4 {
     return this
   }
 
+  copy(v: Vec4): this {
+    this.x = v.x
+    this.y = v.y
+    this.z = v.z
+    this.w = v.w
+    return this
+  }
+
+  setScalar(s: number): this {
+    this.x = s
+    this.y = s
+    this.z = s
+    this.w = s
+    return this
+  }
+
+  addVectors(a: Vec4, b: Vec4): this {
+    this.x = a.x + b.x
+    this.y = a.y + b.y
+    this.z = a.z + b.z
+    this.w = a.w + b.w
+    return this
+  }
+
+  subVectors(a: Vec4, b: Vec4): this {
+    this.x = a.x - b.x
+    this.y = a.y - b.y
+    this.z = a.z - b.z
+    this.w = a.w - b.w
+    return this
+  }
+
+  addScaledVector(v: Vec4, s: number): this {
+    this.x += v.x * s
+    this.y += v.y * s
+    this.z += v.z * s
+    this.w += v.w * s
+    return this
+  }
+
+  multiplyScalar(s: number): this {
+    return this.scale(s)
+  }
+
+  divideScalar(s: number): this {
+    return s !== 0 ? this.scale(1 / s) : this.set(0, 0, 0, 0)
+  }
+
+  negate(): this {
+    this.x = -this.x
+    this.y = -this.y
+    this.z = -this.z
+    this.w = -this.w
+    return this
+  }
+
+  manhattanLength(): number {
+    return Math.abs(this.x) + Math.abs(this.y) + Math.abs(this.z) + Math.abs(this.w)
+  }
+
+  lerpVectors(a: Vec4, b: Vec4, t: number): this {
+    this.x = a.x + (b.x - a.x) * t
+    this.y = a.y + (b.y - a.y) * t
+    this.z = a.z + (b.z - a.z) * t
+    this.w = a.w + (b.w - a.w) * t
+    return this
+  }
+
+  equals(v: Vec4, eps = 1e-6): boolean {
+    return (
+      Math.abs(this.x - v.x) <= eps &&
+      Math.abs(this.y - v.y) <= eps &&
+      Math.abs(this.z - v.z) <= eps &&
+      Math.abs(this.w - v.w) <= eps
+    )
+  }
+
   toArray(): [number, number, number, number] {
     return [this.x, this.y, this.z, this.w]
   }

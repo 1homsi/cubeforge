@@ -280,7 +280,7 @@ export class Quat {
     return this.copy(qa).slerp(qb, t)
   }
 
-  private copy(q: Quat): this {
+  copy(q: Quat): this {
     this.x = q.x
     this.y = q.y
     this.z = q.z

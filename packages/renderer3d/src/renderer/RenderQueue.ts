@@ -38,10 +38,10 @@ export interface RenderItem {
 // Columns of the view-projection matrix (M) define the six clip planes.
 // A sphere (center, radius) is culled if it lies entirely outside any plane.
 
-function extractFrustumPlanes(vp: Mat4): Float32Array {
+function extractFrustumPlanes(vp: Mat4, planes: Float32Array): Float32Array {
   const e = vp.elements
-  // Each plane: [nx, ny, nz, d]
-  const planes = new Float32Array(24) // 6 planes × 4 components
+  // Each plane: [nx, ny, nz, d] — written into the caller-provided buffer to
+  // avoid allocating six planes' worth of floats on every single frame.
 
   // Left:   col3 + col0
   planes[0] = e[3] + e[0]
@@ -112,12 +112,45 @@ export class RenderQueue {
   /** Combined view-projection matrix for frustum extraction (set during extractFromScene) */
   private _vpMatrix = new Mat4()
 
+  /** Reused frustum-plane buffer (6 planes × 4 components). */
+  private _frustumPlanes = new Float32Array(24)
+
+  /** Pool of RenderItem objects, reused frame-to-frame to avoid GC churn. */
+  private _itemPool: RenderItem[] = []
+  private _poolCursor = 0
+
+  /** Number of objects tested against the frustum during the last extract. */
+  culledTested = 0
+  /** Number of objects rejected by frustum culling during the last extract. */
+  culledRejected = 0
+
   clear(): void {
     this.opaque.length = 0
     this.transparent.length = 0
     this.lights.length = 0
     this.sprites.length = 0
     this.lines.length = 0
+    this._poolCursor = 0
+  }
+
+  /** Acquire a RenderItem from the pool, allocating a new one only when needed. */
+  private _acquire(): RenderItem {
+    let item = this._itemPool[this._poolCursor]
+    if (item === undefined) {
+      item = {
+        object: null as unknown as Mesh,
+        geometry: null as unknown as BufferGeometry,
+        material: null as unknown as Material,
+        groupIndex: -1,
+        groupStart: 0,
+        groupCount: 0,
+        z: 0,
+        renderOrder: 0,
+      }
+      this._itemPool[this._poolCursor] = item
+    }
+    this._poolCursor++
+    return item
   }
 
   push(item: RenderItem): void {
@@ -141,9 +174,12 @@ export class RenderQueue {
   extractFromScene(scene: Scene, camera: Camera): void {
     this.clear()
 
+    this.culledTested = 0
+    this.culledRejected = 0
+
     // Build VP matrix for frustum culling
     this._vpMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-    const frustumPlanes = extractFrustumPlanes(this._vpMatrix)
+    const frustumPlanes = extractFrustumPlanes(this._vpMatrix, this._frustumPlanes)
 
     // Camera world position for depth calculation
     const camWorldE = camera.matrixWorld.elements
@@ -193,26 +229,50 @@ export class RenderQueue {
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
 
       // ── Frustum culling ──
+      const instanced = (mesh as unknown as { isInstancedMesh?: boolean }).isInstancedMesh
+        ? (mesh as unknown as import('../objects/InstancedMesh').InstancedMesh)
+        : null
       if (mesh.frustumCulled) {
-        // Ensure bounding sphere is available
-        if (!geometry.boundingSphere) {
-          geometry.computeBoundingSphere()
-        }
-        const bs = geometry.boundingSphere!
+        this.culledTested++
         const mw = mesh.matrixWorld.elements
 
-        // Transform sphere center to world space
-        const wcx = mw[0] * bs.center.x + mw[4] * bs.center.y + mw[8] * bs.center.z + mw[12]
-        const wcy = mw[1] * bs.center.x + mw[5] * bs.center.y + mw[9] * bs.center.z + mw[13]
-        const wcz = mw[2] * bs.center.x + mw[6] * bs.center.y + mw[10] * bs.center.z + mw[14]
+        if (instanced) {
+          // Cull the whole instance fleet by its aggregate bounding sphere,
+          // which already accounts for every instance's world translation.
+          if (!instanced.boundingSphere) instanced.computeBoundingSphere()
+          const ibs = instanced.boundingSphere!
+          // The instance matrices are world-space, so only the mesh's own
+          // world transform is applied on top of the aggregate centre.
+          const wcx = mw[0] * ibs.center.x + mw[4] * ibs.center.y + mw[8] * ibs.center.z + mw[12]
+          const wcy = mw[1] * ibs.center.x + mw[5] * ibs.center.y + mw[9] * ibs.center.z + mw[13]
+          const wcz = mw[2] * ibs.center.x + mw[6] * ibs.center.y + mw[10] * ibs.center.z + mw[14]
+          if (!sphereInFrustum(frustumPlanes, wcx, wcy, wcz, ibs.radius)) {
+            this.culledRejected++
+            return
+          }
+        } else {
+          // Ensure bounding sphere is available
+          if (!geometry.boundingSphere) {
+            geometry.computeBoundingSphere()
+          }
+          const bs = geometry.boundingSphere!
 
-        // Scale radius by max scale component
-        const sx = Math.sqrt(mw[0] ** 2 + mw[1] ** 2 + mw[2] ** 2)
-        const sy = Math.sqrt(mw[4] ** 2 + mw[5] ** 2 + mw[6] ** 2)
-        const sz = Math.sqrt(mw[8] ** 2 + mw[9] ** 2 + mw[10] ** 2)
-        const worldRadius = bs.radius * Math.max(sx, sy, sz)
+          // Transform sphere center to world space
+          const wcx = mw[0] * bs.center.x + mw[4] * bs.center.y + mw[8] * bs.center.z + mw[12]
+          const wcy = mw[1] * bs.center.x + mw[5] * bs.center.y + mw[9] * bs.center.z + mw[13]
+          const wcz = mw[2] * bs.center.x + mw[6] * bs.center.y + mw[10] * bs.center.z + mw[14]
 
-        if (!sphereInFrustum(frustumPlanes, wcx, wcy, wcz, worldRadius)) return
+          // Scale radius by max scale component
+          const sx = Math.sqrt(mw[0] ** 2 + mw[1] ** 2 + mw[2] ** 2)
+          const sy = Math.sqrt(mw[4] ** 2 + mw[5] ** 2 + mw[6] ** 2)
+          const sz = Math.sqrt(mw[8] ** 2 + mw[9] ** 2 + mw[10] ** 2)
+          const worldRadius = bs.radius * Math.max(sx, sy, sz)
+
+          if (!sphereInFrustum(frustumPlanes, wcx, wcy, wcz, worldRadius)) {
+            this.culledRejected++
+            return
+          }
+        }
       }
 
       // ── Compute view-space depth (dot product of (pos - cam) with forward) ──
@@ -232,16 +292,16 @@ export class RenderQueue {
           const mat = materials[group.materialIndex] ?? materials[0]
           if (!mat) continue
 
-          this.push({
-            object: mesh,
-            geometry,
-            material: mat,
-            groupIndex: gi,
-            groupStart: group.start,
-            groupCount: group.count,
-            z,
-            renderOrder: mesh.renderOrder,
-          })
+          const item = this._acquire()
+          item.object = mesh
+          item.geometry = geometry
+          item.material = mat
+          item.groupIndex = gi
+          item.groupStart = group.start
+          item.groupCount = group.count
+          item.z = z
+          item.renderOrder = mesh.renderOrder
+          this.push(item)
         }
       } else {
         const mat = materials[0]
@@ -256,16 +316,16 @@ export class RenderQueue {
               : totalVerts
             : geometry.drawRange.count
 
-        this.push({
-          object: mesh,
-          geometry,
-          material: mat,
-          groupIndex: -1,
-          groupStart: geometry.drawRange.start,
-          groupCount: drawCount,
-          z,
-          renderOrder: mesh.renderOrder,
-        })
+        const item = this._acquire()
+        item.object = mesh
+        item.geometry = geometry
+        item.material = mat
+        item.groupIndex = -1
+        item.groupStart = geometry.drawRange.start
+        item.groupCount = drawCount
+        item.z = z
+        item.renderOrder = mesh.renderOrder
+        this.push(item)
       }
     })
   }
