@@ -29,6 +29,20 @@ export class Vec3 {
     return this
   }
 
+  setScalar(s: number): this {
+    this.x = s
+    this.y = s
+    this.z = s
+    return this
+  }
+
+  copy(v: Vec3): this {
+    this.x = v.x
+    this.y = v.y
+    this.z = v.z
+    return this
+  }
+
   add(v: Vec3): this {
     this.x += v.x
     this.y += v.y
@@ -179,6 +193,212 @@ export class Vec3 {
     this.y = onto.y * scalar
     this.z = onto.z * scalar
     return this
+  }
+
+  // ── Allocation-free binary ops (write result into `this`) ──────────────────
+
+  addVectors(a: Vec3, b: Vec3): this {
+    this.x = a.x + b.x
+    this.y = a.y + b.y
+    this.z = a.z + b.z
+    return this
+  }
+
+  subVectors(a: Vec3, b: Vec3): this {
+    this.x = a.x - b.x
+    this.y = a.y - b.y
+    this.z = a.z - b.z
+    return this
+  }
+
+  /** this += v * s — the workhorse for integrators without a temp allocation. */
+  addScaledVector(v: Vec3, s: number): this {
+    this.x += v.x * s
+    this.y += v.y * s
+    this.z += v.z * s
+    return this
+  }
+
+  addScalar(s: number): this {
+    this.x += s
+    this.y += s
+    this.z += s
+    return this
+  }
+
+  crossVectors(a: Vec3, b: Vec3): this {
+    const ax = a.x,
+      ay = a.y,
+      az = a.z
+    const bx = b.x,
+      by = b.y,
+      bz = b.z
+    this.x = ay * bz - az * by
+    this.y = az * bx - ax * bz
+    this.z = ax * by - ay * bx
+    return this
+  }
+
+  multiplyScalar(s: number): this {
+    return this.scale(s)
+  }
+
+  divideScalar(s: number): this {
+    return s !== 0 ? this.scale(1 / s) : this.set(0, 0, 0)
+  }
+
+  divide(v: Vec3): this {
+    this.x /= v.x
+    this.y /= v.y
+    this.z /= v.z
+    return this
+  }
+
+  lerpVectors(a: Vec3, b: Vec3, t: number): this {
+    this.x = a.x + (b.x - a.x) * t
+    this.y = a.y + (b.y - a.y) * t
+    this.z = a.z + (b.z - a.z) * t
+    return this
+  }
+
+  // ── Component-wise clamping / rounding ─────────────────────────────────────
+
+  min(v: Vec3): this {
+    this.x = Math.min(this.x, v.x)
+    this.y = Math.min(this.y, v.y)
+    this.z = Math.min(this.z, v.z)
+    return this
+  }
+
+  max(v: Vec3): this {
+    this.x = Math.max(this.x, v.x)
+    this.y = Math.max(this.y, v.y)
+    this.z = Math.max(this.z, v.z)
+    return this
+  }
+
+  clamp(min: Vec3, max: Vec3): this {
+    this.x = Math.max(min.x, Math.min(max.x, this.x))
+    this.y = Math.max(min.y, Math.min(max.y, this.y))
+    this.z = Math.max(min.z, Math.min(max.z, this.z))
+    return this
+  }
+
+  clampScalar(minVal: number, maxVal: number): this {
+    this.x = Math.max(minVal, Math.min(maxVal, this.x))
+    this.y = Math.max(minVal, Math.min(maxVal, this.y))
+    this.z = Math.max(minVal, Math.min(maxVal, this.z))
+    return this
+  }
+
+  /** Clamp the vector's length into `[min, max]`, preserving direction. */
+  clampLength(min: number, max: number): this {
+    const len = this.length()
+    if (len === 0) return this
+    const clamped = Math.max(min, Math.min(max, len))
+    return this.scale(clamped / len)
+  }
+
+  setLength(len: number): this {
+    return this.normalize().scale(len)
+  }
+
+  floor(): this {
+    this.x = Math.floor(this.x)
+    this.y = Math.floor(this.y)
+    this.z = Math.floor(this.z)
+    return this
+  }
+
+  ceil(): this {
+    this.x = Math.ceil(this.x)
+    this.y = Math.ceil(this.y)
+    this.z = Math.ceil(this.z)
+    return this
+  }
+
+  round(): this {
+    this.x = Math.round(this.x)
+    this.y = Math.round(this.y)
+    this.z = Math.round(this.z)
+    return this
+  }
+
+  abs(): this {
+    this.x = Math.abs(this.x)
+    this.y = Math.abs(this.y)
+    this.z = Math.abs(this.z)
+    return this
+  }
+
+  // ── Scalar queries ─────────────────────────────────────────────────────────
+
+  manhattanLength(): number {
+    return Math.abs(this.x) + Math.abs(this.y) + Math.abs(this.z)
+  }
+
+  /** Unsigned angle to another vector in radians (numerically clamped). */
+  angleTo(v: Vec3): number {
+    const denom = Math.sqrt(this.lengthSq() * v.lengthSq())
+    if (denom === 0) return Math.PI / 2
+    const t = this.dot(v) / denom
+    return Math.acos(Math.max(-1, Math.min(1, t)))
+  }
+
+  // ── Matrix / spherical helpers ─────────────────────────────────────────────
+
+  setFromMatrixPosition(m: Mat4): this {
+    const e = m.elements
+    this.x = e[12]
+    this.y = e[13]
+    this.z = e[14]
+    return this
+  }
+
+  setFromMatrixColumn(m: Mat4, index: number): this {
+    return this.fromArray(m.elements, index * 4)
+  }
+
+  /** Extract the world-space scale magnitude of each axis from a matrix. */
+  setFromMatrixScale(m: Mat4): this {
+    const e = m.elements
+    this.x = Math.hypot(e[0], e[1], e[2])
+    this.y = Math.hypot(e[4], e[5], e[6])
+    this.z = Math.hypot(e[8], e[9], e[10])
+    return this
+  }
+
+  setFromSphericalCoords(radius: number, phi: number, theta: number): this {
+    const sinPhiRadius = Math.sin(phi) * radius
+    this.x = sinPhiRadius * Math.sin(theta)
+    this.y = Math.cos(phi) * radius
+    this.z = sinPhiRadius * Math.cos(theta)
+    return this
+  }
+
+  applyAxisAngle(axis: Vec3, angle: number): this {
+    // Rodrigues' rotation, allocation-free.
+    const half = angle / 2
+    const s = Math.sin(half)
+    const qx = axis.x * s
+    const qy = axis.y * s
+    const qz = axis.z * s
+    const qw = Math.cos(half)
+    const x = this.x,
+      y = this.y,
+      z = this.z
+    const ix = qw * x + qy * z - qz * y
+    const iy = qw * y + qz * x - qx * z
+    const iz = qw * z + qx * y - qy * x
+    const iw = -qx * x - qy * y - qz * z
+    this.x = ix * qw + iw * -qx + iy * -qz - iz * -qy
+    this.y = iy * qw + iw * -qy + iz * -qx - ix * -qz
+    this.z = iz * qw + iw * -qz + ix * -qy - iy * -qx
+    return this
+  }
+
+  isZero(eps = 0): boolean {
+    return Math.abs(this.x) <= eps && Math.abs(this.y) <= eps && Math.abs(this.z) <= eps
   }
 
   toString(): string {
