@@ -455,8 +455,17 @@ export { createTimeline } from '@cubeforge/core'
 export type { TweenTimeline, TimelineEntry } from '@cubeforge/core'
 export type { ParticlePreset, ParticleEmitterConfig } from './components/particlePresets'
 export { PARTICLE_PRESETS } from './components/particlePresets'
-export { HUD, HUDZone, HUDBar, HUDCounter } from './components/HUD'
-export type { HUDProps, HUDZoneProps, HUDBarProps, HUDCounterProps, HUDPosition } from './components/HUD'
+export { HUD, HUDZone, HUDBar, HUDCounter, HUDButton, HUDMenu } from './components/HUD'
+export type {
+  HUDProps,
+  HUDZoneProps,
+  HUDBarProps,
+  HUDCounterProps,
+  HUDPosition,
+  HUDButtonProps,
+  HUDMenuProps,
+  HUDMenuItem,
+} from './components/HUD'
 
 // Animation helpers
 export { playClip, setAnimationState, setAnimatorParam } from './utils/animationHelpers'

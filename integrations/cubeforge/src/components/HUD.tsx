@@ -1,4 +1,15 @@
-import { createContext, useContext, useMemo, type CSSProperties, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
+import { isReducedMotionPreferred } from '@cubeforge/core'
 
 // ── HUD root ─────────────────────────────────────────────────────────────────
 
@@ -15,13 +26,18 @@ export type HUDPosition =
 
 export interface HUDProps {
   /**
-   * Whether the HUD fades out during scene transitions. Default true. When a
-   * `SceneTransitionOverlay` is active or `usePause` is paused, the HUD will
-   * dim to `dimmedOpacity` to get out of the way.
+   * Whether the HUD dims while `transitioning` is true. Default true. Pass
+   * `transitioning={scenes.phase !== 'idle'}` (from {@link useSceneTransition})
+   * or `transitioning={pause.isPaused}` (from `usePause`) to drive it.
    */
   dimDuringTransitions?: boolean
   /** Opacity when dimmed. Default 0.25. */
   dimmedOpacity?: number
+  /**
+   * Set this from your scene-transition or pause state to dim the HUD (see
+   * `dimDuringTransitions`). Default false.
+   */
+  transitioning?: boolean
   /** Whether the HUD is currently visible. Default true. */
   visible?: boolean
   /** Whether to apply CSS `env(safe-area-inset-*)` padding. Default true on touch. */
@@ -44,17 +60,18 @@ const HUDContextRef = createContext<HUDContext | null>(null)
 
 /**
  * Heads-up-display root. Positions a full-screen overlay over the game canvas
- * and provides layout zones via {@link HUDZone}. Integrates automatically with
- * CubeForge primitives:
+ * and provides layout zones via {@link HUDZone}. Integrates with CubeForge
+ * primitives:
  *
- * - Fades out during scene transitions (via `dimDuringTransitions`)
- * - Respects `prefers-reduced-motion` for fade timing
+ * - Dims during scene transitions / pause (via `dimDuringTransitions` + `transitioning`)
  * - Honors mobile safe-area insets when `safeArea` is on
  *
  * @example
  * ```tsx
+ * const scenes = useSceneTransition('gameplay')
+ *
  * <Stage>
- *   <HUD>
+ *   <HUD transitioning={scenes.phase !== 'idle'}>
  *     <HUDZone position="topLeft">
  *       <HUDBar value={hp} max={100} label="HP" color="#ef5350" />
  *     </HUDZone>
@@ -62,7 +79,7 @@ const HUDContextRef = createContext<HUDContext | null>(null)
  *       <span>Score: {score}</span>
  *     </HUDZone>
  *     <HUDZone position="bottomCenter">
- *       <button onClick={onJump}>Jump</button>
+ *       <HUDButton onClick={onJump}>Jump</HUDButton>
  *     </HUDZone>
  *   </HUD>
  * </Stage>
@@ -71,6 +88,7 @@ const HUDContextRef = createContext<HUDContext | null>(null)
 export function HUD({
   dimDuringTransitions = true,
   dimmedOpacity = 0.25,
+  transitioning = false,
   visible = true,
   safeArea = true,
   padding = 12,
@@ -80,23 +98,17 @@ export function HUD({
 }: HUDProps) {
   const ctx = useMemo<HUDContext>(() => ({ padding, safeArea }), [padding, safeArea])
 
+  const dimmed = dimDuringTransitions && transitioning
   const rootStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
     pointerEvents: 'none',
     zIndex: 100,
-    opacity: visible ? 1 : 0,
+    opacity: !visible ? 0 : dimmed ? dimmedOpacity : 1,
     transition: 'opacity 180ms ease-out',
     userSelect: 'none',
     ...style,
   }
-
-  // Reserved for dim-during-transition integration; currently the prop is
-  // accepted but not wired to scene transitions (apps can toggle visible
-  // manually). Wiring it deeply without a provider would require useContext
-  // into the scene transition state which isn't guaranteed to exist.
-  void dimDuringTransitions
-  void dimmedOpacity
 
   return (
     <HUDContextRef.Provider value={ctx}>
@@ -328,7 +340,27 @@ export function HUDCounter({
   fontSize = 18,
   style,
 }: HUDCounterProps) {
-  void pulse // pulse animation could be implemented via key+CSS keyframes; left for polish pass
+  const prevValueRef = useRef(value)
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isPulsing, setIsPulsing] = useState(false)
+
+  useEffect(() => {
+    if (prevValueRef.current === value) return
+    prevValueRef.current = value
+    if (!pulse || isReducedMotionPreferred()) return
+
+    setIsPulsing(true)
+    if (pulseTimerRef.current !== null) clearTimeout(pulseTimerRef.current)
+    pulseTimerRef.current = setTimeout(() => setIsPulsing(false), 220)
+  }, [value, pulse])
+
+  useEffect(
+    () => () => {
+      if (pulseTimerRef.current !== null) clearTimeout(pulseTimerRef.current)
+    },
+    [],
+  )
+
   return (
     <div
       style={{
@@ -339,12 +371,185 @@ export function HUDCounter({
         fontSize,
         color,
         fontVariantNumeric: 'tabular-nums',
+        transform: isPulsing ? 'scale(1.25)' : 'scale(1)',
+        transition: 'transform 220ms ease-out',
         ...style,
       }}
     >
       {icon && <span style={{ fontSize: fontSize * 1.1 }}>{icon}</span>}
       <span>{value}</span>
       {label && <span style={{ opacity: 0.7, fontSize: fontSize * 0.75 }}>{label}</span>}
+    </div>
+  )
+}
+
+// ── Interactive widgets ──────────────────────────────────────────────────────
+
+export interface HUDButtonProps {
+  /** Click / activate handler. */
+  onClick?: () => void
+  /** Disables the button — no pointer/keyboard activation, dimmed appearance. */
+  disabled?: boolean
+  /** Base background color. Default 'rgba(255,255,255,0.12)'. */
+  color?: string
+  /** Background color while hovered or focused. Default 'rgba(255,255,255,0.22)'. */
+  hoverColor?: string
+  /** Text color. Default '#fff'. */
+  textColor?: string
+  /** Font size in CSS pixels. Default 14. */
+  fontSize?: number
+  /** Additional style. */
+  style?: CSSProperties
+  /** Additional CSS class. */
+  className?: string
+  children?: ReactNode
+}
+
+/**
+ * A screen-anchored, keyboard-and-pointer-accessible button for HUD menus,
+ * toolbars, and dialogs. A thin styled wrapper around a native `<button>` —
+ * Tab/Enter/Space and click all work without extra wiring. Meant to be
+ * dropped inside a {@link HUDZone} or {@link HUDMenu}.
+ *
+ * @example
+ * ```tsx
+ * <HUDZone position="bottomCenter">
+ *   <HUDButton onClick={onJump}>Jump</HUDButton>
+ * </HUDZone>
+ * ```
+ */
+export function HUDButton({
+  onClick,
+  disabled = false,
+  color = 'rgba(255,255,255,0.12)',
+  hoverColor = 'rgba(255,255,255,0.22)',
+  textColor = '#fff',
+  fontSize = 14,
+  style,
+  className,
+  children,
+}: HUDButtonProps) {
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [pressed, setPressed] = useState(false)
+
+  const active = (hovered || focused) && !disabled
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => {
+        setHovered(false)
+        setPressed(false)
+      }}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      className={className}
+      style={{
+        fontFamily: 'system-ui, sans-serif',
+        fontSize,
+        color: disabled ? 'rgba(255,255,255,0.4)' : textColor,
+        background: active ? hoverColor : color,
+        border: focused ? '2px solid #4fc3f7' : '2px solid transparent',
+        borderRadius: 6,
+        padding: '8px 16px',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transform: pressed ? 'scale(0.96)' : 'scale(1)',
+        transition: 'background 120ms ease-out, transform 80ms ease-out, border-color 120ms ease-out',
+        userSelect: 'none',
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+// ── Menu ─────────────────────────────────────────────────────────────────────
+
+export interface HUDMenuItem {
+  /** Unique key for this item. Falls back to the label (if a string) or index. */
+  key?: string
+  /** Text shown on the button. */
+  label: ReactNode
+  /** Called when the item is selected (click, or Enter/Space while focused). */
+  onSelect: () => void
+  /** Disables this item. */
+  disabled?: boolean
+}
+
+export interface HUDMenuProps {
+  /** Items to render as buttons, in order. */
+  items: HUDMenuItem[]
+  /** Layout direction. Default 'column'. */
+  direction?: 'row' | 'column'
+  /** Gap between items in CSS pixels. Default 8. */
+  gap?: number
+  /** Additional style for the menu container. */
+  style?: CSSProperties
+  /** Additional CSS class. */
+  className?: string
+}
+
+/**
+ * A declarative list of {@link HUDButton}s for pause/start/settings menus.
+ * Arrow keys (matching `direction`) move focus between items in addition to
+ * the browser's normal Tab order — handy for gamepad/keyboard-only play.
+ *
+ * @example
+ * ```tsx
+ * <HUDZone position="center">
+ *   <HUDMenu
+ *     items={[
+ *       { label: 'Resume', onSelect: resume },
+ *       { label: 'Restart', onSelect: restart },
+ *       { label: 'Quit', onSelect: quit },
+ *     ]}
+ *   />
+ * </HUDZone>
+ * ```
+ */
+export function HUDMenu({ items, direction = 'column', gap = 8, style, className }: HUDMenuProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const nextKey = direction === 'row' ? 'ArrowRight' : 'ArrowDown'
+  const prevKey = direction === 'row' ? 'ArrowLeft' : 'ArrowUp'
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== nextKey && e.key !== prevKey) return
+    const container = containerRef.current
+    if (!container) return
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).filter((b) => !b.disabled)
+    if (buttons.length === 0) return
+    const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
+    const delta = e.key === nextKey ? 1 : -1
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + delta + buttons.length) % buttons.length
+    e.preventDefault()
+    buttons[nextIndex].focus()
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      role="menu"
+      onKeyDown={onKeyDown}
+      className={className}
+      style={{ display: 'flex', flexDirection: direction, gap, ...style }}
+    >
+      {items.map((item, i) => (
+        <HUDButton
+          key={item.key ?? (typeof item.label === 'string' ? item.label : i)}
+          onClick={item.onSelect}
+          disabled={item.disabled}
+        >
+          {item.label}
+        </HUDButton>
+      ))}
     </div>
   )
 }
