@@ -822,6 +822,16 @@ export class RenderSystem implements System {
   private frameTimes: number[] = []
   private lastTimestamp = 0
 
+  // ── Sprite sort scratch buffers ─────────────────────────────────────────
+  // Reused across frames (grow/shrink via .length, never reallocated) to
+  // avoid allocating one wrapper object per visible sprite just to sort by
+  // (layer, z, texture) — this runs every render frame.
+  private readonly _sortIndices: number[] = []
+  private readonly _sortLayers: number[] = []
+  private readonly _sortZs: number[] = []
+  private readonly _sortTexs: string[] = []
+  private readonly _sortedRenderables: EntityId[] = []
+
   // ── Dynamic canvas textures (texSubImage2D optimization) ─────────────────
   private readonly _dynamicCanvases = new Map<
     string,
@@ -1910,30 +1920,37 @@ export class RenderSystem implements System {
     const viewB = camY + halfVH + 32 / zoom
 
     const renderableIds = world.query('Transform', 'Sprite')
-    // Pre-extract sortable fields once per entity. The previous comparator
-    // called world.getComponent twice and getTextureKey twice per
-    // comparison, costing N*log(N) hash lookups + texture-key recomputes
-    // every frame. Now each entity is touched O(1) and the comparator
-    // works on plain numbers / pre-resolved keys.
-    type SortRow = { id: EntityId; sprite: SpriteComponent; layer: number; z: number; tex: string }
-    const renderableRows: SortRow[] = new Array(renderableIds.length)
-    for (let r = 0; r < renderableIds.length; r++) {
+    // Pre-extract sortable fields once per entity into reused scratch
+    // buffers (parallel arrays, indexed by position in `renderableIds`).
+    // The previous comparator called world.getComponent twice and
+    // getTextureKey twice per comparison, costing N*log(N) hash lookups +
+    // texture-key recomputes every frame; using parallel arrays sorted by
+    // index also avoids allocating one wrapper object per sprite per frame.
+    const n = renderableIds.length
+    const sortIndices = this._sortIndices
+    const sortLayers = this._sortLayers
+    const sortZs = this._sortZs
+    const sortTexs = this._sortTexs
+    sortIndices.length = n
+    sortLayers.length = n
+    sortZs.length = n
+    sortTexs.length = n
+    for (let r = 0; r < n; r++) {
+      sortIndices[r] = r
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
-      renderableRows[r] = {
-        id,
-        sprite,
-        layer: this.layers.getOrder(sprite.layer),
-        z: sprite.zIndex,
-        tex: getTextureKey(sprite),
-      }
+      sortLayers[r] = this.layers.getOrder(sprite.layer)
+      sortZs[r] = sprite.zIndex
+      sortTexs[r] = getTextureKey(sprite)
     }
-    renderableRows.sort((a, b) => {
-      if (a.layer !== b.layer) return a.layer - b.layer
-      if (a.z !== b.z) return a.z - b.z
-      return a.tex < b.tex ? -1 : a.tex > b.tex ? 1 : 0
+    sortIndices.sort((a, b) => {
+      if (sortLayers[a] !== sortLayers[b]) return sortLayers[a] - sortLayers[b]
+      if (sortZs[a] !== sortZs[b]) return sortZs[a] - sortZs[b]
+      return sortTexs[a] < sortTexs[b] ? -1 : sortTexs[a] > sortTexs[b] ? 1 : 0
     })
-    const renderables = renderableRows.map((r) => r.id)
+    const renderables = this._sortedRenderables
+    renderables.length = n
+    for (let r = 0; r < n; r++) renderables[r] = renderableIds[sortIndices[r]]
 
     let batchCount = 0
     let batchKey = ''

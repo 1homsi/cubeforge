@@ -312,7 +312,11 @@ export class ECSWorld {
   query(...types: string[]): EntityId[] {
     this.flushDirty()
 
-    const key = types.slice().sort().join('\x00')
+    // `types` is a fresh rest-parameter array owned by this call (never
+    // shared with the caller), so sorting in place is safe — this avoids an
+    // extra array copy on every call, and the single-type case (the common
+    // one — most systems query one component) skips sort+join entirely.
+    const key = types.length === 0 ? '' : types.length === 1 ? types[0] : types.sort().join('\x00')
     const cached = this.queryCache.get(key)
     if (cached) return cached
 

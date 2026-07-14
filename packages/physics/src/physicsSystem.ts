@@ -346,6 +346,10 @@ export class PhysicsSystem implements System {
   private _currentCompoundPairs = new Map<string, [EntityId, EntityId]>()
   private _currentCapsulePairs = new Map<string, [EntityId, EntityId]>()
   private _currentPolygonPairs = new Map<string, [EntityId, EntityId]>()
+  /** Reused across steps instead of `[...staticBox, ...kinematicBox]` every step. */
+  private _nonDynamicScratch: EntityId[] = []
+  /** Reused across steps instead of a 5-way array spread-concat every step. */
+  private _allDynamicsScratch: EntityId[] = []
 
   constructor(
     private gravity: number,
@@ -553,7 +557,10 @@ export class PhysicsSystem implements System {
     }
 
     // All static-like entities for spatial grid (statics + kinematics)
-    const nonDynamic = [...staticBox, ...kinematicBox]
+    const nonDynamic = this._nonDynamicScratch
+    nonDynamic.length = 0
+    for (const id of staticBox) nonDynamic.push(id)
+    for (const id of kinematicBox) nonDynamic.push(id)
 
     // ── Prune dead entity pairs ───────────────────────────────────────────
 
@@ -664,7 +671,13 @@ export class PhysicsSystem implements System {
     // ── Phase 1: Force accumulation + velocity integration ────────────────
 
     // All dynamics: box, circle, capsule, polygon, triangle
-    const allDynamics = [...dynamicBox, ...dynamicCircle, ...capsuleDynamics, ...dynamicPolygon, ...dynamicTriangle]
+    const allDynamics = this._allDynamicsScratch
+    allDynamics.length = 0
+    for (const id of dynamicBox) allDynamics.push(id)
+    for (const id of dynamicCircle) allDynamics.push(id)
+    for (const id of capsuleDynamics) allDynamics.push(id)
+    for (const id of dynamicPolygon) allDynamics.push(id)
+    for (const id of dynamicTriangle) allDynamics.push(id)
 
     for (const id of allDynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
