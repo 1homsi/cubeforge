@@ -14,7 +14,6 @@ export const publishPackagePaths = [
   'packages/input',
   'packages/renderer',
   'packages/physics',
-  'packages/renderer3d',
   'packages/audio',
   'integrations/context',
   'integrations/gameplay',
@@ -181,11 +180,11 @@ async function smoke(version = getVersion()) {
     writeFileSync(
       path.join(consumerDir, 'index.ts'),
       [
-        "import { AudioOcclusion, CharacterController, Game, Game3D, Raycaster, RenderSystem, Room, createInputMap, overlapBox, useCollisionEnter, useSound } from 'cubeforge'",
-        "import type { ContactData, ECSWorld, Game3DProps, NetTransport, RaycastHit, RenderLayer, SoundControls } from 'cubeforge'",
+        "import { CharacterController, Game, RenderSystem, Room, createInputMap, overlapBox, useCollisionEnter, useSound } from 'cubeforge'",
+        "import type { ContactData, ECSWorld, NetTransport, RaycastHit, RenderLayer, SoundControls } from 'cubeforge'",
         '',
-        'type SmokeTypes = [ContactData, ECSWorld, Game3DProps, NetTransport, RaycastHit, RenderLayer, SoundControls]',
-        'const values = [AudioOcclusion, CharacterController, Game, Game3D, Raycaster, RenderSystem, Room, createInputMap, overlapBox, useCollisionEnter, useSound]',
+        'type SmokeTypes = [ContactData, ECSWorld, NetTransport, RaycastHit, RenderLayer, SoundControls]',
+        'const values = [CharacterController, Game, RenderSystem, Room, createInputMap, overlapBox, useCollisionEnter, useSound]',
         'export type { SmokeTypes }',
         'export { values }',
         '',
@@ -212,7 +211,7 @@ async function smoke(version = getVersion()) {
       [
         '--input-type=module',
         '-e',
-        "const m = await import('cubeforge'); for (const key of ['Game','Room','RenderSystem','Game3D','Raycaster']) { if (!m[key]) throw new Error(`missing ${key}`) }",
+        "const m = await import('cubeforge'); for (const key of ['Game','Room','RenderSystem']) { if (!m[key]) throw new Error(`missing ${key}`) }",
       ],
       { cwd: consumerDir, stdio: 'inherit' },
     )

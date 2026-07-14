@@ -54,7 +54,6 @@
     "@cubeforge/input": "workspace:*",
     "@cubeforge/net": "workspace:*",
     "@cubeforge/physics": "workspace:*",
-    "@cubeforge/renderer": "workspace:*",
-    "@cubeforge/renderer3d": "workspace:*"
+    "@cubeforge/renderer": "workspace:*"
   }
 }

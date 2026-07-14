@@ -23,7 +23,6 @@
       "@cubeforge/net": ["packages/net/src/index.ts"],
       "@cubeforge/physics": ["packages/physics/src/index.ts"],
       "@cubeforge/renderer": ["packages/renderer/src/index.ts"],
-      "@cubeforge/renderer3d": ["packages/renderer3d/src/index.ts"],
       "cubeforge": ["integrations/cubeforge/src/index.ts"],
       "cubeforge/advanced": ["integrations/cubeforge/src/advanced.ts"]
     }

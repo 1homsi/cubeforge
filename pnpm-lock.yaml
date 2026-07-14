@@ -102,9 +102,6 @@ importers:
       '@cubeforge/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
-      '@cubeforge/renderer3d':
-        specifier: workspace:*
-        version: link:../../packages/renderer3d
       react:
         specifier: ^19.2.6
         version: 19.2.6
@@ -224,12 +221,6 @@ importers:
         version: link:../core
 
   packages/renderer:
-    dependencies:
-      '@cubeforge/core':
-        specifier: workspace:*
-        version: link:../core
-
-  packages/renderer3d:
     dependencies:
       '@cubeforge/core':
         specifier: workspace:*

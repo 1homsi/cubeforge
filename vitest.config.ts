@@ -11,7 +11,6 @@ const sourceAliases = {
   '@cubeforge/net': new URL('./packages/net/src/index.ts', import.meta.url).pathname,
   '@cubeforge/physics': new URL('./packages/physics/src/index.ts', import.meta.url).pathname,
   '@cubeforge/renderer': new URL('./packages/renderer/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/renderer3d': new URL('./packages/renderer3d/src/index.ts', import.meta.url).pathname,
   cubeforge: new URL('./integrations/cubeforge/src/index.ts', import.meta.url).pathname,
   'cubeforge/advanced': new URL('./integrations/cubeforge/src/advanced.ts', import.meta.url).pathname,
 }
