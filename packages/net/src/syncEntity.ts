@@ -42,6 +42,11 @@ export function syncEntity(config: SyncConfig): {
   // Per-component JSON cache for delta detection — only changed fields are sent.
   const lastSent = new Map<string, string>()
 
+  // Highest applied `seq` from the owner — guards against an out-of-order or
+  // duplicate packet (common over unreliable/unordered WebRTC channels)
+  // overwriting newer state with stale data.
+  let lastAppliedSeq: number | undefined
+
   function buildDeltaPayload(): Record<string, unknown> | null {
     const delta: Record<string, unknown> = { entityId }
     let hasChanges = false
@@ -64,6 +69,11 @@ export function syncEntity(config: SyncConfig): {
     if (msg.type !== SYNC_MSG_TYPE) return
     const payload = msg.payload as Record<string, unknown>
     if (payload.entityId !== entityId) return
+
+    if (msg.seq !== undefined) {
+      if (lastAppliedSeq !== undefined && msg.seq <= lastAppliedSeq) return // stale or duplicate — drop
+      lastAppliedSeq = msg.seq
+    }
 
     for (const compType of components) {
       const incoming = payload[compType]
@@ -102,6 +112,7 @@ export function syncEntity(config: SyncConfig): {
         unsubscribe = null
       }
       lastSent.clear()
+      lastAppliedSeq = undefined
     },
 
     applyRemoteState,

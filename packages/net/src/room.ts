@@ -26,6 +26,9 @@ const PONG_MSG_TYPE = 'room:pong'
 const PEER_JOIN_TYPE = 'peer:join'
 const PEER_LEAVE_TYPE = 'peer:leave'
 
+/** Pending pings older than this are dropped as lost — bounds memory when a pong never arrives. */
+const PING_TIMEOUT_MS = 10_000
+
 /**
  * Room — multiplayer session layer.
  *
@@ -61,6 +64,16 @@ export class Room {
 
     this._transport.onDisconnect(() => {
       this._connected = false
+      this._pendingPings.clear()
+
+      // Peer presence is only known via `peer:join`/`peer:leave` from the
+      // server; once disconnected, stale entries would otherwise linger
+      // until the server re-announces peers after reconnect.
+      if (this.peers.size > 0) {
+        const stalePeers = [...this.peers]
+        this.peers.clear()
+        for (const peerId of stalePeers) this._onPeerLeave?.(peerId)
+      }
     })
 
     this._transport.onMessage((raw: string) => {
@@ -129,8 +142,16 @@ export class Room {
    */
   ping(): void {
     if (!this._connected) return
+
+    // Prune pings whose pong never arrived (e.g. dropped over an unreliable
+    // transport) so `_pendingPings` doesn't grow unbounded.
+    const now = performance.now()
+    for (const [id, sentAt] of this._pendingPings) {
+      if (now - sentAt > PING_TIMEOUT_MS) this._pendingPings.delete(id)
+    }
+
     const id = `${Date.now()}-${Math.random()}`
-    this._pendingPings.set(id, performance.now())
+    this._pendingPings.set(id, now)
     this.send({ type: PING_MSG_TYPE, payload: id })
   }
 

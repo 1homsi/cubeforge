@@ -53,6 +53,9 @@ export interface WebRTCTransport extends BinaryNetTransport {
 
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 
+/** Connection states that mean the peer is no longer reachable. */
+const FAILED_CONNECTION_STATES = new Set(['disconnected', 'failed', 'closed'])
+
 /**
  * createWebRTCTransport — peer-to-peer DataChannel transport via WebRTC.
  *
@@ -112,6 +115,17 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
   // The responding peer receives the data channel via this event.
   pc.addEventListener('datachannel', (event) => {
     setupChannel(event.channel)
+  })
+
+  // The data channel's 'close' event only fires on a graceful shutdown.
+  // ICE failure (dropped Wi-Fi, NAT rebinding, flaky networks) leaves the
+  // channel dangling without ever closing it, so without this listener the
+  // app never learns the peer is gone. `connectionState` rolls up ICE +
+  // DTLS + data-channel status into one signal.
+  pc.addEventListener('connectionstatechange', () => {
+    if (FAILED_CONNECTION_STATES.has(pc.connectionState)) {
+      for (const h of disconnectHandlers) h()
+    }
   })
 
   function setupChannel(ch: RTCDataChannel): void {

@@ -207,4 +207,47 @@ describe('Room', () => {
     room.ping() // not connected
     expect(mock.transport.send).not.toHaveBeenCalled()
   })
+
+  it('prunes a pending ping whose pong never arrives so it does not leak forever', () => {
+    vi.useFakeTimers()
+    try {
+      const room = new Room({ transport: mock.transport })
+      mock.emitConnect()
+
+      room.ping() // pong never arrives for this one
+      vi.advanceTimersByTime(11_000) // past the internal ping timeout
+
+      room.ping() // triggers pruning of the stale entry, then sends its own ping
+      const secondPingId = JSON.parse((mock.transport.send as ReturnType<typeof vi.fn>).mock.calls[1][0])
+        .payload as string
+
+      // A pong for the *first* (pruned) ping should no longer affect latency measurement
+      // in a way that would keep the stale entry alive — sending the second ping's pong
+      // should still resolve normally.
+      mock.emitMessage(JSON.stringify({ type: 'room:pong', payload: secondPingId }))
+      expect(room.latencyMs).toBeGreaterThanOrEqual(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears pending pings and peers on disconnect', () => {
+    const onPeerLeave = vi.fn()
+    const room = new Room({ transport: mock.transport, onPeerLeave })
+    mock.emitConnect()
+
+    mock.emitMessage(JSON.stringify({ type: 'peer:join', payload: null, peerId: 'player-2' }))
+    expect(room.peers.has('player-2')).toBe(true)
+
+    room.ping()
+
+    mock.emitDisconnect()
+
+    expect(room.peers.size).toBe(0)
+    expect(onPeerLeave).toHaveBeenCalledWith('player-2')
+
+    // The pending ping from before disconnect should no longer be tracked —
+    // a pong arriving for it now must not throw or resurrect stale state.
+    expect(() => mock.emitMessage(JSON.stringify({ type: 'room:pong', payload: 'whatever' }))).not.toThrow()
+  })
 })

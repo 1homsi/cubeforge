@@ -241,6 +241,48 @@ describe('syncEntity', () => {
     expect(lastCall.payload.Transform.x).toBe(99)
   })
 
+  it('drops an out-of-order remote packet with a lower seq than the last applied one', () => {
+    const health = { hp: 10 }
+    world.getComponent.mockReturnValue(health)
+    const sync = syncEntity({
+      entityId: 5,
+      components: ['Health'],
+      room: room as Room,
+      owner: false,
+      world: world as never,
+    })
+
+    sync.applyRemoteState({ type: 'entity:state', seq: 3, payload: { entityId: 5, Health: { hp: 30 } } })
+    expect(health.hp).toBe(30)
+
+    sync.applyRemoteState({ type: 'entity:state', seq: 2, payload: { entityId: 5, Health: { hp: 20 } } })
+    expect(health.hp).toBe(30) // stale packet — dropped
+
+    sync.applyRemoteState({ type: 'entity:state', seq: 3, payload: { entityId: 5, Health: { hp: 99 } } })
+    expect(health.hp).toBe(30) // duplicate seq — dropped
+
+    sync.applyRemoteState({ type: 'entity:state', seq: 4, payload: { entityId: 5, Health: { hp: 40 } } })
+    expect(health.hp).toBe(40) // newer packet — applied
+  })
+
+  it('resets the seq ordering guard on stop', () => {
+    const health = { hp: 10 }
+    world.getComponent.mockReturnValue(health)
+    const sync = syncEntity({
+      entityId: 5,
+      components: ['Health'],
+      room: room as Room,
+      owner: false,
+      world: world as never,
+    })
+
+    sync.applyRemoteState({ type: 'entity:state', seq: 5, payload: { entityId: 5, Health: { hp: 50 } } })
+    sync.stop()
+    sync.applyRemoteState({ type: 'entity:state', seq: 1, payload: { entityId: 5, Health: { hp: 15 } } })
+
+    expect(health.hp).toBe(15) // guard cleared — accepted even though seq is lower than before stop
+  })
+
   it('delta sync: clears cache on stop so next start sends full state', () => {
     const transform = { x: 5, y: 5 }
     world.getComponent.mockImplementation((_entityId: number, type: string) => {

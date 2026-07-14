@@ -27,14 +27,21 @@ function createMockDataChannel(handlers: MockDataChannelHandlers = {}): RTCDataC
 interface MockPCHandlers {
   icecandidate?: (event: { candidate: RTCIceCandidate | null }) => void
   datachannel?: (event: { channel: RTCDataChannel }) => void
+  connectionstatechange?: () => void
 }
 
-function createMockPeerConnection(): { pc: RTCPeerConnection; handlers: MockPCHandlers } {
+function createMockPeerConnection(): {
+  pc: RTCPeerConnection
+  handlers: MockPCHandlers
+  setConnectionState: (state: string) => void
+} {
   const handlers: MockPCHandlers = {}
   const pc = {
+    connectionState: 'new' as RTCPeerConnectionState,
     addEventListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       if (event === 'icecandidate') handlers.icecandidate = handler as MockPCHandlers['icecandidate']
       if (event === 'datachannel') handlers.datachannel = handler as MockPCHandlers['datachannel']
+      if (event === 'connectionstatechange') handlers.connectionstatechange = handler as () => void
     }),
     createDataChannel: vi.fn(() => createMockDataChannel()),
     createOffer: vi.fn(async () => ({ type: 'offer', sdp: 'mock-offer-sdp' })),
@@ -44,7 +51,11 @@ function createMockPeerConnection(): { pc: RTCPeerConnection; handlers: MockPCHa
     addIceCandidate: vi.fn(async () => {}),
     close: vi.fn(),
   }
-  return { pc: pc as unknown as RTCPeerConnection, handlers }
+  const setConnectionState = (state: string) => {
+    ;(pc as unknown as { connectionState: string }).connectionState = state
+    handlers.connectionstatechange?.()
+  }
+  return { pc: pc as unknown as RTCPeerConnection, handlers, setConnectionState }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -52,11 +63,13 @@ function createMockPeerConnection(): { pc: RTCPeerConnection; handlers: MockPCHa
 describe('createWebRTCTransport', () => {
   let mockPC: RTCPeerConnection
   let pcHandlers: MockPCHandlers
+  let setPCConnectionState: (state: string) => void
 
   beforeEach(() => {
-    const { pc, handlers } = createMockPeerConnection()
+    const { pc, handlers, setConnectionState } = createMockPeerConnection()
     mockPC = pc
     pcHandlers = handlers
+    setPCConnectionState = setConnectionState
 
     vi.stubGlobal(
       'RTCPeerConnection',
@@ -227,5 +240,36 @@ describe('createWebRTCTransport', () => {
     const transport = createWebRTCTransport({ ordered: true })
     await transport.createOffer()
     expect(pc.createDataChannel).toHaveBeenCalledWith('cubeforge', { ordered: true })
+  })
+
+  it('fires onDisconnect when the connection state becomes "failed" (ICE failure)', () => {
+    const transport = createWebRTCTransport()
+    const handler = vi.fn()
+    transport.onDisconnect(handler)
+
+    setPCConnectionState('failed')
+
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('fires onDisconnect when the connection state becomes "disconnected"', () => {
+    const transport = createWebRTCTransport()
+    const handler = vi.fn()
+    transport.onDisconnect(handler)
+
+    setPCConnectionState('disconnected')
+
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire onDisconnect for benign connection state transitions', () => {
+    const transport = createWebRTCTransport()
+    const handler = vi.fn()
+    transport.onDisconnect(handler)
+
+    setPCConnectionState('connecting')
+    setPCConnectionState('connected')
+
+    expect(handler).not.toHaveBeenCalled()
   })
 })
