@@ -1,6 +1,7 @@
 export * from './keyboard'
 export * from './mouse'
 export * from './touch'
+export * from './gamepad'
 export * from './inputManager'
 export * from './inputMap'
 export * from './inputContext'

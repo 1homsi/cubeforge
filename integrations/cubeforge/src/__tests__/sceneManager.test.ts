@@ -69,3 +69,33 @@ describe('useSceneManager', () => {
     expect(result.current.has('pause')).toBe(false)
   })
 })
+
+describe('useSceneManager pause semantics', () => {
+  it('pauses scenes below a pausesBelow overlay', () => {
+    const { result } = renderHook(() =>
+      useSceneManager('gameplay', {
+        gameplay: { name: 'gameplay' },
+        pause: { name: 'pause', pausesBelow: true },
+      }),
+    )
+    expect(result.current.isPaused('gameplay')).toBe(false)
+
+    act(() => result.current.push('pause'))
+    expect(result.current.isPaused('gameplay')).toBe(true)
+    expect(result.current.isPaused('pause')).toBe(false) // top is never paused
+    expect(result.current.current).toBe('pause')
+  })
+
+  it('unregistered scenes are never paused', () => {
+    const { result } = renderHook(() => useSceneManager('a', { pause: { name: 'pause', pausesBelow: true } }))
+    act(() => result.current.push('unknown'))
+    expect(result.current.isPaused('a')).toBe(false)
+  })
+
+  it('defaults to checking the active scene', () => {
+    const { result } = renderHook(() => useSceneManager('game', { modal: { name: 'modal', pausesBelow: true } }))
+    act(() => result.current.push('modal'))
+    // active scene itself: not paused
+    expect(result.current.isPaused()).toBe(false)
+  })
+})

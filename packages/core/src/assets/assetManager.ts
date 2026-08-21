@@ -4,15 +4,23 @@ export interface AssetProgress {
   percent: number
 }
 
+export interface AssetLoadError {
+  src: string
+  kind: 'image' | 'audio'
+  error: unknown
+}
+
 export class AssetManager {
   private images = new Map<string, HTMLImageElement>()
   private imagePromises = new Map<string, Promise<HTMLImageElement>>()
   private audio = new Map<string, AudioBuffer>()
+  private audioPromises = new Map<string, Promise<AudioBuffer>>()
   private audioCtx: AudioContext | null = null
   private activeSources = new Map<string, Set<AudioBufferSourceNode>>()
   private _loaded = 0
   private _total = 0
   private _progressListeners = new Set<(p: AssetProgress) => void>()
+  private _errors: AssetLoadError[] = []
 
   /** Base URL prefix applied to all asset paths starting with '/'. Set by Game component. */
   baseURL = ''
@@ -52,6 +60,15 @@ export class AssetManager {
     return () => this._progressListeners.delete(cb)
   }
 
+  /**
+   * Assets that failed to load so far (deduped by src+kind). Loading errors
+   * also reject the individual load promise — this list is for surfacing
+   * problems after a preload completes (e.g. on a loading screen).
+   */
+  getErrors(): readonly AssetLoadError[] {
+    return this._errors
+  }
+
   async loadImage(src: string): Promise<HTMLImageElement> {
     const resolved = this.resolve(src)
     if (this.imagePromises.has(resolved)) return this.imagePromises.get(resolved)!
@@ -67,6 +84,7 @@ export class AssetManager {
         })
       } catch (err) {
         console.warn(`[Cubeforge] Failed to load image: ${resolved}`)
+        this._errors.push({ src: resolved, kind: 'image', error: err })
         throw err
       } finally {
         this._loaded++
@@ -96,17 +114,32 @@ export class AssetManager {
   async loadAudio(src: string): Promise<AudioBuffer> {
     const resolved = this.resolve(src)
     if (this.audio.has(resolved)) return this.audio.get(resolved)!
+    if (this.audioPromises.has(resolved)) return this.audioPromises.get(resolved)!
+    this._total++
+    this.emitProgress()
     const ctx = this.getAudioContext()
-    try {
-      const response = await fetch(resolved)
-      const arrayBuffer = await response.arrayBuffer()
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-      this.audio.set(resolved, audioBuffer)
-      return audioBuffer
-    } catch (err) {
-      console.warn(`[Cubeforge] Failed to load audio: ${resolved}`)
-      throw err
-    }
+    const promise = (async () => {
+      try {
+        const response = await fetch(resolved)
+        if (response.ok === false) throw new Error(`HTTP ${response.status} for ${resolved}`)
+        const arrayBuffer = await response.arrayBuffer()
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+        this.audio.set(resolved, audioBuffer)
+        return audioBuffer
+      } catch (err) {
+        console.warn(`[Cubeforge] Failed to load audio: ${resolved}`)
+        this._errors.push({ src: resolved, kind: 'audio', error: err })
+        throw err
+      } finally {
+        this._loaded++
+        this.emitProgress()
+        this.audioPromises.delete(resolved)
+      }
+    })()
+    // Keep settled promises around only while in flight so failures can be
+    // retried; successful buffers are served from the audio cache above.
+    void promise.catch(() => {})
+    return promise
   }
 
   private trackSource(src: string, source: AudioBufferSourceNode): void {
@@ -174,6 +207,28 @@ export class AssetManager {
       this.stopAudio(src)
     }
     this.activeSources.clear()
+  }
+
+  /**
+   * Release everything: stops playback, closes the AudioContext, clears all
+   * caches and listeners. The manager must not be used afterwards.
+   */
+  dispose(): void {
+    this.stopAll()
+    try {
+      this.audioCtx?.close()
+    } catch {
+      /* context already closed */
+    }
+    this.audioCtx = null
+    this.images.clear()
+    this.imagePromises.clear()
+    this.audio.clear()
+    this.audioPromises.clear()
+    this._progressListeners.clear()
+    this._errors.length = 0
+    this._loaded = 0
+    this._total = 0
   }
 
   preloadImages(srcs: string[]): Promise<HTMLImageElement[]> {

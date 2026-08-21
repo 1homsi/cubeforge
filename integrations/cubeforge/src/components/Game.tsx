@@ -184,6 +184,11 @@ export function Game({
         mode,
         // During hit-pause, re-render the last frame so the screen isn't blank
         onRender: () => renderSystem.update(ecs, 0),
+        // Forward tab visibility changes onto the game's event bus so
+        // scripts/plugins can suspend audio, netcode, timers, etc.
+        onVisibilityChange: (visible) => {
+          events.emit(visible ? 'resume' : 'pause', { reason: 'visibility' })
+        },
       },
     )
 

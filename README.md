@@ -136,13 +136,35 @@ Most browser game engines are imperative — you create objects, call methods, a
 
 ---
 
+## Gamepad & lifecycle
+
+Gamepad buttons/sticks flow through the same string-key API as the keyboard — no special cases:
+
+```tsx
+function PlayerScript() {
+  return (
+    <Script update={(id, world, input, dt) => {
+      const t = world.getComponent(id, 'Transform')!
+      // Analog stick blended with keyboard arrows:
+      t.x += (input.isDown('ArrowRight') - input.isDown('ArrowLeft')
+        + input.gamepad!.getStick('left', 'x')) * 200 * dt
+      if (input.isPressed('gamepad:A')) jump()
+    }} />
+  )
+}
+```
+
+Or with named actions via `createInputMap` (`stick: 'leftx'` blends analog + keys automatically).
+The loop auto-pauses when the tab is hidden and resumes when it's visible again; listen via
+`engine.events.on('pause' | 'resume', ...)` to suspend audio/netcode yourself.
+
 ## Packages
 
 | Package | Description |
 |---|---|
 | `cubeforge` | Components and hooks — the main public API |
 | `@cubeforge/core` | ECS, game loop, events, assets, tween, pathfinding, steering, deterministic RNG |
-| `@cubeforge/input` | Keyboard, mouse, gamepad, input contexts, player input, recording/playback |
+| `@cubeforge/input` | Keyboard, mouse, touch, gamepad (analog sticks, haptics), input contexts, player input, recording/playback |
 | `@cubeforge/renderer` | Camera, sprites, animations, particles, trails, parallax |
 | `@cubeforge/physics` | AABB collision, rigid bodies, kinematic mode, one-way platforms, fixed 60 Hz, spatial broadphase |
 | `@cubeforge/audio` | Web Audio API — useSound, volume groups, fade, duck, crossfade |

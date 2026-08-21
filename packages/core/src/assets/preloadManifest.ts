@@ -1,4 +1,5 @@
 import type { AssetManager } from './assetManager'
+import type { AssetLoadError } from './assetManager'
 
 export interface PreloadManifest {
   /** Image URLs to preload */
@@ -9,26 +10,34 @@ export interface PreloadManifest {
   onProgress?: (percent: number) => void
 }
 
+export interface PreloadResult {
+  /** Assets that failed to load. Empty when everything loaded. */
+  failures: AssetLoadError[]
+}
+
 /**
  * Preloads a batch of assets and resolves when all are done (or failed).
+ * Failed assets do not reject — inspect `result.failures` to surface
+ * problems on a loading screen.
  *
  * @example
  * ```ts
- * await preloadManifest({
+ * const { failures } = await preloadManifest({
  *   images: ['/hero.png', '/tiles.png'],
  *   audio:  ['/jump.wav', '/music.ogg'],
  *   onProgress: (pct) => console.log(`${Math.round(pct * 100)}%`),
  * }, assets)
+ * if (failures.length) console.warn('Missing assets:', failures.map(f => f.src))
  * ```
  */
-export async function preloadManifest(manifest: PreloadManifest, assets: AssetManager): Promise<void> {
+export async function preloadManifest(manifest: PreloadManifest, assets: AssetManager): Promise<PreloadResult> {
   const imageUrls = manifest.images ?? []
   const audioUrls = manifest.audio ?? []
   const total = imageUrls.length + audioUrls.length
 
   if (total === 0) {
     manifest.onProgress?.(1)
-    return
+    return { failures: [] }
   }
 
   let done = 0
@@ -41,4 +50,9 @@ export async function preloadManifest(manifest: PreloadManifest, assets: AssetMa
   const audioLoads = audioUrls.map((src) => assets.loadAudio(src).then(tick, tick))
 
   await Promise.allSettled([...imageLoads, ...audioLoads])
+
+  // AssetManager records every failure; filter to the ones from this batch.
+  const batchSrcs = new Set([...imageUrls, ...audioUrls])
+  const failures = assets.getErrors().filter((e) => batchSrcs.has(e.src))
+  return { failures }
 }

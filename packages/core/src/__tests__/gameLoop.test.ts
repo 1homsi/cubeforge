@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { GameLoop } from '../loop/gameLoop'
 
 // Mock browser globals required by GameLoop
@@ -20,6 +20,29 @@ globalThis.cancelAnimationFrame = mockCaf
 let _now = 0
 // @ts-ignore
 globalThis.performance = { now: () => _now }
+
+// Mock document.visibilitychange plumbing for the auto-pause lifecycle
+type VisListener = (ev: unknown) => void
+let visListeners: VisListener[] = []
+let hidden = false
+// @ts-ignore
+globalThis.document = {
+  get hidden() {
+    return hidden
+  },
+  addEventListener(_: string, cb: VisListener) {
+    visListeners.push(cb)
+  },
+  removeEventListener(_: string, cb: VisListener) {
+    visListeners = visListeners.filter((l) => l !== cb)
+  },
+}
+
+/** Simulate the tab being hidden or shown */
+function setTabHidden(value: boolean): void {
+  hidden = value
+  for (const l of [...visListeners]) l({})
+}
 
 /** Simulate one rAF frame at the given timestamp */
 function fireFrame(time: number): void {
@@ -335,6 +358,64 @@ describe('GameLoop', () => {
       // onRender was called during the frozen frames
       expect(renderCalls.length).toBeGreaterThan(0)
       ondemand.stop()
+    })
+  })
+
+  describe('visibility lifecycle', () => {
+    it('auto-pauses when the tab is hidden and resumes when visible', () => {
+      const loop = new GameLoop(vi.fn())
+      loop.start()
+      expect(loop.isPaused).toBe(false)
+
+      setTabHidden(true)
+      expect(loop.isPaused).toBe(true)
+      expect(loop.isAutoPaused).toBe(true)
+
+      setTabHidden(false)
+      expect(loop.isPaused).toBe(false)
+      expect(loop.isAutoPaused).toBe(false)
+
+      loop.stop()
+    })
+
+    it('fires onVisibilityChange before pausing', () => {
+      const calls: boolean[] = []
+      const loop = new GameLoop(vi.fn(), { onVisibilityChange: (v) => calls.push(v), autoPauseOnHidden: false })
+      loop.start()
+
+      setTabHidden(true)
+      setTabHidden(false)
+
+      expect(calls).toEqual([false, true])
+      expect(loop.isPaused).toBe(false) // auto-pause disabled
+
+      loop.stop()
+    })
+
+    it('respects manual pause across visibility changes', () => {
+      const loop = new GameLoop(vi.fn())
+      loop.start()
+      loop.pause()
+
+      // Hidden while manually paused → no auto-pause marker
+      setTabHidden(true)
+      expect(loop.isAutoPaused).toBe(false)
+
+      // Shown again → stays paused (user paused intentionally)
+      setTabHidden(false)
+      expect(loop.isPaused).toBe(true)
+
+      loop.stop()
+    })
+
+    it('does not double-resume after stop', () => {
+      const loop = new GameLoop(vi.fn())
+      loop.start()
+      setTabHidden(true)
+      loop.stop()
+      setTabHidden(false)
+      expect(loop.isRunning).toBe(false)
+      expect(loop.isAutoPaused).toBe(false)
     })
   })
 })

@@ -1,9 +1,13 @@
 import type { System, ECSWorld } from '../ecs/world'
 import type { ScriptComponent } from '../components/script'
 
+/**
+ * Runs every Script component's update callback each frame. The host passes
+ * its input object (structurally a {@link ScriptInput}); it is forwarded to
+ * scripts untouched.
+ */
 export class ScriptSystem implements System {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly input: any) {}
+  constructor(private readonly input: unknown) {}
 
   update(world: ECSWorld, dt: number): void {
     const entities = world.query('Script')

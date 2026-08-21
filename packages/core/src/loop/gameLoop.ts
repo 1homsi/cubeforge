@@ -6,6 +6,19 @@ export interface GameLoopOptions {
   /** Called every frame even during hit-pause, so the last frame stays rendered. */
   onRender?: (dt: number) => void
   /**
+   * Called when the page's visibility changes (tab hidden/shown). Fires
+   * before any auto-pause takes effect. Use it to suspend audio, netcode,
+   * or timers that shouldn't run in a background tab.
+   */
+  onVisibilityChange?: (visible: boolean) => void
+  /**
+   * Automatically pause the loop when the tab is hidden and resume when it
+   * becomes visible again (default true in realtime mode). Manual pause()
+   * calls made while hidden are respected — auto-resume only happens if the
+   * loop was auto-paused.
+   */
+  autoPauseOnHidden?: boolean
+  /**
    * Loop mode (default 'realtime'):
    * - 'realtime' — runs continuously at the browser's refresh rate. Best for action games.
    * - 'onDemand' — sleeps until markDirty() is called, then runs exactly one frame.
@@ -23,6 +36,10 @@ export class GameLoop {
   private hitPauseTimer = 0
   private readonly fixedDt: number | undefined
   private readonly onRender: ((dt: number) => void) | undefined
+  private readonly onVisibilityChange: ((visible: boolean) => void) | undefined
+  private readonly autoPauseOnHidden: boolean
+  private autoPaused = false
+  private visibilityHooked = false
   private readonly mode: GameLoopMode
   private dirtyScheduled = false
 
@@ -32,6 +49,9 @@ export class GameLoop {
   ) {
     this.fixedDt = options?.fixedDt
     this.onRender = options?.onRender
+    this.onVisibilityChange = options?.onVisibilityChange
+    // onDemand loops are already event-driven — auto-pausing adds nothing.
+    this.autoPauseOnHidden = options?.autoPauseOnHidden ?? options?.mode !== 'onDemand'
     this.mode = options?.mode ?? 'realtime'
   }
 
@@ -59,6 +79,7 @@ export class GameLoop {
   start(): void {
     if (this.running) return
     this.running = true
+    this.hookVisibility()
     this.paused = false
     this.lastTime = performance.now()
     if (this.mode === 'realtime') {
@@ -72,8 +93,10 @@ export class GameLoop {
 
   stop(): void {
     this.running = false
+    this.autoPaused = false
     this.dirtyScheduled = false
     cancelAnimationFrame(this.rafId)
+    this.unhookVisibility()
   }
 
   pause(): void {
@@ -87,6 +110,7 @@ export class GameLoop {
   resume(): void {
     if (!this.paused) return
     this.paused = false
+    this.autoPaused = false
     this.running = true
     this.lastTime = performance.now()
     if (this.mode === 'realtime') {
@@ -106,8 +130,42 @@ export class GameLoop {
     return this.paused
   }
 
+  /** True when the loop is paused because the tab was hidden. */
+  get isAutoPaused(): boolean {
+    return this.autoPaused
+  }
+
   get isOnDemand(): boolean {
     return this.mode === 'onDemand'
+  }
+
+  // ── Visibility lifecycle ────────────────────────────────────────────────
+
+  private onVisibility = (): void => {
+    const visible = typeof document === 'undefined' || !document.hidden
+    this.onVisibilityChange?.(visible)
+    if (!this.autoPauseOnHidden) return
+    if (!visible) {
+      if (this.running && !this.paused && !this.autoPaused) {
+        this.autoPaused = true
+        this.pause()
+      }
+    } else if (this.autoPaused) {
+      this.autoPaused = false
+      this.resume()
+    }
+  }
+
+  private hookVisibility(): void {
+    if (this.visibilityHooked || typeof document === 'undefined') return
+    document.addEventListener('visibilitychange', this.onVisibility)
+    this.visibilityHooked = true
+  }
+
+  private unhookVisibility(): void {
+    if (!this.visibilityHooked) return
+    document.removeEventListener('visibilitychange', this.onVisibility)
+    this.visibilityHooked = false
   }
 
   private frame = (time: number): void => {
