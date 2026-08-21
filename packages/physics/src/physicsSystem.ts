@@ -342,8 +342,12 @@ function sweepAABB(aCx: number, aCy: number, aHw: number, aHh: number, dx: numbe
 
 // ── Contact pair tracking ───────────────────────────────────────────────────
 
-function pairKey(a: EntityId, b: EntityId): string {
-  return a < b ? `${a}:${b}` : `${b}:${a}`
+// Packed numeric pair key — canonical order (min first), exact for entity
+// IDs < 2^21 (~2M, far beyond practical worlds). Zero string allocation per
+// contact pair per frame.
+const PAIR_MUL = 0x200000
+function pairKey(a: EntityId, b: EntityId): number {
+  return a < b ? a * PAIR_MUL + b : b * PAIR_MUL + a
 }
 
 /** Shared immutable placeholder for entities excluded from spatial pairing. */
@@ -357,18 +361,18 @@ export class PhysicsSystem implements System {
   private readonly config: PhysicsConfig
 
   // Contact event tracking
-  private activeTriggerPairs = new Map<string, [EntityId, EntityId]>()
-  private activeCollisionPairs = new Map<string, [EntityId, EntityId]>()
-  private activeCirclePairs = new Map<string, [EntityId, EntityId]>()
-  private activeCompoundPairs = new Map<string, [EntityId, EntityId]>()
-  private activeCapsulePairs = new Map<string, [EntityId, EntityId]>()
-  private activePolygonPairs = new Map<string, [EntityId, EntityId]>()
+  private activeTriggerPairs = new Map<number, [EntityId, EntityId]>()
+  private activeCollisionPairs = new Map<number, [EntityId, EntityId]>()
+  private activeCirclePairs = new Map<number, [EntityId, EntityId]>()
+  private activeCompoundPairs = new Map<number, [EntityId, EntityId]>()
+  private activeCapsulePairs = new Map<number, [EntityId, EntityId]>()
+  private activePolygonPairs = new Map<number, [EntityId, EntityId]>()
 
   // Platform carry tracking
   private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
 
   // Manifold cache for warm starting
-  private manifoldCache = new Map<string, ContactManifold>()
+  private manifoldCache = new Map<number, ContactManifold>()
 
   // BVH cache for TriMesh colliders
   private bvhCache = new Map<number, BVH>()
@@ -390,10 +394,10 @@ export class PhysicsSystem implements System {
   private _staticDelta = new Map<EntityId, { dx: number; dy: number }>()
   private _preStepPos = new Map<EntityId, { x: number; y: number }>()
   private _spatialGrid = new Map<number, EntityId[]>()
-  private _jointExcludedPairs = new Set<string>()
+  private _jointExcludedPairs = new Set<number>()
   private _solverBodies = new Map<number, SolverBody>()
-  private _triggerNormals = new Map<string, { nx: number; ny: number }>()
-  private _circleNormals = new Map<string, { nx: number; ny: number }>()
+  private _triggerNormals = new Map<number, { nx: number; ny: number }>()
+  private _circleNormals = new Map<number, { nx: number; ny: number }>()
   /** Shared scratch for per-body "checked" neighbor dedup; cleared per iteration. */
   private _checkedScratch = new Set<EntityId>()
   /** Scratch grid + per-entity cache reused by `forEachSpatialCandidatePair`. */
@@ -404,12 +408,12 @@ export class PhysicsSystem implements System {
   private _cellX1: number[] = []
   private _cellY0: number[] = []
   private _cellY1: number[] = []
-  private _currentCollisionPairs = new Map<string, [EntityId, EntityId]>()
-  private _currentTriggerPairs = new Map<string, [EntityId, EntityId]>()
-  private _currentCirclePairs = new Map<string, [EntityId, EntityId]>()
-  private _currentCompoundPairs = new Map<string, [EntityId, EntityId]>()
-  private _currentCapsulePairs = new Map<string, [EntityId, EntityId]>()
-  private _currentPolygonPairs = new Map<string, [EntityId, EntityId]>()
+  private _currentCollisionPairs = new Map<number, [EntityId, EntityId]>()
+  private _currentTriggerPairs = new Map<number, [EntityId, EntityId]>()
+  private _currentCirclePairs = new Map<number, [EntityId, EntityId]>()
+  private _currentCompoundPairs = new Map<number, [EntityId, EntityId]>()
+  private _currentCapsulePairs = new Map<number, [EntityId, EntityId]>()
+  private _currentPolygonPairs = new Map<number, [EntityId, EntityId]>()
   /** Reused across steps instead of `[...staticBox, ...kinematicBox]` every step. */
   private _nonDynamicScratch: EntityId[] = []
   /** Reused across steps instead of a 5-way array spread-concat every step. */
@@ -538,7 +542,11 @@ export class PhysicsSystem implements System {
     const checked = this._checkedScratch
     for (let i = 0; i < n; i++) {
       if (c0[i] > c1[i]) continue
-      checked.clear()
+      // Single-cell entities cannot see the same neighbour twice, so the
+      // dedup set is skipped entirely — the common case for bodies smaller
+      // than one cell.
+      const singleCell = c0[i] === c1[i] && c2[i] === c3[i]
+      if (!singleCell) checked.clear()
       for (let x = c0[i]; x <= c1[i]; x++) {
         for (let y = c2[i]; y <= c3[i]; y++) {
           const bucket = grid.get(((x + 32768) << 16) | (y + 32768))
@@ -546,8 +554,8 @@ export class PhysicsSystem implements System {
           for (const j of bucket) {
             if (j <= i) continue
             const idB = ids[j]
-            if (checked.has(idB)) continue
-            checked.add(idB)
+            if (!singleCell && checked.has(idB)) continue
+            if (!singleCell) checked.add(idB)
             cb(ids[i], idB)
           }
         }
@@ -599,20 +607,23 @@ export class PhysicsSystem implements System {
       const idA = idsA[i]
       const a = getBoundsA(idA)
       if (!a) continue
-      checked.clear()
       const CELL = 128
       const x0 = Math.floor((a.cx - a.hw) / CELL)
       const x1 = Math.floor((a.cx + a.hw) / CELL)
       const y0 = Math.floor((a.cy - a.hh) / CELL)
       const y1 = Math.floor((a.cy + a.hh) / CELL)
+      // Single-cell A cannot encounter the same B twice — skip dedup.
+      const singleCell = x0 === x1 && y0 === y1
+      if (!singleCell) checked.clear()
       for (let x = x0; x <= x1; x++) {
         for (let y = y0; y <= y1; y++) {
           const bucket = grid.get(((x + 32768) << 16) | (y + 32768))
           if (!bucket) continue
           for (const j of bucket) {
             const idB = idsB[j]
-            if (idB === idA || checked.has(idB)) continue
-            checked.add(idB)
+            if (idB === idA) continue
+            if (!singleCell && checked.has(idB)) continue
+            if (!singleCell) checked.add(idB)
             cb(idA, idB)
           }
         }
@@ -1010,7 +1021,7 @@ export class PhysicsSystem implements System {
       const j = world.getComponent<JointComponent>(jid, 'Joint')!
       if (!j.enabled || j.broken) continue
       if (!j.contactsEnabled) {
-        const ka = j.entityA < j.entityB ? `${j.entityA}:${j.entityB}` : `${j.entityB}:${j.entityA}`
+        const ka = pairKey(j.entityA, j.entityB)
         jointExcludedPairs.add(ka)
       }
     }
@@ -2902,7 +2913,7 @@ export class PhysicsSystem implements System {
     if (jointExcludedPairs.size > 0) {
       for (let i = manifolds.length - 1; i >= 0; i--) {
         const m = manifolds[i]
-        const ka = m.entityA < m.entityB ? `${m.entityA}:${m.entityB}` : `${m.entityB}:${m.entityA}`
+        const ka = pairKey(m.entityA, m.entityB)
         if (jointExcludedPairs.has(ka)) {
           manifolds.splice(i, 1)
         }
