@@ -45,5 +45,8 @@ jobs:
         run: |
           while IFS= read -r package_dir; do
             echo "Publishing ${package_dir}"
-            (cd "${package_dir}" && npx --yes npm@latest publish --provenance --access public --no-git-checks)
+            # npm pinned to v10: npm 11 removed the --no-git-checks CLI flag
+            # (EUNKNOWNCONFIG), which this pipeline relies on because the
+            # prepare step intentionally leaves package.json modified.
+            (cd "${package_dir}" && npx --yes npm@10 publish --provenance --access public --no-git-checks)
           done < <(node scripts/publish-packages.mjs list-paths)
