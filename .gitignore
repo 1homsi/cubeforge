@@ -6,3 +6,4 @@ coverage/
 *.tsbuildinfo
 bun.lock
 examples/
+phys.cpuprofile
