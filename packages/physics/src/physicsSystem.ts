@@ -489,34 +489,15 @@ export class PhysicsSystem implements System {
     grid.clear()
     const bounds = this._pairBoundsScratch
     bounds.length = n
-    // Cell ranges per entity as (x0, x1, y0, y1) in parallel arrays —
-    // avoids allocating a cells array per body per scan.
-    const c0 = this._cellX0
-    const c1 = this._cellX1
-    const c2 = this._cellY0
-    const c3 = this._cellY1
-    c0.length = n
-    c1.length = n
-    c2.length = n
-    c3.length = n
-
     for (let idx = 0; idx < n; idx++) {
       const b = getBounds(ids[idx])
       bounds[idx] = b
-      if (!b) {
-        c0[idx] = 1
-        c1[idx] = 0 // empty range → no cells
-        continue
-      }
+      if (!b) continue
       const CELL = 128
       const x0 = Math.floor((b.cx - b.hw) / CELL)
       const x1 = Math.floor((b.cx + b.hw) / CELL)
       const y0 = Math.floor((b.cy - b.hh) / CELL)
       const y1 = Math.floor((b.cy + b.hh) / CELL)
-      c0[idx] = x0
-      c1[idx] = x1
-      c2[idx] = y0
-      c3[idx] = y1
       for (let x = x0; x <= x1; x++) {
         for (let y = y0; y <= y1; y++) {
           const cell = ((x + 32768) << 16) | (y + 32768)
@@ -528,6 +509,30 @@ export class PhysicsSystem implements System {
           bucket.push(idx)
         }
       }
+    }
+
+    // Cell ranges per entity as (x0, x1, y0, y1) in parallel arrays —
+    // avoids allocating a cells array per body per scan.
+    const c0 = this._cellX0
+    const c1 = this._cellX1
+    const c2 = this._cellY0
+    const c3 = this._cellY1
+    c0.length = n
+    c1.length = n
+    c2.length = n
+    c3.length = n
+    const CELL = 128
+    for (let idx = 0; idx < n; idx++) {
+      const b = bounds[idx]
+      if (!b) {
+        c0[idx] = 1
+        c1[idx] = 0 // empty range → no cells
+        continue
+      }
+      c0[idx] = Math.floor((b.cx - b.hw) / CELL)
+      c1[idx] = Math.floor((b.cx + b.hw) / CELL)
+      c2[idx] = Math.floor((b.cy - b.hh) / CELL)
+      c3[idx] = Math.floor((b.cy + b.hh) / CELL)
     }
 
     const checked = this._checkedScratch

@@ -71,7 +71,7 @@ const frames = 240
   for (let f = 0; f < 30; f++) phys.update(world, 1 / 60)
 }
 let best = Infinity
-for (let r = 0; r < 3; r++) {
+for (let r = 0; r < 9; r++) {
   const { world, phys } = buildWorld()
   const t0 = performance.now()
   for (let f = 0; f < frames; f++) phys.update(world, 1 / 60)
