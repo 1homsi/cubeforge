@@ -1,5 +1,7 @@
 export type EntityId = number
 
+export type EntityTypeId = number
+
 export interface Component {
   readonly type: string
 }
@@ -56,6 +58,22 @@ export function applyDeltaSnapshot(baseline: WorldSnapshot, delta: DeltaSnapshot
   }
 
   return { nextId: delta.nextId, rngState: delta.rngState, entities }
+}
+
+// ── Column ────────────────────────────────────────────────────────────────────
+// One component type's storage: a packed array of component objects plus the
+// sparse/owner indirections that keep every operation O(1).
+//
+//   dense[i]       — the i-th live component of this type
+//   ownerSlot[i]   — entity slot owning dense[i]
+//   sparse[slot]   — index of that entity's component in dense, or -1
+//
+interface Column {
+  dense: Component[]
+  ownerSlot: number[]
+  sparse: Int32Array
+  /** Interned type name — avoids reverse lookups when marking dirty. */
+  name: string
 }
 
 // ── Archetype ─────────────────────────────────────────────────────────────────
@@ -130,8 +148,20 @@ function _componentsChanged(a: Component[], b: Component[]): boolean {
 export class ECSWorld {
   private nextId = 0
 
-  // Secondary index: O(1) single-entity component lookup
-  private componentIndex = new Map<EntityId, Map<string, Component>>()
+  // ── Dense columnar component storage ────────────────────────────────────────
+  //
+  // Components live in per-type dense arrays ("columns") instead of a
+  // Map<EntityId, Map<string, Component>>. Type strings are interned to small
+  // integer IDs; entities are packed into slots (swap-remove on destroy keeps
+  // slots dense). A lookup is one string-keyed map probe for the type ID plus
+  // O(1) integer array reads — no nested hashing, no boxed map entries.
+  private typeIds = new Map<string, number>()
+  private columns: Column[] = []
+
+  // EntityId ↔ packed slot mapping. Slots are always [0, liveCount).
+  private slotOfId = new Int32Array(1024).fill(-1)
+  private idOfSlot = new Int32Array(1024).fill(-1)
+  private liveCount = 0
 
   // Seeded RNG (LCG) for deterministic mode
   private _rngState = 0
@@ -143,7 +173,7 @@ export class ECSWorld {
     loadImage(src: string): Promise<HTMLImageElement>
   }
 
-  // Primary storage: archetypes keyed by sorted type string
+  // Primary index: archetypes keyed by sorted type string
   private archetypes = new Map<string, Archetype>()
 
   // Reverse index: component type → archetypes containing it. Lets query()
@@ -174,6 +204,62 @@ export class ECSWorld {
 
   // Reused TextEncoder for binary snapshots (construction is expensive).
   private _encoder: TextEncoder | undefined
+
+  // Direct-mapped memo for string → column lookups. System loops fetch the
+  // same few type names millions of times; a pointer-compare hit avoids the
+  // Map hash entirely. Indexed by (length, first char) — collisions fall
+  // through to the real map after an identity check.
+  private _memoKey: (string | undefined)[] = new Array(8)
+  private _memoCol: (Column | undefined)[] = new Array(8)
+
+  /** Resolve a type name to its column without hashing when warm. */
+  private colByName(type: string): Column | undefined {
+    const idx = ((type.length * 31 + type.charCodeAt(0)) & 7) as number
+    if (this._memoKey[idx] === type) return this._memoCol[idx]
+    const tid = this.typeIds.get(type)
+    if (tid === undefined) return undefined
+    const col = this.columns[tid]
+    this._memoKey[idx] = type
+    this._memoCol[idx] = col
+    return col
+  }
+
+  // ── Columnar storage internals ──────────────────────────────────────────────
+
+  /** Intern a component type string to its column, creating it on first use. */
+  private internType(type: string): number {
+    let tid = this.typeIds.get(type)
+    if (tid === undefined) {
+      tid = this.columns.length
+      this.typeIds.set(type, tid)
+      const sparse = new Int32Array(this.slotOfId.length).fill(-1)
+      this.columns.push({ dense: [], ownerSlot: [], sparse, name: type })
+    }
+    return tid
+  }
+
+  /** Grow the id↔slot tables (and every column's sparse view) to fit `id`. */
+  private ensureCapacity(id: number): void {
+    if (id < this.slotOfId.length) return
+    let cap = this.slotOfId.length
+    while (cap <= id) cap *= 2
+    const slots = new Int32Array(cap).fill(-1)
+    slots.set(this.slotOfId)
+    this.slotOfId = slots
+    const ids = new Int32Array(cap).fill(-1)
+    ids.set(this.idOfSlot)
+    this.idOfSlot = ids
+    for (const col of this.columns) {
+      const sparse = new Int32Array(cap).fill(-1)
+      sparse.set(col.sparse)
+      col.sparse = sparse
+    }
+  }
+
+  /** Slot of a live entity, or -1 / undefined-safe access for out-of-range ids. */
+  private slotOf(id: EntityId): number {
+    return id >= 0 && id < this.slotOfId.length ? this.slotOfId[id] : -1
+  }
 
   // ── Internal helpers ────────────────────────────────────────────────────────
 
@@ -265,21 +351,15 @@ export class ECSWorld {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  // Freelist of recycled per-entity component maps — avoids allocating a
-  // fresh Map on every createEntity (spawn-heavy games churn thousands).
-  private _compMapPool: Map<string, Component>[] = []
-
   createEntity(): EntityId {
     const id = this.nextId++
-    const pooled = this._compMapPool.pop()
-    if (pooled) {
-      pooled.clear()
-      this.componentIndex.set(id, pooled)
-    } else {
-      this.componentIndex.set(id, new Map())
-    }
-    // New entity starts in the empty archetype. It has no components, so no
-    // component-typed query can match it — only the zero-arg query ('' key)
+    this.ensureCapacity(id)
+    // Slots stay packed [0, liveCount) because destroy swap-removes them,
+    // so a new entity always takes the next slot — no free list needed.
+    const slot = this.liveCount++
+    this.slotOfId[id] = slot
+    this.idOfSlot[slot] = id
+    // New entities have no components, so only the zero-arg query ('' key)
     // is affected. Invalidate just that instead of nuking the whole cache.
     const emptyArch = this.getOrCreateArchetypeByKey([])
     this.entityPos.set(id, emptyArch.entities.length)
@@ -290,13 +370,38 @@ export class ECSWorld {
   }
 
   destroyEntity(id: EntityId): void {
-    // Guard against double-destroy: callbacks fire only if the entity existed.
-    if (!this.componentIndex.has(id)) return
-    const comps = this.componentIndex.get(id)
-    if (comps) {
-      for (const type of comps.keys()) this.dirtyTypes.add(type)
-      if (comps.size === 0) this.queryCache.delete('')
+    const slot = this.slotOf(id)
+    if (slot < 0) return
+
+    // Remove components from every column that holds one for this slot.
+    // Column order = type interning order, which is tiny (tens).
+    for (let tid = 0; tid < this.columns.length; tid++) {
+      const col = this.columns[tid]
+      const denseIdx = col.sparse[slot]
+      if (denseIdx === -1) continue
+      col.sparse[slot] = -1
+      const lastIdx = col.dense.length - 1
+      if (denseIdx !== lastIdx) {
+        // Swap-remove: move the last component into the freed slot.
+        col.dense[denseIdx] = col.dense[lastIdx]
+        const movedSlot = col.ownerSlot[lastIdx]
+        col.ownerSlot[denseIdx] = movedSlot
+        col.sparse[movedSlot] = denseIdx
+      }
+      col.dense.pop()
+      col.ownerSlot.pop()
+      this.dirtyTypes.add(col.name)
     }
+
+    // Pack the entity slot array.
+    const lastSlot = --this.liveCount
+    if (slot !== lastSlot) {
+      const movedId = this.idOfSlot[lastSlot]
+      this.idOfSlot[slot] = movedId
+      this.slotOfId[movedId] = slot
+    }
+    this.slotOfId[id] = -1
+
     // Remove from archetype — O(1) via stored position + swap-remove.
     const arch = this.entityArchetype.get(id)
     if (arch) {
@@ -308,11 +413,8 @@ export class ECSWorld {
         this.entityPos.set(last, idx)
       }
     }
-    this.componentIndex.delete(id)
     this.entityArchetype.delete(id)
     this.entityPos.delete(id)
-    const pooled = this._compMapPool
-    if (comps && pooled.length < 4096) pooled.push(comps)
     // Zero-arg query() returns ALL live entities, so any destruction
     // invalidates it — component-typed queries are covered by dirtyTypes.
     this.queryCache.delete('')
@@ -323,7 +425,7 @@ export class ECSWorld {
   }
 
   hasEntity(id: EntityId): boolean {
-    return this.componentIndex.has(id)
+    return this.slotOf(id) >= 0
   }
 
   /**
@@ -347,14 +449,32 @@ export class ECSWorld {
 
   private destroyListeners: Set<(id: EntityId) => void> = new Set()
 
+  /**
+   * Intern a component type name into a stable numeric ID.
+   *
+   * `getComponent`/`hasComponent`/`removeComponent` accept the returned ID
+   * wherever a type string is accepted — passing numbers skips the string
+   * hash entirely, which matters in per-entity loops. IDs are valid until
+   * `clear()`; re-fetch after clearing or restoring a world.
+   */
+  typeId(type: string): EntityTypeId {
+    return this.internType(type)
+  }
+
   addComponent<T extends Component>(id: EntityId, component: T): void {
-    const comps = this.componentIndex.get(id)
-    if (!comps) return
-    const newType = !comps.has(component.type)
-    comps.set(component.type, component)
-    // Overwriting an existing component keeps the same archetype — no cache
-    // or structural changes can result.
-    if (!newType) return
+    const slot = this.slotOf(id)
+    if (slot < 0) return
+    const tid = this.internType(component.type)
+    const col = this.columns[tid]
+    const existing = col.sparse[slot]
+    if (existing !== -1) {
+      // Overwrite in place: same type set, so no archetype or cache changes.
+      col.dense[existing] = component
+      return
+    }
+    col.dense.push(component)
+    col.ownerSlot.push(slot)
+    col.sparse[slot] = col.dense.length - 1
     this.dirtyTypes.add(component.type)
 
     // Move along the cached +type archetype edge.
@@ -362,23 +482,44 @@ export class ECSWorld {
     this.moveToArchetype(id, newArch)
   }
 
-  removeComponent(id: EntityId, type: string): void {
-    const comps = this.componentIndex.get(id)
-    if (!comps || !comps.has(type)) return
-    comps.delete(type)
-    this.dirtyTypes.add(type)
+  removeComponent(id: EntityId, type: string | EntityTypeId): void {
+    const slot = this.slotOf(id)
+    if (slot < 0) return
+    const col = typeof type === 'number' ? this.columns[type] : this.colByName(type)
+    if (!col) return
+    const denseIdx = col.sparse[slot]
+    if (denseIdx === -1) return
+    col.sparse[slot] = -1
+    const lastIdx = col.dense.length - 1
+    if (denseIdx !== lastIdx) {
+      col.dense[denseIdx] = col.dense[lastIdx]
+      const movedSlot = col.ownerSlot[lastIdx]
+      col.ownerSlot[denseIdx] = movedSlot
+      col.sparse[movedSlot] = denseIdx
+    }
+    col.dense.pop()
+    col.ownerSlot.pop()
+    this.dirtyTypes.add(col.name)
 
     // Move along the cached −type archetype edge.
-    const newArch = this.getRemoveEdge(this.entityArchetype.get(id)!, type)
+    const newArch = this.getRemoveEdge(this.entityArchetype.get(id)!, col.name)
     this.moveToArchetype(id, newArch)
   }
 
-  getComponent<T extends Component>(id: EntityId, type: string): T | undefined {
-    return this.componentIndex.get(id)?.get(type) as T | undefined
+  getComponent<T extends Component>(id: EntityId, type: string | EntityTypeId): T | undefined {
+    const slot = this.slotOf(id)
+    if (slot < 0) return undefined
+    const col = typeof type === 'number' ? this.columns[type] : this.colByName(type)
+    if (!col) return undefined
+    const idx = col.sparse[slot]
+    return idx === -1 ? undefined : (col.dense[idx] as T)
   }
 
-  hasComponent(id: EntityId, type: string): boolean {
-    return this.componentIndex.get(id)?.has(type) ?? false
+  hasComponent(id: EntityId, type: string | EntityTypeId): boolean {
+    const slot = this.slotOf(id)
+    if (slot < 0) return false
+    const col = typeof type === 'number' ? this.columns[type] : this.colByName(type)
+    return col !== undefined && col.sparse[slot] !== -1
   }
 
   /**
@@ -390,14 +531,20 @@ export class ECSWorld {
    * desync the archetype index. Mutating value fields (x, y, color …) is safe.
    */
   getEntityComponents(id: EntityId): readonly Component[] {
-    const map = this.componentIndex.get(id)
-    if (!map) return []
-    return [...map.values()]
+    const slot = this.slotOf(id)
+    if (slot < 0) return []
+    const out: Component[] = []
+    for (let tid = 0; tid < this.columns.length; tid++) {
+      const col = this.columns[tid]
+      const idx = col.sparse[slot]
+      if (idx !== -1) out.push(col.dense[idx])
+    }
+    return out
   }
 
   /** Returns all live entity IDs currently in the world. */
   getAllEntityIds(): EntityId[] {
-    return [...this.componentIndex.keys()]
+    return Array.from(this.idOfSlot.subarray(0, this.liveCount))
   }
 
   // Flush pending dirty flags into the query cache immediately.
@@ -559,10 +706,13 @@ export class ECSWorld {
   /** Capture a full serialisable snapshot of all entity/component data + RNG state. */
   getSnapshot(): WorldSnapshot {
     const entities: WorldSnapshot['entities'] = []
-    for (const [id, comps] of this.componentIndex) {
+    for (let slot = 0; slot < this.liveCount; slot++) {
+      const id = this.idOfSlot[slot]
       const components: Component[] = []
-      for (const comp of comps.values()) {
-        components.push(_cloneComponent(comp))
+      for (let tid = 0; tid < this.columns.length; tid++) {
+        const col = this.columns[tid]
+        const idx = col.sparse[slot]
+        if (idx !== -1) components.push(_cloneComponent(col.dense[idx]))
       }
       entities.push({ id, components })
     }
@@ -574,11 +724,22 @@ export class ECSWorld {
     this.clear()
     this.nextId = snapshot.nextId
     this._rngState = snapshot.rngState
+    // Pre-intern every component type so columns exist before slot packing.
+    for (const { components } of snapshot.entities) {
+      for (const comp of components) this.internType(comp.type)
+    }
     for (const { id, components } of snapshot.entities) {
-      const compMap = new Map<string, Component>()
-      for (const comp of components) compMap.set(comp.type, comp)
-      this.componentIndex.set(id, compMap)
-      const arch = this.getOrCreateArchetype(compMap.keys())
+      this.ensureCapacity(id)
+      const slot = this.liveCount++
+      this.slotOfId[id] = slot
+      this.idOfSlot[slot] = id
+      for (const comp of components) {
+        const col = this.columns[this.typeIds.get(comp.type)!]
+        col.dense.push(comp)
+        col.ownerSlot.push(slot)
+        col.sparse[slot] = col.dense.length - 1
+      }
+      const arch = this.getOrCreateArchetype(components.map((c) => c.type))
       this.entityPos.set(id, arch.entities.length)
       arch.entities.push(id)
       this.entityArchetype.set(id, arch)
@@ -614,19 +775,24 @@ export class ECSWorld {
    * Compatible with `restoreSnapshotBinary`.
    */
   getSnapshotBinary(): Uint8Array {
-    // Serialise directly from live component storage — no intermediate
-    // deep-cloned WorldSnapshot (that alone used to double the cost).
+    // Serialise directly from column storage — no intermediate deep-cloned
+    // WorldSnapshot (that alone used to double the cost).
     const enc = this._encoder ?? (this._encoder = new TextEncoder())
 
     // First pass: encode component bodies, tracking total size.
     const eecs: Array<{ id: number; comps: Array<{ tb: Uint8Array; db: Uint8Array }> }> = []
     let size = 12 // nextId + rngState + entityCount
-    for (const [id, comps] of this.componentIndex) {
+    for (let slot = 0; slot < this.liveCount; slot++) {
+      const id = this.idOfSlot[slot]
       const encoded: Array<{ tb: Uint8Array; db: Uint8Array }> = []
-      for (const comp of comps.values()) {
-        const { type, ...rest } = comp as unknown as Record<string, unknown>
-        void rest
-        const tb = enc.encode(comp.type)
+      for (let tid = 0; tid < this.columns.length; tid++) {
+        const col = this.columns[tid]
+        const idx = col.sparse[slot]
+        if (idx === -1) continue
+        const comp = col.dense[idx] as unknown as Record<string, unknown>
+        const rest = { ...comp } as Record<string, unknown>
+        delete rest['type']
+        const tb = enc.encode(col.name)
         const db = enc.encode(JSON.stringify(rest))
         encoded.push({ tb, db })
         size += 2 + tb.byteLength + 4 + db.byteLength
@@ -722,25 +888,48 @@ export class ECSWorld {
     const changed: WorldSnapshot['entities'] = []
     const removed: number[] = []
 
-    // Compare live component storage against the baseline without cloning
+    // Compare live column storage against the baseline without cloning
     // unchanged entities — only entities that actually changed are cloned.
-    for (const [id, comps] of this.componentIndex) {
+    for (let slot = 0; slot < this.liveCount; slot++) {
+      const id = this.idOfSlot[slot]
       const base = baseMap.get(id)
+      // Build the live component list lazily: first detect a difference via
+      // counts, then clone only when needed.
+      let count = 0
+      for (let tid = 0; tid < this.columns.length; tid++) {
+        if (this.columns[tid].sparse[slot] !== -1) count++
+      }
       if (!base) {
-        changed.push({ id, components: [...comps.values()].map(_cloneComponent) })
+        changed.push({ id, components: this.cloneComponentsAt(slot, count) })
         continue
       }
-      const liveComps = [...comps.values()]
+      const liveComps = this.liveComponentsAt(slot, count)
       if (_componentsChanged(liveComps, base.components)) {
         changed.push({ id, components: liveComps.map(_cloneComponent) })
       }
     }
 
     for (const { id } of baseline.entities) {
-      if (!this.componentIndex.has(id)) removed.push(id)
+      if (this.slotOf(id) < 0) removed.push(id)
     }
 
     return { nextId: this.nextId, rngState: this._rngState, changed, removed }
+  }
+
+  /** Materialise this slot's components (order = column order). */
+  private liveComponentsAt(slot: number, knownCount: number): Component[] {
+    const out: Component[] = new Array(knownCount)
+    let n = 0
+    for (let tid = 0; tid < this.columns.length; tid++) {
+      const col = this.columns[tid]
+      const idx = col.sparse[slot]
+      if (idx !== -1) out[n++] = col.dense[idx]
+    }
+    return out
+  }
+
+  private cloneComponentsAt(slot: number, knownCount: number): Component[] {
+    return this.liveComponentsAt(slot, knownCount).map(_cloneComponent)
   }
 
   addSystem(system: System): void {
@@ -759,7 +948,13 @@ export class ECSWorld {
   }
 
   clear(): void {
-    this.componentIndex.clear()
+    this.typeIds.clear()
+    this.columns.length = 0
+    this._memoKey.fill(undefined)
+    this._memoCol.fill(undefined)
+    this.slotOfId = new Int32Array(1024).fill(-1)
+    this.idOfSlot = new Int32Array(1024).fill(-1)
+    this.liveCount = 0
     this.archetypes.clear()
     this.typeIndex.clear()
     this.entityArchetype.clear()
@@ -774,6 +969,6 @@ export class ECSWorld {
   }
 
   get entityCount(): number {
-    return this.componentIndex.size
+    return this.liveCount
   }
 }

@@ -1672,6 +1672,16 @@ export class RenderSystem implements System {
   // ── Main update loop ───────────────────────────────────────────────────────
 
   update(world: ECSWorld, dt: number): void {
+    // Intern component types once per frame — numeric IDs skip the string
+    // hash on every per-entity getComponent below.
+    const TID_Transform = world.typeId('Transform')
+    const TID_Sprite = world.typeId('Sprite')
+    const TID_Text = world.typeId('Text')
+    const TID_Animator = world.typeId('Animator')
+    const TID_AnimState = world.typeId('AnimationState')
+    const TID_Squash = world.typeId('SquashStretch')
+    const TID_ParticlePool = world.typeId('ParticlePool')
+    const TID_Trail = world.typeId('Trail')
     const { gl, canvas } = this
     const W = canvas.width
     const H = canvas.height
@@ -1746,8 +1756,8 @@ export class RenderSystem implements System {
 
     // ── Animator evaluation pass (runs before animation so clips are resolved) ──
     for (const id of world.query('Animator', 'AnimationState')) {
-      const animator = world.getComponent<AnimatorComponent>(id, 'Animator')!
-      const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
+      const animator = world.getComponent<AnimatorComponent>(id, TID_Animator)!
+      const anim = world.getComponent<AnimationStateComponent>(id, TID_AnimState)!
       if (!animator.playing) continue
 
       // Ensure valid state
@@ -1810,8 +1820,8 @@ export class RenderSystem implements System {
 
     // ── Animation clip resolution + playback pass ─────────────────────────────
     for (const id of world.query('AnimationState', 'Sprite')) {
-      const anim = world.getComponent<AnimationStateComponent>(id, 'AnimationState')!
-      const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
+      const anim = world.getComponent<AnimationStateComponent>(id, TID_AnimState)!
+      const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
 
       // Resolve named clip if changed
       if (anim.clips && anim.currentClip && anim._resolvedClip !== anim.currentClip) {
@@ -1856,7 +1866,7 @@ export class RenderSystem implements System {
 
     // ── SquashStretch update ─────────────────────────────────────────────────
     for (const id of world.query('SquashStretch')) {
-      const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')!
+      const ss = world.getComponent<SquashStretchComponent>(id, TID_Squash)!
       let tScX: number
       let tScY: number
 
@@ -2002,7 +2012,7 @@ export class RenderSystem implements System {
     for (let r = 0; r < n; r++) {
       sortIndices[r] = r
       const id = renderableIds[r]
-      const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
+      const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
       sortLayers[r] = this.layers.getOrder(sprite.layer)
       sortZs[r] = sprite.zIndex
       const texKey = getTextureKey(sprite)
@@ -2045,8 +2055,8 @@ export class RenderSystem implements System {
       }
 
       const id = renderables[i]
-      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
-      const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
+      const transform = world.getComponent<TransformComponent>(id, TID_Transform)!
+      const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
       if (!sprite.visible) continue
 
       // Frustum culling: bounding-sphere test in world space
@@ -2119,7 +2129,7 @@ export class RenderSystem implements System {
       if (key.startsWith('__shape__')) batchShapeRef = sprite
       else batchShapeRef = undefined
 
-      const ss = world.getComponent<SquashStretchComponent>(id, 'SquashStretch')
+      const ss = world.getComponent<SquashStretchComponent>(id, TID_Squash)
       const scaleXMod = ss ? ss.currentScaleX : 1
       const scaleYMod = ss ? ss.currentScaleY : 1
       // Textured sprites use white tint so the texture shows true colors;
@@ -2180,14 +2190,14 @@ export class RenderSystem implements System {
     // Text entities are rendered as textured quads using offscreen Canvas2D textures.
     const textEntities = world.query('Transform', 'Text')
     textEntities.sort((a: EntityId, b: EntityId) => {
-      const ta = world.getComponent<TextComponent>(a, 'Text')!
-      const tb = world.getComponent<TextComponent>(b, 'Text')!
+      const ta = world.getComponent<TextComponent>(a, TID_Text)!
+      const tb = world.getComponent<TextComponent>(b, TID_Text)!
       return ta.zIndex - tb.zIndex
     })
 
     for (const id of textEntities) {
-      const transform = world.getComponent<TransformComponent>(id, 'Transform')!
-      const text = world.getComponent<TextComponent>(id, 'Text')!
+      const transform = world.getComponent<TransformComponent>(id, TID_Transform)!
+      const text = world.getComponent<TextComponent>(id, TID_Text)!
       if (!text.visible) continue
 
       const entry = this.getOrCreateTextTexture(text)
@@ -2229,8 +2239,8 @@ export class RenderSystem implements System {
 
     // ── Particles ────────────────────────────────────────────────────────────
     for (const id of world.query('Transform', 'ParticlePool')) {
-      const t = world.getComponent<TransformComponent>(id, 'Transform')!
-      const pool = world.getComponent<ParticlePoolComponent>(id, 'ParticlePool')!
+      const t = world.getComponent<TransformComponent>(id, TID_Transform)!
+      const pool = world.getComponent<ParticlePoolComponent>(id, TID_ParticlePool)!
 
       // Global color transition
       if (pool.targetColor && pool._colorTransitionFrom !== undefined) {
@@ -2471,8 +2481,8 @@ export class RenderSystem implements System {
 
     // ── Trail update + render pass ────────────────────────────────────────────
     for (const id of world.query('Transform', 'Trail')) {
-      const t = world.getComponent<TransformComponent>(id, 'Transform')!
-      const trail = world.getComponent<TrailComponent>(id, 'Trail')!
+      const t = world.getComponent<TransformComponent>(id, TID_Transform)!
+      const trail = world.getComponent<TrailComponent>(id, TID_Trail)!
 
       // Prepend current position
       trail.points.unshift({ x: t.x, y: t.y })
