@@ -8,9 +8,9 @@
  *
  * Performance notes (vs. the original implementation):
  * - Each entity owns its two Endpoint objects; the axis array holds
-   * references to them, so per-frame position updates write straight into
-   * the objects (O(1)) instead of rescanning the whole axis per entity,
-   * which made updates O(n²).
+ * references to them, so per-frame position updates write straight into
+ * the objects (O(1)) instead of rescanning the whole axis per entity,
+ * which made updates O(n²).
  * - Overlap pairs are keyed by packed numbers, not `${a}:${b}` strings —
  *   zero string allocation per candidate pair per frame.
  * - The sweep's "active" set and per-entity pair indexes are reused across
