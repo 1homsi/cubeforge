@@ -850,6 +850,8 @@ export class RenderSystem implements System {
 
   // ── Debug overlays ──────────────────────────────────────────────────────
   private debugNavGrid: NavGrid | null = null
+  /** Set when the GL context is lost — rendering suspends until restore. */
+  private _contextLostWarned = false
   private contactFlashPoints: { x: number; y: number; ttl: number }[] = []
   private _highlightEntityId: number | null = null
 
@@ -1672,6 +1674,20 @@ export class RenderSystem implements System {
   // ── Main update loop ───────────────────────────────────────────────────────
 
   update(world: ECSWorld, dt: number): void {
+    // Context loss (GPU reset, memory pressure, driver crash): browsers keep
+    // the GL calls no-op'ing but spam warnings; without this guard the game
+    // burns CPU rendering into a dead context every frame.
+    if (this.gl.isContextLost()) {
+      if (!this._contextLostWarned) {
+        this._contextLostWarned = true
+        console.error('[Cubeforge] WebGL context lost. Rendering suspended until the context is restored.')
+      }
+      return
+    }
+    if (this._contextLostWarned) {
+      this._contextLostWarned = false
+      console.info('[Cubeforge] WebGL context restored — resuming rendering.')
+    }
     // Intern component types once per frame — numeric IDs skip the string
     // hash on every per-entity getComponent below.
     const TID_Transform = world.typeId('Transform')
