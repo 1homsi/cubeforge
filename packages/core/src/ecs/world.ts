@@ -208,13 +208,14 @@ export class ECSWorld {
   // Direct-mapped memo for string → column lookups. System loops fetch the
   // same few type names millions of times; a pointer-compare hit avoids the
   // Map hash entirely. Indexed by (length, first char) — collisions fall
-  // through to the real map after an identity check.
-  private _memoKey: (string | undefined)[] = new Array(8)
-  private _memoCol: (Column | undefined)[] = new Array(8)
+  // through to the real map after an identity check. 32 slots because the
+  // physics step cycles ~a dozen distinct type names per frame.
+  private _memoKey: (string | undefined)[] = new Array(32)
+  private _memoCol: (Column | undefined)[] = new Array(32)
 
   /** Resolve a type name to its column without hashing when warm. */
   private colByName(type: string): Column | undefined {
-    const idx = ((type.length * 31 + type.charCodeAt(0)) & 7) as number
+    const idx = ((type.length * 31 + type.charCodeAt(0)) & 31) as number
     if (this._memoKey[idx] === type) return this._memoCol[idx]
     const tid = this.typeIds.get(type)
     if (tid === undefined) return undefined
