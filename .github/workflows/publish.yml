@@ -20,7 +20,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Node 24 ships npm >=11.5.1, required for OIDC trusted publishing
+          # auth (npm 10 signs provenance but cannot authenticate the PUT,
+          # which surfaces as a misleading E404).
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -40,13 +43,17 @@ jobs:
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
           VERSION="$VERSION" node scripts/publish-packages.mjs prepare
+          # Commit the stamped manifests so the working tree is clean —
+          # newer npm enforces tree cleanliness on publish and the old
+          # --no-git-checks escape hatch was removed from the CLI.
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -A
+          git commit -qm "Stamp package manifests for ${GITHUB_REF_NAME}"
 
       - name: Publish packages
         run: |
           while IFS= read -r package_dir; do
             echo "Publishing ${package_dir}"
-            # npm pinned to v10: npm 11 removed the --no-git-checks CLI flag
-            # (EUNKNOWNCONFIG), which this pipeline relies on because the
-            # prepare step intentionally leaves package.json modified.
-            (cd "${package_dir}" && npx --yes npm@10 publish --provenance --access public --no-git-checks)
+            (cd "${package_dir}" && npx --yes npm@latest publish --provenance --access public)
           done < <(node scripts/publish-packages.mjs list-paths)
