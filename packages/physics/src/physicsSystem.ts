@@ -258,7 +258,13 @@ function getCompoundBounds(tx: number, ty: number, shapes: ColliderShape[]): AAB
   return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, hw: (maxX - minX) / 2, hh: (maxY - minY) / 2 }
 }
 
-function polygonWorldAABB(vertices: { x: number; y: number }[], tx: number, ty: number, offX: number, offY: number): AABB {
+function polygonWorldAABB(
+  vertices: { x: number; y: number }[],
+  tx: number,
+  ty: number,
+  offX: number,
+  offY: number,
+): AABB {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
