@@ -6,8 +6,15 @@
  * Candidate pairs from the X sweep are validated against Y-axis overlap
  * before being reported.
  *
- * This replaces the naive O(n²) brute-force used in CollisionPipeline and
- * supplements the spatial grid in PhysicsSystem.
+ * Performance notes (vs. the original implementation):
+ * - Each entity owns its two Endpoint objects; the axis array holds
+   * references to them, so per-frame position updates write straight into
+   * the objects (O(1)) instead of rescanning the whole axis per entity,
+   * which made updates O(n²).
+ * - Overlap pairs are keyed by packed numbers, not `${a}:${b}` strings —
+ *   zero string allocation per candidate pair per frame.
+ * - The sweep's "active" set and per-entity pair indexes are reused across
+ *   frames instead of reallocated.
  */
 
 import type { EntityId } from '@cubeforge/core'
@@ -39,28 +46,37 @@ interface Endpoint {
   isMin: boolean
 }
 
-// ── Pair key helpers ──────────────────────────────────────────────────────
-
-/**
- * Canonical string key for an unordered entity pair.
- * The smaller ID always comes first so the key is order-independent.
- */
-function pairKey(a: EntityId, b: EntityId): string {
-  return a < b ? `${a}:${b}` : `${b}:${a}`
+/** Per-entity bookkeeping: the caller's AABB plus owned endpoints + stamp. */
+interface SAPRecord {
+  aabb: BroadPhaseAABB
+  minEp: Endpoint
+  maxEp: Endpoint
+  /** Frame stamp of the last update() that included this entity. */
+  seen: number
 }
 
-/**
- * Extract the two entity IDs encoded in a pair key.
- */
-function splitKey(key: string): [EntityId, EntityId] {
-  const sep = key.indexOf(':')
-  return [Number(key.slice(0, sep)) as EntityId, Number(key.slice(sep + 1)) as EntityId]
+// ── Pair key packing ──────────────────────────────────────────────────────
+// Unordered pair (a, b) with a < b packs as a * PAIR_MUL + b. Exact in
+// float64 well past 2^53, so entity IDs up to PAIR_MUL - 1 (~2.1 million,
+// far beyond practical world sizes) are losslessly encoded/decoded.
+const PAIR_MUL = 0x200000 // 2^21
+
+function packPair(a: EntityId, b: EntityId): number {
+  return a < b ? a * PAIR_MUL + b : b * PAIR_MUL + a
+}
+
+function unpackPairA(key: number): EntityId {
+  return Math.floor(key / PAIR_MUL) as EntityId
+}
+
+function unpackPairB(key: number): EntityId {
+  return (key % PAIR_MUL) as EntityId
 }
 
 // ── SweepAndPrune ─────────────────────────────────────────────────────────
 
 /**
- * Sweep-and-Prune broad phase.
+ * Sweep-and-prune broad phase.
  *
  * Maintains sorted axis lists for efficient overlap detection.
  * Much better than O(n²) for large worlds — amortised O(n + k) per frame
@@ -75,23 +91,27 @@ function splitKey(key: string): [EntityId, EntityId] {
  * ```
  */
 export class SweepAndPrune {
-  /** Pooled endpoint array — reused across frames to avoid allocation. */
+  /** Pooled endpoint array — holds references to per-entity endpoints. */
   private endpoints: Endpoint[] = []
 
-  /** Number of valid endpoints in the pool (always 2 × entity count). */
+  /** Number of valid endpoints in the pool (always 2 × tracked entities). */
   private endpointCount = 0
 
-  /** AABB lookup for Y-axis validation. */
-  private aabbs: Map<EntityId, BroadPhaseAABB> = new Map()
+  /** Per-entity record: AABB reference + owned endpoints + freshness stamp. */
+  private records: Map<EntityId, SAPRecord> = new Map()
 
-  /** Active overlapping pairs that passed both X and Y checks. */
-  private activePairs: Set<string> = new Set()
+  /** Active overlapping pairs that passed both X and Y checks (packed keys). */
+  private activePairs: Set<number> = new Set()
 
-  /** Tracks which entities currently have endpoints in the list. */
-  private entitySet: Set<EntityId> = new Set()
+  /** Reverse index: entity → packed keys of pairs involving it. Rebuilt with activePairs. */
+  private pairsByEntity: Map<EntityId, Set<number>> = new Map()
 
-  /** Cached result array — rebuilt on each query(). */
+  /** Monotonic frame stamp used to prune entities absent from update(). */
+  private frameStamp = 0
+
+  /** Cached result array + pooled pair objects — rebuilt on each query(). */
   private resultCache: BroadPhasePair[] = []
+  private pairPool: BroadPhasePair[] = []
   private resultDirty = true
 
   // ── Public API ────────────────────────────────────────────────────────
@@ -105,33 +125,36 @@ export class SweepAndPrune {
    */
   update(aabbs: BroadPhaseAABB[]): void {
     this.resultDirty = true
+    const stamp = ++this.frameStamp
 
-    // Track which entities are present this frame for pruning.
-    const incoming = new Set<EntityId>()
-    for (let i = 0; i < aabbs.length; i++) {
-      incoming.add(aabbs[i].entityId)
-    }
-
-    // Remove stale entities that are no longer in the input.
-    for (const existingId of this.entitySet) {
-      if (!incoming.has(existingId)) {
-        this.removeInternal(existingId)
-      }
-    }
-
-    // Upsert AABBs.
+    // Upsert AABBs. Endpoint objects are owned per entity, so position
+    // updates are direct writes — no axis rescan.
     for (let i = 0; i < aabbs.length; i++) {
       const aabb = aabbs[i]
-      this.aabbs.set(aabb.entityId, aabb)
-
-      if (!this.entitySet.has(aabb.entityId)) {
-        // New entity — append two endpoints from the pool.
-        this.insertEndpoints(aabb)
-        this.entitySet.add(aabb.entityId)
+      let rec = this.records.get(aabb.entityId)
+      if (!rec) {
+        rec = {
+          aabb,
+          minEp: { entityId: aabb.entityId, value: aabb.minX, isMin: true },
+          maxEp: { entityId: aabb.entityId, value: aabb.maxX, isMin: false },
+          seen: stamp,
+        }
+        this.records.set(aabb.entityId, rec)
+        // Append the two new endpoints to the axis pool.
+        this.endpoints.push(rec.minEp, rec.maxEp)
       } else {
-        // Existing entity — update endpoint values in place.
-        this.updateEndpointValues(aabb)
+        rec.aabb = aabb
+        rec.minEp.value = aabb.minX
+        rec.maxEp.value = aabb.maxX
+        rec.seen = stamp
       }
+    }
+    this.endpointCount = this.endpoints.length
+
+    // Prune entities absent from this frame's input (deleting from a Map
+    // while iterating it is safe).
+    for (const [id, rec] of this.records) {
+      if (rec.seen !== stamp) this.removeInternal(id)
     }
 
     // Sort endpoints with insertion sort and incrementally update pairs.
@@ -141,18 +164,30 @@ export class SweepAndPrune {
   /**
    * Get all overlapping pairs that passed both X and Y overlap tests.
    * Must call `update()` first.
+   *
+   * The returned array (and its contents) is reused across calls — treat it
+   * as valid only until the next update()/query().
    */
   query(): BroadPhasePair[] {
     if (!this.resultDirty) return this.resultCache
 
-    this.resultCache.length = 0
+    const out = this.resultCache
+    out.length = 0
+    let i = 0
     for (const key of this.activePairs) {
-      const [a, b] = splitKey(key)
-      this.resultCache.push({ entityA: a, entityB: b })
+      let pair = this.pairPool[i]
+      if (!pair) {
+        pair = { entityA: 0 as EntityId, entityB: 0 as EntityId }
+        this.pairPool[i] = pair
+      }
+      pair.entityA = unpackPairA(key)
+      pair.entityB = unpackPairB(key)
+      out.push(pair)
+      i++
     }
 
     this.resultDirty = false
-    return this.resultCache
+    return out
   }
 
   /**
@@ -160,7 +195,7 @@ export class SweepAndPrune {
    * Any pairs involving this entity are also removed.
    */
   remove(entityId: EntityId): void {
-    if (!this.entitySet.has(entityId)) return
+    if (!this.records.has(entityId)) return
     this.removeInternal(entityId)
     this.resultDirty = true
   }
@@ -170,9 +205,11 @@ export class SweepAndPrune {
    */
   clear(): void {
     this.endpointCount = 0
-    this.aabbs.clear()
+    this.endpoints.length = 0
+    this.records.clear()
     this.activePairs.clear()
-    this.entitySet.clear()
+    this.pairsByEntity.clear()
+    this.frameStamp++
     this.resultCache.length = 0
     this.resultDirty = true
   }
@@ -180,87 +217,47 @@ export class SweepAndPrune {
   // ── Internals ─────────────────────────────────────────────────────────
 
   /**
-   * Allocate (or reuse) two endpoint slots from the pool and initialise
-   * them for the given AABB.
-   */
-  private insertEndpoints(aabb: BroadPhaseAABB): void {
-    const idx = this.endpointCount
-
-    // Grow pool if needed.
-    while (this.endpoints.length < idx + 2) {
-      this.endpoints.push({ entityId: 0 as EntityId, value: 0, isMin: true })
-    }
-
-    // Min endpoint.
-    const epMin = this.endpoints[idx]
-    epMin.entityId = aabb.entityId
-    epMin.value = aabb.minX
-    epMin.isMin = true
-
-    // Max endpoint.
-    const epMax = this.endpoints[idx + 1]
-    epMax.entityId = aabb.entityId
-    epMax.value = aabb.maxX
-    epMax.isMin = false
-
-    this.endpointCount += 2
-  }
-
-  /**
-   * Scan the endpoint array and update the values for a known entity.
-   */
-  private updateEndpointValues(aabb: BroadPhaseAABB): void {
-    let found = 0
-    for (let i = 0; i < this.endpointCount && found < 2; i++) {
-      const ep = this.endpoints[i]
-      if (ep.entityId === aabb.entityId) {
-        ep.value = ep.isMin ? aabb.minX : aabb.maxX
-        found++
-      }
-    }
-  }
-
-  /**
-   * Remove an entity's endpoints and purge its pairs.
+   * Remove one entity's endpoints, record and pairs.
+   * The record must belong to `entityId`.
    */
   private removeInternal(entityId: EntityId): void {
-    // Remove endpoints by compacting in-place.
+    // Compact the endpoint array in place, dropping both of this entity's
+    // endpoints in a single pass.
+    const eps = this.endpoints
     let dst = 0
-    for (let src = 0; src < this.endpointCount; src++) {
-      if (this.endpoints[src].entityId !== entityId) {
+    for (let src = 0; src < eps.length; src++) {
+      const ep = eps[src]
+      if (ep.entityId !== entityId) {
         if (dst !== src) {
-          const tmp = this.endpoints[dst]
-          this.endpoints[dst] = this.endpoints[src]
-          this.endpoints[src] = tmp
+          eps[dst] = ep
         }
         dst++
       }
     }
+    eps.length = dst
     this.endpointCount = dst
 
-    // Purge active pairs involving this entity.
-    const prefix1 = `${entityId}:`
-    const suffix1 = `:${entityId}`
-    for (const key of this.activePairs) {
-      if (key.startsWith(prefix1) || key.endsWith(suffix1)) {
+    // Purge pairs involving this entity via the reverse index — no full scan.
+    const keys = this.pairsByEntity.get(entityId)
+    if (keys) {
+      for (const key of keys) {
         this.activePairs.delete(key)
+        const other = unpackPairA(key) === entityId ? unpackPairB(key) : unpackPairA(key)
+        this.pairsByEntity.get(other)?.delete(key)
       }
+      this.pairsByEntity.delete(entityId)
     }
 
-    this.aabbs.delete(entityId)
-    this.entitySet.delete(entityId)
+    this.records.delete(entityId)
   }
 
   /**
-   * Insertion-sort the endpoint array and incrementally maintain the
-   * active-pair set.
+   * Insertion-sort the endpoint array, then rebuild the active-pair set
+   * from the sorted axis.
    *
-   * When a min endpoint moves left past another entity's max endpoint, a
-   * new X-overlap begins. When a max endpoint moves right past another
-   * entity's min endpoint, the overlap was already tracked. The inverse
-   * motions signal the end of an overlap.
-   *
-   * After sorting, the pair set is pruned against Y-axis overlap.
+   * The sort itself doesn't track pair changes as it goes — the subsequent
+   * rebuild unconditionally recomputes the full pair set from the sorted
+   * endpoints, so mid-sort bookkeeping would only be discarded.
    */
   private sortAndSweep(): void {
     const eps = this.endpoints
@@ -269,48 +266,17 @@ export class SweepAndPrune {
     // Insertion sort — O(n) when nearly sorted (typical for frame-coherent data).
     for (let i = 1; i < n; i++) {
       const current = eps[i]
+      const value = current.value
       let j = i - 1
-
-      while (j >= 0 && eps[j].value > current.value) {
-        // `current` is moving left past `eps[j]`.
-        // Detect pair creation/destruction from the swap.
-        const other = eps[j]
-
-        if (current.entityId !== other.entityId) {
-          this.onSwap(current, other)
-        }
-
-        // Shift right.
-        eps[j + 1] = other
+      while (j >= 0 && eps[j].value > value) {
+        eps[j + 1] = eps[j]
         j--
       }
-
       eps[j + 1] = current
     }
 
-    // Rebuild active pairs from scratch on the X-axis to avoid
-    // accumulated drift from incremental swaps, then filter by Y.
+    // Rebuild active pairs from scratch on the X-axis, then filter by Y.
     this.rebuildPairsFromSortedAxis()
-  }
-
-  /**
-   * Incremental swap handler (used during insertion sort).
-   *
-   * When a min endpoint passes left over a max endpoint (or vice-versa),
-   * it signals a potential overlap change on the X-axis.
-   */
-  private onSwap(moving: Endpoint, stationary: Endpoint): void {
-    // A min endpoint moving left past a max endpoint → new X overlap.
-    // A max endpoint moving left past a min endpoint → X overlap lost.
-    // (The sort moves `moving` leftward past `stationary`.)
-
-    if (moving.isMin && !stationary.isMin) {
-      // moving.min passed left of stationary.max → overlap begins on X
-      this.tryAddPair(moving.entityId, stationary.entityId)
-    } else if (!moving.isMin && stationary.isMin) {
-      // moving.max passed left of stationary.min → overlap ends on X
-      this.activePairs.delete(pairKey(moving.entityId, stationary.entityId))
-    }
   }
 
   /**
@@ -322,14 +288,17 @@ export class SweepAndPrune {
    * against Y before being added.
    *
    * This is called every frame to ensure correctness regardless of
-   * incremental swap accuracy (floating-point edge cases, teleportation,
-   * etc.).
+   * floating-point edge cases or teleportation.
    */
   private rebuildPairsFromSortedAxis(): void {
     this.activePairs.clear()
+    this.pairsByEntity.clear()
 
     // Set of entity IDs whose min endpoint has been seen but max has not.
-    const active = new Set<EntityId>()
+    // Reused across frames — clearing beats reallocating.
+    const active = this._sweepActive
+    active.clear()
+
     const eps = this.endpoints
     const n = this.endpointCount
 
@@ -350,19 +319,37 @@ export class SweepAndPrune {
     }
   }
 
+  /** Open-interval entity set used by the sweep; reused across frames. */
+  private _sweepActive: Set<EntityId> = new Set()
+
   /**
    * Attempt to add a pair after confirming Y-axis overlap.
    */
   private tryAddPair(a: EntityId, b: EntityId): void {
     if (a === b) return
 
-    const aabbA = this.aabbs.get(a)
-    const aabbB = this.aabbs.get(b)
-    if (!aabbA || !aabbB) return
+    const recA = this.records.get(a)
+    const recB = this.records.get(b)
+    if (!recA || !recB) return
 
     // Y-axis overlap check.
-    if (aabbA.maxY < aabbB.minY || aabbB.maxY < aabbA.minY) return
+    if (recA.aabb.maxY < recB.aabb.minY || recB.aabb.maxY < recA.aabb.minY) return
 
-    this.activePairs.add(pairKey(a, b))
+    const key = packPair(a, b)
+    this.activePairs.add(key)
+
+    let setA = this.pairsByEntity.get(a)
+    if (!setA) {
+      setA = new Set()
+      this.pairsByEntity.set(a, setA)
+    }
+    setA.add(key)
+
+    let setB = this.pairsByEntity.get(b)
+    if (!setB) {
+      setB = new Set()
+      this.pairsByEntity.set(b, setB)
+    }
+    setB.add(key)
   }
 }

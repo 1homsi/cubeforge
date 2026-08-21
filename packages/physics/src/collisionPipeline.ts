@@ -84,6 +84,14 @@ function pairKey(a: EntityId, b: EntityId): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`
 }
 
+// Packed numeric pair key — same canonical ordering as pairKey() but with
+// zero string allocation. Exact for entity IDs < 2^21 (see broadPhase.ts).
+const PAIR_MUL = 0x200000
+
+function packPair(a: EntityId, b: EntityId): number {
+  return a < b ? a * PAIR_MUL + b : b * PAIR_MUL + a
+}
+
 // ── Collision Pipeline ─────────────────────────────────────────────────────
 
 export class CollisionPipeline {
@@ -95,7 +103,8 @@ export class CollisionPipeline {
     const manifolds: ContactManifold[] = []
     const broadPhasePairs: CollisionPair[] = []
     const intersectionPairs: CollisionPair[] = []
-    const checked = new Set<string>()
+    // Numeric packed keys — no per-pair string allocation.
+    const checked = new Set<number>()
 
     // Build joint exclusion set
     const jointExcluded = new Set<string>()
@@ -140,14 +149,14 @@ export class CollisionPipeline {
       for (let j = i + 1; j < entries.length; j++) {
         const a = entries[i]
         const b = entries[j]
-        const key = pairKey(a.id, b.id)
+        const key = packPair(a.id, b.id)
 
         if (!aabbOverlaps(a.aabb, b.aabb)) continue
 
         broadPhasePairs.push({ entityA: a.id, entityB: b.id })
 
         // Joint exclusion
-        if (jointExcluded.has(key)) continue
+        if (jointExcluded.has(a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`)) continue
         if (checked.has(key)) continue
         checked.add(key)
 
@@ -224,16 +233,16 @@ export class CollisionPipeline {
     id: EntityId,
     kind: 'box' | 'circle' | 'capsule',
   ): { layer: string; mask: string | string[]; group: string; isTrigger: boolean } | null {
+    // Return the component itself — wrapping it in a fresh object per call
+    // allocated once per overlapping pair per frame. All three collider
+    // components expose the same layer/mask/group/isTrigger shape.
     if (kind === 'box') {
-      const c = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')
-      return c ? { layer: c.layer, mask: c.mask, group: c.group, isTrigger: c.isTrigger } : null
+      return world.getComponent<BoxColliderComponent>(id, 'BoxCollider') ?? null
     }
     if (kind === 'circle') {
-      const c = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')
-      return c ? { layer: c.layer, mask: c.mask, group: c.group, isTrigger: c.isTrigger } : null
+      return world.getComponent<CircleColliderComponent>(id, 'CircleCollider') ?? null
     }
-    const c = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')
-    return c ? { layer: c.layer, mask: c.mask, group: c.group, isTrigger: c.isTrigger } : null
+    return world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider') ?? null
   }
 
   private narrowPhase(

@@ -118,6 +118,14 @@ interface AnimatorCondition {
   value: unknown
 }
 
+interface AnimatorTransition {
+  to: string
+  when: AnimatorCondition[]
+  priority?: number
+  exitTime?: number
+  blendDuration?: number
+}
+
 interface AnimatorComponent {
   type: 'Animator'
   initialState: string
@@ -444,30 +452,45 @@ function getTextureKey(sprite: SpriteComponent): string {
   return `__color__:${sprite.color}${suffix}`
 }
 
+// Scratch buffer for UV rects — avoids allocating a 4-tuple per sprite per
+// frame. Consumed immediately by writeInstance at the only call site.
+const uvScratch: [number, number, number, number] = [0, 0, 1, 1]
+
 function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
-  if (!sprite.image || sprite.image.naturalWidth === 0) return [0, 0, 1, 1]
+  if (!sprite.image || sprite.image.naturalWidth === 0) {
+    uvScratch[0] = 0
+    uvScratch[1] = 0
+    uvScratch[2] = 1
+    uvScratch[3] = 1
+    return uvScratch
+  }
   const iw = sprite.image.naturalWidth
   const ih = sprite.image.naturalHeight
   if (sprite.frameWidth && sprite.frameHeight) {
     const cols = sprite.frameColumns ?? Math.floor(iw / sprite.frameWidth)
     const col = sprite.frameIndex % cols
     const row = Math.floor(sprite.frameIndex / cols)
-    return [
-      (col * sprite.frameWidth) / iw,
-      (row * sprite.frameHeight) / ih,
-      sprite.frameWidth / iw,
-      sprite.frameHeight / ih,
-    ]
+    uvScratch[0] = (col * sprite.frameWidth) / iw
+    uvScratch[1] = (row * sprite.frameHeight) / ih
+    uvScratch[2] = sprite.frameWidth / iw
+    uvScratch[3] = sprite.frameHeight / ih
+    return uvScratch
   }
   if (sprite.frame) {
     const { sx, sy, sw, sh } = sprite.frame
-    return [sx / iw, sy / ih, sw / iw, sh / ih]
+    uvScratch[0] = sx / iw
+    uvScratch[1] = sy / ih
+    uvScratch[2] = sw / iw
+    uvScratch[3] = sh / ih
+    return uvScratch
   }
   // Tiling: UV width/height > 1 causes the texture to repeat (needs REPEAT wrap mode)
   // tileSizeX/tileSizeY control how many pixels each tile repeat covers
-  const uw = sprite.tileX ? sprite.width / (sprite.tileSizeX ?? iw) : 1
-  const vh = sprite.tileY ? sprite.height / (sprite.tileSizeY ?? ih) : 1
-  return [0, 0, uw, vh]
+  uvScratch[0] = 0
+  uvScratch[1] = 0
+  uvScratch[2] = sprite.tileX ? sprite.width / (sprite.tileSizeX ?? iw) : 1
+  uvScratch[3] = sprite.tileY ? sprite.height / (sprite.tileSizeY ?? ih) : 1
+  return uvScratch
 }
 
 // ── Post-process options ──────────────────────────────────────────────────────
@@ -775,6 +798,18 @@ export class RenderSystem implements System {
   // ── Shape texture cache ─────────────────────────────────────────────────
   private readonly shapeTextures = new Map<string, WebGLTexture>()
 
+  /**
+   * Caches the parsed RGB endpoints of an in-progress particle-pool color
+   * transition, keyed by pool instance. `from`/`to` are invariant for the
+   * whole transition, so re-parsing the CSS color strings every frame (as
+   * opposed to once when the transition starts or its endpoints change)
+   * was pure wasted work.
+   */
+  private readonly colorTransitionCache = new WeakMap<
+    ParticlePoolComponent,
+    { from: string; to: string; r0: number; g0: number; b0: number; r1: number; g1: number; b1: number }
+  >()
+
   // ── Render layer manager ────────────────────────────────────────────────
   readonly layers: RenderLayerManager = createRenderLayerManager()
 
@@ -830,6 +865,10 @@ export class RenderSystem implements System {
   private readonly _sortLayers: number[] = []
   private readonly _sortZs: number[] = []
   private readonly _sortTexs: string[] = []
+  private readonly _sortTexRanks: number[] = []
+  /** texture key → small integer rank, so the frame sort compares numbers not strings */
+  private readonly _texRankCache = new Map<string, number>()
+  private _texNextRank = 0
   private readonly _sortedRenderables: EntityId[] = []
 
   // ── Dynamic canvas textures (texSubImage2D optimization) ─────────────────
@@ -891,6 +930,28 @@ export class RenderSystem implements System {
   setDebugNavGrid(grid: NavGrid | null): void {
     this.debugNavGrid = grid
     this._overlayRevision++
+  }
+
+  /** Reusable empty transition list — avoids allocating per entity per frame. */
+  private static readonly _emptyTransitions: AnimatorTransition[] = []
+
+  /** Cache of priority-sorted transition lists, keyed by the original array identity. */
+  private _sortedTransitionsMap = new WeakMap<AnimatorTransition[], AnimatorTransition[]>()
+
+  /**
+   * Returns the transitions of a state definition sorted by priority
+   * descending (stable). The sorted copy is cached per array identity, so the
+   * sort runs once per state definition instead of once per entity per frame.
+   */
+  private _sortedTransitions(stateDef: { transitions?: AnimatorTransition[] }): AnimatorTransition[] {
+    const list = stateDef.transitions
+    if (!list || list.length === 0) return RenderSystem._emptyTransitions
+    let sorted = this._sortedTransitionsMap.get(list)
+    if (!sorted) {
+      sorted = [...list].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+      this._sortedTransitionsMap.set(list, sorted)
+    }
+    return sorted
   }
 
   /** Flash a point on the canvas for one frame (world-space coords). */
@@ -1719,8 +1780,9 @@ export class RenderSystem implements System {
       } else {
         // Evaluate transitions
         if (stateDef.transitions && stateDef.transitions.length > 0) {
-          // Sort by priority descending (stable: declaration order for same priority)
-          const sorted = [...stateDef.transitions].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+          // Sorted by priority descending (cached per state definition —
+          // re-sorting a fresh copy every frame per entity dominated animator cost).
+          const sorted = this._sortedTransitions(stateDef)
           for (const trans of sorted) {
             // exitTime check
             if (trans.exitTime != null && anim.frames.length > 0) {
@@ -1931,22 +1993,39 @@ export class RenderSystem implements System {
     const sortLayers = this._sortLayers
     const sortZs = this._sortZs
     const sortTexs = this._sortTexs
+    const sortTexRanks = this._sortTexRanks
     sortIndices.length = n
     sortLayers.length = n
     sortZs.length = n
     sortTexs.length = n
+    sortTexRanks.length = n
     for (let r = 0; r < n; r++) {
       sortIndices[r] = r
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, 'Sprite')!
       sortLayers[r] = this.layers.getOrder(sprite.layer)
       sortZs[r] = sprite.zIndex
-      sortTexs[r] = getTextureKey(sprite)
+      const texKey = getTextureKey(sprite)
+      sortTexs[r] = texKey
+      // Numeric rank per unique texture key — the comparator below runs
+      // N·logN times per frame, and string comparison is far slower than a
+      // float compare. Ranks only need to distinguish keys (batch grouping
+      // relies on equality), not preserve lexicographic order.
+      let rank = this._texRankCache.get(texKey)
+      if (rank === undefined) {
+        if (this._texRankCache.size > 4096) {
+          this._texRankCache.clear()
+          this._texNextRank = 0
+        }
+        rank = this._texNextRank++
+        this._texRankCache.set(texKey, rank)
+      }
+      sortTexRanks[r] = rank
     }
     sortIndices.sort((a, b) => {
       if (sortLayers[a] !== sortLayers[b]) return sortLayers[a] - sortLayers[b]
       if (sortZs[a] !== sortZs[b]) return sortZs[a] - sortZs[b]
-      return sortTexs[a] < sortTexs[b] ? -1 : sortTexs[a] > sortTexs[b] ? 1 : 0
+      return sortTexRanks[a] - sortTexRanks[b]
     })
     const renderables = this._sortedRenderables
     renderables.length = n
@@ -2024,7 +2103,9 @@ export class RenderSystem implements System {
         sprite.image = img
       }
 
-      const key = getTextureKey(sprite)
+      // Reuse the texture key computed during the sort pass — recomputing it
+      // here cost another string concat + hash lookup per sprite per frame.
+      const key = sortTexs[sortIndices[i]]
       const spriteBlend = sprite.blendMode ?? 'normal'
 
       // Flush if texture group or blend mode changes, or buffer is full
@@ -2047,7 +2128,18 @@ export class RenderSystem implements System {
         (sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0) ||
         (sprite.dynamicSrc !== undefined && this._dynamicCanvases.has(sprite.dynamicSrc))
       const opacity = sprite.opacity ?? 1
-      let [r, g, b, a] = hasTexture ? [1, 1, 1, 1] : parseCSSColor(sprite.color)
+      // WHITE is a shared frozen tuple — `[1,1,1,1]` here allocated a fresh
+      // array for every textured sprite every frame.
+      let r: number, g: number, b: number
+      let a: number
+      if (hasTexture) {
+        r = 1
+        g = 1
+        b = 1
+        a = 1
+      } else {
+        ;[r, g, b, a] = parseCSSColor(sprite.color)
+      }
       a *= opacity
       // Apply tint: blend tint color into rgb channels
       if (sprite.tint && (sprite.tintOpacity ?? 0) > 0) {
@@ -2146,8 +2238,14 @@ export class RenderSystem implements System {
         const dur = pool.colorTransitionDuration ?? 0.5
         const ct = Math.min((pool._colorTransitionElapsed ?? 0) / dur, 1)
         const ease = ct * ct * (3 - 2 * ct)
-        const [cr0, cg0, cb0] = parseCSSColor(pool._colorTransitionFrom)
-        const [cr1, cg1, cb1] = parseCSSColor(pool.targetColor)
+        let parsed = this.colorTransitionCache.get(pool)
+        if (!parsed || parsed.from !== pool._colorTransitionFrom || parsed.to !== pool.targetColor) {
+          const [r0, g0, b0] = parseCSSColor(pool._colorTransitionFrom)
+          const [r1, g1, b1] = parseCSSColor(pool.targetColor)
+          parsed = { from: pool._colorTransitionFrom, to: pool.targetColor, r0, g0, b0, r1, g1, b1 }
+          this.colorTransitionCache.set(pool, parsed)
+        }
+        const { r0: cr0, g0: cg0, b0: cb0, r1: cr1, g1: cg1, b1: cb1 } = parsed
         const ri = Math.round((cr0 + (cr1 - cr0) * ease) * 255)
         const gi = Math.round((cg0 + (cg1 - cg0) * ease) * 255)
         const bi = Math.round((cb0 + (cb1 - cb0) * ease) * 255)
@@ -2160,8 +2258,12 @@ export class RenderSystem implements System {
 
       const isFormation = pool.mode === 'formation'
 
-      // Update existing particles
-      pool.particles = pool.particles.filter((p: Particle) => {
+      // Update a single particle in place; returns whether it survives.
+      // Defined once per pool per frame (not per particle) and applied via
+      // an in-place compaction pass below — avoids both a per-particle
+      // closure allocation and the fresh array `filter()` would allocate
+      // every frame for every pool even when nothing expired.
+      const updateParticle = (p: Particle): boolean => {
         if (isFormation) {
           // Seek toward formation target
           if (p.targetX !== undefined && p.targetY !== undefined) {
@@ -2205,7 +2307,15 @@ export class RenderSystem implements System {
         p.vy += p.gravity * dt
         if (p.rotationSpeed !== undefined) p.rotation = (p.rotation ?? 0) + p.rotationSpeed * dt
         return p.life > 0
-      })
+      }
+
+      const particles = pool.particles
+      let writeIdx = 0
+      for (let readIdx = 0; readIdx < particles.length; readIdx++) {
+        const p = particles[readIdx]
+        if (updateParticle(p)) particles[writeIdx++] = p
+      }
+      particles.length = writeIdx
 
       // Emit new particles
       if (isFormation) {

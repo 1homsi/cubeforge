@@ -788,19 +788,21 @@ export function warmStartManifold(
   cached: { points: ContactPoint[] },
   warmFactor: number,
 ): void {
-  // Track which cached points have already been consumed.
-  const used = new Uint8Array(cached.points.length)
+  // Track which cached points have already been consumed via a bitmask —
+  // manifolds have only a handful of points (well under 32), so a plain
+  // number avoids allocating a Uint8Array per manifold per frame.
+  let usedMask = 0
 
   for (const pt of manifold.points) {
     let matched = false
 
     // Tier 1: Feature ID match (preferred).
     for (let i = 0; i < cached.points.length; i++) {
-      if (used[i]) continue
+      if (usedMask & (1 << i)) continue
       if (pt.featureId === cached.points[i].featureId) {
         pt.normalImpulse = cached.points[i].normalImpulse * warmFactor
         pt.tangentImpulse = cached.points[i].tangentImpulse * warmFactor
-        used[i] = 1
+        usedMask |= 1 << i
         matched = true
         break
       }
@@ -811,7 +813,7 @@ export function warmStartManifold(
     let bestIdx = -1
     let bestDistSq = POSITION_MATCH_THRESHOLD_SQ
     for (let i = 0; i < cached.points.length; i++) {
-      if (used[i]) continue
+      if (usedMask & (1 << i)) continue
       const dxA = pt.worldAx - cached.points[i].worldAx
       const dyA = pt.worldAy - cached.points[i].worldAy
       const distSq = dxA * dxA + dyA * dyA
@@ -823,7 +825,7 @@ export function warmStartManifold(
     if (bestIdx >= 0) {
       pt.normalImpulse = cached.points[bestIdx].normalImpulse * warmFactor
       pt.tangentImpulse = cached.points[bestIdx].tangentImpulse * warmFactor
-      used[bestIdx] = 1
+      usedMask |= 1 << bestIdx
     }
   }
 }

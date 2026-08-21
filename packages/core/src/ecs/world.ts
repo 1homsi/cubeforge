@@ -69,6 +69,11 @@ interface Archetype {
   readonly types: ReadonlySet<string>
   // Entities in this archetype (insertion order)
   entities: EntityId[]
+  // Cached structural transitions: type → target archetype after adding that
+  // type (addEdges) or removing it (removeEdges). Turns repeated
+  // add/removeComponent calls into O(1) map lookups with zero allocation.
+  addEdges: Map<string, Archetype>
+  removeEdges: Map<string, Archetype>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -92,6 +97,17 @@ function _valuesEqual(a: unknown, b: unknown): boolean {
   return keysA.every(
     (key) => Object.prototype.hasOwnProperty.call(recordB, key) && _valuesEqual(recordA[key], recordB[key]),
   )
+}
+
+/**
+ * Deep-clone a plain-data component.
+ *
+ * Benchmarked: the JSON round-trip beats `structuredClone` for small plain
+ * objects in V8 (structuredClone's generality costs several µs extra per call),
+ * so JSON stays despite looking naive.
+ */
+function _cloneComponent<T>(comp: T): T {
+  return JSON.parse(JSON.stringify(comp)) as T
 }
 
 function _componentsChanged(a: Component[], b: Component[]): boolean {
@@ -130,8 +146,16 @@ export class ECSWorld {
   // Primary storage: archetypes keyed by sorted type string
   private archetypes = new Map<string, Archetype>()
 
-  // Which archetype each entity lives in
-  private entityArchetype = new Map<EntityId, string>()
+  // Reverse index: component type → archetypes containing it. Lets query()
+  // start from the smallest candidate set instead of scanning all archetypes.
+  private typeIndex = new Map<string, Set<Archetype>>()
+
+  // Which archetype each entity lives in (direct object ref — no key lookup)
+  private entityArchetype = new Map<EntityId, Archetype>()
+
+  // Each entity's index within its archetype's entity array. Together with
+  // swap-remove this makes structural moves O(1) instead of O(n) indexOf.
+  private entityPos = new Map<EntityId, number>()
 
   private systems: System[] = []
 
@@ -139,47 +163,129 @@ export class ECSWorld {
   // Invalidated selectively when archetypes are added or entities move.
   private queryCache = new Map<string, EntityId[]>()
 
+  // Reverse index of the query cache: component type → cached query keys that
+  // include it. Makes dirty-flush invalidation O(dirty types) instead of
+  // O(cache size × key parse).
+  private cacheKeysByType = new Map<string, Set<string>>()
+
   // Component types touched since last update() — used for selective cache invalidation
   private dirtyTypes = new Set<string>()
   private dirtyAll = false
+
+  // Reused TextEncoder for binary snapshots (construction is expensive).
+  private _encoder: TextEncoder | undefined
 
   // ── Internal helpers ────────────────────────────────────────────────────────
 
   private getOrCreateArchetype(types: Iterable<string>): Archetype {
     const arr = [...types].sort()
+    return this.getOrCreateArchetypeByKey(arr)
+  }
+
+  /** Create or fetch an archetype from an already-sorted type list. */
+  private getOrCreateArchetypeByKey(arr: string[]): Archetype {
     const key = arr.join('\x00')
     let arch = this.archetypes.get(key)
     if (!arch) {
-      arch = { key, types: new Set(arr), entities: [] }
+      arch = { key, types: new Set(arr), entities: [], addEdges: new Map(), removeEdges: new Map() }
       this.archetypes.set(key, arch)
+      for (const t of arr) {
+        let set = this.typeIndex.get(t)
+        if (!set) {
+          set = new Set()
+          this.typeIndex.set(t, set)
+        }
+        set.add(arch)
+      }
     }
     return arch
   }
 
+  /**
+   * Resolve the archetype reached by adding `type` to `from` — via cached
+   * edge when available, computing and caching it on first traversal.
+   */
+  private getAddEdge(from: Archetype, type: string): Archetype {
+    let target = from.addEdges.get(type)
+    if (!target) {
+      // Insert into the sorted type list without re-spreading the whole set.
+      const merged: string[] = []
+      let inserted = false
+      for (const t of from.types) {
+        if (!inserted && t > type) {
+          merged.push(type)
+          inserted = true
+        }
+        merged.push(t)
+      }
+      if (!inserted) merged.push(type)
+      target = this.getOrCreateArchetypeByKey(merged)
+      from.addEdges.set(type, target)
+      target.removeEdges.set(type, from)
+    }
+    return target
+  }
+
+  /**
+   * Resolve the archetype reached by removing `type` from `from`.
+   */
+  private getRemoveEdge(from: Archetype, type: string): Archetype {
+    let target = from.removeEdges.get(type)
+    if (!target) {
+      // Rebuild the sorted list without `type`.
+      const reduced: string[] = []
+      for (const t of from.types) {
+        if (t !== type) reduced.push(t)
+      }
+      target = this.getOrCreateArchetypeByKey(reduced)
+      from.removeEdges.set(type, target)
+      target.addEdges.set(type, from)
+    }
+    return target
+  }
+
   private moveToArchetype(id: EntityId, newArch: Archetype): void {
-    // Remove from current archetype
-    const oldKey = this.entityArchetype.get(id)
-    if (oldKey !== undefined) {
-      const oldArch = this.archetypes.get(oldKey)
-      if (oldArch) {
-        const idx = oldArch.entities.indexOf(id)
-        if (idx !== -1) oldArch.entities.splice(idx, 1)
+    // Remove from current archetype — O(1) via the stored position +
+    // swap-remove. Query results make no ordering guarantees, so relative
+    // order loss is acceptable.
+    const oldArch = this.entityArchetype.get(id)
+    if (oldArch) {
+      const entities = oldArch.entities
+      const idx = this.entityPos.get(id)!
+      const last = entities.pop()!
+      if (idx < entities.length) {
+        entities[idx] = last
+        this.entityPos.set(last, idx)
       }
     }
+    this.entityPos.set(id, newArch.entities.length)
     newArch.entities.push(id)
-    this.entityArchetype.set(id, newArch.key)
+    this.entityArchetype.set(id, newArch)
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
+  // Freelist of recycled per-entity component maps — avoids allocating a
+  // fresh Map on every createEntity (spawn-heavy games churn thousands).
+  private _compMapPool: Map<string, Component>[] = []
+
   createEntity(): EntityId {
     const id = this.nextId++
-    this.componentIndex.set(id, new Map())
-    // New entity starts in the empty archetype
-    const emptyArch = this.getOrCreateArchetype([])
+    const pooled = this._compMapPool.pop()
+    if (pooled) {
+      pooled.clear()
+      this.componentIndex.set(id, pooled)
+    } else {
+      this.componentIndex.set(id, new Map())
+    }
+    // New entity starts in the empty archetype. It has no components, so no
+    // component-typed query can match it — only the zero-arg query ('' key)
+    // is affected. Invalidate just that instead of nuking the whole cache.
+    const emptyArch = this.getOrCreateArchetypeByKey([])
+    this.entityPos.set(id, emptyArch.entities.length)
     emptyArch.entities.push(id)
-    this.entityArchetype.set(id, emptyArch.key)
-    this.dirtyAll = true
+    this.entityArchetype.set(id, emptyArch)
+    this.queryCache.delete('')
     return id
   }
 
@@ -189,19 +295,27 @@ export class ECSWorld {
     const comps = this.componentIndex.get(id)
     if (comps) {
       for (const type of comps.keys()) this.dirtyTypes.add(type)
+      if (comps.size === 0) this.queryCache.delete('')
     }
-    // Remove from archetype
-    const archKey = this.entityArchetype.get(id)
-    if (archKey !== undefined) {
-      const arch = this.archetypes.get(archKey)
-      if (arch) {
-        const idx = arch.entities.indexOf(id)
-        if (idx !== -1) arch.entities.splice(idx, 1)
+    // Remove from archetype — O(1) via stored position + swap-remove.
+    const arch = this.entityArchetype.get(id)
+    if (arch) {
+      const entities = arch.entities
+      const idx = this.entityPos.get(id)!
+      const last = entities.pop()!
+      if (idx < entities.length) {
+        entities[idx] = last
+        this.entityPos.set(last, idx)
       }
     }
     this.componentIndex.delete(id)
     this.entityArchetype.delete(id)
-    this.dirtyAll = true
+    this.entityPos.delete(id)
+    const pooled = this._compMapPool
+    if (comps && pooled.length < 4096) pooled.push(comps)
+    // Zero-arg query() returns ALL live entities, so any destruction
+    // invalidates it — component-typed queries are covered by dirtyTypes.
+    this.queryCache.delete('')
     // Fire subscribers — copy to avoid mutation-during-iteration if one unsubscribes.
     if (this.destroyListeners.size > 0) {
       for (const cb of Array.from(this.destroyListeners)) cb(id)
@@ -236,22 +350,26 @@ export class ECSWorld {
   addComponent<T extends Component>(id: EntityId, component: T): void {
     const comps = this.componentIndex.get(id)
     if (!comps) return
+    const newType = !comps.has(component.type)
     comps.set(component.type, component)
+    // Overwriting an existing component keeps the same archetype — no cache
+    // or structural changes can result.
+    if (!newType) return
     this.dirtyTypes.add(component.type)
 
-    // Move entity to new archetype (current types + new type)
-    const newArch = this.getOrCreateArchetype(comps.keys())
+    // Move along the cached +type archetype edge.
+    const newArch = this.getAddEdge(this.entityArchetype.get(id)!, component.type)
     this.moveToArchetype(id, newArch)
   }
 
   removeComponent(id: EntityId, type: string): void {
     const comps = this.componentIndex.get(id)
-    if (!comps) return
+    if (!comps || !comps.has(type)) return
     comps.delete(type)
     this.dirtyTypes.add(type)
 
-    // Move entity to new archetype (current types − removed type)
-    const newArch = this.getOrCreateArchetype(comps.keys())
+    // Move along the cached −type archetype edge.
+    const newArch = this.getRemoveEdge(this.entityArchetype.get(id)!, type)
     this.moveToArchetype(id, newArch)
   }
 
@@ -287,20 +405,28 @@ export class ECSWorld {
   // (destroyEntity, addComponent, removeComponent) is reflected before
   // the next query returns its results — prevents stale entity IDs from
   // appearing in results for systems that run later in the same frame.
+  //
+  // The clean/no-work case is kept to two branch-and-return instructions so
+  // this method stays within V8's inlining budget on the query() hot path.
   private flushDirty(): void {
+    if (!this.dirtyAll && this.dirtyTypes.size === 0) return
+    this.flushDirtySlow()
+  }
+
+  private flushDirtySlow(): void {
     if (this.dirtyAll) {
       this.queryCache.clear()
+      this.cacheKeysByType.clear()
       this.dirtyAll = false
       this.dirtyTypes.clear()
-    } else if (this.dirtyTypes.size > 0) {
-      for (const key of this.queryCache.keys()) {
-        if (key === '') {
-          this.queryCache.delete(key)
-          continue
-        }
-        const keyTypes = key.split('\x00')
-        if (keyTypes.some((t) => this.dirtyTypes.has(t))) {
-          this.queryCache.delete(key)
+    } else {
+      // Invalidate only cached queries whose key includes a dirty type.
+      // The reverse index makes this O(dirty) instead of O(cache size).
+      for (const type of this.dirtyTypes) {
+        const keys = this.cacheKeysByType.get(type)
+        if (keys) {
+          for (const key of keys) this.queryCache.delete(key)
+          keys.clear()
         }
       }
       this.dirtyTypes.clear()
@@ -308,26 +434,72 @@ export class ECSWorld {
   }
 
   // Returns all entities that have ALL of the requested component types.
-  // Uses archetype superset matching — no per-entity scan.
+  // Uses archetype superset matching via the per-type reverse index — the
+  // scan starts from the smallest candidate set, not from every archetype.
+  //
+  // The hot path (cache hit) is kept in this small function; cache-miss work
+  // lives in `queryUncached` so V8 optimizes the tiny frame aggressively.
   query(...types: string[]): EntityId[] {
     this.flushDirty()
-
     // `types` is a fresh rest-parameter array owned by this call (never
-    // shared with the caller), so sorting in place is safe — this avoids an
-    // extra array copy on every call, and the single-type case (the common
-    // one — most systems query one component) skips sort+join entirely.
+    // shared with the caller), so sorting in place is safe.
     const key = types.length === 0 ? '' : types.length === 1 ? types[0] : types.sort().join('\x00')
     const cached = this.queryCache.get(key)
-    if (cached) return cached
+    return cached ?? this.queryUncached(types, key)
+  }
 
+  private queryUncached(types: string[], key: string): EntityId[] {
     const result: EntityId[] = []
-    for (const arch of this.archetypes.values()) {
-      // Skip archetypes that don't have all requested types
-      if (types.every((t) => arch.types.has(t))) {
-        for (const id of arch.entities) result.push(id)
+    if (types.length === 1) {
+      const candidates = this.typeIndex.get(types[0])
+      if (candidates) {
+        for (const arch of candidates) {
+          const entities = arch.entities
+          for (let i = 0; i < entities.length; i++) result.push(entities[i])
+        }
+      }
+    } else if (types.length > 1) {
+      // Start from the smallest per-type archetype set, then filter.
+      let smallest: Set<Archetype> | undefined
+      for (const t of types) {
+        const set = this.typeIndex.get(t)
+        if (!set || set.size === 0) {
+          this.queryCache.set(key, result)
+          return result
+        }
+        if (!smallest || set.size < smallest.size) smallest = set
+      }
+      for (const arch of smallest!) {
+        let match = true
+        for (let i = 0; i < types.length; i++) {
+          if (!arch.types.has(types[i])) {
+            match = false
+            break
+          }
+        }
+        if (match) {
+          const entities = arch.entities
+          for (let i = 0; i < entities.length; i++) result.push(entities[i])
+        }
+      }
+    } else {
+      // Zero-arg query: ALL live entities across every archetype.
+      for (const arch of this.archetypes.values()) {
+        const entities = arch.entities
+        for (let i = 0; i < entities.length; i++) result.push(entities[i])
       }
     }
+
     this.queryCache.set(key, result)
+    // Register this cache entry under each requested type for O(1) invalidation.
+    for (let i = 0; i < types.length; i++) {
+      let keys = this.cacheKeysByType.get(types[i])
+      if (!keys) {
+        keys = new Set()
+        this.cacheKeysByType.set(types[i], keys)
+      }
+      keys.add(key)
+    }
     return result
   }
 
@@ -390,7 +562,7 @@ export class ECSWorld {
     for (const [id, comps] of this.componentIndex) {
       const components: Component[] = []
       for (const comp of comps.values()) {
-        components.push(JSON.parse(JSON.stringify(comp)) as Component)
+        components.push(_cloneComponent(comp))
       }
       entities.push({ id, components })
     }
@@ -407,8 +579,9 @@ export class ECSWorld {
       for (const comp of components) compMap.set(comp.type, comp)
       this.componentIndex.set(id, compMap)
       const arch = this.getOrCreateArchetype(compMap.keys())
+      this.entityPos.set(id, arch.entities.length)
       arch.entities.push(id)
-      this.entityArchetype.set(id, arch.key)
+      this.entityArchetype.set(id, arch)
     }
     this.dirtyAll = true
   }
@@ -441,25 +614,25 @@ export class ECSWorld {
    * Compatible with `restoreSnapshotBinary`.
    */
   getSnapshotBinary(): Uint8Array {
-    const enc = new TextEncoder()
-    const snap = this.getSnapshot()
+    // Serialise directly from live component storage — no intermediate
+    // deep-cloned WorldSnapshot (that alone used to double the cost).
+    const enc = this._encoder ?? (this._encoder = new TextEncoder())
 
-    // Pre-encode to measure total size
-    const eecs: Array<{ id: number; comps: Array<{ tb: Uint8Array; db: Uint8Array }> }> = snap.entities.map(
-      ({ id, components }) => ({
-        id,
-        comps: components.map((comp) => {
-          const { type, ...rest } = comp as unknown as Record<string, unknown>
-          void type
-          return { tb: enc.encode(comp.type), db: enc.encode(JSON.stringify(rest)) }
-        }),
-      }),
-    )
-
+    // First pass: encode component bodies, tracking total size.
+    const eecs: Array<{ id: number; comps: Array<{ tb: Uint8Array; db: Uint8Array }> }> = []
     let size = 12 // nextId + rngState + entityCount
-    for (const { comps } of eecs) {
+    for (const [id, comps] of this.componentIndex) {
+      const encoded: Array<{ tb: Uint8Array; db: Uint8Array }> = []
+      for (const comp of comps.values()) {
+        const { type, ...rest } = comp as unknown as Record<string, unknown>
+        void rest
+        const tb = enc.encode(comp.type)
+        const db = enc.encode(JSON.stringify(rest))
+        encoded.push({ tb, db })
+        size += 2 + tb.byteLength + 4 + db.byteLength
+      }
+      eecs.push({ id, comps: encoded })
       size += 6 // id (4) + componentCount (2)
-      for (const { tb, db } of comps) size += 2 + tb.byteLength + 4 + db.byteLength
     }
 
     const buf = new ArrayBuffer(size)
@@ -467,9 +640,9 @@ export class ECSWorld {
     const u8 = new Uint8Array(buf)
     let o = 0
 
-    view.setUint32(o, snap.nextId, true)
+    view.setUint32(o, this.nextId, true)
     o += 4
-    view.setUint32(o, snap.rngState, true)
+    view.setUint32(o, this._rngState, true)
     o += 4
     view.setUint32(o, eecs.length, true)
     o += 4
@@ -545,24 +718,29 @@ export class ECSWorld {
    * baseline + a sequence of deltas without sending full world state each tick.
    */
   getDeltaSnapshot(baseline: WorldSnapshot): DeltaSnapshot {
-    const current = this.getSnapshot()
     const baseMap = new Map(baseline.entities.map((e) => [e.id, e]))
     const changed: WorldSnapshot['entities'] = []
     const removed: number[] = []
 
-    for (const entity of current.entities) {
-      const base = baseMap.get(entity.id)
-      if (!base || _componentsChanged(entity.components, base.components)) {
-        changed.push(entity)
+    // Compare live component storage against the baseline without cloning
+    // unchanged entities — only entities that actually changed are cloned.
+    for (const [id, comps] of this.componentIndex) {
+      const base = baseMap.get(id)
+      if (!base) {
+        changed.push({ id, components: [...comps.values()].map(_cloneComponent) })
+        continue
+      }
+      const liveComps = [...comps.values()]
+      if (_componentsChanged(liveComps, base.components)) {
+        changed.push({ id, components: liveComps.map(_cloneComponent) })
       }
     }
 
-    const currentIds = new Set(current.entities.map((e) => e.id))
     for (const { id } of baseline.entities) {
-      if (!currentIds.has(id)) removed.push(id)
+      if (!this.componentIndex.has(id)) removed.push(id)
     }
 
-    return { nextId: current.nextId, rngState: current.rngState, changed, removed }
+    return { nextId: this.nextId, rngState: this._rngState, changed, removed }
   }
 
   addSystem(system: System): void {
@@ -583,8 +761,11 @@ export class ECSWorld {
   clear(): void {
     this.componentIndex.clear()
     this.archetypes.clear()
+    this.typeIndex.clear()
     this.entityArchetype.clear()
+    this.entityPos.clear()
     this.queryCache.clear()
+    this.cacheKeysByType.clear()
     this.dirtyTypes.clear()
     this.dirtyAll = false
     this.nextId = 0

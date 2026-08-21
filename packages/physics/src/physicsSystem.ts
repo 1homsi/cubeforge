@@ -258,6 +258,22 @@ function getCompoundBounds(tx: number, ty: number, shapes: ColliderShape[]): AAB
   return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, hw: (maxX - minX) / 2, hh: (maxY - minY) / 2 }
 }
 
+function polygonWorldAABB(vertices: { x: number; y: number }[], tx: number, ty: number, offX: number, offY: number): AABB {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const v of vertices) {
+    const wx = tx + offX + v.x
+    const wy = ty + offY + v.y
+    if (wx < minX) minX = wx
+    if (wx > maxX) maxX = wx
+    if (wy < minY) minY = wy
+    if (wy > maxY) maxY = wy
+  }
+  return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, hw: (maxX - minX) / 2, hh: (maxY - minY) / 2 }
+}
+
 // ── Swept AABB (CCD) ───────────────────────────────────────────────────────
 
 function sweepAABB(aCx: number, aCy: number, aHw: number, aHh: number, dx: number, dy: number, b: AABB): number | null {
@@ -291,6 +307,9 @@ function sweepAABB(aCx: number, aCy: number, aHw: number, aHh: number, dx: numbe
 function pairKey(a: EntityId, b: EntityId): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`
 }
+
+/** Shared immutable placeholder for entities excluded from spatial pairing. */
+const EMPTY_CELLS: string[] = []
 
 // ── Physics System ──────────────────────────────────────────────────────────
 
@@ -340,6 +359,10 @@ export class PhysicsSystem implements System {
   private _circleNormals = new Map<string, { nx: number; ny: number }>()
   /** Shared scratch for per-body "checked" neighbor dedup; cleared per iteration. */
   private _checkedScratch = new Set<EntityId>()
+  /** Scratch grid + per-entity cache reused by `forEachSpatialCandidatePair`. */
+  private _pairGridScratch = new Map<string, EntityId[]>()
+  private _pairBoundsScratch: Array<{ cx: number; cy: number; hw: number; hh: number } | null> = []
+  private _pairCellsScratch: string[][] = []
   private _currentCollisionPairs = new Map<string, [EntityId, EntityId]>()
   private _currentTriggerPairs = new Map<string, [EntityId, EntityId]>()
   private _currentCirclePairs = new Map<string, [EntityId, EntityId]>()
@@ -392,6 +415,122 @@ export class PhysicsSystem implements System {
     const cells: string[] = []
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) cells.push(`${x},${y}`)
     return cells
+  }
+
+  /**
+   * Invoke `cb(ia, ib)` once for every unordered pair of entities in `ids`
+   * whose AABBs (from `getBounds`) share at least one spatial cell.
+   *
+   * This is a broad-phase pre-filter for the O(n²) all-pairs event-detection
+   * scans below: AABB cells are a conservative superset of true overlaps, so
+   * no pair that could actually overlap is ever skipped — only pairs that
+   * provably cannot overlap are pruned before reaching the (more expensive)
+   * per-pair narrow-phase check `cb` performs.
+   *
+   * `getBounds` returning `null` (e.g. for a disabled collider) excludes
+   * that entity from every pair entirely.
+   */
+  private forEachSpatialCandidatePair(
+    ids: EntityId[],
+    getBounds: (id: EntityId) => { cx: number; cy: number; hw: number; hh: number } | null,
+    cb: (ia: EntityId, ib: EntityId) => void,
+  ): void {
+    const n = ids.length
+    if (n < 2) return
+
+    const grid = this._pairGridScratch
+    grid.clear()
+    const bounds = this._pairBoundsScratch
+    bounds.length = n
+    const cellsByIdx = this._pairCellsScratch
+    cellsByIdx.length = n
+
+    for (let idx = 0; idx < n; idx++) {
+      const b = getBounds(ids[idx])
+      bounds[idx] = b
+      if (!b) {
+        cellsByIdx[idx] = EMPTY_CELLS
+        continue
+      }
+      const cells = this.getCells(b.cx, b.cy, b.hw, b.hh)
+      cellsByIdx[idx] = cells
+      for (const cell of cells) {
+        let bucket = grid.get(cell)
+        if (!bucket) {
+          bucket = []
+          grid.set(cell, bucket)
+        }
+        bucket.push(idx)
+      }
+    }
+
+    const checked = this._checkedScratch
+    for (let i = 0; i < n; i++) {
+      const cells = cellsByIdx[i]
+      if (cells.length === 0) continue
+      checked.clear()
+      for (const cell of cells) {
+        const bucket = grid.get(cell)
+        if (!bucket) continue
+        for (const j of bucket) {
+          if (j <= i) continue
+          const idB = ids[j]
+          if (checked.has(idB)) continue
+          checked.add(idB)
+          cb(ids[i], idB)
+        }
+      }
+    }
+  }
+
+  /**
+   * Cross-set variant of `forEachSpatialCandidatePair`: invokes `cb(a, b)`
+   * once for every entity `a` in `idsA` and `b` in `idsB` whose bounds share
+   * a spatial cell, skipping the degenerate case where the same entity id
+   * appears in both sets (e.g. an entity with both a Circle and a Box
+   * collider shouldn't be paired against itself).
+   */
+  private forEachSpatialCandidateCrossPair(
+    idsA: EntityId[],
+    idsB: EntityId[],
+    getBoundsA: (id: EntityId) => { cx: number; cy: number; hw: number; hh: number } | null,
+    getBoundsB: (id: EntityId) => { cx: number; cy: number; hw: number; hh: number } | null,
+    cb: (a: EntityId, b: EntityId) => void,
+  ): void {
+    if (idsA.length === 0 || idsB.length === 0) return
+
+    const grid = this._pairGridScratch
+    grid.clear()
+    for (let j = 0; j < idsB.length; j++) {
+      const b = getBoundsB(idsB[j])
+      if (!b) continue
+      for (const cell of this.getCells(b.cx, b.cy, b.hw, b.hh)) {
+        let bucket = grid.get(cell)
+        if (!bucket) {
+          bucket = []
+          grid.set(cell, bucket)
+        }
+        bucket.push(j)
+      }
+    }
+
+    const checked = this._checkedScratch
+    for (let i = 0; i < idsA.length; i++) {
+      const idA = idsA[i]
+      const a = getBoundsA(idA)
+      if (!a) continue
+      checked.clear()
+      for (const cell of this.getCells(a.cx, a.cy, a.hw, a.hh)) {
+        const bucket = grid.get(cell)
+        if (!bucket) continue
+        for (const j of bucket) {
+          const idB = idsB[j]
+          if (idB === idA || checked.has(idB)) continue
+          checked.add(idB)
+          cb(idA, idB)
+        }
+      }
+    }
   }
 
   // ── Mass properties ─────────────────────────────────────────────────────
@@ -571,13 +710,9 @@ export class PhysicsSystem implements System {
     // and contacts are built. The computed velocity is preserved so dynamic
     // bodies see the kinematic motion through the solver.
 
-    const allKinematics = world.query('Transform', 'RigidBody').filter((id) => {
+    for (const id of world.query('Transform', 'RigidBody')) {
       const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
-      return rb.isKinematic && rb.enabled
-    })
-
-    for (const id of allKinematics) {
-      const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+      if (!rb.isKinematic || !rb.enabled) continue
       const t = world.getComponent<TransformComponent>(id, 'Transform')!
       if (rb._nextKinematicX !== null || rb._nextKinematicY !== null) {
         if (rb._nextKinematicX !== null) {
@@ -981,10 +1116,14 @@ export class PhysicsSystem implements System {
     }
 
     // Dynamic box vs dynamic box
-    for (let i = 0; i < dynamicBox.length; i++) {
-      for (let j = i + 1; j < dynamicBox.length; j++) {
-        const ia = dynamicBox[i]
-        const ib = dynamicBox[j]
+    this.forEachSpatialCandidatePair(
+      dynamicBox,
+      (id) => {
+        const c = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+        if (!c.enabled) return null
+        return getAABB(world.getComponent<TransformComponent>(id, 'Transform')!, c)
+      },
+      (ia, ib) => {
         const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
         const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
 
@@ -992,9 +1131,9 @@ export class PhysicsSystem implements System {
         const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
         const ca = world.getComponent<BoxColliderComponent>(ia, 'BoxCollider')!
         const cb = world.getComponent<BoxColliderComponent>(ib, 'BoxCollider')!
-        if (!ca.enabled || !cb.enabled) continue
-        if (ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
+        if (!ca.enabled || !cb.enabled) return
+        if (ca.isTrigger || cb.isTrigger) return
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) return
 
         const aabbA = getAABB(ta, ca)
         const aabbB = getAABB(tb, cb)
@@ -1008,7 +1147,7 @@ export class PhysicsSystem implements System {
           aabbB.hw,
           aabbB.hh,
         )
-        if (!result) continue
+        if (!result) return
 
         // Wake sleeping bodies on contact
         if (rba.sleeping) {
@@ -1051,8 +1190,8 @@ export class PhysicsSystem implements System {
 
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [ia, ib])
-      }
-    }
+      },
+    )
 
     // Dynamic circle vs static box
     for (const cid of dynamicCircle) {
@@ -1128,10 +1267,15 @@ export class PhysicsSystem implements System {
     }
 
     // Dynamic circle vs dynamic circle
-    for (let i = 0; i < dynamicCircle.length; i++) {
-      for (let j = i + 1; j < dynamicCircle.length; j++) {
-        const ia = dynamicCircle[i]
-        const ib = dynamicCircle[j]
+    this.forEachSpatialCandidatePair(
+      dynamicCircle,
+      (id) => {
+        const c = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+        if (!c.enabled) return null
+        const t = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: t.x + c.offsetX, cy: t.y + c.offsetY, hw: c.radius, hh: c.radius }
+      },
+      (ia, ib) => {
         const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
         const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
 
@@ -1139,8 +1283,8 @@ export class PhysicsSystem implements System {
         const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
         const ca = world.getComponent<CircleColliderComponent>(ia, 'CircleCollider')!
         const cb = world.getComponent<CircleColliderComponent>(ib, 'CircleCollider')!
-        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
+        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) return
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) return
 
         const result = generateCircleCircleManifold(
           ta.x + ca.offsetX,
@@ -1150,7 +1294,7 @@ export class PhysicsSystem implements System {
           tb.y + cb.offsetY,
           cb.radius,
         )
-        if (!result) continue
+        if (!result) return
 
         if (rba.sleeping) {
           rba.sleeping = false
@@ -1192,24 +1336,35 @@ export class PhysicsSystem implements System {
 
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [ia, ib])
-      }
-    }
+      },
+    )
 
     // Dynamic circle vs dynamic box
-    for (const cid of dynamicCircle) {
-      const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
-      if (crb.sleeping) continue
-      const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
-      const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
-      if (!cc.enabled || cc.isTrigger) continue
-
-      for (const bid of dynamicBox) {
+    this.forEachSpatialCandidateCrossPair(
+      dynamicCircle,
+      dynamicBox,
+      (id) => {
+        const crb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+        if (crb.sleeping) return null
+        const cc = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) return null
+        const ct = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: ct.x + cc.offsetX, cy: ct.y + cc.offsetY, hw: cc.radius, hh: cc.radius }
+      },
+      (id) => {
+        const bc = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+        if (!bc.enabled) return null
+        return getAABB(world.getComponent<TransformComponent>(id, 'Transform')!, bc)
+      },
+      (cid, bid) => {
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
         const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
-
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
-        if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) continue
+        if (bc.isTrigger) return
+        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) return
 
         const bAABB = getAABB(bt, bc)
         const result = generateCircleBoxManifold(
@@ -1221,7 +1376,7 @@ export class PhysicsSystem implements System {
           bAABB.hw,
           bAABB.hh,
         )
-        if (!result) continue
+        if (!result) return
 
         if (crb.sleeping) {
           crb.sleeping = false
@@ -1263,43 +1418,78 @@ export class PhysicsSystem implements System {
 
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [cid, bid])
-      }
-    }
+      },
+    )
 
     // ── Dynamic bodies vs static/kinematic circle geometry ───────────────
+    this.forEachSpatialCandidateCrossPair(
+      staticCircle,
+      dynamicCircle,
+      (id) => {
+        const sc = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+        if (!sc.enabled || sc.isTrigger) return null
+        const st = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: st.x + sc.offsetX, cy: st.y + sc.offsetY, hw: sc.radius, hh: sc.radius }
+      },
+      (id) => {
+        const crb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+        if (crb.sleeping) return null
+        const cc = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+        if (!cc.enabled || cc.isTrigger) return null
+        const ct = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: ct.x + cc.offsetX, cy: ct.y + cc.offsetY, hw: cc.radius, hh: cc.radius }
+      },
+      (sid, cid) => {
+        const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+        const sc = world.getComponent<CircleColliderComponent>(sid, 'CircleCollider')!
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
+        if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask, cc.group, sc.group)) return
+
+        const sx = st.x + sc.offsetX
+        const sy = st.y + sc.offsetY
+        const result = generateCircleCircleManifold(ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius, sx, sy, sc.radius)
+        if (result) addGeneratedManifold(cid, sid, result, cc, sc)
+      },
+    )
+
+    this.forEachSpatialCandidateCrossPair(
+      staticCircle,
+      dynamicBox,
+      (id) => {
+        const sc = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+        if (!sc.enabled || sc.isTrigger) return null
+        const st = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: st.x + sc.offsetX, cy: st.y + sc.offsetY, hw: sc.radius, hh: sc.radius }
+      },
+      (id) => {
+        const brb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+        if (brb.sleeping) return null
+        const bc = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+        if (!bc.enabled || bc.isTrigger) return null
+        return getAABB(world.getComponent<TransformComponent>(id, 'Transform')!, bc)
+      },
+      (sid, bid) => {
+        const st = world.getComponent<TransformComponent>(sid, 'Transform')!
+        const sc = world.getComponent<CircleColliderComponent>(sid, 'CircleCollider')!
+        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
+        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
+        if (!canInteract(sc.layer, sc.mask, bc.layer, bc.mask, sc.group, bc.group)) return
+
+        const sx = st.x + sc.offsetX
+        const sy = st.y + sc.offsetY
+        const bAABB = getAABB(bt, bc)
+        const result = generateCircleBoxManifold(sx, sy, sc.radius, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
+        if (result) addGeneratedManifold(sid, bid, result, sc, bc)
+      },
+    )
+
     for (const sid of staticCircle) {
       const st = world.getComponent<TransformComponent>(sid, 'Transform')!
       const sc = world.getComponent<CircleColliderComponent>(sid, 'CircleCollider')!
       if (!sc.enabled || sc.isTrigger) continue
       const sx = st.x + sc.offsetX
       const sy = st.y + sc.offsetY
-
-      for (const cid of dynamicCircle) {
-        if (cid === sid) continue
-        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
-        if (crb.sleeping) continue
-        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
-        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
-        if (!cc.enabled || cc.isTrigger) continue
-        if (!canInteract(cc.layer, cc.mask, sc.layer, sc.mask, cc.group, sc.group)) continue
-
-        const result = generateCircleCircleManifold(ct.x + cc.offsetX, ct.y + cc.offsetY, cc.radius, sx, sy, sc.radius)
-        if (result) addGeneratedManifold(cid, sid, result, cc, sc)
-      }
-
-      for (const bid of dynamicBox) {
-        if (bid === sid) continue
-        const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
-        if (brb.sleeping) continue
-        const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
-        const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
-        if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(sc.layer, sc.mask, bc.layer, bc.mask, sc.group, bc.group)) continue
-
-        const bAABB = getAABB(bt, bc)
-        const result = generateCircleBoxManifold(sx, sy, sc.radius, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
-        if (result) addGeneratedManifold(sid, bid, result, sc, bc)
-      }
 
       for (const pid of dynamicPolygon) {
         if (pid === sid) continue
@@ -1513,28 +1703,39 @@ export class PhysicsSystem implements System {
     }
 
     // ── Capsule vs dynamic box ───────────────────────────────────────────
-    for (const cid of contactCapsules) {
-      const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
-      if (crb.sleeping) continue
-      const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
-      const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
-      if (!cc.enabled || cc.isTrigger) continue
-
-      const capCx = ct.x + cc.offsetX
-      const capCy = ct.y + cc.offsetY
-      const capHw = cc.width / 2
-      const capHh = cc.height / 2
-
-      for (const bid of dynamicBox) {
+    this.forEachSpatialCandidateCrossPair(
+      contactCapsules,
+      dynamicBox,
+      (id) => {
+        const crb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+        if (crb.sleeping) return null
+        const cc = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
+        if (!cc.enabled || cc.isTrigger) return null
+        const ct = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: ct.x + cc.offsetX, cy: ct.y + cc.offsetY, hw: cc.width / 2, hh: cc.height / 2 }
+      },
+      (id) => {
+        const bc = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+        if (!bc.enabled) return null
+        return getAABB(world.getComponent<TransformComponent>(id, 'Transform')!, bc)
+      },
+      (cid, bid) => {
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
         const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
-        if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) continue
+        if (bc.isTrigger) return
+        if (!canInteract(cc.layer, cc.mask, bc.layer, bc.mask, cc.group, bc.group)) return
 
+        const capCx = ct.x + cc.offsetX
+        const capCy = ct.y + cc.offsetY
+        const capHw = cc.width / 2
+        const capHh = cc.height / 2
         const bAABB = getAABB(bt, bc)
         const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
-        if (!result) continue
+        if (!result) return
 
         if (crb.sleeping) {
           crb.sleeping = false
@@ -1572,22 +1773,27 @@ export class PhysicsSystem implements System {
         if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [cid, bid])
-      }
-    }
+      },
+    )
 
     // ── Capsule vs capsule ───────────────────────────────────────────────
-    for (let i = 0; i < contactCapsules.length; i++) {
-      for (let j = i + 1; j < contactCapsules.length; j++) {
-        const ia = contactCapsules[i]
-        const ib = contactCapsules[j]
+    this.forEachSpatialCandidatePair(
+      contactCapsules,
+      (id) => {
+        const c = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
+        if (!c.enabled) return null
+        const t = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: t.x + c.offsetX, cy: t.y + c.offsetY, hw: c.width / 2, hh: c.height / 2 }
+      },
+      (ia, ib) => {
         const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
         const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
         const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
         const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
         const ca = world.getComponent<CapsuleColliderComponent>(ia, 'CapsuleCollider')!
         const cb = world.getComponent<CapsuleColliderComponent>(ib, 'CapsuleCollider')!
-        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
+        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) return
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) return
 
         const result = generateCapsuleCapsuleManifold(
           ta.x + ca.offsetX,
@@ -1599,7 +1805,7 @@ export class PhysicsSystem implements System {
           cb.width / 2,
           cb.height / 2,
         )
-        if (!result) continue
+        if (!result) return
 
         if (rba.sleeping) {
           rba.sleeping = false
@@ -1637,29 +1843,41 @@ export class PhysicsSystem implements System {
         if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [ia, ib])
-      }
-    }
+      },
+    )
 
     // ── Capsule vs dynamic circle ────────────────────────────────────────
-    for (const cid of contactCapsules) {
-      const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
-      if (crb.sleeping) continue
-      const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
-      const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
-      if (!cc.enabled || cc.isTrigger) continue
-
-      const capCx = ct.x + cc.offsetX
-      const capCy = ct.y + cc.offsetY
-      const capHw = cc.width / 2
-      const capHh = cc.height / 2
-
-      for (const oid of dynamicCircle) {
+    this.forEachSpatialCandidateCrossPair(
+      contactCapsules,
+      dynamicCircle,
+      (id) => {
+        const crb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+        if (crb.sleeping) return null
+        const cc = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
+        if (!cc.enabled || cc.isTrigger) return null
+        const ct = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: ct.x + cc.offsetX, cy: ct.y + cc.offsetY, hw: cc.width / 2, hh: cc.height / 2 }
+      },
+      (id) => {
+        const oc = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+        if (!oc.enabled) return null
+        const ot = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: ot.x + oc.offsetX, cy: ot.y + oc.offsetY, hw: oc.radius, hh: oc.radius }
+      },
+      (cid, oid) => {
+        const crb = world.getComponent<RigidBodyComponent>(cid, 'RigidBody')!
         const orb = world.getComponent<RigidBodyComponent>(oid, 'RigidBody')!
+        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+        const cc = world.getComponent<CapsuleColliderComponent>(cid, 'CapsuleCollider')!
         const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
         const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
-        if (!oc.enabled || oc.isTrigger) continue
-        if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask, cc.group, oc.group)) continue
+        if (oc.isTrigger) return
+        if (!canInteract(cc.layer, cc.mask, oc.layer, oc.mask, cc.group, oc.group)) return
 
+        const capCx = ct.x + cc.offsetX
+        const capCy = ct.y + cc.offsetY
+        const capHw = cc.width / 2
+        const capHh = cc.height / 2
         const result = generateCapsuleCircleManifold(
           capCx,
           capCy,
@@ -1669,7 +1887,7 @@ export class PhysicsSystem implements System {
           ot.y + oc.offsetY,
           oc.radius,
         )
-        if (!result) continue
+        if (!result) return
 
         if (crb.sleeping) {
           crb.sleeping = false
@@ -1707,8 +1925,8 @@ export class PhysicsSystem implements System {
         if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [cid, oid])
-      }
-    }
+      },
+    )
 
     // ── Polygon vs static box ────────────────────────────────────────────
     for (const pid of dynamicPolygon) {
@@ -1797,19 +2015,31 @@ export class PhysicsSystem implements System {
     }
 
     // ── Polygon vs dynamic box ───────────────────────────────────────────
-    for (const pid of dynamicPolygon) {
-      const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
-      if (prb.sleeping) continue
-      const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
-      const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
-      if (!pc.enabled || pc.isTrigger) continue
-
-      for (const bid of dynamicBox) {
+    this.forEachSpatialCandidateCrossPair(
+      dynamicPolygon,
+      dynamicBox,
+      (id) => {
+        const prb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+        if (prb.sleeping) return null
+        const pc = world.getComponent<ConvexPolygonColliderComponent>(id, 'ConvexPolygonCollider')!
+        if (!pc.enabled || pc.isTrigger) return null
+        const pt = world.getComponent<TransformComponent>(id, 'Transform')!
+        return polygonWorldAABB(pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY)
+      },
+      (id) => {
+        const bc = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+        if (!bc.enabled) return null
+        return getAABB(world.getComponent<TransformComponent>(id, 'Transform')!, bc)
+      },
+      (pid, bid) => {
+        const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
         const brb = world.getComponent<RigidBodyComponent>(bid, 'RigidBody')!
+        const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+        const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
         const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
         const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
-        if (!bc.enabled || bc.isTrigger) continue
-        if (!canInteract(pc.layer, pc.mask, bc.layer, bc.mask, pc.group, bc.group)) continue
+        if (bc.isTrigger) return
+        if (!canInteract(pc.layer, pc.mask, bc.layer, bc.mask, pc.group, bc.group)) return
 
         const bAABB = getAABB(bt, bc)
         const result = generatePolygonBoxManifold(
@@ -1823,7 +2053,7 @@ export class PhysicsSystem implements System {
           bAABB.hw,
           bAABB.hh,
         )
-        if (!result) continue
+        if (!result) return
 
         if (prb.sleeping) {
           prb.sleeping = false
@@ -1861,22 +2091,27 @@ export class PhysicsSystem implements System {
         if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [pid, bid])
-      }
-    }
+      },
+    )
 
     // ── Polygon vs polygon ───────────────────────────────────────────────
-    for (let i = 0; i < dynamicPolygon.length; i++) {
-      for (let j = i + 1; j < dynamicPolygon.length; j++) {
-        const ia = dynamicPolygon[i]
-        const ib = dynamicPolygon[j]
+    this.forEachSpatialCandidatePair(
+      dynamicPolygon,
+      (id) => {
+        const c = world.getComponent<ConvexPolygonColliderComponent>(id, 'ConvexPolygonCollider')!
+        if (!c.enabled) return null
+        const t = world.getComponent<TransformComponent>(id, 'Transform')!
+        return polygonWorldAABB(c.vertices, t.x, t.y, c.offsetX, c.offsetY)
+      },
+      (ia, ib) => {
         const rba = world.getComponent<RigidBodyComponent>(ia, 'RigidBody')!
         const rbb = world.getComponent<RigidBodyComponent>(ib, 'RigidBody')!
         const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
         const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
         const ca = world.getComponent<ConvexPolygonColliderComponent>(ia, 'ConvexPolygonCollider')!
         const cb = world.getComponent<ConvexPolygonColliderComponent>(ib, 'ConvexPolygonCollider')!
-        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
+        if (!ca.enabled || !cb.enabled || ca.isTrigger || cb.isTrigger) return
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) return
 
         const result = generatePolygonPolygonManifold(
           ca.vertices,
@@ -1890,7 +2125,7 @@ export class PhysicsSystem implements System {
           cb.offsetX,
           cb.offsetY,
         )
-        if (!result) continue
+        if (!result) return
 
         if (rba.sleeping) {
           rba.sleeping = false
@@ -1928,23 +2163,36 @@ export class PhysicsSystem implements System {
         if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [ia, ib])
-      }
-    }
+      },
+    )
 
     // ── Polygon vs dynamic circle ────────────────────────────────────────
-    for (const pid of dynamicPolygon) {
-      const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
-      if (prb.sleeping) continue
-      const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
-      const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
-      if (!pc.enabled || pc.isTrigger) continue
-
-      for (const oid of dynamicCircle) {
+    this.forEachSpatialCandidateCrossPair(
+      dynamicPolygon,
+      dynamicCircle,
+      (id) => {
+        const prb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
+        if (prb.sleeping) return null
+        const pc = world.getComponent<ConvexPolygonColliderComponent>(id, 'ConvexPolygonCollider')!
+        if (!pc.enabled || pc.isTrigger) return null
+        const pt = world.getComponent<TransformComponent>(id, 'Transform')!
+        return polygonWorldAABB(pc.vertices, pt.x, pt.y, pc.offsetX, pc.offsetY)
+      },
+      (id) => {
+        const oc = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+        if (!oc.enabled) return null
+        const ot = world.getComponent<TransformComponent>(id, 'Transform')!
+        return { cx: ot.x + oc.offsetX, cy: ot.y + oc.offsetY, hw: oc.radius, hh: oc.radius }
+      },
+      (pid, oid) => {
+        const prb = world.getComponent<RigidBodyComponent>(pid, 'RigidBody')!
         const orb = world.getComponent<RigidBodyComponent>(oid, 'RigidBody')!
+        const pt = world.getComponent<TransformComponent>(pid, 'Transform')!
+        const pc = world.getComponent<ConvexPolygonColliderComponent>(pid, 'ConvexPolygonCollider')!
         const ot = world.getComponent<TransformComponent>(oid, 'Transform')!
         const oc = world.getComponent<CircleColliderComponent>(oid, 'CircleCollider')!
-        if (!oc.enabled || oc.isTrigger) continue
-        if (!canInteract(pc.layer, pc.mask, oc.layer, oc.mask, pc.group, oc.group)) continue
+        if (oc.isTrigger) return
+        if (!canInteract(pc.layer, pc.mask, oc.layer, oc.mask, pc.group, oc.group)) return
 
         const result = generatePolygonCircleManifold(
           pc.vertices,
@@ -1956,7 +2204,7 @@ export class PhysicsSystem implements System {
           ot.y + oc.offsetY,
           oc.radius,
         )
-        if (!result) continue
+        if (!result) return
 
         if (prb.sleeping) {
           prb.sleeping = false
@@ -1994,8 +2242,8 @@ export class PhysicsSystem implements System {
         if (cached && this.config.warmStarting) warmStartManifold(manifold, cached, this.config.warmStartingFactor)
         manifolds.push(manifold)
         currentCollisionPairs.set(key, [pid, oid])
-      }
-    }
+      },
+    )
 
     // ── Triangle vs static box (treat as 3-vertex polygon) ───────────────
     for (const tid of dynamicTriangle) {
@@ -3482,19 +3730,23 @@ export class PhysicsSystem implements System {
     const triggerNormals = this._triggerNormals
     triggerNormals.clear()
 
-    for (let i = 0; i < allWithCollider.length; i++) {
-      for (let j = i + 1; j < allWithCollider.length; j++) {
-        const ia = allWithCollider[i]
-        const ib = allWithCollider[j]
+    this.forEachSpatialCandidatePair(
+      allWithCollider,
+      (id) => {
+        const c = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+        if (!c.enabled) return null
+        return getAABB(world.getComponent<TransformComponent>(id, 'Transform')!, c)
+      },
+      (ia, ib) => {
         const ca = world.getComponent<BoxColliderComponent>(ia, 'BoxCollider')!
         const cb = world.getComponent<BoxColliderComponent>(ib, 'BoxCollider')!
-        if (!ca.isTrigger && !cb.isTrigger) continue
-        if (!ca.enabled || !cb.enabled) continue
-        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
+        if (!ca.isTrigger && !cb.isTrigger) return
+        if (!ca.enabled || !cb.enabled) return
+        if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) return
         const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
         const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
         const ov = getOverlap(getAABB(ta, ca), getAABB(tb, cb))
-        if (!ov) continue
+        if (!ov) return
         const key = pairKey(ia, ib)
         currentTriggerPairs.set(key, [ia, ib])
         // Contact normal (A→B) via minimum-penetration axis
@@ -3506,8 +3758,8 @@ export class PhysicsSystem implements System {
           ny = ov.y > 0 ? 1 : -1
         }
         triggerNormals.set(key, { nx, ny })
-      }
-    }
+      },
+    )
 
     for (const [key, [a, b]] of currentTriggerPairs) {
       const tn = triggerNormals.get(key)
@@ -3534,14 +3786,19 @@ export class PhysicsSystem implements System {
       const circleNormals = this._circleNormals
       circleNormals.clear()
 
-      for (let i = 0; i < allCircle.length; i++) {
-        for (let j = i + 1; j < allCircle.length; j++) {
-          const ia = allCircle[i]
-          const ib = allCircle[j]
+      this.forEachSpatialCandidatePair(
+        allCircle,
+        (id) => {
+          const c = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+          if (!c.enabled) return null
+          const t = world.getComponent<TransformComponent>(id, 'Transform')!
+          return { cx: t.x + c.offsetX, cy: t.y + c.offsetY, hw: c.radius, hh: c.radius }
+        },
+        (ia, ib) => {
           const ca = world.getComponent<CircleColliderComponent>(ia, 'CircleCollider')!
           const cb = world.getComponent<CircleColliderComponent>(ib, 'CircleCollider')!
-          if (!ca.enabled || !cb.enabled) continue
-          if (!maskAllows(ca.mask, cb.layer) || !maskAllows(cb.mask, ca.layer)) continue
+          if (!ca.enabled || !cb.enabled) return
+          if (!maskAllows(ca.mask, cb.layer) || !maskAllows(cb.mask, ca.layer)) return
           const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
           const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
           const dx = ta.x + ca.offsetX - (tb.x + cb.offsetX)
@@ -3557,22 +3814,32 @@ export class PhysicsSystem implements System {
               ny: dist > 0 ? dy / dist : 0,
             })
           }
-        }
-      }
+        },
+      )
 
       // Circle-AABB events
       const allBoxes = world.query('Transform', 'BoxCollider')
-      for (const cid of allCircle) {
-        const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
-        if (!cc.enabled) continue
-        const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
-        const cx = ct.x + cc.offsetX
-        const cy = ct.y + cc.offsetY
-        for (const bid of allBoxes) {
-          if (bid === cid) continue
+      this.forEachSpatialCandidateCrossPair(
+        allCircle,
+        allBoxes,
+        (id) => {
+          const c = world.getComponent<CircleColliderComponent>(id, 'CircleCollider')!
+          if (!c.enabled) return null
+          const t = world.getComponent<TransformComponent>(id, 'Transform')!
+          return { cx: t.x + c.offsetX, cy: t.y + c.offsetY, hw: c.radius, hh: c.radius }
+        },
+        (id) => {
+          const c = world.getComponent<BoxColliderComponent>(id, 'BoxCollider')!
+          if (!c.enabled) return null
+          return getAABB(world.getComponent<TransformComponent>(id, 'Transform')!, c)
+        },
+        (cid, bid) => {
+          const cc = world.getComponent<CircleColliderComponent>(cid, 'CircleCollider')!
           const bc = world.getComponent<BoxColliderComponent>(bid, 'BoxCollider')!
-          if (!bc.enabled) continue
-          if (!maskAllows(cc.mask, bc.layer) || !maskAllows(bc.mask, cc.layer)) continue
+          if (!maskAllows(cc.mask, bc.layer) || !maskAllows(bc.mask, cc.layer)) return
+          const ct = world.getComponent<TransformComponent>(cid, 'Transform')!
+          const cx = ct.x + cc.offsetX
+          const cy = ct.y + cc.offsetY
           const bt = world.getComponent<TransformComponent>(bid, 'Transform')!
           const bx = bt.x + bc.offsetX
           const by = bt.y + bc.offsetY
@@ -3590,8 +3857,8 @@ export class PhysicsSystem implements System {
               ny: dist > 0 ? dy / dist : 0,
             })
           }
-        }
-      }
+        },
+      )
 
       for (const [key, [a, b]] of currentCirclePairs) {
         const cn = circleNormals.get(key)
@@ -3658,15 +3925,15 @@ export class PhysicsSystem implements System {
       }
 
       for (let i = 0; i < allCompound.length; i++) {
+        const ia = allCompound[i]
+        const ca = world.getComponent<CompoundColliderComponent>(ia, 'CompoundCollider')!
+        const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
+        const boundsA = getCompoundBounds(ta.x, ta.y, ca.shapes)
         for (let j = i + 1; j < allCompound.length; j++) {
-          const ia = allCompound[i]
           const ib = allCompound[j]
-          const ca = world.getComponent<CompoundColliderComponent>(ia, 'CompoundCollider')!
           const cb = world.getComponent<CompoundColliderComponent>(ib, 'CompoundCollider')!
           if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
-          const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
           const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
-          const boundsA = getCompoundBounds(ta.x, ta.y, ca.shapes)
           const boundsB = getCompoundBounds(tb.x, tb.y, cb.shapes)
           if (!getOverlap(boundsA, boundsB)) continue
           let hit = false
@@ -3730,20 +3997,25 @@ export class PhysicsSystem implements System {
         }
       }
 
-      for (let i = 0; i < allCapsule.length; i++) {
-        for (let j = i + 1; j < allCapsule.length; j++) {
-          const ia = allCapsule[i]
-          const ib = allCapsule[j]
+      this.forEachSpatialCandidatePair(
+        allCapsule,
+        (id) => {
+          const c = world.getComponent<CapsuleColliderComponent>(id, 'CapsuleCollider')!
+          const t = world.getComponent<TransformComponent>(id, 'Transform')!
+          const aabb = getCapsuleAABB(t, c)
+          return { cx: aabb.cx, cy: aabb.cy, hw: aabb.hw, hh: aabb.hh }
+        },
+        (ia, ib) => {
           const ca = world.getComponent<CapsuleColliderComponent>(ia, 'CapsuleCollider')!
           const cb = world.getComponent<CapsuleColliderComponent>(ib, 'CapsuleCollider')!
-          if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) continue
+          if (!canInteract(ca.layer, ca.mask, cb.layer, cb.mask, ca.group, cb.group)) return
           const ta = world.getComponent<TransformComponent>(ia, 'Transform')!
           const tb = world.getComponent<TransformComponent>(ib, 'Transform')!
           if (getOverlap(getCapsuleAABB(ta, ca), getCapsuleAABB(tb, cb))) {
             currentCapsulePairs.set(pairKey(ia, ib), [ia, ib])
           }
-        }
-      }
+        },
+      )
 
       for (const [key, [a, b]] of currentCapsulePairs) {
         if (!this.activeCapsulePairs.has(key)) this.events?.emit('capsuleEnter', { a, b })
