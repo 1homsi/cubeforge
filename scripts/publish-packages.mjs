@@ -9,20 +9,12 @@ const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const nodeBin = process.execPath
 
-export const publishPackagePaths = [
-  'packages/core',
-  'packages/input',
-  'packages/renderer',
-  'packages/physics',
-  'packages/audio',
-  'integrations/context',
-  'integrations/gameplay',
-  'integrations/devtools',
-  'integrations/editor',
-  'packages/net',
-  'integrations/cubeforge',
-  'packages/create-cubeforge-game',
-]
+// Packages actually published to npm. The monorepo also contains
+// @cubeforge/* scoped workspace packages, but no npm scope/org is
+// configured for them — `cubeforge` bundles them into its dist via tsup,
+// so consumers never need them as runtime deps. Extend this list only
+// after creating the npm org + trusted publisher for the scope.
+export const publishPackagePaths = ['integrations/cubeforge', 'packages/create-cubeforge-game']
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, 'utf8'))
@@ -48,7 +40,18 @@ export function preparePackageJson(pkg, version) {
     delete prepared.publishConfig
   }
 
-  for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+  // @cubeforge/* packages are bundled into the published dist (tsup) — they
+  // must not appear as runtime deps or installs would 404 on npm.
+  for (const section of ['dependencies', 'optionalDependencies']) {
+    const deps = prepared[section]
+    if (!deps) continue
+    for (const name of Object.keys(deps)) {
+      if (name.startsWith('@cubeforge/')) delete deps[name]
+    }
+    if (Object.keys(deps).length === 0) delete prepared[section]
+  }
+
+  for (const section of ['peerDependencies']) {
     if (!prepared[section]) continue
     for (const [name, range] of Object.entries(prepared[section])) {
       if (typeof range === 'string' && range.startsWith('workspace:')) {
