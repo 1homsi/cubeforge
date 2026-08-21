@@ -653,10 +653,33 @@ export class ECSWorld {
 
   queryOne(...types: string[]): EntityId | undefined {
     this.flushDirty()
-    for (const arch of this.archetypes.values()) {
-      if (types.every((t) => arch.types.has(t))) {
+    // Start from the smallest per-type archetype set — same strategy as
+    // query() — instead of scanning every archetype in the world.
+    let smallest: Set<Archetype> | undefined
+    for (const t of types) {
+      const set = this.typeIndex.get(t)
+      if (!set || set.size === 0) return undefined
+      if (!smallest || set.size < smallest.size) smallest = set
+    }
+    if (!smallest) {
+      // No types requested: any live entity (slot 0 when populated).
+      return this.liveCount > 0 ? this.idOfSlot[0] : undefined
+    }
+    if (types.length <= 1) {
+      for (const arch of smallest) {
         if (arch.entities.length > 0) return arch.entities[0]
       }
+      return undefined
+    }
+    for (const arch of smallest) {
+      let match = true
+      for (let i = 0; i < types.length; i++) {
+        if (!arch.types.has(types[i])) {
+          match = false
+          break
+        }
+      }
+      if (match && arch.entities.length > 0) return arch.entities[0]
     }
     return undefined
   }

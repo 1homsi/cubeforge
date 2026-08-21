@@ -17,7 +17,12 @@ export class EventBus {
   }
 
   emit<T>(event: string, data?: T): void {
-    this.listeners.get(event)?.forEach((l) => l(data))
+    // for..of over the live Set matches forEach() semantics exactly (added
+    // listeners are visited, removals mid-emit are safe) without allocating
+    // a closure per call — games emit hundreds of events per frame.
+    const set = this.listeners.get(event)
+    if (!set || set.size === 0) return
+    for (const listener of set) listener(data)
   }
 
   once<T>(event: string, listener: Listener<T>): () => void {
