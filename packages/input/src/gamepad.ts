@@ -67,6 +67,24 @@ export function gamepadButtonCode(button: number | keyof typeof GamepadButton): 
   return GAMEPAD_PREFIX + name
 }
 
+/**
+ * Synthetic indices for directional stick codes (100–107), so stick
+ * directions get press/release edges exactly like buttons.
+ * Order: LX+, LX-, LY+, LY-, RX+, RX-, RY+, RY-
+ */
+export const GAMEPAD_STICK_DIR_BASE = 100
+
+const STICK_DIRECTION_IDS: Record<string, number> = {
+  'LX+': 100,
+  'LX-': 101,
+  'LY+': 102,
+  'LY-': 103,
+  'RX+': 104,
+  'RX-': 105,
+  'RY+': 106,
+  'RY-': 107,
+}
+
 interface PadState {
   held: Set<number>
   justPressed: Set<number>
@@ -141,6 +159,19 @@ export class GamepadInput {
       for (let a = 0; a < 4 && a < gp.axes.length; a++) {
         const raw = gp.axes[a]
         state.axes[a] = Math.abs(raw) < dz ? 0 : raw
+      }
+      // Directional stick codes get button-style edges: synthetic indices
+      // 100–107 track whether each half-axis is currently active.
+      for (let d = 0; d < 8; d++) {
+        const id = GAMEPAD_STICK_DIR_BASE + d
+        const axisIdx = d >> 1 // LX± →0, LY± →1, RX± →2, RY± →3
+        const positive = d % 2 === 0
+        const v = state.axes[axisIdx] ?? 0
+        const active = positive ? v > 0 : v < 0
+        if (active && !state.held.has(id)) state.justPressed.add(id)
+        else if (!active && state.held.has(id)) state.justReleased.add(id)
+        if (active) state.held.add(id)
+        else state.held.delete(id)
       }
       if (gp.buttons.length > 6) state.triggers[0] = gp.buttons[6].value
       if (gp.buttons.length > 7) state.triggers[1] = gp.buttons[7].value
@@ -218,6 +249,9 @@ export class GamepadInput {
     const name = button.startsWith(GAMEPAD_PREFIX) ? button.slice(GAMEPAD_PREFIX.length) : button
     const idx = BUTTON_CODES.indexOf(name as (typeof BUTTON_CODES)[number])
     if (idx !== -1) return idx
+    // Directional stick codes ('LX+', 'LY-', …) map to synthetic edge-tracked ids
+    const dir = STICK_DIRECTION_IDS[name]
+    if (dir !== undefined) return dir
     // Numeric strings ('gamepad:17') address raw indices; anything else is
     // not a real button — return −1 rather than NaN, which never matches.
     const n = Number(name)

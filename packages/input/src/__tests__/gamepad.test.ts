@@ -184,3 +184,29 @@ describe('GamepadInput code resolution', () => {
     expect(gp.isDown('gamepad:0')).toBe(true)
   })
 })
+
+describe('Stick direction edge detection', () => {
+  it('gives directional codes press/release edges like buttons', () => {
+    const input = new InputManager()
+    mockPads[0] = makePad()
+    mockPads[0]!.axes = [0, 0, 0, 0]
+    input.flush()
+    expect(input.isDown('gamepad:LX+')).toBe(false)
+
+    // push stick right
+    mockPads[0]!.axes = [1, 0, 0, 0]
+    input.flush()
+    expect(input.isPressed('gamepad:LX+')).toBe(true)
+    expect(input.isDown('gamepad:LX+')).toBe(true)
+
+    input.flush()
+    expect(input.isPressed('gamepad:LX+')).toBe(false)
+    expect(input.isDown('gamepad:LX+')).toBe(true)
+
+    // release
+    mockPads[0]!.axes = [0, 0, 0, 0]
+    input.flush()
+    expect(input.isReleased('gamepad:LX+')).toBe(true)
+    expect(input.isDown('gamepad:LX+')).toBe(false)
+  })
+})
