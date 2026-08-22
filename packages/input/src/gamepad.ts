@@ -212,11 +212,15 @@ export class GamepadInput {
     })
   }
 
-  /** Map a button code/index to its numeric index; unknown codes → −1. */
+  /** Map a button code/index to its numeric index; unknown codes → −1 (never matches). */
   private resolve(button: number | string): number {
     if (typeof button === 'number') return button
     const name = button.startsWith(GAMEPAD_PREFIX) ? button.slice(GAMEPAD_PREFIX.length) : button
     const idx = BUTTON_CODES.indexOf(name as (typeof BUTTON_CODES)[number])
-    return idx !== -1 ? idx : Number(name)
+    if (idx !== -1) return idx
+    // Numeric strings ('gamepad:17') address raw indices; anything else is
+    // not a real button — return −1 rather than NaN, which never matches.
+    const n = Number(name)
+    return Number.isFinite(n) && Number.isInteger(n) && n >= 0 ? n : -1
   }
 }

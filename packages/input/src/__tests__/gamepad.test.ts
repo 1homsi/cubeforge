@@ -169,3 +169,18 @@ describe('InputMap analog stick binding', () => {
     expect(map.isActionDown(input, 'moveX')).toBe(true)
   })
 })
+
+describe('GamepadInput code resolution', () => {
+  it('unknown button codes never match instead of producing NaN', () => {
+    const gp = new GamepadInput()
+    mockPads[0] = makePad()
+    mockPads[0]!.buttons[0].pressed = true
+    gp.flush()
+
+    expect(gp.isDown('gamepad:Banana')).toBe(false)
+    expect(gp.isDown('gamepad:LX')).toBe(false) // stick names are not buttons
+    expect(gp.isPressed('gamepad:Banana')).toBe(false)
+    // raw numeric indices still work
+    expect(gp.isDown('gamepad:0')).toBe(true)
+  })
+})

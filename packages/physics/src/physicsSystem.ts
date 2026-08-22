@@ -343,9 +343,9 @@ function sweepAABB(aCx: number, aCy: number, aHw: number, aHh: number, dx: numbe
 // ── Contact pair tracking ───────────────────────────────────────────────────
 
 // Packed numeric pair key — canonical order (min first), exact for entity
-// IDs < 2^21 (~2M, far beyond practical worlds). Zero string allocation per
-// contact pair per frame.
-const PAIR_MUL = 0x200000
+// IDs < 2^26 (~67M; IDs are never reused, churn games climb). Zero string
+// allocation per contact pair per frame.
+const PAIR_MUL = 0x4000000 // 2^26
 function pairKey(a: EntityId, b: EntityId): number {
   return a < b ? a * PAIR_MUL + b : b * PAIR_MUL + a
 }

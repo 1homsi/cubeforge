@@ -240,3 +240,25 @@ describe('SweepAndPrune', () => {
     })
   })
 })
+
+describe('SweepAndPrune large entity IDs', () => {
+  it('decodes pairs correctly for IDs beyond 2^21 (long-session churn)', () => {
+    const sap = new SweepAndPrune()
+    const BIG = 3_000_000 // > old 2^21 packing limit
+    const SMALL = 7
+    const y = 0
+    // Overlapping boxes with extreme IDs
+    sap.update([
+      { entityId: SMALL as EntityId, minX: 0, maxX: 10, minY: y, maxY: 10 },
+      { entityId: BIG as EntityId, minX: 5, maxX: 15, minY: y, maxY: 10 },
+    ])
+    const pairs = sap.query()
+    expect(pairs).toHaveLength(1)
+    expect(pairs[0].entityA).toBe(SMALL)
+    expect(pairs[0].entityB).toBe(BIG)
+
+    // Removing one side purges exactly its pair (decode must not corrupt)
+    sap.remove(BIG as EntityId)
+    expect(sap.query()).toEqual([])
+  })
+})

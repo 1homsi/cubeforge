@@ -85,8 +85,8 @@ function pairKey(a: EntityId, b: EntityId): string {
 }
 
 // Packed numeric pair key — same canonical ordering as pairKey() but with
-// zero string allocation. Exact for entity IDs < 2^21 (see broadPhase.ts).
-const PAIR_MUL = 0x200000
+// zero string allocation. Exact for entity IDs < 2^26 (see broadPhase.ts).
+const PAIR_MUL = 0x4000000 // 2^26
 
 function packPair(a: EntityId, b: EntityId): number {
   return a < b ? a * PAIR_MUL + b : b * PAIR_MUL + a

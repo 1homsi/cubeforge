@@ -46,13 +46,16 @@ export async function preloadManifest(manifest: PreloadManifest, assets: AssetMa
     manifest.onProgress?.(done / total)
   }
 
+  // Snapshot BEFORE starting loads — loadImage/loadAudio kick off
+  // asynchronously as the promises are created. (Matching failures by src is
+  // unreliable: errors store baseURL-resolved paths while callers pass
+  // originals.)
+  const errBefore = assets.getErrors().length
+
   const imageLoads = imageUrls.map((src) => assets.loadImage(src).then(tick, tick))
   const audioLoads = audioUrls.map((src) => assets.loadAudio(src).then(tick, tick))
 
   await Promise.allSettled([...imageLoads, ...audioLoads])
 
-  // AssetManager records every failure; filter to the ones from this batch.
-  const batchSrcs = new Set([...imageUrls, ...audioUrls])
-  const failures = assets.getErrors().filter((e) => batchSrcs.has(e.src))
-  return { failures }
+  return { failures: assets.getErrors().slice(errBefore) }
 }

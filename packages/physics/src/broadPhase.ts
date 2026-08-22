@@ -57,9 +57,10 @@ interface SAPRecord {
 
 // ── Pair key packing ──────────────────────────────────────────────────────
 // Unordered pair (a, b) with a < b packs as a * PAIR_MUL + b. Exact in
-// float64 well past 2^53, so entity IDs up to PAIR_MUL - 1 (~2.1 million,
-// far beyond practical world sizes) are losslessly encoded/decoded.
-const PAIR_MUL = 0x200000 // 2^21
+// float64 up to 2^53, so both IDs may go up to 2^26 (~67 million) before
+// decoding degrades — far past any realistic lifetime entity count
+// (IDs are never reused, so churn games do climb).
+const PAIR_MUL = 0x4000000 // 2^26
 
 function packPair(a: EntityId, b: EntityId): number {
   return a < b ? a * PAIR_MUL + b : b * PAIR_MUL + a

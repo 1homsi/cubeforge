@@ -149,3 +149,39 @@ describe('AssetManager', () => {
     })
   })
 })
+
+describe('preloadManifest failures', () => {
+  it('reports failed assets even when baseURL is set (resolved-path mismatch)', async () => {
+    const { preloadManifest } = await import('../assets/preloadManifest')
+    const assets = new AssetManager()
+    assets.baseURL = '/game'
+
+    // Make image loads fail
+    const RealImage = globalThis.Image
+    // @ts-ignore
+    globalThis.Image = class {
+      src = ''
+      set onerror(cb: () => void) {
+        queueMicrotask(() => cb())
+      }
+      onload: () => void = () => {}
+    }
+
+    try {
+      const result = await preloadManifest({ images: ['/missing.png'] }, assets)
+      expect(result.failures).toHaveLength(1)
+      expect(result.failures[0].kind).toBe('image')
+      expect(result.failures[0].src).toContain('missing.png')
+    } finally {
+      // @ts-ignore
+      globalThis.Image = RealImage
+    }
+  })
+
+  it('returns empty failures on success', async () => {
+    const { preloadManifest } = await import('../assets/preloadManifest')
+    const assets = new AssetManager()
+    const result = await preloadManifest({ images: [] }, assets)
+    expect(result.failures).toEqual([])
+  })
+})
