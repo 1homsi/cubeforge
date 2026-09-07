@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useGame } from './useGame'
 
 export interface DynamicCanvasHandle {
@@ -27,6 +27,8 @@ type DynamicCanvasRenderer = {
  * Creates a CPU-side canvas that is uploaded to the GPU as a sprite texture.
  * Only re-uploads when you call `markDirty()` — skipping frames where the
  * canvas content hasn't changed avoids redundant `texSubImage2D` calls.
+ * Resizing preserves the last committed bitmap, scaled to the new dimensions,
+ * until the caller draws replacement content.
  *
  * Useful for minimaps, procedural textures, dynamic UI painted with Canvas2D,
  * or any per-frame canvas drawing that shouldn't upload every RAF tick.
@@ -58,6 +60,7 @@ export function useDynamicCanvas(width: number, height: number): DynamicCanvasHa
   const engine = useGame()
   const idRef = useRef(`__dynamic__:${Math.random().toString(36).slice(2)}`)
   const id = idRef.current
+  const committedCanvas = useRef<HTMLCanvasElement | null>(null)
 
   const canvas = useMemo(() => {
     const c = document.createElement('canvas')
@@ -69,17 +72,24 @@ export function useDynamicCanvas(width: number, height: number): DynamicCanvasHa
 
   const ctx = useMemo(() => canvas.getContext('2d')!, [canvas])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const previous = committedCanvas.current
+    if (previous && previous !== canvas && previous.width > 0 && previous.height > 0) {
+      ctx.drawImage(previous, 0, 0, canvas.width, canvas.height)
+    }
+    committedCanvas.current = canvas
     const rs = engine.activeRenderSystem as DynamicCanvasRenderer
     rs.registerDynamicCanvas?.(id, canvas)
+    engine.loop.markDirty()
     return () => {
       rs.unregisterDynamicCanvas?.(id)
     }
-  }, [engine, id, canvas])
+  }, [engine, id, canvas, ctx])
 
   const markDirty = useCallback(() => {
     const rs = engine.activeRenderSystem as DynamicCanvasRenderer
     rs.markDynamicCanvasDirty?.(id)
+    engine.loop.markDirty()
   }, [engine, id])
 
   return useMemo(() => ({ id, canvas, ctx, markDirty }), [id, canvas, ctx, markDirty])

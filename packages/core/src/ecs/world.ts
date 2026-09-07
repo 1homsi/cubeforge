@@ -612,7 +612,6 @@ export class ECSWorld {
       for (const t of types) {
         const set = this.typeIndex.get(t)
         if (!set || set.size === 0) {
-          this.queryCache.set(key, result)
           return result
         }
         if (!smallest || set.size < smallest.size) smallest = set
