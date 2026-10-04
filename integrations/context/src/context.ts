@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { ECSWorld, EventBus, AssetManager, EntityId, System } from '@cubeforge/core'
+import type { ECSWorld, EventBus, AssetManager, EntityId, System, EngineStats } from '@cubeforge/core'
 import type { InputManager } from '@cubeforge/input'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import type { GameLoop } from '@cubeforge/core'
@@ -24,6 +24,13 @@ export interface EngineState {
   systemTimings: Map<string, number>
   /** Post-processing effect stack applied after each frame. */
   postProcessStack: PostProcessStack
+  /**
+   * Live engine stats for the last frame, mutated in place (no per-frame
+   * allocation). Copy with `copyEngineStats` if you need to keep a sample.
+   */
+  stats?: EngineStats
+  /** Returns the live {@link stats} object. */
+  getStats?(): EngineStats
 }
 
 export const EngineContext = createContext<EngineState | null>(null)

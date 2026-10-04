@@ -5,6 +5,7 @@ import {
   EventBus,
   AssetManager,
   ScriptSystem,
+  createEngineStats,
   type GameLoopMode,
   type Plugin,
   type System,
@@ -166,9 +167,21 @@ export function Game({
       console.warn(`[Cubeforge] Invalid Game dimensions: ${width}x${height}. Width and height must be positive.`)
     }
 
+    const stats = createEngineStats(renderSystem.stats)
+    let lastFrameStart = 0
     const loop = new GameLoop(
       (dt) => {
+        const t0 = performance.now()
+        if (lastFrameStart > 0) stats.frameIntervalMs = t0 - lastFrameStart
+        lastFrameStart = t0
         ecs.update(dt)
+        stats.updateMs = performance.now() - t0
+        stats.renderMs = systemTimings.get('RenderSystem') ?? 0
+        stats.scriptMs = systemTimings.get('ScriptSystem') ?? 0
+        stats.physicsMs = systemTimings.get('PhysicsSystem') ?? 0
+        stats.systemsMs = stats.updateMs - stats.renderMs
+        stats.entityCount = ecs.entityCount
+        stats.frame++
         input.flush()
         if (devtools) {
           const handle = devtoolsHandle.current
@@ -220,6 +233,8 @@ export function Game({
       entityIds,
       systemTimings,
       postProcessStack,
+      stats,
+      getStats: () => stats,
     }
     setEngine(state)
 
