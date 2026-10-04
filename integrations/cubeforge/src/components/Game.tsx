@@ -320,6 +320,7 @@ export function Game({
       loop.stop()
       input.detach()
       ecs.clear()
+      renderSystem.dispose()
       // Release the AudioContext + asset caches (leaks a live AudioContext
       // per remount otherwise).
       assets.dispose()

@@ -6,8 +6,16 @@ import { render, act } from '@testing-library/react'
 vi.mock('@cubeforge/renderer', async (orig) => {
   const actual = await orig<typeof import('@cubeforge/renderer')>()
   class RenderSystem {
+    static created = 0
+    static disposed = 0
+    constructor() {
+      RenderSystem.created++
+    }
     update() {}
     setDefaultSampling() {}
+    dispose() {
+      RenderSystem.disposed++
+    }
   }
   return { ...actual, RenderSystem }
 })
@@ -86,6 +94,8 @@ describe('<Game> lifecycle', () => {
     expect(rafLive.size).toBe(0)
     expect(engines[0].ecs.entityCount).toBe(0)
     expect(disposeSpy).toHaveBeenCalledTimes(2)
+    const RS = (await import('@cubeforge/renderer')).RenderSystem as unknown as { created: number; disposed: number }
+    expect(RS.disposed).toBe(RS.created)
     expect(windowListeners()).toBe(0)
     expect(documentListeners()).toBe(0)
   })

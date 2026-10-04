@@ -89,6 +89,8 @@ interface Camera2DComponent {
   shakeDuration: number
   shakeTimer: number
   pixelSnap?: boolean
+  followOffsetX?: number
+  followOffsetY?: number
 }
 
 interface AnimationClipDefinition {
@@ -794,13 +796,13 @@ export class RenderSystem implements System {
   defaultBackground = '#1a1a2e'
 
   private readonly gl: WebGL2RenderingContext
-  private readonly program: WebGLProgram
-  private readonly quadVAO: WebGLVertexArrayObject
-  private readonly instanceBuffer: WebGLBuffer
-  private readonly instanceData: Float32Array
-  private readonly whiteTexture: WebGLTexture
-  private readonly particleTextureSoft: WebGLTexture
-  private readonly particleTextureCircle: WebGLTexture
+  private program!: WebGLProgram
+  private quadVAO!: WebGLVertexArrayObject
+  private instanceBuffer!: WebGLBuffer
+  private readonly instanceData = new Float32Array(MAX_INSTANCES * FLOATS_PER_INSTANCE)
+  private whiteTexture!: WebGLTexture
+  private particleTextureSoft!: WebGLTexture
+  private particleTextureCircle!: WebGLTexture
   private readonly textures = new Map<string, WebGLTexture>()
   /**
    * Tracks texture access order for LRU eviction (most recent at end).
@@ -812,24 +814,24 @@ export class RenderSystem implements System {
   private readonly imageCache = new Map<string, HTMLImageElement>()
 
   // Cached uniform locations — sprite program
-  private readonly uCamPos: WebGLUniformLocation
-  private readonly uZoom: WebGLUniformLocation
-  private readonly uCanvasSize: WebGLUniformLocation
-  private readonly uShake: WebGLUniformLocation
-  private readonly uTexture: WebGLUniformLocation
-  private readonly uUseTexture: WebGLUniformLocation
+  private uCamPos!: WebGLUniformLocation
+  private uZoom!: WebGLUniformLocation
+  private uCanvasSize!: WebGLUniformLocation
+  private uShake!: WebGLUniformLocation
+  private uTexture!: WebGLUniformLocation
+  private uUseTexture!: WebGLUniformLocation
 
   // ── Parallax program ──────────────────────────────────────────────────────
-  private readonly parallaxProgram: WebGLProgram
-  private readonly parallaxVAO: WebGLVertexArrayObject
+  private parallaxProgram!: WebGLProgram
+  private parallaxVAO!: WebGLVertexArrayObject
   private readonly parallaxTextures = new Map<string, WebGLTexture>()
   private readonly parallaxImageCache = new Map<string, HTMLImageElement>()
 
   // Cached uniform locations — parallax program
-  private readonly pUTexture: WebGLUniformLocation
-  private readonly pUUvOffset: WebGLUniformLocation
-  private readonly pUTexSize: WebGLUniformLocation
-  private readonly pUCanvasSize: WebGLUniformLocation
+  private pUTexture!: WebGLUniformLocation
+  private pUUvOffset!: WebGLUniformLocation
+  private pUTexSize!: WebGLUniformLocation
+  private pUCanvasSize!: WebGLUniformLocation
 
   // ── Text texture cache ────────────────────────────────────────────────────
   private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number }>()
@@ -943,7 +945,7 @@ export class RenderSystem implements System {
   private _texNextRank = 0
   private _texRankEpoch = 0
   private readonly _spriteLayers: SpriteLayer[] = []
-  private readonly _layerImageTextures = new WeakMap<object, WebGLTexture>()
+  private _layerImageTextures = new WeakMap<object, WebGLTexture>()
   private _spriteLayerVersion = 0
   private readonly _visSprites: SpriteComponent[] = []
   private readonly _visInfo: SpriteTexInfo[] = []
@@ -1330,7 +1332,82 @@ export class RenderSystem implements System {
     const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, premultipliedAlpha: false })
     if (!gl) throw new Error('[WebGLRenderer] WebGL2 is not supported in this browser')
     this.gl = gl
+    this.initGL()
+    this._tileLayers = new TileLayerRenderer(gl)
+    canvas.addEventListener?.('webglcontextlost', this.onContextLost)
+    canvas.addEventListener?.('webglcontextrestored', this.onContextRestored)
+  }
 
+  // Without preventDefault the browser never restores a lost context.
+  private onContextLost = (e: Event): void => e.preventDefault()
+
+  // Every GL object died with the old context: rebuild programs and buffers,
+  // drop texture caches (images are kept, so textures re-upload on demand).
+  private onContextRestored = (): void => {
+    this.initGL()
+    this.textures.clear()
+    this.textureLRU.clear()
+    this.textureCache.clear()
+    this.textureCacheKeys.length = 0
+    this.shapeTextures.clear()
+    this.parallaxTextures.clear()
+    this._layerImageTextures = new WeakMap()
+    this._ppBloomExtractProg = null
+    this._ppFBOW = this._ppFBOH = 0
+    this._idleFBO = null
+    this._idleTex = null
+    this._idleFBOW = this._idleFBOH = 0
+    this._prevSceneHash = -1
+    const { gl } = this
+    for (const [id, entry] of this._dynamicCanvases) {
+      const tex = gl.createTexture()!
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, entry.canvas)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      entry.tex = tex
+      entry.texW = entry.canvas.width
+      entry.texH = entry.canvas.height
+      entry.dirty = false
+      this.textures.set(id, tex)
+    }
+    this._tileLayers.contextRestored()
+    this._textureRevision++
+  }
+
+  /** Free every GL resource and listener. The canvas can be reused afterwards. */
+  dispose(): void {
+    const { gl, canvas } = this
+    canvas.removeEventListener?.('webglcontextlost', this.onContextLost)
+    canvas.removeEventListener?.('webglcontextrestored', this.onContextRestored)
+    if (gl.isContextLost()) return
+    for (const tex of this.textures.values()) gl.deleteTexture(tex)
+    for (const tex of this.shapeTextures.values()) gl.deleteTexture(tex)
+    for (const tex of this.parallaxTextures.values()) gl.deleteTexture(tex)
+    for (const e of this.textureCache.values()) gl.deleteTexture(e.tex)
+    for (const e of this._dynamicCanvases.values()) gl.deleteTexture(e.tex)
+    gl.deleteTexture(this.whiteTexture)
+    gl.deleteTexture(this.particleTextureSoft)
+    gl.deleteTexture(this.particleTextureCircle)
+    gl.deleteProgram(this.program)
+    gl.deleteProgram(this.parallaxProgram)
+    gl.deleteVertexArray(this.quadVAO)
+    gl.deleteVertexArray(this.parallaxVAO)
+    gl.deleteBuffer(this.instanceBuffer)
+    if (this._idleFBO) gl.deleteFramebuffer(this._idleFBO)
+    if (this._idleTex) gl.deleteTexture(this._idleTex)
+    this._tileLayers.dispose()
+    this.textures.clear()
+    this.shapeTextures.clear()
+    this.parallaxTextures.clear()
+    this.textureCache.clear()
+    this._dynamicCanvases.clear()
+  }
+
+  private initGL(): void {
+    const { gl } = this
     this.program = createProgram(gl, VERT_SRC, FRAG_SRC)
 
     // ── Unit quad geometry (6 vertices, 2 triangles) ──────────────────────────
@@ -1354,7 +1431,6 @@ export class RenderSystem implements System {
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, qStride, 2 * 4) // a_uv
 
     // Per-instance buffer
-    this.instanceData = new Float32Array(MAX_INSTANCES * FLOATS_PER_INSTANCE)
     this.instanceBuffer = gl.createBuffer()!
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferData(gl.ARRAY_BUFFER, this.instanceData.byteLength, gl.DYNAMIC_DRAW)
@@ -1418,7 +1494,6 @@ export class RenderSystem implements System {
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-    this._tileLayers = new TileLayerRenderer(gl)
   }
 
   /** Pre-baked particle shape textures: white alpha mask, tinted by instance color at render time. */
@@ -2176,28 +2251,32 @@ export class RenderSystem implements System {
         if (targetId !== undefined) {
           const t = world.getComponent<TransformComponent>(targetId, 'Transform')
           if (t) {
+            const tx = t.x + (cam.followOffsetX ?? 0)
+            const ty = t.y + (cam.followOffsetY ?? 0)
             if (cam.deadZone) {
               const halfW = cam.deadZone.w / 2
               const halfH = cam.deadZone.h / 2
-              const dx = t.x - cam.x,
-                dy = t.y - cam.y
-              if (dx > halfW) cam.x = t.x - halfW
-              else if (dx < -halfW) cam.x = t.x + halfW
-              if (dy > halfH) cam.y = t.y - halfH
-              else if (dy < -halfH) cam.y = t.y + halfH
+              const dx = tx - cam.x,
+                dy = ty - cam.y
+              if (dx > halfW) cam.x = tx - halfW
+              else if (dx < -halfW) cam.x = tx + halfW
+              if (dy > halfH) cam.y = ty - halfH
+              else if (dy < -halfH) cam.y = ty + halfH
             } else if (cam.smoothing > 0) {
-              const distSq = (t.x - cam.x) ** 2 + (t.y - cam.y) ** 2
+              const distSq = (tx - cam.x) ** 2 + (ty - cam.y) ** 2
               // Snap instantly when target teleports (>400px jump)
               if (distSq > 160000) {
-                cam.x = t.x
-                cam.y = t.y
+                cam.x = tx
+                cam.y = ty
               } else {
-                cam.x += (t.x - cam.x) * (1 - cam.smoothing)
-                cam.y += (t.y - cam.y) * (1 - cam.smoothing)
+                // Same response as a per-frame lerp at 60 fps, at any frame rate.
+                const k = 1 - Math.pow(cam.smoothing, dt * 60)
+                cam.x += (tx - cam.x) * k
+                cam.y += (ty - cam.y) * k
               }
             } else {
-              cam.x = t.x
-              cam.y = t.y
+              cam.x = tx
+              cam.y = ty
             }
           }
         }
