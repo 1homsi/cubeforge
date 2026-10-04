@@ -10,10 +10,10 @@ import {
   type System,
 } from '@cubeforge/core'
 import { InputManager } from '@cubeforge/input'
-import { RenderSystem, DebugOverlayRenderer, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
-import { PhysicsSystem } from '@cubeforge/physics'
+import { RenderSystem, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
+import type { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
-import { DebugSystem, DevToolsOverlay, MAX_DEVTOOLS_FRAMES, type DevToolsHandle } from '@cubeforge/devtools'
+import type { DevToolsHandle } from '@cubeforge/devtools'
 
 /** Wraps a System to record execution time into a shared timings map. */
 function timedSystem(name: string, system: System, timings: Map<string, number>): System {
@@ -26,13 +26,29 @@ function timedSystem(name: string, system: System, timings: Map<string, number>)
   }
 }
 
+/**
+ * Optional subsystems injected by the full `cubeforge` entry. `cubeforge/render`
+ * omits them so physics and devtools stay out of its import graph.
+ */
+export interface GameFeatures {
+  createPhysics?: (gravity: number, events: EventBus) => PhysicsSystem
+  createDebugSystem?: (overlay: HTMLCanvasElement) => System
+  DevToolsOverlay?: React.ComponentType<{
+    handle: DevToolsHandle
+    loop: GameLoop
+    ecs: ECSWorld
+    engine: EngineState
+  }>
+  maxDevtoolsFrames?: number
+}
+
 export interface GameControls {
   pause(): void
   resume(): void
   reset(): void
 }
 
-interface GameProps {
+export interface GameProps {
   width?: number
   height?: number
   /** Pixels per second squared downward (default 980) */
@@ -85,6 +101,8 @@ interface GameProps {
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
+  /** @internal */
+  features?: GameFeatures
 }
 
 export function Game({
@@ -104,6 +122,7 @@ export function Game({
   style,
   className,
   children,
+  features = {},
 }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const debugCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -124,7 +143,7 @@ export function Game({
     const viteEnv = (import.meta as unknown as { env?: { BASE_URL?: string } }).env
     assets.baseURL = (viteEnv?.BASE_URL ?? '/').replace(/\/$/, '')
     ecs.assets = assets
-    const physics = new PhysicsSystem(gravity, events)
+    const physics = features.createPhysics?.(gravity, events)
     const entityIds = new Map<string, number>()
 
     // Always use the WebGL2 render system
@@ -141,20 +160,19 @@ export function Game({
     const activeRenderSystem: System = renderSystem
 
     // Debug system: always uses a separate overlay canvas (Canvas2D for wireframes)
-    let debugSystem: DebugSystem | null = null
-    if (debug) {
-      const debugCanvas2dEl = debugCanvasRef.current
-      if (debugCanvas2dEl) {
-        const debugCanvas2d = new DebugOverlayRenderer(debugCanvas2dEl)
-        debugSystem = new DebugSystem(debugCanvas2d)
-      }
+    let debugSystem: System | null = null
+    if (debug && debugCanvasRef.current) {
+      debugSystem = features.createDebugSystem?.(debugCanvasRef.current) ?? null
+    }
+    if ((debug && !features.createDebugSystem) || (devtools && !features.DevToolsOverlay)) {
+      console.warn('[Cubeforge] debug/devtools need <Game> from "cubeforge", not "cubeforge/render".')
     }
 
     const systemTimings = new Map<string, number>()
 
     // System order: scripts → physics → render → (debug) → plugins
     ecs.addSystem(timedSystem('ScriptSystem', new ScriptSystem(input), systemTimings))
-    ecs.addSystem(timedSystem('PhysicsSystem', physics, systemTimings))
+    if (physics) ecs.addSystem(timedSystem('PhysicsSystem', physics, systemTimings))
     ecs.addSystem(timedSystem('RenderSystem', renderSystem, systemTimings))
     if (debugSystem) ecs.addSystem(timedSystem('DebugSystem', debugSystem, systemTimings))
 
@@ -173,7 +191,7 @@ export function Game({
         if (devtools) {
           const handle = devtoolsHandle.current
           handle.buffer.push(ecs.getSnapshot())
-          if (handle.buffer.length > MAX_DEVTOOLS_FRAMES) handle.buffer.shift()
+          if (handle.buffer.length > (features.maxDevtoolsFrames ?? 600)) handle.buffer.shift()
           handle.onFrame?.()
         }
       },
@@ -351,7 +369,7 @@ export function Game({
 
   // Sync gravity changes
   useEffect(() => {
-    engine?.physics.setGravity(gravity)
+    engine?.physics?.setGravity(gravity)
   }, [gravity, engine])
 
   const canvasStyle: CSSProperties = {
@@ -454,8 +472,8 @@ export function Game({
         )}
       </div>
       {engine && children}
-      {engine && devtools && (
-        <DevToolsOverlay handle={devtoolsHandle.current} loop={engine.loop} ecs={engine.ecs} engine={engine} />
+      {engine && devtools && features.DevToolsOverlay && (
+        <features.DevToolsOverlay handle={devtoolsHandle.current} loop={engine.loop} ecs={engine.ecs} engine={engine} />
       )}
     </EngineContext.Provider>
   )

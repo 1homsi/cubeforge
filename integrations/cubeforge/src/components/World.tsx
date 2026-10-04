@@ -14,7 +14,7 @@ export function World({ gravity, background = '#1a1a2e', children }: WorldProps)
 
   useEffect(() => {
     if (!engine) return
-    if (gravity !== undefined) engine.physics.setGravity(gravity)
+    if (gravity !== undefined) engine.physics?.setGravity(gravity)
   }, [gravity, engine])
 
   useEffect(() => {
