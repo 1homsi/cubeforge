@@ -25,6 +25,8 @@ export interface Camera2DComponent extends Component {
   shakeDuration: number
   /** Time remaining for shake */
   shakeTimer: number
+  /** Round the camera offset to whole device pixels (crisp pixel art while panning). */
+  pixelSnap?: boolean
 }
 
 export function createCamera2D(opts?: Partial<Camera2DComponent>): Camera2DComponent {

@@ -68,7 +68,7 @@ void main() {
 `
 
 export const FRAG_SRC = `#version 300 es
-precision mediump float;
+precision highp float;
 
 in vec2 v_uv;
 in vec4 v_color;

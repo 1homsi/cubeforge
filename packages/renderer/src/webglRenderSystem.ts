@@ -30,6 +30,7 @@ import {
   DEFAULT_SAMPLING,
 } from './textureFilter'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
+import { TileLayerRenderer, type TileLayerRenderStats } from './tileLayerGL'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
@@ -86,6 +87,7 @@ interface Camera2DComponent {
   shakeIntensity: number
   shakeDuration: number
   shakeTimer: number
+  pixelSnap?: boolean
 }
 
 interface AnimationClipDefinition {
@@ -782,6 +784,11 @@ export function computeWebGLSceneHash({
  * drawn in a single `drawArraysInstanced` call.
  */
 export class RenderSystem implements System {
+  private readonly _tileLayers: TileLayerRenderer
+  /** Per-frame TileLayer upload/draw counters. */
+  get tileLayerStats(): TileLayerRenderStats {
+    return this._tileLayers.stats
+  }
   /** Default background used when no Camera2D component exists */
   defaultBackground = '#1a1a2e'
 
@@ -1371,6 +1378,7 @@ export class RenderSystem implements System {
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    this._tileLayers = new TileLayerRenderer(gl)
   }
 
   /** Pre-baked particle shape textures: white alpha mask, tinted by instance color at render time. */
@@ -2046,6 +2054,7 @@ export class RenderSystem implements System {
     if (this._contextLostWarned) {
       this._contextLostWarned = false
       console.info('[Cubeforge] WebGL context restored — resuming rendering.')
+      this._tileLayers.contextRestored()
     }
     // Intern component types once per frame — numeric IDs skip the string
     // hash on every per-entity getComponent below.
@@ -2127,6 +2136,15 @@ export class RenderSystem implements System {
       camX = cam.x
       camY = cam.y
       zoom = cam.zoom
+      if (cam.pixelSnap) {
+        // Whole device pixels so pixel art does not shimmer while panning.
+        const s = zoom * (W / Wl)
+        camX = (W / 2 - Math.round(W / 2 - camX * s)) / s
+        camY = (H / 2 - Math.round(H / 2 - camY * s)) / s
+        const dpr = W / Wl
+        shakeX = Math.round(shakeX * dpr) / dpr
+        shakeY = Math.round(shakeY * dpr) / dpr
+      }
     }
 
     // ── Animator evaluation pass (runs before animation so clips are resolved) ──
@@ -2268,6 +2286,8 @@ export class RenderSystem implements System {
       if (entry.dirty) this.uploadDynamicCanvas(entry)
     }
 
+    if (this._tileLayers.prepare(world, dt)) this._prevSceneHash = -1
+
     // ── Idle frame skip ───────────────────────────────────────────────────────
     // When enabled, hash visible entity state. If unchanged from last frame,
     // blit the cached scene FBO to screen and skip all GPU draw calls.
@@ -2352,6 +2372,8 @@ export class RenderSystem implements System {
         gl.drawArrays(gl.TRIANGLES, 0, 6)
       }
     }
+
+    this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY)
 
     // ── Upload camera uniforms for sprite program ──────────────────────────────
     gl.useProgram(this.program)
