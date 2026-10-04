@@ -20,6 +20,7 @@ import {
   COMPOSITE_FRAG_SRC,
 } from './shaders'
 import { parseCSSColor } from './colorParser'
+import { SpriteLayer, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN } from './spriteLayer'
 import {
   type Sampling,
   resolveSampling,
@@ -905,6 +906,8 @@ export class RenderSystem implements System {
   private readonly _texRankCache = new Map<string, number>()
   private _texNextRank = 0
   private _texRankEpoch = 0
+  private readonly _spriteLayers: SpriteLayer[] = []
+  private _spriteLayerVersion = 0
   private readonly _visSprites: SpriteComponent[] = []
   private readonly _visInfo: SpriteTexInfo[] = []
   private readonly _visIds: EntityId[] = []
@@ -1028,6 +1031,17 @@ export class RenderSystem implements System {
    *
    * Use the returned `id` as the `dynamicSrc` on a `<Sprite>` component.
    */
+  addSpriteLayer(layer: SpriteLayer): void {
+    if (!this._spriteLayers.includes(layer)) this._spriteLayers.push(layer)
+    this._overlayRevision++
+  }
+
+  removeSpriteLayer(layer: SpriteLayer): void {
+    const i = this._spriteLayers.indexOf(layer)
+    if (i >= 0) this._spriteLayers.splice(i, 1)
+    this._overlayRevision++
+  }
+
   registerDynamicCanvas(id: string, canvas: HTMLCanvasElement | OffscreenCanvas): void {
     const { gl } = this
     const tex = gl.createTexture()!
@@ -1824,20 +1838,112 @@ export class RenderSystem implements System {
       info.glKey = src ? (tiled ? `${src}:repeat` : src) : null
     }
     if (info.epoch !== this._texRankEpoch) {
-      let rank = this._texRankCache.get(info.key)
-      if (rank === undefined) {
-        if (this._texRankCache.size > 4096) {
-          this._texRankCache.clear()
-          this._texNextRank = 0
-          this._texRankEpoch++
-        }
-        rank = this._texNextRank++
-        this._texRankCache.set(info.key, rank)
-      }
-      info.rank = rank
+      info.rank = this.textureRank(info.key)
       info.epoch = this._texRankEpoch
     }
     return info
+  }
+
+  private textureRank(key: string): number {
+    let rank = this._texRankCache.get(key)
+    if (rank === undefined) {
+      if (this._texRankCache.size > 4096) {
+        this._texRankCache.clear()
+        this._texNextRank = 0
+        this._texRankEpoch++
+      }
+      rank = this._texNextRank++
+      this._texRankCache.set(key, rank)
+    }
+    return rank
+  }
+
+  private drawSpriteLayer(layer: SpriteLayer, viewL: number, viewR: number, viewT: number, viewB: number): void {
+    const count = layer.count
+    if (!layer.visible || count === 0) return
+    let tex: WebGLTexture
+    let iw = 0
+    let ih = 0
+    if (layer.dynamicSrc !== undefined) {
+      const entry = this._dynamicCanvases.get(layer.dynamicSrc)
+      if (!entry) return
+      tex = entry.tex
+      iw = entry.texW
+      ih = entry.texH
+    } else if (layer.src !== undefined) {
+      tex = this.loadTexture(layer.src)
+      if (tex === this.whiteTexture) return
+      const img = this.imageCache.get(layer.src)
+      iw = img?.naturalWidth ?? 0
+      ih = img?.naturalHeight ?? 0
+    } else {
+      tex = this.whiteTexture
+    }
+    const textured = iw > 0
+    const { gl } = this
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    this.applySampling(layer.sampling)
+
+    const fw = layer.frameWidth
+    const fh = layer.frameHeight
+    const gridded = textured && fw > 0 && fh > 0
+    const cols = gridded ? (layer.frameColumns ?? Math.max(1, Math.floor(iw / fw))) : 1
+    const uw = gridded ? fw / iw : 1
+    const vh = gridded ? fh / ih : 1
+    const ax = layer.anchorX
+    const ay = layer.anchorY
+    const X = layer.x,
+      Y = layer.y,
+      Wd = layer.w,
+      Ht = layer.h,
+      R = layer.rotation,
+      F = layer.frame,
+      C = layer.color,
+      FL = layer.flags
+    const d = this.instanceData
+    let batch = 0
+    for (let i = 0; i < count; i++) {
+      const flags = FL[i]
+      if (flags & SPRITE_HIDDEN) continue
+      const x = X[i],
+        y = Y[i],
+        w = Wd[i],
+        h = Ht[i]
+      const rad = (w < 0 ? -w : w) + (h < 0 ? -h : h)
+      if (x + rad < viewL || x - rad > viewR || y + rad < viewT || y - rad > viewB) continue
+      const c = C[i]
+      const base = batch * FLOATS_PER_INSTANCE
+      d[base] = x
+      d[base + 1] = y
+      d[base + 2] = w
+      d[base + 3] = h
+      d[base + 4] = R[i]
+      d[base + 5] = ax
+      d[base + 6] = ay
+      d[base + 7] = 0
+      d[base + 8] = 0
+      d[base + 9] = flags & SPRITE_FLIP_X
+      d[base + 10] = (flags & SPRITE_FLIP_Y) >> 1
+      d[base + 11] = (c >>> 24) / 255
+      d[base + 12] = ((c >>> 16) & 255) / 255
+      d[base + 13] = ((c >>> 8) & 255) / 255
+      d[base + 14] = (c & 255) / 255
+      if (gridded) {
+        const f = F[i]
+        d[base + 15] = (f % cols) * uw
+        d[base + 16] = Math.floor(f / cols) * vh
+      } else {
+        d[base + 15] = 0
+        d[base + 16] = 0
+      }
+      d[base + 17] = uw
+      d[base + 18] = vh
+      if (++batch === MAX_INSTANCES) {
+        this.flushWithTex(batch, tex, textured)
+        batch = 0
+      }
+    }
+    this.flushWithTex(batch, tex, textured)
   }
 
   private refreshSpriteColor(info: SpriteTexInfo, color: string): void {
@@ -2004,8 +2110,8 @@ export class RenderSystem implements System {
       }
 
       if (cam.bounds) {
-        const halfW = W / (2 * cam.zoom)
-        const halfH = H / (2 * cam.zoom)
+        const halfW = Wl / (2 * cam.zoom)
+        const halfH = Hl / (2 * cam.zoom)
         cam.x = Math.max(cam.bounds.x + halfW, Math.min(cam.bounds.x + cam.bounds.width - halfW, cam.x))
         cam.y = Math.max(cam.bounds.y + halfH, Math.min(cam.bounds.y + cam.bounds.height - halfH, cam.y))
       }
@@ -2165,6 +2271,14 @@ export class RenderSystem implements System {
     // ── Idle frame skip ───────────────────────────────────────────────────────
     // When enabled, hash visible entity state. If unchanged from last frame,
     // blit the cached scene FBO to screen and skip all GPU draw calls.
+    if (this._spriteLayers.length > 0) {
+      let v = 0
+      for (const layer of this._spriteLayers) v += layer.version + (layer.visible ? 1 : 0)
+      if (v !== this._spriteLayerVersion) {
+        this._spriteLayerVersion = v
+        this._overlayRevision++
+      }
+    }
     if (this._idleSkip) {
       this._ensureIdleFBO(W, H)
       const hash = this._computeSceneHash(world, camX, camY, zoom, shakeX, shakeY, background)
@@ -2250,8 +2364,8 @@ export class RenderSystem implements System {
 
     // ── Sprites ───────────────────────────────────────────────────────────────
     // Frustum culling: pre-compute view bounds in world space (with 32px padding)
-    const halfVW = (W * 0.5) / zoom
-    const halfVH = (H * 0.5) / zoom
+    const halfVW = (Wl * 0.5) / zoom
+    const halfVH = (Hl * 0.5) / zoom
     const viewL = camX - halfVW - 32 / zoom
     const viewR = camX + halfVW + 32 / zoom
     const viewT = camY - halfVH - 32 / zoom
@@ -2264,7 +2378,8 @@ export class RenderSystem implements System {
     const sortLayers = this._sortLayers
     const sortZs = this._sortZs
     const sortTexRanks = this._sortTexRanks
-    const m = n
+    const layers = this._spriteLayers
+    const m = n + layers.length
     for (let r = 0; r < n; r++) {
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
@@ -2278,6 +2393,13 @@ export class RenderSystem implements System {
       sortTexRanks[r] = info.rank
     }
 
+    for (let j = 0; j < layers.length; j++) {
+      const layer = layers[j]
+      const r = n + j
+      sortLayers[r] = this.layers.getOrder(layer.layer)
+      sortZs[r] = layer.zIndex
+      sortTexRanks[r] = this.textureRank(layer.dynamicSrc ?? layer.src ?? '__color__')
+    }
     const sortIndices = this.sortVisible(m)
 
     const hasSquash = world.query('SquashStretch').length > 0
@@ -2290,6 +2412,14 @@ export class RenderSystem implements System {
 
     for (let i = 0; i < m; i++) {
       const k = sortIndices[i]
+      if (k >= n) {
+        this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
+        batchCount = 0
+        batchKey = ''
+        ensuredKey = null
+        this.drawSpriteLayer(layers[k - n], viewL, viewR, viewT, viewB)
+        continue
+      }
       const sprite = visSprites[k]
       if (!sprite.visible) continue
       const transform = world.getComponent<TransformComponent>(this._visIds[k], TID_Transform)!

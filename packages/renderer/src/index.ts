@@ -16,6 +16,8 @@ export * from './components/nineSlice'
 export * from './components/mask'
 export * from './components/shapes'
 export { RenderSystem } from './webglRenderSystem'
+export { SpriteLayer, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN } from './spriteLayer'
+export type { SpriteLayerOptions } from './spriteLayer'
 export type { PostProcessOptions } from './webglRenderSystem'
 export { resolveClip, evaluateConditions } from './renderSystem'
 // DebugOverlayRenderer — Canvas2D, debug/devtools only. NOT the game renderer.
