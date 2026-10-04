@@ -9,6 +9,7 @@ import { createCircleCollider } from '../packages/physics/src/components/circleC
 
 const N = Number(process.argv[2] ?? 1000)
 const FRAMES = Number(process.argv[3] ?? 600)
+const SLEEP = process.argv.includes('--sleep')
 
 function build() {
   const world = new ECSWorld()
@@ -27,7 +28,7 @@ function build() {
   for (let i = 0; i < N; i++) {
     const e = world.createEntity()
     world.addComponent(e, createTransform(((i * 37) % 1100) - 550, -((i / 30) | 0) * 22))
-    world.addComponent(e, createRigidBody())
+    world.addComponent(e, createRigidBody(SLEEP ? { sleepThreshold: 8, sleepDelay: 0.5 } : {}))
     if (i % 3 === 0) world.addComponent(e, createCircleCollider(9))
     else world.addComponent(e, createBoxCollider(18, 18))
   }
@@ -43,6 +44,13 @@ for (let f = 0; f < FRAMES; f++) {
 }
 const settled = times.slice(FRAMES / 2).sort((a, b) => a - b)
 const all = times.reduce((a, b) => a + b, 0) / FRAMES
+let lost = 0
+let asleep = 0
+for (const id of world.query('RigidBody')) {
+  if (world.getComponent<{ type: 'RigidBody'; sleeping: boolean }>(id, 'RigidBody')!.sleeping) asleep++
+  const t = world.getComponent<{ type: 'Transform'; y: number }>(id, 'Transform')!
+  if (t.y > 420) lost++
+}
 console.log(
-  `bodies=${N} frames=${FRAMES} mean ${all.toFixed(3)} ms, settled median ${settled[settled.length >> 1].toFixed(3)} ms`,
+  `fell through floor: ${lost}; asleep: ${asleep}; bodies=${N} frames=${FRAMES} mean ${all.toFixed(3)} ms, settled median ${settled[settled.length >> 1].toFixed(3)} ms`,
 )

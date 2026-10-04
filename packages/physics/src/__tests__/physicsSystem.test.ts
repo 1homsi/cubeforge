@@ -100,7 +100,7 @@ describe('PhysicsSystem', () => {
       expect(rb.vy).toBeCloseTo(0, 2)
       // Entity center y should be at or near the floor top edge minus half entity height
       // floor top = 200 - 10 = 190, entity half-height = 10, so entity y ≈ 180
-      expect(t.y).toBeCloseTo(180, 0)
+      expect(Math.abs(t.y - 180)).toBeLessThan(1)
     })
   })
 

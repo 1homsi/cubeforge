@@ -345,9 +345,25 @@ function sweepAABB(aCx: number, aCy: number, aHw: number, aHh: number, dx: numbe
 // Packed numeric pair key — canonical order (min first), exact for entity
 // IDs < 2^26 (~67M; IDs are never reused, churn games climb). Zero string
 // allocation per contact pair per frame.
+// Ids below 2^15 pack into a small integer (no boxed double in Maps); larger
+// ids use a disjoint range above 2^30.
 const PAIR_MUL = 0x4000000 // 2^26
 function pairKey(a: EntityId, b: EntityId): number {
-  return a < b ? a * PAIR_MUL + b : b * PAIR_MUL + a
+  const lo = a < b ? a : b
+  const hi = a < b ? b : a
+  return hi < 0x8000 ? (lo << 15) | hi : 0x40000000 + lo * PAIR_MUL + hi
+}
+
+// A contact wakes a sleeping body only when the other body is moving; two
+// sleeping bodies (or sleeping-on-static) stay asleep.
+function wakePair(a: RigidBodyComponent, b: RigidBodyComponent): void {
+  if (a.sleeping === b.sleeping) return
+  const sleeper = a.sleeping ? a : b
+  const other = a.sleeping ? b : a
+  // A neighbour that is itself settling (sleepTimer > 0) doesn't count as moving.
+  if (other.isStatic || other.sleepTimer > 0) return
+  sleeper.sleeping = false
+  sleeper.sleepTimer = 0
 }
 
 /** Shared immutable placeholder for entities excluded from spatial pairing. */
@@ -400,6 +416,8 @@ export class PhysicsSystem implements System {
   private readonly _solverPool: SolverBody[] = []
   private _solverPoolUsed = 0
   private solverBody(id: EntityId, t: TransformComponent, rb: RigidBodyComponent | null): SolverBody {
+    // Sleeping bodies are immovable for the solver; their own supports are skipped.
+    if (rb !== null && rb.sleeping) rb = null
     let b = this._solverPool[this._solverPoolUsed]
     if (b === undefined) {
       b = {} as SolverBody
@@ -425,15 +443,7 @@ export class PhysicsSystem implements System {
   private _circleNormals = new Map<number, { nx: number; ny: number }>()
   /** Shared scratch for per-body "checked" neighbor dedup; cleared per iteration. */
   private _checkedScratch = new Set<EntityId>()
-  /** Scratch grid + per-entity cache reused by `forEachSpatialCandidatePair`. */
   private _pairGridScratch = new Map<number, EntityId[]>()
-  private _pairBoundsScratch: Array<{ cx: number; cy: number; hw: number; hh: number } | null> = []
-  /** Per-entity cell ranges (x0/x1/y0/y1) reused across scans — no per-body arrays. */
-  private _crossBoundsScratch: Array<{ cx: number; cy: number; hw: number; hh: number } | null> = []
-  private _cellX0: number[] = []
-  private _cellX1: number[] = []
-  private _cellY0: number[] = []
-  private _cellY1: number[] = []
   private _currentCollisionPairs = new Map<number, [EntityId, EntityId]>()
   private _currentTriggerPairs = new Map<number, [EntityId, EntityId]>()
   private _currentCirclePairs = new Map<number, [EntityId, EntityId]>()
@@ -501,17 +511,8 @@ export class PhysicsSystem implements System {
   }
 
   /**
-   * Invoke `cb(ia, ib)` once for every unordered pair of entities in `ids`
-   * whose AABBs (from `getBounds`) share at least one spatial cell.
-   *
-   * This is a broad-phase pre-filter for the O(n²) all-pairs event-detection
-   * scans below: AABB cells are a conservative superset of true overlaps, so
-   * no pair that could actually overlap is ever skipped — only pairs that
-   * provably cannot overlap are pruned before reaching the (more expensive)
-   * per-pair narrow-phase check `cb` performs.
-   *
-   * `getBounds` returning `null` (e.g. for a disabled collider) excludes
-   * that entity from every pair entirely.
+   * Invoke `cb(ia, ib)` once for every unordered pair in `ids` whose AABBs
+   * overlap (touching counts). `getBounds` returning null excludes an entity.
    */
   private forEachSpatialCandidatePair(
     ids: EntityId[],
@@ -520,91 +521,37 @@ export class PhysicsSystem implements System {
   ): void {
     const n = ids.length
     if (n < 2) return
-
+    this.loadBounds(0, ids, getBounds)
+    const cell = this.chooseCell(0, n)
+    this.fillGrid(0, n, cell)
+    const { _bx0: X0, _bx1: X1, _by0: Y0, _by1: Y1, _cx0: C0, _cx1: C1, _cy0: D0, _cy1: D1 } = this
     const grid = this._pairGridScratch
-    grid.clear()
-    const bounds = this._pairBoundsScratch
-    bounds.length = n
-    for (let idx = 0; idx < n; idx++) {
-      const b = getBounds(ids[idx])
-      bounds[idx] = b
-      if (!b) continue
-      const CELL = 128
-      const x0 = Math.floor((b.cx - b.hw) / CELL)
-      const x1 = Math.floor((b.cx + b.hw) / CELL)
-      const y0 = Math.floor((b.cy - b.hh) / CELL)
-      const y1 = Math.floor((b.cy + b.hh) / CELL)
-      for (let x = x0; x <= x1; x++) {
-        for (let y = y0; y <= y1; y++) {
-          const cell = ((x + 32768) << 16) | (y + 32768)
-          let bucket = grid.get(cell)
-          if (!bucket) {
-            bucket = []
-            grid.set(cell, bucket)
-          }
-          bucket.push(idx)
-        }
-      }
-    }
-
-    // Cell ranges per entity as (x0, x1, y0, y1) in parallel arrays —
-    // avoids allocating a cells array per body per scan.
-    const c0 = this._cellX0
-    const c1 = this._cellX1
-    const c2 = this._cellY0
-    const c3 = this._cellY1
-    c0.length = n
-    c1.length = n
-    c2.length = n
-    c3.length = n
-    const CELL = 128
-    for (let idx = 0; idx < n; idx++) {
-      const b = bounds[idx]
-      if (!b) {
-        c0[idx] = 1
-        c1[idx] = 0 // empty range → no cells
-        continue
-      }
-      c0[idx] = Math.floor((b.cx - b.hw) / CELL)
-      c1[idx] = Math.floor((b.cx + b.hw) / CELL)
-      c2[idx] = Math.floor((b.cy - b.hh) / CELL)
-      c3[idx] = Math.floor((b.cy + b.hh) / CELL)
-    }
-
-    const checked = this._checkedScratch
     for (let i = 0; i < n; i++) {
-      if (c0[i] > c1[i]) continue
-      const bi = bounds[i]!
-      // Single-cell entities cannot see the same neighbour twice, so the
-      // dedup set is skipped entirely — the common case for bodies smaller
-      // than one cell.
-      const singleCell = c0[i] === c1[i] && c2[i] === c3[i]
-      if (!singleCell) checked.clear()
-      for (let x = c0[i]; x <= c1[i]; x++) {
-        for (let y = c2[i]; y <= c3[i]; y++) {
+      if (C0[i] > C1[i]) continue
+      const ax0 = X0[i],
+        ax1 = X1[i],
+        ay0 = Y0[i],
+        ay1 = Y1[i]
+      const ci0 = C0[i],
+        di0 = D0[i]
+      for (let x = ci0; x <= C1[i]; x++) {
+        for (let y = di0; y <= D1[i]; y++) {
           const bucket = grid.get(((x + 32768) << 16) | (y + 32768))
-          if (!bucket) continue
-          for (const j of bucket) {
+          if (bucket === undefined) continue
+          for (let k = 0; k < bucket.length; k++) {
+            const j = bucket[k]
             if (j <= i) continue
-            const bj = bounds[j]!
-            if (Math.abs(bi.cx - bj.cx) > bi.hw + bj.hw || Math.abs(bi.cy - bj.cy) > bi.hh + bj.hh) continue
-            const idB = ids[j]
-            if (!singleCell && checked.has(idB)) continue
-            if (!singleCell) checked.add(idB)
-            cb(ids[i], idB)
+            if (X0[j] > ax1 || X1[j] < ax0 || Y0[j] > ay1 || Y1[j] < ay0) continue
+            // Report each pair only in the first cell both boxes share.
+            if (x !== (C0[j] > ci0 ? C0[j] : ci0) || y !== (D0[j] > di0 ? D0[j] : di0)) continue
+            cb(ids[i], ids[j])
           }
         }
       }
     }
   }
 
-  /**
-   * Cross-set variant of `forEachSpatialCandidatePair`: invokes `cb(a, b)`
-   * once for every entity `a` in `idsA` and `b` in `idsB` whose bounds share
-   * a spatial cell, skipping the degenerate case where the same entity id
-   * appears in both sets (e.g. an entity with both a Circle and a Box
-   * collider shouldn't be paired against itself).
-   */
+  /** Cross-set variant: pairs (a in idsA, b in idsB) with overlapping AABBs, a !== b. */
   private forEachSpatialCandidateCrossPair(
     idsA: EntityId[],
     idsB: EntityId[],
@@ -612,60 +559,137 @@ export class PhysicsSystem implements System {
     getBoundsB: (id: EntityId) => { cx: number; cy: number; hw: number; hh: number } | null,
     cb: (a: EntityId, b: EntityId) => void,
   ): void {
-    if (idsA.length === 0 || idsB.length === 0) return
-
+    const na = idsA.length
+    const nb = idsB.length
+    if (na === 0 || nb === 0) return
+    this.loadBounds(0, idsB, getBoundsB)
+    this.loadBounds(nb, idsA, getBoundsA)
+    const cell = this.chooseCell(0, nb + na)
+    this.fillGrid(0, nb, cell)
+    const inv = 1 / cell
+    const { _bx0: X0, _bx1: X1, _by0: Y0, _by1: Y1, _cx0: C0, _cy0: D0 } = this
     const grid = this._pairGridScratch
-    grid.clear()
-    const boundsB = this._crossBoundsScratch
-    boundsB.length = idsB.length
-    for (let j = 0; j < idsB.length; j++) {
-      const b = getBoundsB(idsB[j])
-      boundsB[j] = b
-      if (!b) continue
-      const CELL = 128
-      const x0 = Math.floor((b.cx - b.hw) / CELL)
-      const x1 = Math.floor((b.cx + b.hw) / CELL)
-      const y0 = Math.floor((b.cy - b.hh) / CELL)
-      const y1 = Math.floor((b.cy + b.hh) / CELL)
-      for (let x = x0; x <= x1; x++) {
-        for (let y = y0; y <= y1; y++) {
-          const cell = ((x + 32768) << 16) | (y + 32768)
-          let bucket = grid.get(cell)
-          if (!bucket) {
-            bucket = []
-            grid.set(cell, bucket)
+    for (let ia = 0; ia < na; ia++) {
+      const i = nb + ia
+      const ax0 = X0[i]
+      if (ax0 > X1[i]) continue
+      const ax1 = X1[i],
+        ay0 = Y0[i],
+        ay1 = Y1[i]
+      const ci0 = Math.floor(ax0 * inv),
+        ci1 = Math.floor(ax1 * inv),
+        di0 = Math.floor(ay0 * inv),
+        di1 = Math.floor(ay1 * inv)
+      const idA = idsA[ia]
+      for (let x = ci0; x <= ci1; x++) {
+        for (let y = di0; y <= di1; y++) {
+          const bucket = grid.get(((x + 32768) << 16) | (y + 32768))
+          if (bucket === undefined) continue
+          for (let k = 0; k < bucket.length; k++) {
+            const j = bucket[k]
+            if (X0[j] > ax1 || X1[j] < ax0 || Y0[j] > ay1 || Y1[j] < ay0) continue
+            if (x !== (C0[j] > ci0 ? C0[j] : ci0) || y !== (D0[j] > di0 ? D0[j] : di0)) continue
+            const idB = idsB[j]
+            if (idB !== idA) cb(idA, idB)
           }
-          bucket.push(j)
         }
       }
     }
+  }
 
-    const checked = this._checkedScratch
-    for (let i = 0; i < idsA.length; i++) {
-      const idA = idsA[i]
-      const a = getBoundsA(idA)
-      if (!a) continue
-      const CELL = 128
-      const x0 = Math.floor((a.cx - a.hw) / CELL)
-      const x1 = Math.floor((a.cx + a.hw) / CELL)
-      const y0 = Math.floor((a.cy - a.hh) / CELL)
-      const y1 = Math.floor((a.cy + a.hh) / CELL)
-      // Single-cell A cannot encounter the same B twice — skip dedup.
-      const singleCell = x0 === x1 && y0 === y1
-      if (!singleCell) checked.clear()
+  private _bx0 = new Float64Array(256)
+  private _bx1 = new Float64Array(256)
+  private _by0 = new Float64Array(256)
+  private _by1 = new Float64Array(256)
+  private _cx0 = new Int32Array(256)
+  private _cx1 = new Int32Array(256)
+  private _cy0 = new Int32Array(256)
+  private _cy1 = new Int32Array(256)
+  private readonly _bucketPool: number[][] = []
+
+  /** Writes AABBs for `ids` at offset `at`; excluded entities get an empty box (x0 > x1). */
+  private loadBounds(
+    at: number,
+    ids: EntityId[],
+    getBounds: (id: EntityId) => { cx: number; cy: number; hw: number; hh: number } | null,
+  ): void {
+    const need = at + ids.length
+    if (need > this._bx0.length) {
+      const size = Math.max(need, this._bx0.length * 2)
+      const grow = <T extends Float64Array | Int32Array>(old: T, make: new (n: number) => T): T => {
+        const next = new make(size)
+        next.set(old)
+        return next
+      }
+      this._bx0 = grow(this._bx0, Float64Array)
+      this._bx1 = grow(this._bx1, Float64Array)
+      this._by0 = grow(this._by0, Float64Array)
+      this._by1 = grow(this._by1, Float64Array)
+      this._cx0 = grow(this._cx0, Int32Array)
+      this._cx1 = grow(this._cx1, Int32Array)
+      this._cy0 = grow(this._cy0, Int32Array)
+      this._cy1 = grow(this._cy1, Int32Array)
+    }
+    for (let k = 0; k < ids.length; k++) {
+      const b = getBounds(ids[k])
+      const i = at + k
+      if (b === null) {
+        this._bx0[i] = 1
+        this._bx1[i] = 0
+        continue
+      }
+      this._bx0[i] = b.cx - b.hw
+      this._bx1[i] = b.cx + b.hw
+      this._by0[i] = b.cy - b.hh
+      this._by1[i] = b.cy + b.hh
+    }
+  }
+
+  /** Cell size ~4x the median-ish body extent, so most bodies touch 1-4 cells. */
+  private chooseCell(from: number, to: number): number {
+    let sum = 0
+    let count = 0
+    for (let i = from; i < to; i++) {
+      const w = this._bx1[i] - this._bx0[i]
+      if (w < 0) continue
+      const h = this._by1[i] - this._by0[i]
+      sum += w > h ? w : h
+      count++
+    }
+    if (count === 0) return 128
+    const avg = sum / count
+    return Math.min(512, Math.max(16, avg * 2))
+  }
+
+  private fillGrid(from: number, to: number, cell: number): void {
+    const grid = this._pairGridScratch
+    const pool = this._bucketPool
+    for (const bucket of grid.values()) {
+      bucket.length = 0
+      pool.push(bucket)
+    }
+    grid.clear()
+    const inv = 1 / cell
+    const { _bx0: X0, _bx1: X1, _by0: Y0, _by1: Y1, _cx0: C0, _cx1: C1, _cy0: D0, _cy1: D1 } = this
+    for (let i = from; i < to; i++) {
+      if (X0[i] > X1[i]) {
+        C0[i] = 1
+        C1[i] = 0
+        continue
+      }
+      const x0 = (C0[i] = Math.floor(X0[i] * inv))
+      const x1 = (C1[i] = Math.floor(X1[i] * inv))
+      const y0 = (D0[i] = Math.floor(Y0[i] * inv))
+      const y1 = (D1[i] = Math.floor(Y1[i] * inv))
       for (let x = x0; x <= x1; x++) {
         for (let y = y0; y <= y1; y++) {
-          const bucket = grid.get(((x + 32768) << 16) | (y + 32768))
-          if (!bucket) continue
-          for (const j of bucket) {
-            const idB = idsB[j]
-            if (idB === idA) continue
-            const b = boundsB[j]!
-            if (Math.abs(a.cx - b.cx) > a.hw + b.hw || Math.abs(a.cy - b.cy) > a.hh + b.hh) continue
-            if (!singleCell && checked.has(idB)) continue
-            if (!singleCell) checked.add(idB)
-            cb(idA, idB)
+          const key = ((x + 32768) << 16) | (y + 32768)
+          let bucket = grid.get(key)
+          if (bucket === undefined) {
+            bucket = pool.pop() ?? []
+            grid.set(key, bucket)
           }
+          bucket.push(i)
         }
       }
     }
@@ -953,6 +977,7 @@ export class PhysicsSystem implements System {
     for (const id of dynamicPolygon) allDynamics.push(id)
     for (const id of dynamicTriangle) allDynamics.push(id)
 
+    this._anySleeping = false
     for (const id of allDynamics) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
 
@@ -967,7 +992,10 @@ export class PhysicsSystem implements System {
           rb.sleeping = false
         }
       }
-      if (rb.sleeping) continue
+      if (rb.sleeping) {
+        this._anySleeping = true
+        continue
+      }
 
       rb.onGround = false
       rb.isNearGround = false
@@ -1291,14 +1319,7 @@ export class PhysicsSystem implements System {
         if (!result) return
 
         // Wake sleeping bodies on contact
-        if (rba.sleeping) {
-          rba.sleeping = false
-          rba.sleepTimer = 0
-        }
-        if (rbb.sleeping) {
-          rbb.sleeping = false
-          rbb.sleepTimer = 0
-        }
+        wakePair(rba, rbb)
 
         const combinedFriction = combineCoefficients(
           ca.friction,
@@ -1437,14 +1458,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) return
 
-        if (rba.sleeping) {
-          rba.sleeping = false
-          rba.sleepTimer = 0
-        }
-        if (rbb.sleeping) {
-          rbb.sleeping = false
-          rbb.sleepTimer = 0
-        }
+        wakePair(rba, rbb)
 
         const combinedFriction = combineCoefficients(
           ca.friction,
@@ -1519,14 +1533,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) return
 
-        if (crb.sleeping) {
-          crb.sleeping = false
-          crb.sleepTimer = 0
-        }
-        if (brb.sleeping) {
-          brb.sleeping = false
-          brb.sleepTimer = 0
-        }
+        wakePair(crb, brb)
 
         const combinedFriction = combineCoefficients(
           cc.friction,
@@ -1878,14 +1885,7 @@ export class PhysicsSystem implements System {
         const result = generateCapsuleBoxManifold(capCx, capCy, capHw, capHh, bAABB.cx, bAABB.cy, bAABB.hw, bAABB.hh)
         if (!result) return
 
-        if (crb.sleeping) {
-          crb.sleeping = false
-          crb.sleepTimer = 0
-        }
-        if (brb.sleeping) {
-          brb.sleeping = false
-          brb.sleepTimer = 0
-        }
+        wakePair(crb, brb)
 
         const combinedFriction = combineCoefficients(
           cc.friction,
@@ -1948,14 +1948,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) return
 
-        if (rba.sleeping) {
-          rba.sleeping = false
-          rba.sleepTimer = 0
-        }
-        if (rbb.sleeping) {
-          rbb.sleeping = false
-          rbb.sleepTimer = 0
-        }
+        wakePair(rba, rbb)
 
         const combinedFriction = combineCoefficients(
           ca.friction,
@@ -2030,14 +2023,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) return
 
-        if (crb.sleeping) {
-          crb.sleeping = false
-          crb.sleepTimer = 0
-        }
-        if (orb.sleeping) {
-          orb.sleeping = false
-          orb.sleepTimer = 0
-        }
+        wakePair(crb, orb)
 
         const combinedFriction = combineCoefficients(
           cc.friction,
@@ -2196,14 +2182,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) return
 
-        if (prb.sleeping) {
-          prb.sleeping = false
-          prb.sleepTimer = 0
-        }
-        if (brb.sleeping) {
-          brb.sleeping = false
-          brb.sleepTimer = 0
-        }
+        wakePair(prb, brb)
 
         const combinedFriction = combineCoefficients(
           pc.friction,
@@ -2268,14 +2247,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) return
 
-        if (rba.sleeping) {
-          rba.sleeping = false
-          rba.sleepTimer = 0
-        }
-        if (rbb.sleeping) {
-          rbb.sleeping = false
-          rbb.sleepTimer = 0
-        }
+        wakePair(rba, rbb)
 
         const combinedFriction = combineCoefficients(
           ca.friction,
@@ -2347,14 +2319,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) return
 
-        if (prb.sleeping) {
-          prb.sleeping = false
-          prb.sleepTimer = 0
-        }
-        if (orb.sleeping) {
-          orb.sleeping = false
-          orb.sleepTimer = 0
-        }
+        wakePair(prb, orb)
 
         const combinedFriction = combineCoefficients(
           pc.friction,
@@ -2503,14 +2468,7 @@ export class PhysicsSystem implements System {
         )
         if (!result) continue
 
-        if (trb.sleeping) {
-          trb.sleeping = false
-          trb.sleepTimer = 0
-        }
-        if (orb.sleeping) {
-          orb.sleeping = false
-          orb.sleepTimer = 0
-        }
+        wakePair(trb, orb)
 
         const combinedFriction = combineCoefficients(
           tc.friction,
@@ -3722,6 +3680,7 @@ export class PhysicsSystem implements System {
           this.events?.emit('collisionExit', { a, b, normalX: 0, normalY: 0 })
         }
       }
+    if (this._anySleeping) this.wakeSeparated(world, this.activeCollisionPairs, currentCollisionPairs)
     // Double-buffer swap: last frame's active becomes next frame's scratch.
     {
       const prev = this.activeCollisionPairs
@@ -3882,6 +3841,7 @@ export class PhysicsSystem implements System {
         for (const [key, [a, b]] of this.activeCirclePairs) {
           if (!currentCirclePairs.has(key)) this.events?.emit('circleExit', { a, b, normalX: 0, normalY: 0 })
         }
+      if (this._anySleeping) this.wakeSeparated(world, this.activeCirclePairs, currentCirclePairs)
       {
         const prev = this.activeCirclePairs
         this.activeCirclePairs = currentCirclePairs
@@ -4167,6 +4127,35 @@ export class PhysicsSystem implements System {
 
   // ── Pair pruning ────────────────────────────────────────────────────────
 
+  private _anySleeping = false
+
+  // Bodies resting on something that moved away or vanished must not float.
+  private wakeSeparated(
+    world: ECSWorld,
+    prev: Map<number, [EntityId, EntityId]>,
+    cur: Map<number, [EntityId, EntityId]>,
+  ): void {
+    prev.forEach((pair, key) => {
+      if (cur.has(key)) return
+      const ra = world.getComponent<RigidBodyComponent>(pair[0], 'RigidBody')
+      const rb = world.getComponent<RigidBodyComponent>(pair[1], 'RigidBody')
+      if (!ra || !rb) return
+      // A pair can also vanish because sleeping bodies are skipped by pairing.
+      const movedA = !ra.sleeping && !ra.isStatic && ra.sleepTimer === 0
+      const movedB = !rb.sleeping && !rb.isStatic && rb.sleepTimer === 0
+      if (movedA && rb.sleeping) this.wake(world, pair[1])
+      if (movedB && ra.sleeping) this.wake(world, pair[0])
+    })
+  }
+
+  private wake(world: ECSWorld, id: EntityId): void {
+    const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')
+    if (rb && rb.sleeping) {
+      rb.sleeping = false
+      rb.sleepTimer = 0
+    }
+  }
+
   private pruneDeadPairs(world: ECSWorld): void {
     for (const [key, [a, b]] of this.activeTriggerPairs) {
       if (!world.hasEntity(a) || !world.hasEntity(b)) {
@@ -4176,6 +4165,8 @@ export class PhysicsSystem implements System {
     }
     for (const [key, [a, b]] of this.activeCollisionPairs) {
       if (!world.hasEntity(a) || !world.hasEntity(b)) {
+        this.wake(world, a)
+        this.wake(world, b)
         this.events?.emit('collisionExit', { a, b })
         this.activeCollisionPairs.delete(key)
       }

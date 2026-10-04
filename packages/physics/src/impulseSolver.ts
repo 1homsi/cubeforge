@@ -319,17 +319,20 @@ export function solvePositions(
       }
 
       for (const pd of c.pointData) {
-        // Recompute contact arms from current positions
-        const rAx = pd.point.worldAx - bodyA.x
-        const rAy = pd.point.worldAy - bodyA.y
-        const rBx = pd.point.worldBx - bodyB.x
-        const rBy = pd.point.worldBy - bodyB.y
-
-        // Current separation along normal
-        const separation =
-          (bodyB.x + rBx - (bodyA.x + rAx)) * manifold.normalX +
-          (bodyB.y + rBy - (bodyA.y + rAy)) * manifold.normalY -
-          pd.point.penetration
+        // Separation = -penetration at generation, plus how far the contact
+        // points moved since (integration and pseudo-displacement so far).
+        // Generators disagree on where worldA/worldB sit, so only the
+        // penetration and the arms (world point - body origin) are trusted.
+        const pt = pd.point
+        const rAx = pt.rAx
+        const rAy = pt.rAy
+        const rBx = pt.rBx
+        const rBy = pt.rBy
+        const dAx = bodyA.x + bodyA.pvx - bodyA.pAngVel * rAy - (pt.worldAx - rAx)
+        const dAy = bodyA.y + bodyA.pvy + bodyA.pAngVel * rAx - (pt.worldAy - rAy)
+        const dBx = bodyB.x + bodyB.pvx - bodyB.pAngVel * rBy - (pt.worldBx - rBx)
+        const dBy = bodyB.y + bodyB.pvy + bodyB.pAngVel * rBx - (pt.worldBy - rBy)
+        const separation = -pt.penetration + (dBx - dAx) * manifold.normalX + (dBy - dAy) * manifold.normalY
 
         // Position error: only correct if penetrating beyond slop
         const posError = Math.max(0, -separation - slop)
