@@ -2517,7 +2517,7 @@ export class RenderSystem implements System {
       }
     }
 
-    this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY)
+    this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY, W / Wl)
     this.stats.drawCalls += this._tileLayers.stats.drawCalls
 
     // ── Upload camera uniforms for sprite program ──────────────────────────────

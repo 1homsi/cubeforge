@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TileLayerData, createTileLayerComponent, visibleChunkRange, visibleTileRange } from '../tileLayer'
+import { TileLayerData, createTileLayerComponent, tileHash, visibleChunkRange, visibleTileRange } from '../tileLayer'
 import { TileLayerRenderer } from '../tileLayerGL'
 import { TileLayerCanvasRenderer } from '../tileLayerCanvas2D'
 import { RenderSystem } from '../webglRenderSystem'
@@ -409,5 +409,56 @@ describe('RenderSystem integration', () => {
     expect(Math.abs(500 - cx * s - Math.round(500 - cx * s))).toBeLessThan(1e-9)
     expect(Math.abs(300 - cy * s - Math.round(300 - cy * s))).toBeLessThan(1e-9)
     expect(Math.abs(cx - 100.3)).toBeLessThanOrEqual(0.5 / s)
+  })
+})
+
+describe('TileLayer variation, tints and jitter', () => {
+  it('variants pick a stable per-cell alternative before animation', () => {
+    const l = makeLayer({ variants: { 3: [3, 7, 8] }, animations: { 8: { frames: [8, 9], duration: 1 } } })
+    l.setTile(10, 4, 3)
+    const pick = [3, 7, 8][tileHash(10, 4) % 3]
+    expect(l.visualTile(10, 4)).toBe(pick === 8 ? 8 : pick)
+    l.updateAnimations(1.5)
+    expect(l.visualTile(10, 4)).toBe(pick === 8 ? 9 : pick)
+    expect(l.variantTable![3] & 255).toBe(3)
+  })
+
+  it('tileHash matches the shader integer hash', () => {
+    let h = (Math.imul(5, 1664525) + Math.imul(9, 1013904223)) >>> 0
+    h = (h ^ (h >>> 16)) >>> 0
+    h = Math.imul(h, 2246822519) >>> 0
+    expect(tileHash(5, 9)).toBe((h ^ (h >>> 13)) >>> 0)
+  })
+
+  it('uploads the tint layer once, then only the dirty rect with the tile rect', () => {
+    const { gl, calls, reset } = fakeGL()
+    const r = new TileLayerRenderer(gl)
+    const l = makeLayer({ tinted: true })
+    const world = worldWith(l)
+    r.prepare(world, 0)
+    const tintUploads = () => calls.filter((c) => c[0] === 'texSubImage2D' && c[1][8] === l.tints)
+    expect(tintUploads()).toHaveLength(1)
+    reset()
+    l.setTint(70, 40, 0x3366ccff)
+    expect([...l.tints!.slice((40 * 600 + 70) * 4, (40 * 600 + 70) * 4 + 4)]).toEqual([0x33, 0x66, 0xcc, 0xff])
+    r.prepare(world, 0)
+    expect(tintUploads().map((c) => c[1].slice(2, 6))).toEqual([[70, 40, 1, 1]])
+    reset()
+    l.setTints(new Uint8Array(600 * 300 * 4).fill(128))
+    r.prepare(world, 0)
+    expect(tintUploads()).toHaveLength(1)
+  })
+
+  it('passes jitter and tint flags to the shader', () => {
+    const { gl, calls } = fakeGL()
+    const r = new TileLayerRenderer(gl)
+    const l = makeLayer({ jitter: 0.2 })
+    const world = worldWith(l)
+    r.prepare(world, 0)
+    r.render(0, 0, 0.05, 800, 600, 0, 0, 2)
+    const set = (name: string) =>
+      calls.filter((c) => (c[1][0] as { name?: string } | null)?.name === name).map((c) => c[1][1])
+    expect(set('u_jitter')).toContain(0.2)
+    expect(set('u_hasTint')).toContain(0)
   })
 })

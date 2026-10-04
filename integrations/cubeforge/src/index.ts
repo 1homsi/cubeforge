@@ -27,7 +27,13 @@ export { Checkpoint } from './components/Checkpoint'
 export { Tilemap } from './components/Tilemap'
 export { TileLayer, useTileLayer } from './components/TileLayer'
 export type { TileLayerProps } from './components/TileLayer'
-export { TileLayerData, TileLayerCanvasRenderer, visibleTileRange, visibleChunkRange } from '@cubeforge/renderer'
+export {
+  TileLayerData,
+  TileLayerCanvasRenderer,
+  visibleTileRange,
+  visibleChunkRange,
+  tileHash,
+} from '@cubeforge/renderer'
 export type {
   TileIdArray,
   Tileset,

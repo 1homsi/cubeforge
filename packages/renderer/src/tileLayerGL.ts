@@ -34,24 +34,56 @@ in vec2 v_tile;
 uniform sampler2D u_atlas;
 uniform usampler2D u_index;
 uniform usampler2D u_lut;
+uniform usampler2D u_var;
+uniform sampler2D u_tint;
+uniform sampler2D u_avg;
 uniform uint u_lutSize;
 uniform int u_lutW;
+uniform uint u_varSize;
+uniform int u_varW;
 uniform ivec2 u_pageSize;
+uniform ivec2 u_pageCell;
 uniform ivec4 u_ts;
 uniform int u_margin;
 uniform float u_opacity;
+uniform float u_jitter;
+uniform int u_hasTint;
+uniform int u_useAvg;
 out vec4 fragColor;
+uint tileHash(uvec2 p) {
+  uint h = p.x * 1664525u + p.y * 1013904223u;
+  h ^= h >> 16;
+  h *= 2246822519u;
+  h ^= h >> 13;
+  return h;
+}
+uint fetchU(usampler2D t, int w, uint i) {
+  return texelFetch(t, ivec2(int(i) % w, int(i) / w), 0).r;
+}
 void main() {
   ivec2 cell = clamp(ivec2(floor(v_tile)), ivec2(0), u_pageSize - 1);
   uint id = texelFetch(u_index, cell, 0).r;
   if (id == 0u) discard;
-  if (id < u_lutSize) id = texelFetch(u_lut, ivec2(int(id) % u_lutW, int(id) / u_lutW), 0).r;
+  uint h = tileHash(uvec2(cell + u_pageCell));
+  if (id < u_varSize) {
+    uint head = fetchU(u_var, u_varW, id);
+    uint n = head & 255u;
+    if (n > 0u) id = fetchU(u_var, u_varW, (head >> 8) + h % n);
+  }
+  if (id < u_lutSize) id = fetchU(u_lut, u_lutW, id);
   if (id == 0u) discard;
   int t = int(id - 1u);
-  ivec2 tsz = u_ts.xy;
-  ivec2 px = clamp(ivec2(floor(fract(v_tile) * vec2(tsz))), ivec2(0), tsz - 1);
-  ivec2 org = ivec2(u_margin) + ivec2(t % u_ts.z, t / u_ts.z) * (tsz + u_ts.w);
-  vec4 c = texelFetch(u_atlas, org + px, 0);
+  vec4 c;
+  if (u_useAvg == 1) {
+    c = texelFetch(u_avg, ivec2(t % u_ts.z, t / u_ts.z), 0);
+  } else {
+    ivec2 tsz = u_ts.xy;
+    ivec2 px = clamp(ivec2(floor(fract(v_tile) * vec2(tsz))), ivec2(0), tsz - 1);
+    ivec2 org = ivec2(u_margin) + ivec2(t % u_ts.z, t / u_ts.z) * (tsz + u_ts.w);
+    c = texelFetch(u_atlas, org + px, 0);
+  }
+  if (u_hasTint == 1) c *= texelFetch(u_tint, cell, 0);
+  if (u_jitter > 0.0) c.rgb *= 1.0 + (float(h >> 8 & 255u) / 255.0 - 0.5) * u_jitter;
   fragColor = vec4(c.rgb, c.a * u_opacity);
 }
 `
@@ -61,6 +93,7 @@ const MAX_LUT_W = 2048
 
 interface Page {
   tex: WebGLTexture
+  tint: WebGLTexture | null
   x0: number
   y0: number
   w: number
@@ -80,6 +113,11 @@ interface LayerGL {
   lutVersion: number
   atlasTex: WebGLTexture | null
   atlasImage: unknown
+  avgTex: WebGLTexture | null
+  tintVersion: number
+  varTex: WebGLTexture | null
+  varW: number
+  varVersion: number
   drawnRevision: number
   seenFrame: number
 }
@@ -99,6 +137,12 @@ interface Uniforms {
   ts: WebGLUniformLocation | null
   margin: WebGLUniformLocation | null
   opacity: WebGLUniformLocation | null
+  varSize: WebGLUniformLocation | null
+  varW: WebGLUniformLocation | null
+  pageCell: WebGLUniformLocation | null
+  jitter: WebGLUniformLocation | null
+  hasTint: WebGLUniformLocation | null
+  useAvg: WebGLUniformLocation | null
 }
 
 export interface TileLayerRenderStats {
@@ -127,6 +171,7 @@ export class TileLayerRenderer {
   private vao: WebGLVertexArrayObject | null = null
   private vbo: WebGLBuffer | null = null
   private dummyLut: WebGLTexture | null = null
+  private dummyRGBA: WebGLTexture | null = null
   private u: Uniforms | null = null
   private maxTex = 2048
   private readonly states = new Map<TileLayerData, LayerGL>()
@@ -202,6 +247,7 @@ export class TileLayerRenderer {
     canvasH: number,
     shakeX: number,
     shakeY: number,
+    dpr = 1,
   ): void {
     this.stats.drawCalls = 0
     const layers = this.layers
@@ -236,11 +282,22 @@ export class TileLayerRenderer {
       gl.uniform1f(u.opacity, layer.opacity)
       gl.uniform1ui(u.lutSize, s.lutTex ? layer.lutSize : 0)
       gl.uniform1i(u.lutW, s.lutW || 1)
+      gl.uniform1ui(u.varSize, s.varTex ? layer.variantSize : 0)
+      gl.uniform1i(u.varW, s.varW || 1)
+      gl.uniform1f(u.jitter, layer.jitter)
+      // Below ~2 device pixels per tile, one texel per pixel aliases; use the tile's average colour.
+      const pxPerTile = Math.min(layer.tileWorldWidth, layer.tileWorldHeight) * zoom * dpr
+      gl.uniform1i(u.useAvg, s.avgTex && pxPerTile < 2 ? 1 : 0)
+      const tinted = layer.tints !== null
+      gl.uniform1i(u.hasTint, tinted ? 1 : 0)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, s.atlasTex)
       gl.activeTexture(gl.TEXTURE2)
       gl.bindTexture(gl.TEXTURE_2D, s.lutTex ?? this.dummyLut)
-      gl.activeTexture(gl.TEXTURE1)
+      gl.activeTexture(gl.TEXTURE3)
+      gl.bindTexture(gl.TEXTURE_2D, s.varTex ?? this.dummyLut)
+      gl.activeTexture(gl.TEXTURE5)
+      gl.bindTexture(gl.TEXTURE_2D, s.avgTex ?? this.dummyRGBA)
 
       for (let p = 0; p < s.pages.length; p++) {
         const pg = s.pages[p]
@@ -249,6 +306,10 @@ export class TileLayerRenderer {
         const x1 = Math.min(r[2], pg.x0 + pg.w)
         const y1 = Math.min(r[3], pg.y0 + pg.h)
         if (x1 <= x0 || y1 <= y0) continue
+        gl.activeTexture(gl.TEXTURE4)
+        gl.bindTexture(gl.TEXTURE_2D, tinted && pg.tint ? pg.tint : this.dummyRGBA)
+        gl.uniform2i(u.pageCell, pg.x0, pg.y0)
+        gl.activeTexture(gl.TEXTURE1)
         gl.bindTexture(gl.TEXTURE_2D, pg.tex)
         gl.uniform4f(u.rect, x0, y0, x1, y1)
         gl.uniform2f(u.pageOrigin, pg.x0, pg.y0)
@@ -268,6 +329,7 @@ export class TileLayerRenderer {
     this.vao = null
     this.vbo = null
     this.dummyLut = null
+    this.dummyRGBA = null
     this.u = null
     this.lastLayerCount = -1
   }
@@ -280,6 +342,7 @@ export class TileLayerRenderer {
     if (this.vao) gl.deleteVertexArray(this.vao)
     if (this.vbo) gl.deleteBuffer(this.vbo)
     if (this.dummyLut) gl.deleteTexture(this.dummyLut)
+    if (this.dummyRGBA) gl.deleteTexture(this.dummyRGBA)
     this.contextRestored()
   }
 
@@ -314,11 +377,20 @@ export class TileLayerRenderer {
       ts: loc('u_ts'),
       margin: loc('u_margin'),
       opacity: loc('u_opacity'),
+      varSize: loc('u_varSize'),
+      varW: loc('u_varW'),
+      pageCell: loc('u_pageCell'),
+      jitter: loc('u_jitter'),
+      hasTint: loc('u_hasTint'),
+      useAvg: loc('u_useAvg'),
     }
     gl.useProgram(prog)
     gl.uniform1i(loc('u_atlas'), 0)
     gl.uniform1i(loc('u_index'), 1)
     gl.uniform1i(loc('u_lut'), 2)
+    gl.uniform1i(loc('u_var'), 3)
+    gl.uniform1i(loc('u_tint'), 4)
+    gl.uniform1i(loc('u_avg'), 5)
 
     this.vao = gl.createVertexArray()
     gl.bindVertexArray(this.vao)
@@ -330,6 +402,9 @@ export class TileLayerRenderer {
     gl.bindVertexArray(null)
 
     this.dummyLut = this.createIntTexture(1, 1, true)
+    this.dummyRGBA = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, this.dummyRGBA)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]))
     this.maxTex = Math.min(MAX_PAGE, (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) || 2048)
   }
 
@@ -359,7 +434,7 @@ export class TileLayerRenderer {
         const y0 = py * pageTiles
         const w = Math.min(pageTiles, layer.width - x0)
         const h = Math.min(pageTiles, layer.height - y0)
-        pages.push({ tex: this.createIntTexture(w, h, wide), x0, y0, w, h })
+        pages.push({ tex: this.createIntTexture(w, h, wide), tint: null, x0, y0, w, h })
       }
     }
     s = {
@@ -375,6 +450,11 @@ export class TileLayerRenderer {
       lutVersion: -1,
       atlasTex: null,
       atlasImage: null,
+      avgTex: null,
+      tintVersion: -1,
+      varTex: null,
+      varW: 0,
+      varVersion: -1,
       drawnRevision: -1,
       seenFrame: 0,
     }
@@ -384,6 +464,7 @@ export class TileLayerRenderer {
 
   private upload(layer: TileLayerData, s: LayerGL): void {
     const { gl } = this
+    if (layer.tints && s.tintVersion !== layer.tintVersion) this.uploadTintsFull(layer, s)
     const needFull = s.fullVersion !== layer.fullVersion
     if (needFull || layer.dirtyCount > 0) {
       const fmt = gl.RED_INTEGER
@@ -404,7 +485,10 @@ export class TileLayerRenderer {
           const x0 = rect[o]
           const y0 = rect[o + 1]
           const pg = s.pages[Math.floor(y0 / s.pageTiles) * s.pagesX + Math.floor(x0 / s.pageTiles)]
-          this.subUpload(layer, pg, x0, y0, rect[o + 2] - x0 + 1, rect[o + 3] - y0 + 1, fmt, type)
+          const w = rect[o + 2] - x0 + 1
+          const h = rect[o + 3] - y0 + 1
+          this.subUpload(layer, pg, x0, y0, w, h, fmt, type)
+          if (layer.tints && pg.tint) this.tintUpload(layer, pg, x0, y0, w, h)
         }
       }
       layer.clearDirty()
@@ -415,6 +499,55 @@ export class TileLayerRenderer {
       gl.activeTexture(gl.TEXTURE0)
     }
     if (s.lutVersion !== layer.lutVersion) this.uploadLut(layer, s)
+    if (s.varVersion !== layer.variantVersion) this.uploadVariants(layer, s)
+  }
+
+  private uploadTintsFull(layer: TileLayerData, s: LayerGL): void {
+    const { gl } = this
+    s.tintVersion = layer.tintVersion
+    gl.activeTexture(gl.TEXTURE4)
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, layer.width)
+    for (const pg of s.pages) {
+      if (!pg.tint) {
+        pg.tint = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, pg.tint)
+        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, pg.w, pg.h)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+      }
+      this.tintUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h)
+    }
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0)
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0)
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0)
+    gl.activeTexture(gl.TEXTURE0)
+  }
+
+  // Expects UNPACK_ROW_LENGTH = layer.width.
+  private tintUpload(layer: TileLayerData, pg: Page, x: number, y: number, w: number, h: number): void {
+    const { gl } = this
+    gl.activeTexture(gl.TEXTURE4)
+    gl.bindTexture(gl.TEXTURE_2D, pg.tint)
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x)
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, layer.tints!, 0)
+    gl.activeTexture(gl.TEXTURE1)
+  }
+
+  private uploadVariants(layer: TileLayerData, s: LayerGL): void {
+    const { gl } = this
+    s.varVersion = layer.variantVersion
+    if (s.varTex) gl.deleteTexture(s.varTex)
+    s.varTex = null
+    const table = layer.variantTable
+    if (!table) return
+    const w = Math.min(table.length, MAX_LUT_W)
+    const h = Math.ceil(table.length / w)
+    const data = w * h === table.length ? table : new Uint32Array(w * h)
+    if (data !== table) data.set(table)
+    s.varTex = this.createIntTexture(w, h, true)
+    s.varW = w
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RED_INTEGER, gl.UNSIGNED_INT, data, 0)
   }
 
   private subUpload(
@@ -482,12 +615,77 @@ export class TileLayerRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     s.atlasTex = tex
     s.atlasImage = layer.tileset.image
+    if (s.avgTex) gl.deleteTexture(s.avgTex)
+    s.avgTex = this.createAverageTexture(layer)
+  }
+
+  /** One texel per atlas tile holding its mean colour; null if the atlas can't be read. */
+  private createAverageTexture(layer: TileLayerData): WebGLTexture | null {
+    const ts = layer.tileset
+    const img = ts.image as TexImageSource & { width: number; height: number; naturalWidth?: number }
+    try {
+      const iw = img.naturalWidth || img.width
+      const ih = (img as { naturalHeight?: number }).naturalHeight || img.height
+      const sp = ts.spacing ?? 0
+      const mg = ts.margin ?? 0
+      const cols = ts.columns
+      const rows = Math.max(1, Math.floor((ih - 2 * mg + sp) / (ts.tileHeight + sp)))
+      const c = document.createElement('canvas')
+      c.width = iw
+      c.height = ih
+      const ctx = c.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | null
+      if (!ctx) return null
+      ctx.drawImage(img as CanvasImageSource, 0, 0)
+      const px = ctx.getImageData(0, 0, iw, ih).data
+      if (!px || px.length < iw * ih * 4) return null
+      const out = new Uint8Array(cols * rows * 4)
+      for (let t = 0; t < cols * rows; t++) {
+        const ox = mg + (t % cols) * (ts.tileWidth + sp)
+        const oy = mg + Math.floor(t / cols) * (ts.tileHeight + sp)
+        let r = 0,
+          g = 0,
+          b = 0,
+          a = 0
+        for (let y = oy; y < oy + ts.tileHeight && y < ih; y++) {
+          for (let x = ox; x < ox + ts.tileWidth && x < iw; x++) {
+            const o = (y * iw + x) * 4
+            const al = px[o + 3]
+            r += px[o] * al
+            g += px[o + 1] * al
+            b += px[o + 2] * al
+            a += al
+          }
+        }
+        const n = ts.tileWidth * ts.tileHeight
+        out[t * 4] = a ? r / a : 0
+        out[t * 4 + 1] = a ? g / a : 0
+        out[t * 4 + 2] = a ? b / a : 0
+        out[t * 4 + 3] = a / n
+      }
+      const { gl } = this
+      const tex = gl.createTexture()!
+      gl.activeTexture(gl.TEXTURE5)
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, out)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+      gl.activeTexture(gl.TEXTURE0)
+      return tex
+    } catch {
+      // Cross-origin atlas without CORS: keep exact sampling at every zoom.
+      return null
+    }
   }
 
   private deleteLayer(s: LayerGL): void {
     const { gl } = this
-    for (const pg of s.pages) gl.deleteTexture(pg.tex)
+    for (const pg of s.pages) {
+      gl.deleteTexture(pg.tex)
+      if (pg.tint) gl.deleteTexture(pg.tint)
+    }
     if (s.lutTex) gl.deleteTexture(s.lutTex)
     if (s.atlasTex) gl.deleteTexture(s.atlasTex)
+    if (s.avgTex) gl.deleteTexture(s.avgTex)
+    if (s.varTex) gl.deleteTexture(s.varTex)
   }
 }

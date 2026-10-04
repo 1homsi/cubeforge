@@ -32,6 +32,7 @@ export {
   visibleChunkRange,
   tileSourceX,
   tileSourceY,
+  tileHash,
   isTilesetReady,
 } from './tileLayer'
 export type {

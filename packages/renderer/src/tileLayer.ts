@@ -46,6 +46,21 @@ export interface TileLayerOptions {
   /** Chunk edge in tiles for dirty tracking and the Canvas2D cache. Default 32. */
   chunkSize?: number
   animations?: Record<number, TileAnimation>
+  /** Per-cell alternatives: drawing `id` shows `variants[id][tileHash(x, y) % n]` (before animation). */
+  variants?: Record<number, number[]>
+  /** Per-tile brightness variation from the tile hash, 0..1. Default 0. */
+  jitter?: number
+  /** Allocate the per-tile RGBA tint layer up front (otherwise on first setTint). */
+  tinted?: boolean
+}
+
+/** Stable per-cell hash shared with the tile shader (variants, jitter). */
+export function tileHash(x: number, y: number): number {
+  let h = (Math.imul(x >>> 0, 1664525) + Math.imul(y >>> 0, 1013904223)) >>> 0
+  h = (h ^ (h >>> 16)) >>> 0
+  h = Math.imul(h, 2246822519) >>> 0
+  h = (h ^ (h >>> 13)) >>> 0
+  return h
 }
 
 export interface TileLayerComponent extends Component {
@@ -100,6 +115,17 @@ export class TileLayerData {
   private animCur: Int32Array = new Int32Array(0)
   private animFlag: Uint8Array = new Uint8Array(0)
 
+  /** RGBA bytes per tile, multiplied with the tile colour; null until enabled. */
+  tints: Uint8Array | null = null
+  /** Bumped when the tint layer is (re)allocated or fully replaced. */
+  tintVersion = 0
+  private _jitter = 0
+  /** Packed variant table: heads ((start << 8) | count) for ids < variantSize, then the id lists. */
+  variantTable: Uint32Array | null = null
+  variantSize = 0
+  variantVersion = 0
+  private variantLists: Record<number, number[]> = {}
+
   /** Called after any mutation (the React component uses it to wake on-demand loops). */
   onChange: (() => void) | null = null
 
@@ -127,6 +153,94 @@ export class TileLayerData {
     this.dirtyRect = new Int32Array(chunks * 4)
     this.dirtyFlag = new Uint8Array(chunks)
     if (opts.animations) this.setAnimations(opts.animations)
+    if (opts.variants) this.setVariants(opts.variants)
+    this._jitter = opts.jitter ?? 0
+    if (opts.tinted) this.enableTints()
+  }
+
+  get jitter(): number {
+    return this._jitter
+  }
+  set jitter(v: number) {
+    if (v === this._jitter) return
+    this._jitter = v
+    this.revision++
+    this.onChange?.()
+  }
+
+  /** Allocate the tint layer (all white, opaque). */
+  enableTints(): Uint8Array {
+    if (!this.tints) {
+      this.tints = new Uint8Array(this.width * this.height * 4).fill(255)
+      this.tintVersion++
+      this.revision++
+    }
+    return this.tints
+  }
+
+  /** Tint one tile with 0xRRGGBBAA. Marks only its chunk dirty. */
+  setTint(x: number, y: number, rgba: number): void {
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return
+    const t = this.tints ?? this.enableTints()
+    const o = (y * this.width + x) * 4
+    t[o] = rgba >>> 24
+    t[o + 1] = (rgba >>> 16) & 255
+    t[o + 2] = (rgba >>> 8) & 255
+    t[o + 3] = rgba & 255
+    this.markDirty(x, y)
+  }
+
+  /** Replace all tints: RGBA bytes, length width * height * 4. */
+  setTints(rgba: ArrayLike<number>): void {
+    const t = this.tints ?? this.enableTints()
+    if (rgba.length !== t.length) throw new Error(`[TileLayer] expected ${t.length} tint bytes, got ${rgba.length}`)
+    t.set(rgba)
+    this.tintVersion++
+    this.revision++
+    this.onChange?.()
+  }
+
+  /** Replace the variant table. Keys and values are tile ids. */
+  setVariants(variants: Record<number, number[]>): void {
+    this.variantLists = variants
+    let maxId = -1
+    let total = 0
+    for (const key of Object.keys(variants)) {
+      const id = Number(key)
+      const list = variants[id]
+      if (!(id > 0) || !list || list.length === 0) continue
+      if (id > maxId) maxId = id
+      total += Math.min(255, list.length)
+    }
+    if (maxId < 0) {
+      this.variantTable = null
+      this.variantSize = 0
+    } else {
+      const size = maxId + 1
+      const table = new Uint32Array(size + total)
+      let at = size
+      for (const key of Object.keys(variants)) {
+        const id = Number(key)
+        const list = variants[id]
+        if (!(id > 0) || !list || list.length === 0) continue
+        const n = Math.min(255, list.length)
+        table[id] = (at << 8) | n
+        for (let k = 0; k < n; k++) table[at++] = list[k]
+      }
+      this.variantTable = table
+      this.variantSize = size
+    }
+    this.variantVersion++
+    this.revision++
+    this.onChange?.()
+  }
+
+  /** The id actually drawn at (x, y): variant by hash, then animation frame. */
+  visualTile(x: number, y: number): number {
+    let id = this.getTile(x, y)
+    const list = this.variantLists[id]
+    if (list && list.length > 0) id = list[tileHash(x, y) % Math.min(255, list.length)]
+    return this.resolveTile(id)
   }
 
   get x(): number {
@@ -181,6 +295,11 @@ export class TileLayerData {
     const i = y * this.width + x
     if (this.tiles[i] === id) return false
     this.tiles[i] = id
+    this.markDirty(x, y)
+    return true
+  }
+
+  private markDirty(x: number, y: number): void {
     const cs = this.chunkSize
     const c = ((y / cs) | 0) * this.chunksX + ((x / cs) | 0)
     this.chunkVersion[c]++
@@ -200,7 +319,6 @@ export class TileLayerData {
     }
     this.revision++
     this.onChange?.()
-    return true
   }
 
   /** Replace every tile (copied). Length must equal width * height. */

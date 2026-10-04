@@ -34,6 +34,9 @@ jobs:
       - name: Benchmark budgets (headless)
         run: pnpm run bench:ci
 
+      - name: GPU smoke test (real WebGL2 via SwiftShader)
+        run: node scripts/gpu-smoke/run.mjs
+
       - name: Build
         run: pnpm run build
 

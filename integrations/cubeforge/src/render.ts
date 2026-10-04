@@ -29,6 +29,7 @@ export {
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
   TileLayerData,
+  tileHash,
 } from '@cubeforge/renderer'
 export type { SpriteLayerOptions, LayerAtlas, TileLayerOptions, Tileset, TileAnimation } from '@cubeforge/renderer'
 export { StatsOverlay } from './components/StatsOverlay'

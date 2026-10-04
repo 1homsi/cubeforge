@@ -12,10 +12,10 @@ import { EngineContext } from '../context'
  * Create a stable {@link TileLayerData} for `<TileLayer layer={...} />`.
  * Mutate it imperatively (`setTile`, `setTiles`) from simulation code; no React
  * re-render is involved. A new layer is created only if the size, id width or
- * chunk size change. `tileset` and `animations` are synced by identity.
+ * chunk size change. `tileset`, `animations` and `variants` are synced by identity.
  */
 export function useTileLayer(options: TileLayerOptions): TileLayerData {
-  const { width, height, wideIds, chunkSize, tileset, animations } = options
+  const { width, height, wideIds, chunkSize, tileset, animations, variants, jitter } = options
   const optsRef = useRef(options)
   optsRef.current = options
   const layer = useMemo(
@@ -34,6 +34,12 @@ export function useTileLayer(options: TileLayerOptions): TileLayerData {
     syncedAnims.current = animations
     layer.setAnimations(animations ?? {})
   }
+  const syncedVariants = useRef(variants)
+  if (syncedVariants.current !== variants) {
+    syncedVariants.current = variants
+    layer.setVariants(variants ?? {})
+  }
+  layer.jitter = jitter ?? 0
   return layer
 }
 

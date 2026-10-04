@@ -11,6 +11,7 @@
     "prepare": "git config core.hooksPath .githooks",
     "bench": "node benchmarks/run.mjs",
     "bench:ci": "node benchmarks/run.mjs --ci",
+    "gpu:smoke": "node scripts/gpu-smoke/run.mjs",
     "pack:smoke": "pnpm build && node scripts/publish-packages.mjs smoke",
     "size": "node scripts/bundle-size.mjs && node scripts/bundle-size.mjs --entry cubeforge/render",
     "size:check": "node scripts/bundle-size.mjs --entry cubeforge/render --check 34000 --forbid _pkg/physics/,_pkg/audio/,_pkg/net/,_pkg/editor/,_pkg/devtools/,_pkg/gameplay/ && node scripts/bundle-size.mjs --check 36000 --forbid _pkg/physics/,_pkg/devtools/,_pkg/net/,_pkg/editor/,_pkg/gameplay/"
