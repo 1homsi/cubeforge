@@ -1,4 +1,9 @@
 import type { Sampling } from './textureFilter'
+import { registerSpriteLayerRenderer } from './layerRegistry'
+import { SpriteLayerRenderer } from './spriteLayerGL'
+import { SPRITE_HIDDEN } from './spriteLayerFlags'
+
+export { MAX_LAYER_ATLASES, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
 
 export type SpriteLayerImage = HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas
 
@@ -13,9 +18,6 @@ export interface LayerAtlas {
   frameHeight?: number
   frameColumns?: number
 }
-
-/** Atlases per layer that can be drawn in one batch. */
-export const MAX_LAYER_ATLASES = 8
 
 export interface SpriteLayerOptions extends LayerAtlas {
   /** Initial capacity; grows automatically. */
@@ -35,12 +37,6 @@ export interface SpriteLayerOptions extends LayerAtlas {
   anchorY?: number
   visible?: boolean
 }
-
-export const SPRITE_FLIP_X = 1
-export const SPRITE_FLIP_Y = 2
-export const SPRITE_HIDDEN = 4
-/** Draw as a solid rect in `color`, ignoring the atlas. */
-export const SPRITE_UNTEXTURED = 8
 
 /**
  * Struct-of-arrays sprite batch for data-driven games: thousands of sprites
@@ -83,6 +79,7 @@ export class SpriteLayer {
   private _orderStructure = -1
 
   constructor(options: SpriteLayerOptions = {}) {
+    registerSpriteLayerRenderer((gl) => new SpriteLayerRenderer(gl))
     const { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns } = options
     this.atlases = options.atlases ?? [{ src, image, dynamicSrc, frameWidth, frameHeight, frameColumns }]
     this.sortByKey = options.sortByKey ?? false

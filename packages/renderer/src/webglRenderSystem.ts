@@ -22,7 +22,8 @@ import {
 } from './shaders'
 import { parseCSSColor } from './colorParser'
 import type { SpriteLayer, LayerAtlas } from './spriteLayer'
-import { SpriteLayerRenderer, type LayerCamera, type ResolvedAtlas } from './spriteLayerGL'
+import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLayerGL'
+import { spriteLayerRendererFactory, tileRendererFactory, type TileRenderer } from './layerRegistry'
 import {
   type Sampling,
   resolveSampling,
@@ -32,7 +33,7 @@ import {
   DEFAULT_SAMPLING,
 } from './textureFilter'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
-import { TileLayerRenderer, type TileLayerRenderStats } from './tileLayerGL'
+import type { TileLayerRenderStats } from './tileLayerGL'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
@@ -788,10 +789,16 @@ export function computeWebGLSceneHash({
  * drawn in a single `drawArraysInstanced` call.
  */
 export class RenderSystem implements System {
-  private readonly _tileLayers: TileLayerRenderer
+  private _tileLayers: TileRenderer | null = null
+  private static readonly _noTileStats: TileLayerRenderStats = {
+    indexUploads: 0,
+    uploadedTexels: 0,
+    lutUploads: 0,
+    drawCalls: 0,
+  }
   /** Per-frame TileLayer upload/draw counters. */
   get tileLayerStats(): TileLayerRenderStats {
-    return this._tileLayers.stats
+    return this._tileLayers?.stats ?? RenderSystem._noTileStats
   }
   /** Default background used when no Camera2D component exists */
   defaultBackground = '#1a1a2e'
@@ -961,7 +968,7 @@ export class RenderSystem implements System {
     viewT: 0,
     viewB: 0,
   }
-  private _spriteLayerRenderer!: SpriteLayerRenderer
+  private _spriteLayerRenderer: SpriteLayerRenderer | null = null
   private _spriteLayerVersion = 0
   private readonly _visSprites: SpriteComponent[] = []
   private readonly _visInfo: SpriteTexInfo[] = []
@@ -1375,8 +1382,6 @@ export class RenderSystem implements System {
     if (!gl) throw new Error('[WebGLRenderer] WebGL2 is not supported in this browser')
     this.gl = gl
     this.initGL()
-    this._tileLayers = new TileLayerRenderer(gl)
-    this._spriteLayerRenderer = new SpriteLayerRenderer(gl)
     canvas.addEventListener?.('webglcontextlost', this.onContextLost)
     canvas.addEventListener?.('webglcontextrestored', this.onContextRestored)
   }
@@ -1415,8 +1420,8 @@ export class RenderSystem implements System {
       entry.dirty = false
       this.textures.set(id, tex)
     }
-    this._tileLayers.contextRestored()
-    this._spriteLayerRenderer.contextRestored()
+    this._tileLayers?.contextRestored()
+    this._spriteLayerRenderer?.contextRestored()
     this._textureRevision++
   }
 
@@ -1441,8 +1446,8 @@ export class RenderSystem implements System {
     gl.deleteBuffer(this.instanceBuffer)
     if (this._idleFBO) gl.deleteFramebuffer(this._idleFBO)
     if (this._idleTex) gl.deleteTexture(this._idleTex)
-    this._tileLayers.dispose()
-    this._spriteLayerRenderer.dispose()
+    this._tileLayers?.dispose()
+    this._spriteLayerRenderer?.dispose()
     this.textures.clear()
     this.shapeTextures.clear()
     this.parallaxTextures.clear()
@@ -2053,7 +2058,8 @@ export class RenderSystem implements System {
     cam.viewR = viewR
     cam.viewT = viewT
     cam.viewB = viewB
-    const r = this._spriteLayerRenderer
+    const r = (this._spriteLayerRenderer ??= spriteLayerRendererFactory()?.(this.gl) ?? null)
+    if (!r) return
     r.drawCalls = 0
     r.instances = 0
     r.draw(
@@ -2259,7 +2265,7 @@ export class RenderSystem implements System {
     if (this._contextLostWarned) {
       this._contextLostWarned = false
       console.info('[Cubeforge] WebGL context restored — resuming rendering.')
-      this._tileLayers.contextRestored()
+      this._tileLayers?.contextRestored()
     }
     resetRenderFrameStats(this.stats)
     this._frame++
@@ -2497,7 +2503,11 @@ export class RenderSystem implements System {
       if (entry.dirty) this.uploadDynamicCanvas(entry)
     }
 
-    if (this._tileLayers.prepare(world, dt)) this._prevSceneHash = -1
+    if (!this._tileLayers) {
+      const make = tileRendererFactory()
+      if (make) this._tileLayers = make(gl)
+    }
+    if (this._tileLayers?.prepare(world, dt)) this._prevSceneHash = -1
 
     // ── Idle frame skip ───────────────────────────────────────────────────────
     // When enabled, hash visible entity state. If unchanged from last frame,
@@ -2586,8 +2596,10 @@ export class RenderSystem implements System {
       }
     }
 
-    this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY, W / Wl)
-    this.stats.drawCalls += this._tileLayers.stats.drawCalls
+    if (this._tileLayers) {
+      this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY, W / Wl)
+      this.stats.drawCalls += this._tileLayers.stats.drawCalls
+    }
 
     // ── Upload camera uniforms for sprite program ──────────────────────────────
     gl.useProgram(this.program)

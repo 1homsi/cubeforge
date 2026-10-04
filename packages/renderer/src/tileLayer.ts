@@ -1,4 +1,6 @@
 import type { Component } from '@cubeforge/core'
+import { registerTileRenderer } from './layerRegistry'
+import { TileLayerRenderer } from './tileLayerGL'
 
 /** Tile id storage. `0` is always empty; id `n` draws atlas tile `n - 1`. */
 export type TileIdArray = Uint16Array | Uint32Array
@@ -130,6 +132,7 @@ export class TileLayerData {
   onChange: (() => void) | null = null
 
   constructor(opts: TileLayerOptions) {
+    registerTileRenderer((gl) => new TileLayerRenderer(gl))
     const { width, height } = opts
     if (!(width > 0 && height > 0)) throw new Error('[TileLayer] width and height must be positive')
     this.width = width | 0
