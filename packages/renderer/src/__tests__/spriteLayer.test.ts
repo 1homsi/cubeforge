@@ -17,18 +17,23 @@ function setup() {
     return el
   })
   const draws: number[] = []
+  const uploads: Float32Array[] = []
   const gl = new Proxy({} as Record<string, unknown>, {
     get(_t, p: string) {
       if (/^[A-Z_0-9]+$/.test(p)) return p
       if (p === 'isContextLost') return () => false
       if (p.startsWith('get') || p.startsWith('create')) return () => ({})
       if (p === 'drawArraysInstanced') return (_m: unknown, _f: unknown, _c: unknown, n: number) => draws.push(n)
+      if (p === 'bufferSubData')
+        return (_t: unknown, _o: unknown, data: Float32Array, src: number, len: number) =>
+          uploads.push(data.slice(src, src + len))
+      if (p === 'getShaderParameter' || p === 'getProgramParameter') return () => true
       return () => true
     },
   })
   const canvas = { width: 200, height: 100, clientWidth: 200, clientHeight: 100, getContext: () => gl }
   const rs = new RenderSystem(canvas as unknown as HTMLCanvasElement, new Map())
-  return { rs, world: new ECSWorld(), draws }
+  return { rs, world: new ECSWorld(), draws, uploads }
 }
 
 describe('SpriteLayer', () => {
@@ -60,5 +65,38 @@ describe('SpriteLayer', () => {
     draws.length = 0
     rs.update(world, 1 / 60)
     expect(draws).toEqual([])
+  })
+
+  it('draws several atlases in one batch, ordered by sortKey', () => {
+    const { rs, world, draws, uploads } = setup()
+    const img = (w: number) =>
+      ({ width: w, height: 16, naturalWidth: w, naturalHeight: 16 }) as unknown as HTMLImageElement
+    const layer = new SpriteLayer({
+      atlases: [
+        { image: img(64), frameWidth: 16, frameHeight: 16 },
+        { image: img(32), frameWidth: 16, frameHeight: 16 },
+      ],
+      sortByKey: true,
+    })
+    const ys = [30, 10, 20]
+    ys.forEach((y, i) => {
+      const k = layer.add(0, y, 8, 8, i, 100 + i)
+      layer.atlas[k] = i % 2
+      layer.sortKey[k] = y
+    })
+    rs.addSpriteLayer(layer)
+    uploads.length = 0
+    rs.update(world, 1 / 60)
+    expect(draws).toEqual([3])
+    const data = uploads[uploads.length - 1]
+    const drawn = [0, 1, 2].map((n) => ({ y: data[n * 20 + 1], atlas: data[n * 20 + 17] }))
+    expect(drawn.map((d) => d.y)).toEqual([10, 20, 30])
+    expect(drawn.map((d) => d.atlas)).toEqual([1, 0, 0])
+    // pick follows draw order: the y=30 sprite is drawn last, so it wins on overlap
+    layer.y[1] = 30
+    layer.sortKey[1] = 31
+    expect(layer.pick(0, 30)).toBe(101)
+    layer.sortKey[1] = 29
+    expect(layer.pick(0, 30)).toBe(100)
   })
 })

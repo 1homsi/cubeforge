@@ -16,8 +16,15 @@ export * from './components/nineSlice'
 export * from './components/mask'
 export * from './components/shapes'
 export { RenderSystem } from './webglRenderSystem'
-export { SpriteLayer, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN } from './spriteLayer'
-export type { SpriteLayerOptions } from './spriteLayer'
+export {
+  SpriteLayer,
+  SPRITE_FLIP_X,
+  SPRITE_FLIP_Y,
+  SPRITE_HIDDEN,
+  SPRITE_UNTEXTURED,
+  MAX_LAYER_ATLASES,
+} from './spriteLayer'
+export type { SpriteLayerOptions, LayerAtlas, SpriteLayerImage } from './spriteLayer'
 export {
   TileLayerData,
   createTileLayerComponent,

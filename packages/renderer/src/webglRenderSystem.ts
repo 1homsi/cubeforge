@@ -21,7 +21,8 @@ import {
   COMPOSITE_FRAG_SRC,
 } from './shaders'
 import { parseCSSColor } from './colorParser'
-import { SpriteLayer, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN } from './spriteLayer'
+import type { SpriteLayer, LayerAtlas } from './spriteLayer'
+import { SpriteLayerRenderer, type LayerCamera, type ResolvedAtlas } from './spriteLayerGL'
 import {
   type Sampling,
   resolveSampling,
@@ -945,6 +946,21 @@ export class RenderSystem implements System {
   private _texRankEpoch = 0
   private readonly _spriteLayers: SpriteLayer[] = []
   private _layerImageTextures = new WeakMap<object, WebGLTexture>()
+  private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
+  private readonly _layerCam: LayerCamera = {
+    x: 0,
+    y: 0,
+    zoom: 1,
+    width: 1,
+    height: 1,
+    shakeX: 0,
+    shakeY: 0,
+    viewL: 0,
+    viewR: 0,
+    viewT: 0,
+    viewB: 0,
+  }
+  private _spriteLayerRenderer!: SpriteLayerRenderer
   private _spriteLayerVersion = 0
   private readonly _visSprites: SpriteComponent[] = []
   private readonly _visInfo: SpriteTexInfo[] = []
@@ -1333,6 +1349,7 @@ export class RenderSystem implements System {
     this.gl = gl
     this.initGL()
     this._tileLayers = new TileLayerRenderer(gl)
+    this._spriteLayerRenderer = new SpriteLayerRenderer(gl)
     canvas.addEventListener?.('webglcontextlost', this.onContextLost)
     canvas.addEventListener?.('webglcontextrestored', this.onContextRestored)
   }
@@ -1372,6 +1389,7 @@ export class RenderSystem implements System {
       this.textures.set(id, tex)
     }
     this._tileLayers.contextRestored()
+    this._spriteLayerRenderer.contextRestored()
     this._textureRevision++
   }
 
@@ -1397,6 +1415,7 @@ export class RenderSystem implements System {
     if (this._idleFBO) gl.deleteFramebuffer(this._idleFBO)
     if (this._idleTex) gl.deleteTexture(this._idleTex)
     this._tileLayers.dispose()
+    this._spriteLayerRenderer.dispose()
     this.textures.clear()
     this.shapeTextures.clear()
     this.parallaxTextures.clear()
@@ -2002,22 +2021,42 @@ export class RenderSystem implements System {
   }
 
   private drawSpriteLayer(layer: SpriteLayer, viewL: number, viewR: number, viewT: number, viewB: number): void {
-    const count = layer.count
-    if (!layer.visible || count === 0) return
-    let tex: WebGLTexture
-    let iw = 0
-    let ih = 0
-    if (layer.dynamicSrc !== undefined) {
-      const entry = this._dynamicCanvases.get(layer.dynamicSrc)
-      if (!entry) return
-      tex = entry.tex
-      iw = entry.texW
-      ih = entry.texH
-    } else if (layer.image !== undefined) {
-      const img = layer.image
-      iw = (img as HTMLImageElement).naturalWidth ?? img.width
-      ih = (img as HTMLImageElement).naturalHeight ?? img.height
-      if (!iw || !ih) return
+    const cam = this._layerCam
+    cam.viewL = viewL
+    cam.viewR = viewR
+    cam.viewT = viewT
+    cam.viewB = viewB
+    const r = this._spriteLayerRenderer
+    r.drawCalls = 0
+    r.instances = 0
+    r.draw(
+      layer,
+      cam,
+      (i) => this.resolveLayerAtlas(layer.atlases[i]),
+      this.whiteTexture,
+      () => this.applySampling(layer.sampling),
+    )
+    this.stats.drawCalls += r.drawCalls
+    this.stats.batches += r.drawCalls
+    this.stats.instances += r.instances
+    this.gl.useProgram(this.program)
+  }
+
+  private resolveLayerAtlas(atlas: LayerAtlas): ResolvedAtlas | null {
+    const out = this._resolvedAtlas
+    if (atlas.dynamicSrc !== undefined) {
+      const entry = this._dynamicCanvases.get(atlas.dynamicSrc)
+      if (!entry) return null
+      out.tex = entry.tex
+      out.width = entry.texW
+      out.height = entry.texH
+      return out
+    }
+    if (atlas.image !== undefined) {
+      const img = atlas.image
+      const iw = (img as HTMLImageElement).naturalWidth ?? img.width
+      const ih = (img as HTMLImageElement).naturalHeight ?? img.height
+      if (!iw || !ih) return null
       let t = this._layerImageTextures.get(img)
       if (!t) {
         const { gl } = this
@@ -2031,81 +2070,22 @@ export class RenderSystem implements System {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
         this._layerImageTextures.set(img, t)
       }
-      tex = t
-    } else if (layer.src !== undefined) {
-      tex = this.loadTexture(layer.src)
-      if (tex === this.whiteTexture) return
-      const img = this.imageCache.get(layer.src)
-      iw = img?.naturalWidth ?? 0
-      ih = img?.naturalHeight ?? 0
-    } else {
-      tex = this.whiteTexture
+      out.tex = t
+      out.width = iw
+      out.height = ih
+      return out
     }
-    const textured = iw > 0
-    const { gl } = this
-    gl.bindTexture(gl.TEXTURE_2D, tex)
-    this.applySampling(layer.sampling)
-
-    const fw = layer.frameWidth
-    const fh = layer.frameHeight
-    const gridded = textured && fw > 0 && fh > 0
-    const cols = gridded ? (layer.frameColumns ?? Math.max(1, Math.floor(iw / fw))) : 1
-    const uw = gridded ? fw / iw : 1
-    const vh = gridded ? fh / ih : 1
-    const ax = layer.anchorX
-    const ay = layer.anchorY
-    const X = layer.x,
-      Y = layer.y,
-      Wd = layer.w,
-      Ht = layer.h,
-      R = layer.rotation,
-      F = layer.frame,
-      C = layer.color,
-      FL = layer.flags
-    const d = this.instanceData
-    let batch = 0
-    for (let i = 0; i < count; i++) {
-      const flags = FL[i]
-      if (flags & SPRITE_HIDDEN) continue
-      const x = X[i],
-        y = Y[i],
-        w = Wd[i],
-        h = Ht[i]
-      const rad = (w < 0 ? -w : w) + (h < 0 ? -h : h)
-      if (x + rad < viewL || x - rad > viewR || y + rad < viewT || y - rad > viewB) continue
-      const c = C[i]
-      const base = batch * FLOATS_PER_INSTANCE
-      d[base] = x
-      d[base + 1] = y
-      d[base + 2] = w
-      d[base + 3] = h
-      d[base + 4] = R[i]
-      d[base + 5] = ax
-      d[base + 6] = ay
-      d[base + 7] = 0
-      d[base + 8] = 0
-      d[base + 9] = flags & SPRITE_FLIP_X
-      d[base + 10] = (flags & SPRITE_FLIP_Y) >> 1
-      d[base + 11] = (c >>> 24) / 255
-      d[base + 12] = ((c >>> 16) & 255) / 255
-      d[base + 13] = ((c >>> 8) & 255) / 255
-      d[base + 14] = (c & 255) / 255
-      if (gridded) {
-        const f = F[i]
-        d[base + 15] = (f % cols) * uw
-        d[base + 16] = Math.floor(f / cols) * vh
-      } else {
-        d[base + 15] = 0
-        d[base + 16] = 0
-      }
-      d[base + 17] = uw
-      d[base + 18] = vh
-      if (++batch === MAX_INSTANCES) {
-        this.flushWithTex(batch, tex, textured)
-        batch = 0
-      }
+    if (atlas.src !== undefined) {
+      const tex = this.loadTexture(atlas.src)
+      if (tex === this.whiteTexture) return null
+      const img = this.imageCache.get(atlas.src)
+      if (!img || !img.naturalWidth) return null
+      out.tex = tex
+      out.width = img.naturalWidth
+      out.height = img.naturalHeight
+      return out
     }
-    this.flushWithTex(batch, tex, textured)
+    return null
   }
 
   private refreshSpriteColor(info: SpriteTexInfo, color: string): void {
@@ -2455,7 +2435,7 @@ export class RenderSystem implements System {
     // blit the cached scene FBO to screen and skip all GPU draw calls.
     if (this._spriteLayers.length > 0) {
       let v = 0
-      for (const layer of this._spriteLayers) v += layer.version + (layer.visible ? 1 : 0)
+      for (const layer of this._spriteLayers) v += layer.version + (layer.visible ? 1 : 0) + layer.atlases.length
       if (v !== this._spriteLayerVersion) {
         this._spriteLayerVersion = v
         this._overlayRevision++
@@ -2547,6 +2527,16 @@ export class RenderSystem implements System {
     gl.uniform2f(this.uCanvasSize, Wl, Hl)
     gl.uniform2f(this.uShake, shakeX, shakeY)
     gl.uniform1i(this.uTexture, 0)
+    {
+      const lc = this._layerCam
+      lc.x = camX
+      lc.y = camY
+      lc.zoom = zoom
+      lc.width = Wl
+      lc.height = Hl
+      lc.shakeX = shakeX
+      lc.shakeY = shakeY
+    }
     gl.activeTexture(gl.TEXTURE0)
 
     // ── Sprites ───────────────────────────────────────────────────────────────
@@ -2585,7 +2575,7 @@ export class RenderSystem implements System {
       const r = n + j
       sortLayers[r] = this.layers.getOrder(layer.layer)
       sortZs[r] = layer.zIndex
-      sortTexRanks[r] = this.textureRank(layer.dynamicSrc ?? layer.src ?? (layer.image ? '__layerimg__' : '__color__'))
+      sortTexRanks[r] = this.textureRank('__layer__')
     }
     const sortIndices = this.sortVisible(m)
 

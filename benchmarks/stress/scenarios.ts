@@ -286,6 +286,45 @@ function spriteLayer(n: number): ScenarioDef {
   }
 }
 
+/** Human Box shape: two atlases in one layer, depth-sorted by y every frame. */
+function depthLayer(n: number): ScenarioDef {
+  return {
+    name: `spritelayer-depth-${n}`,
+    description: `${n} sprites from 2 atlases in one SpriteLayer, y-sorted every frame`,
+    setup(ctx) {
+      const r = rng(1)
+      const atlas = { image: ctx.atlas, frameWidth: FRAME, frameHeight: FRAME, frameColumns: ATLAS / FRAME }
+      const layer = new SpriteLayer({ atlases: [atlas, { ...atlas }], sortByKey: true, capacity: n })
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        const X = layer.x
+        const Y = layer.y
+        const K = layer.sortKey
+        for (let i = 0; i < n; i++) {
+          const x = X[i] + vx[i]
+          const y = Y[i] + vy[i]
+          if (x < 0 || x > W) vx[i] = -vx[i]
+          if (y < 0 || y > H) vy[i] = -vy[i]
+          X[i] = x
+          Y[i] = y
+          K[i] = y
+        }
+        layer.touch()
+      })
+      for (let i = 0; i < n; i++) {
+        const k = layer.add(r() * W, r() * H, FRAME, FRAME, (r() * 256) | 0)
+        layer.atlas[k] = i & 1
+        layer.sortKey[k] = layer.y[k]
+        vx[i] = (r() - 0.5) * 4
+        vy[i] = (r() - 0.5) * 4
+      }
+      sc.renderer.addSpriteLayer(layer)
+      return sc
+    },
+  }
+}
+
 /** The same tile world as one TileLayer, with 10 tile edits per frame. */
 function tileLayer(cols: number, rows: number): ScenarioDef {
   return {
@@ -352,6 +391,7 @@ export const SCENARIOS: ScenarioDef[] = [
   movingSprites(10000),
   spriteLayer(3000),
   spriteLayer(10000),
+  depthLayer(3000),
   churn(3000, 200),
   tileWorld(600, 300),
   tileLayer(600, 300),

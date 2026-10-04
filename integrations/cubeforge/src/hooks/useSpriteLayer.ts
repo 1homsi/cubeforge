@@ -25,12 +25,16 @@ export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
   const [layer] = useState(() => new SpriteLayer(options))
 
   useLayoutEffect(() => {
-    layer.src = options.src
-    layer.image = options.image
-    layer.dynamicSrc = options.dynamicSrc
-    if (options.frameWidth !== undefined) layer.frameWidth = options.frameWidth
-    if (options.frameHeight !== undefined) layer.frameHeight = options.frameHeight
-    layer.frameColumns = options.frameColumns
+    if (options.atlases) layer.atlases = options.atlases
+    else {
+      layer.src = options.src
+      layer.image = options.image
+      layer.dynamicSrc = options.dynamicSrc
+      if (options.frameWidth !== undefined) layer.frameWidth = options.frameWidth
+      if (options.frameHeight !== undefined) layer.frameHeight = options.frameHeight
+      layer.frameColumns = options.frameColumns
+    }
+    layer.sortByKey = options.sortByKey ?? false
     layer.layer = options.layer ?? 'default'
     layer.zIndex = options.zIndex ?? 0
     layer.sampling = options.sampling
@@ -40,6 +44,8 @@ export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
     layer.touch()
   }, [
     layer,
+    options.atlases,
+    options.sortByKey,
     options.src,
     options.image,
     options.dynamicSrc,

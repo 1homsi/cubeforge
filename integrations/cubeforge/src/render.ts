@@ -22,7 +22,14 @@ export { TileLayer, useTileLayer } from './components/TileLayer'
 export { useSpriteLayer } from './hooks/useSpriteLayer'
 export { useCoordinates } from './hooks/useCoordinates'
 export { useEngineStats } from './hooks/useProfiler'
-export { SpriteLayer, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, TileLayerData } from '@cubeforge/renderer'
-export type { SpriteLayerOptions, TileLayerOptions, Tileset, TileAnimation } from '@cubeforge/renderer'
+export {
+  SpriteLayer,
+  SPRITE_FLIP_X,
+  SPRITE_FLIP_Y,
+  SPRITE_HIDDEN,
+  SPRITE_UNTEXTURED,
+  TileLayerData,
+} from '@cubeforge/renderer'
+export type { SpriteLayerOptions, LayerAtlas, TileLayerOptions, Tileset, TileAnimation } from '@cubeforge/renderer'
 export { StatsOverlay } from './components/StatsOverlay'
 export { Script } from './components/Script'

@@ -1,18 +1,32 @@
 import type { Sampling } from './textureFilter'
 
-export interface SpriteLayerOptions {
-  /** Initial capacity; grows automatically. */
-  capacity?: number
-  /** Image URL for the layer's texture (one texture per layer). */
+export type SpriteLayerImage = HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas
+
+/** One texture of a sprite layer, sliced into a grid of frames. */
+export interface LayerAtlas {
   src?: string
-  /** Or an already loaded image / canvas. */
   image?: SpriteLayerImage
-  /** Or a dynamic canvas id from useDynamicCanvas. */
+  /** A dynamic canvas id from useDynamicCanvas. */
   dynamicSrc?: string
-  /** Grid atlas cell size in texture pixels; `frame` indexes cells row-major. */
+  /** Grid cell size in texture pixels; `frame` indexes cells row-major. Omit for one whole-texture frame. */
   frameWidth?: number
   frameHeight?: number
   frameColumns?: number
+}
+
+/** Atlases per layer that can be drawn in one batch. */
+export const MAX_LAYER_ATLASES = 8
+
+export interface SpriteLayerOptions extends LayerAtlas {
+  /** Initial capacity; grows automatically. */
+  capacity?: number
+  /**
+   * Several textures drawn in one batch (up to 8); each sprite picks one with
+   * `atlas[i]`. When omitted, `src`/`image`/`dynamicSrc` + frame size form atlas 0.
+   */
+  atlases?: LayerAtlas[]
+  /** Draw (and pick) in ascending `sortKey[i]` order, e.g. y for depth. Default: insertion order. */
+  sortByKey?: boolean
   /** Render layer name and z-index, sorted together with regular sprites. */
   layer?: string
   zIndex?: number
@@ -22,11 +36,11 @@ export interface SpriteLayerOptions {
   visible?: boolean
 }
 
-export type SpriteLayerImage = HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas
-
 export const SPRITE_FLIP_X = 1
 export const SPRITE_FLIP_Y = 2
 export const SPRITE_HIDDEN = 4
+/** Draw as a solid rect in `color`, ignoring the atlas. */
+export const SPRITE_UNTEXTURED = 8
 
 /**
  * Struct-of-arrays sprite batch for data-driven games: thousands of sprites
@@ -43,19 +57,19 @@ export class SpriteLayer {
   h!: Float32Array
   rotation!: Float32Array
   frame!: Uint32Array
+  /** Index into `atlases` per sprite. */
+  atlas!: Uint8Array
   /** 0xRRGGBBAA tint multiplied with the texture (or the fill color without one). */
   color!: Uint32Array
-  /** Bit flags: SPRITE_FLIP_X | SPRITE_FLIP_Y | SPRITE_HIDDEN. */
+  /** Bit flags: SPRITE_FLIP_X | SPRITE_FLIP_Y | SPRITE_HIDDEN | SPRITE_UNTEXTURED. */
   flags!: Uint8Array
+  /** Draw order key when `sortByKey` is set (lower draws first). */
+  sortKey!: Float32Array
   /** Caller ids returned by pick(); defaults to the index at insertion. */
   ids!: Int32Array
 
-  src: string | undefined
-  image: SpriteLayerImage | undefined
-  dynamicSrc: string | undefined
-  frameWidth: number
-  frameHeight: number
-  frameColumns: number | undefined
+  atlases: LayerAtlas[]
+  sortByKey: boolean
   layer: string
   zIndex: number
   sampling: Sampling | undefined
@@ -63,13 +77,15 @@ export class SpriteLayer {
   anchorY: number
   visible: boolean
 
+  private _order = new Int32Array(0)
+  private _orderCount = -1
+  private _structure = 0
+  private _orderStructure = -1
+
   constructor(options: SpriteLayerOptions = {}) {
-    this.src = options.src
-    this.image = options.image
-    this.dynamicSrc = options.dynamicSrc
-    this.frameWidth = options.frameWidth ?? 0
-    this.frameHeight = options.frameHeight ?? 0
-    this.frameColumns = options.frameColumns
+    const { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns } = options
+    this.atlases = options.atlases ?? [{ src, image, dynamicSrc, frameWidth, frameHeight, frameColumns }]
+    this.sortByKey = options.sortByKey ?? false
     this.layer = options.layer ?? 'default'
     this.zIndex = options.zIndex ?? 0
     this.sampling = options.sampling
@@ -77,6 +93,49 @@ export class SpriteLayer {
     this.anchorY = options.anchorY ?? 0.5
     this.visible = options.visible ?? true
     this.grow(Math.max(16, options.capacity ?? 256))
+  }
+
+  /** Atlas 0's url (single-atlas shorthand). */
+  get src(): string | undefined {
+    return this.atlases[0]?.src
+  }
+  set src(v: string | undefined) {
+    this.atlas0().src = v
+  }
+  get image(): SpriteLayerImage | undefined {
+    return this.atlases[0]?.image
+  }
+  set image(v: SpriteLayerImage | undefined) {
+    this.atlas0().image = v
+  }
+  get dynamicSrc(): string | undefined {
+    return this.atlases[0]?.dynamicSrc
+  }
+  set dynamicSrc(v: string | undefined) {
+    this.atlas0().dynamicSrc = v
+  }
+  get frameWidth(): number {
+    return this.atlases[0]?.frameWidth ?? 0
+  }
+  set frameWidth(v: number) {
+    this.atlas0().frameWidth = v
+  }
+  get frameHeight(): number {
+    return this.atlases[0]?.frameHeight ?? 0
+  }
+  set frameHeight(v: number) {
+    this.atlas0().frameHeight = v
+  }
+  get frameColumns(): number | undefined {
+    return this.atlases[0]?.frameColumns
+  }
+  set frameColumns(v: number | undefined) {
+    this.atlas0().frameColumns = v
+  }
+
+  private atlas0(): LayerAtlas {
+    if (this.atlases.length === 0) this.atlases.push({})
+    return this.atlases[0]
   }
 
   private grow(capacity: number): void {
@@ -94,8 +153,10 @@ export class SpriteLayer {
     this.h = copy(this.h, Float32Array)
     this.rotation = copy(this.rotation, Float32Array)
     this.frame = copy(this.frame, Uint32Array)
+    this.atlas = copy(this.atlas, Uint8Array)
     this.color = copy(this.color, Uint32Array)
     this.flags = copy(this.flags, Uint8Array)
+    this.sortKey = copy(this.sortKey, Float32Array)
     this.ids = copy(this.ids, Int32Array)
     this.capacity = capacity
   }
@@ -108,30 +169,33 @@ export class SpriteLayer {
   /** Set the sprite count (new slots are zeroed, white, visible). */
   resize(n: number): void {
     this.reserve(n)
-    for (let i = this.count; i < n; i++) {
-      this.rotation[i] = 0
-      this.frame[i] = 0
-      this.color[i] = 0xffffffff
-      this.flags[i] = 0
-      this.ids[i] = i
-    }
+    for (let i = this.count; i < n; i++) this.reset(i, i)
+    if (n !== this.count) this._structure++
     this.count = n
     this.version++
+  }
+
+  private reset(i: number, id: number): void {
+    this.rotation[i] = 0
+    this.frame[i] = 0
+    this.atlas[i] = 0
+    this.color[i] = 0xffffffff
+    this.flags[i] = 0
+    this.sortKey[i] = 0
+    this.ids[i] = id
   }
 
   add(x: number, y: number, w: number, h: number, frame = 0, id?: number): number {
     const i = this.count
     this.reserve(i + 1)
     this.count = i + 1
+    this.reset(i, id ?? i)
     this.x[i] = x
     this.y[i] = y
     this.w[i] = w
     this.h[i] = h
-    this.rotation[i] = 0
     this.frame[i] = frame
-    this.color[i] = 0xffffffff
-    this.flags[i] = 0
-    this.ids[i] = id ?? i
+    this._structure++
     this.version++
     return i
   }
@@ -153,15 +217,19 @@ export class SpriteLayer {
       this.h[i] = this.h[last]
       this.rotation[i] = this.rotation[last]
       this.frame[i] = this.frame[last]
+      this.atlas[i] = this.atlas[last]
       this.color[i] = this.color[last]
       this.flags[i] = this.flags[last]
+      this.sortKey[i] = this.sortKey[last]
       this.ids[i] = this.ids[last]
     }
+    this._structure++
     this.version++
   }
 
   clear(): void {
     this.count = 0
+    this._structure++
     this.version++
   }
 
@@ -170,11 +238,46 @@ export class SpriteLayer {
     this.version++
   }
 
+  /**
+   * Draw order (indices into the arrays), ascending `sortKey` when `sortByKey`
+   * is set. Updated incrementally: keys that drift a little between frames
+   * cost a near-linear insertion sort.
+   */
+  drawOrder(): Int32Array {
+    const n = this.count
+    if (this._order.length < n) this._order = new Int32Array(Math.max(n, this._order.length * 2))
+    const order = this._order
+    if (this._orderCount !== n || this._orderStructure !== this._structure || !this.sortByKey) {
+      for (let i = 0; i < n; i++) order[i] = i
+      this._orderCount = n
+      this._orderStructure = this._structure
+      if (this.sortByKey) {
+        const K = this.sortKey
+        order.subarray(0, n).sort((a, b) => K[a] - K[b] || a - b)
+      }
+      return order
+    }
+    const K = this.sortKey
+    for (let i = 1; i < n; i++) {
+      const v = order[i]
+      const k = K[v]
+      let j = i - 1
+      while (j >= 0 && (K[order[j]] > k || (K[order[j]] === k && order[j] > v))) {
+        order[j + 1] = order[j]
+        j--
+      }
+      order[j + 1] = v
+    }
+    return order
+  }
+
   /** Topmost sprite index containing the world point (rotation ignored), or -1. */
   pickIndex(wx: number, wy: number): number {
     const ax = this.anchorX
     const ay = this.anchorY
-    for (let i = this.count - 1; i >= 0; i--) {
+    const order = this.sortByKey ? this.drawOrder() : null
+    for (let k = this.count - 1; k >= 0; k--) {
+      const i = order ? order[k] : k
       if (this.flags[i] & SPRITE_HIDDEN) continue
       const w = this.w[i]
       const h = this.h[i]
