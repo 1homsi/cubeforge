@@ -37,8 +37,8 @@ export function useCoordinates(): CoordinateHelpers {
       const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')!
       const zoom = cam.zoom
       return {
-        x: canvas.width / 2 + (wx - cam.x) * zoom,
-        y: canvas.height / 2 + (wy - cam.y) * zoom,
+        x: canvas.clientWidth / 2 + (wx - cam.x) * zoom,
+        y: canvas.clientHeight / 2 + (wy - cam.y) * zoom,
       }
     },
     [engine.ecs, engine.canvas],
@@ -52,8 +52,8 @@ export function useCoordinates(): CoordinateHelpers {
       const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')!
       const zoom = cam.zoom
       return {
-        x: cam.x + (sx - canvas.width / 2) / zoom,
-        y: cam.y + (sy - canvas.height / 2) / zoom,
+        x: cam.x + (sx - canvas.clientWidth / 2) / zoom,
+        y: cam.y + (sy - canvas.clientHeight / 2) / zoom,
       }
     },
     [engine.ecs, engine.canvas],

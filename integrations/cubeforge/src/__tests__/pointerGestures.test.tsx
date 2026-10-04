@@ -1,0 +1,104 @@
+// @vitest-environment happy-dom
+import { describe, it, expect, vi } from 'vitest'
+import React from 'react'
+import { render, act } from '@testing-library/react'
+import { ECSWorld, EventBus, AssetManager, createTransform } from '@cubeforge/core'
+import { EngineContext, type EngineState } from '../context'
+import { useDraggable } from '../hooks/useDragDrop'
+import { useGestures } from '../hooks/useGestures'
+
+function makeEngine(): EngineState {
+  const canvas = document.createElement('canvas')
+  Object.defineProperty(canvas, 'clientWidth', { value: 200 })
+  Object.defineProperty(canvas, 'clientHeight', { value: 100 })
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100 }) as DOMRect
+  return {
+    ecs: new ECSWorld(),
+    events: new EventBus(),
+    assets: new AssetManager(),
+    input: {} as never,
+    physics: {} as never,
+    loop: { markDirty: vi.fn() } as never,
+    canvas,
+    entityIds: new Map(),
+    systemTimings: new Map(),
+    postProcessStack: {} as never,
+  }
+}
+
+const pe = (type: string, pointerId: number, clientX: number, clientY: number) =>
+  new PointerEvent(type, { pointerId, clientX, clientY, bubbles: true })
+
+describe('useDraggable with several pointers', () => {
+  it('ignores moves and releases from a pointer that did not start the drag', () => {
+    const engine = makeEngine()
+    const id = engine.ecs.createEntity()
+    engine.ecs.addComponent(id, createTransform(0, 0))
+    engine.ecs.addComponent(id, { type: 'BoxCollider', width: 20, height: 20 } as never)
+    const onDragEnd = vi.fn()
+    function D() {
+      useDraggable({ entityId: id, onDragEnd })
+      return null
+    }
+    render(
+      <EngineContext.Provider value={engine}>
+        <D />
+      </EngineContext.Provider>,
+    )
+    const t = engine.ecs.getComponent<{ type: string; x: number; y: number }>(id, 'Transform')!
+    act(() => {
+      engine.canvas.dispatchEvent(pe('pointerdown', 1, 100, 50))
+      window.dispatchEvent(pe('pointermove', 1, 110, 50))
+    })
+    expect(t.x).toBe(10)
+    act(() => {
+      window.dispatchEvent(pe('pointermove', 2, 180, 90))
+      window.dispatchEvent(pe('pointerup', 2, 180, 90))
+    })
+    expect(t.x).toBe(10)
+    expect(onDragEnd).not.toHaveBeenCalled()
+    act(() => window.dispatchEvent(pe('pointerup', 1, 110, 50)))
+    expect(onDragEnd).toHaveBeenCalledTimes(1)
+  })
+})
+
+function touchEvent(type: string, changed: [number, number, number][], all: [number, number, number][]) {
+  const mk = ([identifier, clientX, clientY]: [number, number, number]) => ({ identifier, clientX, clientY })
+  const e = new Event(type) as Event & { changedTouches: unknown; touches: unknown }
+  e.changedTouches = changed.map(mk)
+  e.touches = all.map(mk)
+  return e
+}
+
+describe('useGestures', () => {
+  it('reports pinch scale and does not turn a pinch into a swipe', () => {
+    const onSwipe = vi.fn()
+    const onPinch = vi.fn()
+    function G() {
+      useGestures({ onSwipe, onPinch })
+      return null
+    }
+    let now = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => (now += 50))
+    const { unmount } = render(<G />)
+    act(() => {
+      window.dispatchEvent(touchEvent('touchstart', [[1, 100, 100]], [[1, 100, 100]]))
+      window.dispatchEvent(touchEvent('touchstart', [[2, 120, 100]], [[1, 100, 100], [2, 120, 100]]))
+      window.dispatchEvent(touchEvent('touchmove', [[1, 20, 100], [2, 200, 100]], [[1, 20, 100], [2, 200, 100]]))
+      window.dispatchEvent(touchEvent('touchend', [[1, 20, 100]], [[2, 200, 100]]))
+      window.dispatchEvent(touchEvent('touchend', [[2, 200, 100]], []))
+    })
+    expect(onPinch).toHaveBeenLastCalledWith({ scale: 9, delta: 8 })
+    expect(onSwipe).not.toHaveBeenCalled()
+
+    act(() => {
+      window.dispatchEvent(touchEvent('touchstart', [[3, 100, 100]], [[3, 100, 100]]))
+      window.dispatchEvent(touchEvent('touchend', [[3, 300, 100]], []))
+    })
+    expect(onSwipe).toHaveBeenCalledWith(expect.objectContaining({ direction: 'right', distance: 200 }))
+
+    const remove = vi.spyOn(window, 'removeEventListener')
+    unmount()
+    expect(remove.mock.calls.map((c) => c[0]).sort()).toEqual(['touchcancel', 'touchend', 'touchmove', 'touchstart'])
+  })
+})
