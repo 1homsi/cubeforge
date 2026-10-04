@@ -2,8 +2,27 @@
 
 let _audioCtx: AudioContext | null = null
 
+const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchend'] as const
+
+// Autoplay policy: a context created before a user gesture starts suspended.
+function resumeOnGesture(ctx: AudioContext): () => void {
+  if (ctx.state !== 'suspended' || typeof window === 'undefined') return () => {}
+  const off = () => {
+    for (const e of UNLOCK_EVENTS) window.removeEventListener(e, unlock, true)
+  }
+  const unlock = () => {
+    if (ctx.state !== 'suspended') return off()
+    Promise.resolve(ctx.resume()).then(off, () => {})
+  }
+  for (const e of UNLOCK_EVENTS) window.addEventListener(e, unlock, true)
+  return off
+}
+
 export function getAudioCtx(): AudioContext {
-  if (!_audioCtx) _audioCtx = new AudioContext()
+  if (!_audioCtx) {
+    _audioCtx = new AudioContext()
+    resumeOnGesture(_audioCtx)
+  }
   return _audioCtx
 }
 

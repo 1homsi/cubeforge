@@ -185,3 +185,27 @@ describe('preloadManifest failures', () => {
     expect(result.failures).toEqual([])
   })
 })
+
+describe('AssetManager audio unlock', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('resumes a suspended context on a user gesture and drops the listeners on dispose', async () => {
+    const { ctx } = installAudioMocks()
+    const c = ctx as typeof ctx & { state: string; resume: () => Promise<void>; close: () => void }
+    c.state = 'suspended'
+    c.resume = vi.fn(async () => {})
+    c.close = vi.fn()
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const assets = new AssetManager()
+    await assets.loadAudio('/a.wav')
+    window.dispatchEvent(new Event('pointerdown'))
+    expect(c.resume).toHaveBeenCalledTimes(1)
+    assets.dispose()
+    expect(remove.mock.calls.map((x) => x[0])).toEqual(expect.arrayContaining(['pointerdown', 'keydown', 'touchend']))
+    window.dispatchEvent(new Event('pointerdown'))
+    expect(c.resume).toHaveBeenCalledTimes(1)
+  })
+})

@@ -421,4 +421,51 @@ describe('Audio system', () => {
       expect(createdSources[1].stop).toHaveBeenCalled()
     })
   })
+
+  describe('robustness', () => {
+    it('keeps voices bounded under a burst of plays and releases them all on unmount', async () => {
+      const { useSound } = await import('../useSound')
+      const onEnded = vi.fn()
+      const controls = useSound('/burst.wav', { maxInstances: 8, onEnded })
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      for (let i = 0; i < 500; i++) controls.play()
+      const live = createdSources.filter((s) => !s.stop.mock.calls.length)
+      expect(live.length).toBe(8)
+      expect(onEnded).not.toHaveBeenCalled()
+      runCleanups()
+      expect(createdSources.every((s) => s.stop.mock.calls.length > 0)).toBe(true)
+      expect(onEnded).not.toHaveBeenCalled()
+    })
+
+    it('maxInstances 0 does not hang', async () => {
+      const { useSound } = await import('../useSound')
+      const controls = useSound('/x.wav', { maxInstances: 0 })
+      flushEffects()
+      await new Promise((r) => setTimeout(r, 10))
+      controls.play()
+      controls.play()
+      expect(createdSources.length).toBe(2)
+    })
+
+    it('resumes a suspended context on the first user gesture, then stops listening', async () => {
+      mockCtx.state = 'suspended'
+      mockCtx.resume = vi.fn(async () => {
+        mockCtx.state = 'running'
+      })
+      const add = vi.spyOn(window, 'addEventListener')
+      const remove = vi.spyOn(window, 'removeEventListener')
+      const { getAudioCtx } = await import('../audioContext')
+      getAudioCtx()
+      const types = add.mock.calls.map((c) => c[0])
+      expect(types).toEqual(expect.arrayContaining(['pointerdown', 'keydown', 'touchend']))
+      window.dispatchEvent(new Event('keydown'))
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(mockCtx.resume).toHaveBeenCalledTimes(1)
+      expect(remove.mock.calls.map((c) => c[0]).sort()).toEqual(['keydown', 'pointerdown', 'touchend'])
+      window.dispatchEvent(new Event('keydown'))
+      expect(mockCtx.resume).toHaveBeenCalledTimes(1)
+    })
+  })
 })
