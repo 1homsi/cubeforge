@@ -162,3 +162,17 @@ describe('ECSWorld entity churn', () => {
     }
   })
 })
+
+describe('ECSWorld query cache', () => {
+  it('caches empty multi-type results and invalidates them when the type appears', () => {
+    const w = new ECSWorld()
+    const e = w.createEntity()
+    w.addComponent(e, pos(1))
+    const first = w.query('Pos', 'Tag2')
+    expect(first).toEqual([])
+    expect(w.query('Tag2', 'Pos')).toBe(first)
+    w.addComponent(e, tag(5))
+    expect(w.query('Pos', 'Tag2')).toEqual([e])
+    expect(w.query('Tag2', 'Pos', 'Missing')).toEqual([])
+  })
+})

@@ -601,11 +601,33 @@ export class ECSWorld {
   // lives in `queryUncached` so V8 optimizes the tiny frame aggressively.
   query(...types: string[]): EntityId[] {
     this.flushDirty()
-    // `types` is a fresh rest-parameter array owned by this call (never
-    // shared with the caller), so sorting in place is safe.
-    const key = types.length === 0 ? '' : types.length === 1 ? types[0] : types.sort().join('\x00')
+    const key = types.length === 0 ? '' : types.length === 1 ? types[0] : this.queryKey(types)
     const cached = this.queryCache.get(key)
     return cached ?? this.queryUncached(types, key)
+  }
+
+  // Sorted, joined key for a multi-type query, memoized by argument order so
+  // the hot path does no sort/join allocation.
+  private readonly _queryKeys2 = new Map<string, Map<string, string>>()
+  private readonly _queryKeys3 = new Map<string, Map<string, Map<string, string>>>()
+  private queryKey(types: string[]): string {
+    if (types.length === 2) {
+      let byA = this._queryKeys2.get(types[0])
+      if (byA === undefined) this._queryKeys2.set(types[0], (byA = new Map()))
+      let key = byA.get(types[1])
+      if (key === undefined) byA.set(types[1], (key = types.slice().sort().join('\x00')))
+      return key
+    }
+    if (types.length === 3) {
+      let byA = this._queryKeys3.get(types[0])
+      if (byA === undefined) this._queryKeys3.set(types[0], (byA = new Map()))
+      let byB = byA.get(types[1])
+      if (byB === undefined) byA.set(types[1], (byB = new Map()))
+      let key = byB.get(types[2])
+      if (key === undefined) byB.set(types[2], (key = types.slice().sort().join('\x00')))
+      return key
+    }
+    return types.slice().sort().join('\x00')
   }
 
   private queryUncached(types: string[], key: string): EntityId[] {
@@ -624,23 +646,25 @@ export class ECSWorld {
       for (const t of types) {
         const set = this.typeIndex.get(t)
         if (!set || set.size === 0) {
-          return result
+          smallest = undefined
+          break
         }
         if (!smallest || set.size < smallest.size) smallest = set
       }
-      for (const arch of smallest!) {
-        let match = true
-        for (let i = 0; i < types.length; i++) {
-          if (!arch.types.has(types[i])) {
-            match = false
-            break
+      if (smallest)
+        for (const arch of smallest) {
+          let match = true
+          for (let i = 0; i < types.length; i++) {
+            if (!arch.types.has(types[i])) {
+              match = false
+              break
+            }
+          }
+          if (match) {
+            const entities = arch.entities
+            for (let i = 0; i < entities.length; i++) result.push(entities[i])
           }
         }
-        if (match) {
-          const entities = arch.entities
-          for (let i = 0; i < entities.length; i++) result.push(entities[i])
-        }
-      }
     } else {
       // Zero-arg query: ALL live entities across every archetype.
       for (const arch of this.archetypes.values()) {

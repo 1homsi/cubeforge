@@ -392,10 +392,35 @@ export class PhysicsSystem implements System {
   // previous "active"). Same enter/stay/exit event semantics, zero allocation.
 
   private _staticDelta = new Map<EntityId, { dx: number; dy: number }>()
-  private _preStepPos = new Map<EntityId, { x: number; y: number }>()
+  private readonly _preStepX: number[] = []
+  private readonly _preStepY: number[] = []
   private _spatialGrid = new Map<number, EntityId[]>()
   private _jointExcludedPairs = new Set<number>()
   private _solverBodies = new Map<number, SolverBody>()
+  private readonly _solverPool: SolverBody[] = []
+  private _solverPoolUsed = 0
+  private solverBody(id: EntityId, t: TransformComponent, rb: RigidBodyComponent | null): SolverBody {
+    let b = this._solverPool[this._solverPoolUsed]
+    if (b === undefined) {
+      b = {} as SolverBody
+      this._solverPool.push(b)
+    }
+    this._solverPoolUsed++
+    b.entityId = id
+    b.x = t.x
+    b.y = t.y
+    b.rotation = t.rotation
+    b.vx = rb ? rb.vx : 0
+    b.vy = rb ? rb.vy : 0
+    b.angVel = rb ? rb.angularVelocity : 0
+    b.invMass = rb ? rb.invMass : 0
+    b.invInertia = rb ? rb.invInertia : 0
+    b.dominance = rb ? rb.dominance : 0
+    b.pvx = 0
+    b.pvy = 0
+    b.pAngVel = 0
+    return b
+  }
   private _triggerNormals = new Map<number, { nx: number; ny: number }>()
   private _circleNormals = new Map<number, { nx: number; ny: number }>()
   /** Shared scratch for per-body "checked" neighbor dedup; cleared per iteration. */
@@ -404,6 +429,7 @@ export class PhysicsSystem implements System {
   private _pairGridScratch = new Map<number, EntityId[]>()
   private _pairBoundsScratch: Array<{ cx: number; cy: number; hw: number; hh: number } | null> = []
   /** Per-entity cell ranges (x0/x1/y0/y1) reused across scans — no per-body arrays. */
+  private _crossBoundsScratch: Array<{ cx: number; cy: number; hw: number; hh: number } | null> = []
   private _cellX0: number[] = []
   private _cellX1: number[] = []
   private _cellY0: number[] = []
@@ -418,6 +444,12 @@ export class PhysicsSystem implements System {
   private _nonDynamicScratch: EntityId[] = []
   /** Reused across steps instead of a 5-way array spread-concat every step. */
   private _allDynamicsScratch: EntityId[] = []
+  private readonly _idScratch: EntityId[][] = []
+  private scratchIds(i: number): EntityId[] {
+    const a = this._idScratch[i] ?? (this._idScratch[i] = [])
+    a.length = 0
+    return a
+  }
 
   constructor(
     private gravity: number,
@@ -542,6 +574,7 @@ export class PhysicsSystem implements System {
     const checked = this._checkedScratch
     for (let i = 0; i < n; i++) {
       if (c0[i] > c1[i]) continue
+      const bi = bounds[i]!
       // Single-cell entities cannot see the same neighbour twice, so the
       // dedup set is skipped entirely — the common case for bodies smaller
       // than one cell.
@@ -553,6 +586,8 @@ export class PhysicsSystem implements System {
           if (!bucket) continue
           for (const j of bucket) {
             if (j <= i) continue
+            const bj = bounds[j]!
+            if (Math.abs(bi.cx - bj.cx) > bi.hw + bj.hw || Math.abs(bi.cy - bj.cy) > bi.hh + bj.hh) continue
             const idB = ids[j]
             if (!singleCell && checked.has(idB)) continue
             if (!singleCell) checked.add(idB)
@@ -581,8 +616,11 @@ export class PhysicsSystem implements System {
 
     const grid = this._pairGridScratch
     grid.clear()
+    const boundsB = this._crossBoundsScratch
+    boundsB.length = idsB.length
     for (let j = 0; j < idsB.length; j++) {
       const b = getBoundsB(idsB[j])
+      boundsB[j] = b
       if (!b) continue
       const CELL = 128
       const x0 = Math.floor((b.cx - b.hw) / CELL)
@@ -622,6 +660,8 @@ export class PhysicsSystem implements System {
           for (const j of bucket) {
             const idB = idsB[j]
             if (idB === idA) continue
+            const b = boundsB[j]!
+            if (Math.abs(a.cx - b.cx) > a.hw + b.hw || Math.abs(a.cy - b.cy) > a.hh + b.hh) continue
             if (!singleCell && checked.has(idB)) continue
             if (!singleCell) checked.add(idB)
             cb(idA, idB)
@@ -736,9 +776,9 @@ export class PhysicsSystem implements System {
     const allCircle = world.query('Transform', 'CircleCollider')
     const allCapsule = world.query('Transform', 'RigidBody', 'CapsuleCollider')
 
-    const dynamicBox: EntityId[] = []
-    const staticBox: EntityId[] = []
-    const kinematicBox: EntityId[] = []
+    const dynamicBox = this.scratchIds(0)
+    const staticBox = this.scratchIds(1)
+    const kinematicBox = this.scratchIds(2)
 
     for (const id of allBox) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
@@ -748,8 +788,8 @@ export class PhysicsSystem implements System {
       else dynamicBox.push(id)
     }
 
-    const dynamicCircle: EntityId[] = []
-    const staticCircle: EntityId[] = []
+    const dynamicCircle = this.scratchIds(3)
+    const staticCircle = this.scratchIds(4)
     for (const id of allCircle) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)
       if (rb && !rb.enabled) continue
@@ -758,8 +798,8 @@ export class PhysicsSystem implements System {
       else dynamicCircle.push(id)
     }
 
-    const capsuleDynamics: EntityId[] = []
-    const contactCapsules: EntityId[] = []
+    const capsuleDynamics = this.scratchIds(5)
+    const contactCapsules = this.scratchIds(6)
     for (const id of allCapsule) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       if (!rb.enabled) continue
@@ -776,8 +816,8 @@ export class PhysicsSystem implements System {
     const allHalfSpace = world.query('Transform', 'HalfSpaceCollider')
     const allTriMesh = world.query('Transform', 'TriMeshCollider')
 
-    const dynamicPolygon: EntityId[] = []
-    const staticPolygon: EntityId[] = []
+    const dynamicPolygon = this.scratchIds(7)
+    const staticPolygon = this.scratchIds(8)
     for (const id of allPolygon) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       if (!rb.enabled) continue
@@ -785,8 +825,8 @@ export class PhysicsSystem implements System {
       else dynamicPolygon.push(id)
     }
 
-    const dynamicTriangle: EntityId[] = []
-    const staticTriangle: EntityId[] = []
+    const dynamicTriangle = this.scratchIds(9)
+    const staticTriangle = this.scratchIds(10)
     for (const id of allTriangle) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       if (!rb.enabled) continue
@@ -984,11 +1024,13 @@ export class PhysicsSystem implements System {
     }
 
     // Save pre-integration positions for CCD and one-way platform checks
-    const preStepPos = this._preStepPos
-    preStepPos.clear()
-    for (const id of dynamicBox) {
-      const t = world.getComponent<TransformComponent>(id, T.transform)!
-      preStepPos.set(id, { x: t.x, y: t.y })
+    const preX = this._preStepX
+    const preY = this._preStepY
+    preX.length = preY.length = dynamicBox.length
+    for (let i = 0; i < dynamicBox.length; i++) {
+      const t = world.getComponent<TransformComponent>(dynamicBox[i], T.transform)!
+      preX[i] = t.x
+      preY[i] = t.y
     }
 
     // ── Phase 2: Build spatial grid ───────────────────────────────────────
@@ -2938,44 +2980,17 @@ export class PhysicsSystem implements System {
 
     const solverBodies = this._solverBodies
     solverBodies.clear()
+    this._solverPoolUsed = 0
 
     for (const id of allBox) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: rb.vx,
-        vy: rb.vy,
-        angVel: rb.angularVelocity,
-        invMass: rb.invMass,
-        invInertia: rb.invInertia,
-        dominance: rb.dominance,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, rb))
     }
     for (const id of dynamicCircle) {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: rb.vx,
-        vy: rb.vy,
-        angVel: rb.angularVelocity,
-        invMass: rb.invMass,
-        invInertia: rb.invInertia,
-        dominance: rb.dominance,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, rb))
     }
     // Also add static circle entities that are referenced in manifolds
     for (const id of allCircle) {
@@ -2983,21 +2998,7 @@ export class PhysicsSystem implements System {
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)
       if (!rb) continue
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: rb.vx,
-        vy: rb.vy,
-        angVel: rb.angularVelocity,
-        invMass: rb.invMass,
-        invInertia: rb.invInertia,
-        dominance: rb.dominance,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, rb))
     }
 
     // Add capsule solver bodies
@@ -3005,21 +3006,7 @@ export class PhysicsSystem implements System {
       if (solverBodies.has(id)) continue
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: rb.vx,
-        vy: rb.vy,
-        angVel: rb.angularVelocity,
-        invMass: rb.invMass,
-        invInertia: rb.invInertia,
-        dominance: rb.dominance,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, rb))
     }
 
     // Add polygon dynamic/static solver bodies
@@ -3027,21 +3014,7 @@ export class PhysicsSystem implements System {
       if (solverBodies.has(id)) continue
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: rb.vx,
-        vy: rb.vy,
-        angVel: rb.angularVelocity,
-        invMass: rb.invMass,
-        invInertia: rb.invInertia,
-        dominance: rb.dominance,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, rb))
     }
 
     // Add triangle dynamic/static solver bodies
@@ -3049,21 +3022,7 @@ export class PhysicsSystem implements System {
       if (solverBodies.has(id)) continue
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: rb.vx,
-        vy: rb.vy,
-        angVel: rb.angularVelocity,
-        invMass: rb.invMass,
-        invInertia: rb.invInertia,
-        dominance: rb.dominance,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, rb))
     }
 
     // Add static-only solver bodies for segments, heightfields, halfspaces, trimeshes
@@ -3071,78 +3030,22 @@ export class PhysicsSystem implements System {
     for (const id of allSegment) {
       if (solverBodies.has(id)) continue
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: 0,
-        vy: 0,
-        angVel: 0,
-        invMass: 0,
-        invInertia: 0,
-        dominance: 0,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, null))
     }
     for (const id of allHeightField) {
       if (solverBodies.has(id)) continue
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: 0,
-        vy: 0,
-        angVel: 0,
-        invMass: 0,
-        invInertia: 0,
-        dominance: 0,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, null))
     }
     for (const id of allHalfSpace) {
       if (solverBodies.has(id)) continue
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: 0,
-        vy: 0,
-        angVel: 0,
-        invMass: 0,
-        invInertia: 0,
-        dominance: 0,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, null))
     }
     for (const id of allTriMesh) {
       if (solverBodies.has(id)) continue
       const t = world.getComponent<TransformComponent>(id, T.transform)!
-      solverBodies.set(id, {
-        entityId: id,
-        x: t.x,
-        y: t.y,
-        rotation: t.rotation,
-        vx: 0,
-        vy: 0,
-        angVel: 0,
-        invMass: 0,
-        invInertia: 0,
-        dominance: 0,
-        pvx: 0,
-        pvy: 0,
-        pAngVel: 0,
-      })
+      solverBodies.set(id, this.solverBody(id, t, null))
     }
 
     // ── Phase 5: Solve velocity constraints ───────────────────────────────
@@ -3265,20 +3168,23 @@ export class PhysicsSystem implements System {
 
     // ── Phase 8: CCD ──────────────────────────────────────────────────────
 
-    for (const [id, prev] of preStepPos) {
+    for (let pi = 0; pi < dynamicBox.length; pi++) {
+      const id = dynamicBox[pi]
+      const prevX = preX[pi]
+      const prevY = preY[pi]
       const rb = world.getComponent<RigidBodyComponent>(id, T.rigidBody)!
       if (!rb.ccd || rb.sleeping) continue
       const transform = world.getComponent<TransformComponent>(id, T.transform)!
       const col = world.getComponent<BoxColliderComponent>(id, T.box)!
 
-      const totalDx = transform.x - prev.x
-      const totalDy = transform.y - prev.y
+      const totalDx = transform.x - prevX
+      const totalDy = transform.y - prevY
       const moveLen = Math.abs(totalDx) + Math.abs(totalDy)
       const halfSize = Math.min(col.width, col.height) / 2
       if (moveLen <= halfSize) continue
 
-      const startCx = prev.x + col.offsetX
-      const startCy = prev.y + col.offsetY
+      const startCx = prevX + col.offsetX
+      const startCy = prevY + col.offsetY
       const hw = col.width / 2
       const hh = col.height / 2
 
@@ -3317,14 +3223,14 @@ export class PhysicsSystem implements System {
       if (hitSid !== null && earliestT < 1.0) {
         const eps = 0.01
         const clampedT = Math.max(0, earliestT - eps / (Math.hypot(totalDx, totalDy) || 1))
-        transform.x = prev.x + totalDx * clampedT
-        transform.y = prev.y + totalDy * clampedT
+        transform.x = prevX + totalDx * clampedT
+        transform.y = prevY + totalDy * clampedT
 
         const st = world.getComponent<TransformComponent>(hitSid, T.transform)!
         const sc = world.getComponent<BoxColliderComponent>(hitSid, T.box)!
         const staticAABB = getAABB(st, sc)
-        const contactCx = prev.x + col.offsetX + totalDx * earliestT
-        const contactCy = prev.y + col.offsetY + totalDy * earliestT
+        const contactCx = prevX + col.offsetX + totalDx * earliestT
+        const contactCy = prevY + col.offsetY + totalDy * earliestT
         const dxFromCenter = contactCx - staticAABB.cx
         const dyFromCenter = contactCy - staticAABB.cy
         const overlapX = hw + staticAABB.hw - Math.abs(dxFromCenter)
@@ -3797,23 +3703,25 @@ export class PhysicsSystem implements System {
 
     // ── Phase 12: Collision events ────────────────────────────────────────
 
-    for (const [key, [a, b]] of currentCollisionPairs) {
-      // manifoldCache holds the current-frame contact normal (A→B direction)
-      const m = this.manifoldCache.get(key)
-      const normalX = m?.normalX ?? 0
-      const normalY = m?.normalY ?? 0
-      if (!this.activeCollisionPairs.has(key)) {
-        this.events?.emit('collisionEnter', { a, b, normalX, normalY })
-      } else {
-        this.events?.emit('collisionStay', { a, b, normalX, normalY })
+    if (this.listens('collision'))
+      for (const [key, [a, b]] of currentCollisionPairs) {
+        // manifoldCache holds the current-frame contact normal (A→B direction)
+        const m = this.manifoldCache.get(key)
+        const normalX = m?.normalX ?? 0
+        const normalY = m?.normalY ?? 0
+        if (!this.activeCollisionPairs.has(key)) {
+          this.events?.emit('collisionEnter', { a, b, normalX, normalY })
+        } else {
+          this.events?.emit('collisionStay', { a, b, normalX, normalY })
+        }
+        this.events?.emit('collision', { a, b, normalX, normalY })
       }
-      this.events?.emit('collision', { a, b, normalX, normalY })
-    }
-    for (const [key, [a, b]] of this.activeCollisionPairs) {
-      if (!currentCollisionPairs.has(key)) {
-        this.events?.emit('collisionExit', { a, b, normalX: 0, normalY: 0 })
+    if (this.listens('collision'))
+      for (const [key, [a, b]] of this.activeCollisionPairs) {
+        if (!currentCollisionPairs.has(key)) {
+          this.events?.emit('collisionExit', { a, b, normalX: 0, normalY: 0 })
+        }
       }
-    }
     // Double-buffer swap: last frame's active becomes next frame's scratch.
     {
       const prev = this.activeCollisionPairs
@@ -3860,17 +3768,19 @@ export class PhysicsSystem implements System {
       },
     )
 
-    for (const [key, [a, b]] of currentTriggerPairs) {
-      const tn = triggerNormals.get(key)
-      const normalX = tn?.nx ?? 0
-      const normalY = tn?.ny ?? 0
-      if (!this.activeTriggerPairs.has(key)) this.events?.emit('triggerEnter', { a, b, normalX, normalY })
-      else this.events?.emit('triggerStay', { a, b, normalX, normalY })
-      this.events?.emit('trigger', { a, b, normalX, normalY })
-    }
-    for (const [key, [a, b]] of this.activeTriggerPairs) {
-      if (!currentTriggerPairs.has(key)) this.events?.emit('triggerExit', { a, b, normalX: 0, normalY: 0 })
-    }
+    if (this.listens('trigger'))
+      for (const [key, [a, b]] of currentTriggerPairs) {
+        const tn = triggerNormals.get(key)
+        const normalX = tn?.nx ?? 0
+        const normalY = tn?.ny ?? 0
+        if (!this.activeTriggerPairs.has(key)) this.events?.emit('triggerEnter', { a, b, normalX, normalY })
+        else this.events?.emit('triggerStay', { a, b, normalX, normalY })
+        this.events?.emit('trigger', { a, b, normalX, normalY })
+      }
+    if (this.listens('trigger'))
+      for (const [key, [a, b]] of this.activeTriggerPairs) {
+        if (!currentTriggerPairs.has(key)) this.events?.emit('triggerExit', { a, b, normalX: 0, normalY: 0 })
+      }
     {
       const prev = this.activeTriggerPairs
       this.activeTriggerPairs = currentTriggerPairs
@@ -3959,17 +3869,19 @@ export class PhysicsSystem implements System {
         },
       )
 
-      for (const [key, [a, b]] of currentCirclePairs) {
-        const cn = circleNormals.get(key)
-        const normalX = cn?.nx ?? 0
-        const normalY = cn?.ny ?? 0
-        if (!this.activeCirclePairs.has(key)) this.events?.emit('circleEnter', { a, b, normalX, normalY })
-        else this.events?.emit('circleStay', { a, b, normalX, normalY })
-        this.events?.emit('circle', { a, b, normalX, normalY })
-      }
-      for (const [key, [a, b]] of this.activeCirclePairs) {
-        if (!currentCirclePairs.has(key)) this.events?.emit('circleExit', { a, b, normalX: 0, normalY: 0 })
-      }
+      if (this.listens('circle'))
+        for (const [key, [a, b]] of currentCirclePairs) {
+          const cn = circleNormals.get(key)
+          const normalX = cn?.nx ?? 0
+          const normalY = cn?.ny ?? 0
+          if (!this.activeCirclePairs.has(key)) this.events?.emit('circleEnter', { a, b, normalX, normalY })
+          else this.events?.emit('circleStay', { a, b, normalX, normalY })
+          this.events?.emit('circle', { a, b, normalX, normalY })
+        }
+      if (this.listens('circle'))
+        for (const [key, [a, b]] of this.activeCirclePairs) {
+          if (!currentCirclePairs.has(key)) this.events?.emit('circleExit', { a, b, normalX: 0, normalY: 0 })
+        }
       {
         const prev = this.activeCirclePairs
         this.activeCirclePairs = currentCirclePairs
@@ -4056,14 +3968,16 @@ export class PhysicsSystem implements System {
         }
       }
 
-      for (const [key, [a, b]] of currentCompoundPairs) {
-        if (!this.activeCompoundPairs.has(key)) this.events?.emit('compoundEnter', { a, b })
-        else this.events?.emit('compoundStay', { a, b })
-        this.events?.emit('compound', { a, b })
-      }
-      for (const [key, [a, b]] of this.activeCompoundPairs) {
-        if (!currentCompoundPairs.has(key)) this.events?.emit('compoundExit', { a, b })
-      }
+      if (this.listens('compound'))
+        for (const [key, [a, b]] of currentCompoundPairs) {
+          if (!this.activeCompoundPairs.has(key)) this.events?.emit('compoundEnter', { a, b })
+          else this.events?.emit('compoundStay', { a, b })
+          this.events?.emit('compound', { a, b })
+        }
+      if (this.listens('compound'))
+        for (const [key, [a, b]] of this.activeCompoundPairs) {
+          if (!currentCompoundPairs.has(key)) this.events?.emit('compoundExit', { a, b })
+        }
       {
         const prev = this.activeCompoundPairs
         this.activeCompoundPairs = currentCompoundPairs
@@ -4116,14 +4030,16 @@ export class PhysicsSystem implements System {
         },
       )
 
-      for (const [key, [a, b]] of currentCapsulePairs) {
-        if (!this.activeCapsulePairs.has(key)) this.events?.emit('capsuleEnter', { a, b })
-        else this.events?.emit('capsuleStay', { a, b })
-        this.events?.emit('capsule', { a, b })
-      }
-      for (const [key, [a, b]] of this.activeCapsulePairs) {
-        if (!currentCapsulePairs.has(key)) this.events?.emit('capsuleExit', { a, b })
-      }
+      if (this.listens('capsule'))
+        for (const [key, [a, b]] of currentCapsulePairs) {
+          if (!this.activeCapsulePairs.has(key)) this.events?.emit('capsuleEnter', { a, b })
+          else this.events?.emit('capsuleStay', { a, b })
+          this.events?.emit('capsule', { a, b })
+        }
+      if (this.listens('capsule'))
+        for (const [key, [a, b]] of this.activeCapsulePairs) {
+          if (!currentCapsulePairs.has(key)) this.events?.emit('capsuleExit', { a, b })
+        }
       {
         const prev = this.activeCapsulePairs
         this.activeCapsulePairs = currentCapsulePairs
@@ -4220,14 +4136,16 @@ export class PhysicsSystem implements System {
         }
       }
 
-      for (const [key, [a, b]] of currentPolyPairs) {
-        if (!this.activePolygonPairs.has(key)) this.events?.emit('polygonEnter', { a, b })
-        else this.events?.emit('polygonStay', { a, b })
-        this.events?.emit('polygon', { a, b })
-      }
-      for (const [key, [a, b]] of this.activePolygonPairs) {
-        if (!currentPolyPairs.has(key)) this.events?.emit('polygonExit', { a, b })
-      }
+      if (this.listens('polygon'))
+        for (const [key, [a, b]] of currentPolyPairs) {
+          if (!this.activePolygonPairs.has(key)) this.events?.emit('polygonEnter', { a, b })
+          else this.events?.emit('polygonStay', { a, b })
+          this.events?.emit('polygon', { a, b })
+        }
+      if (this.listens('polygon'))
+        for (const [key, [a, b]] of this.activePolygonPairs) {
+          if (!currentPolyPairs.has(key)) this.events?.emit('polygonExit', { a, b })
+        }
       {
         const prev = this.activePolygonPairs
         this.activePolygonPairs = currentPolyPairs
@@ -4237,6 +4155,14 @@ export class PhysicsSystem implements System {
       for (const [, [a, b]] of this.activePolygonPairs) this.events?.emit('polygonExit', { a, b })
       this.activePolygonPairs.clear()
     }
+  }
+
+  private listens(prefix: string): boolean {
+    const ev = this.events
+    return (
+      ev !== undefined &&
+      (ev.has(prefix) || ev.has(prefix + 'Enter') || ev.has(prefix + 'Stay') || ev.has(prefix + 'Exit'))
+    )
   }
 
   // ── Pair pruning ────────────────────────────────────────────────────────

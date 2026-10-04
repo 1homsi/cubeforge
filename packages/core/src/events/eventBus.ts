@@ -16,6 +16,12 @@ export class EventBus {
     this.listeners.get(event)?.delete(listener)
   }
 
+  /** True when at least one listener is registered for `event`. */
+  has(event: string): boolean {
+    const set = this.listeners.get(event)
+    return set !== undefined && set.size > 0
+  }
+
   emit<T>(event: string, data?: T): void {
     // for..of over the live Set matches forEach() semantics exactly (added
     // listeners are visited, removals mid-emit are safe) without allocating
