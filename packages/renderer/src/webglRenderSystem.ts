@@ -456,17 +456,40 @@ function getTextureKey(sprite: SpriteComponent): string {
 // frame. Consumed immediately by writeInstance at the only call site.
 const uvScratch: [number, number, number, number] = [0, 0, 1, 1]
 
-function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
-  if (!sprite.image || sprite.image.naturalWidth === 0) {
+// Per-sprite cache of everything derived from its texture inputs, so the hot
+// loop skips string building and DOM getters (img.src/complete/naturalWidth).
+interface SpriteTexInfo {
+  image: HTMLImageElement | undefined
+  src: string | undefined
+  dyn: string | undefined
+  sampling: Sampling | undefined
+  tiled: boolean
+  color: string
+  key: string
+  rank: number
+  epoch: number
+  iw: number
+  ih: number
+  glKey: string | null
+  r: number
+  g: number
+  b: number
+  a: number
+}
+
+type SpriteWithInfo = SpriteComponent & { _rinfo?: SpriteTexInfo }
+
+function hasCustomShape(sprite: SpriteComponent): boolean {
+  return (sprite.shape !== undefined && sprite.shape !== 'rect') || !!sprite.borderRadius || !!sprite.strokeColor
+}
+
+function writeUV(sprite: SpriteComponent, iw: number, ih: number): void {
+  if (iw === 0) {
     uvScratch[0] = 0
     uvScratch[1] = 0
     uvScratch[2] = 1
     uvScratch[3] = 1
-    return uvScratch
-  }
-  const iw = sprite.image.naturalWidth
-  const ih = sprite.image.naturalHeight
-  if (sprite.frameWidth && sprite.frameHeight) {
+  } else if (sprite.frameWidth && sprite.frameHeight) {
     const cols = sprite.frameColumns ?? Math.floor(iw / sprite.frameWidth)
     const col = sprite.frameIndex % cols
     const row = Math.floor(sprite.frameIndex / cols)
@@ -474,23 +497,18 @@ function getUVRect(sprite: SpriteComponent): [number, number, number, number] {
     uvScratch[1] = (row * sprite.frameHeight) / ih
     uvScratch[2] = sprite.frameWidth / iw
     uvScratch[3] = sprite.frameHeight / ih
-    return uvScratch
-  }
-  if (sprite.frame) {
+  } else if (sprite.frame) {
     const { sx, sy, sw, sh } = sprite.frame
     uvScratch[0] = sx / iw
     uvScratch[1] = sy / ih
     uvScratch[2] = sw / iw
     uvScratch[3] = sh / ih
-    return uvScratch
+  } else {
+    uvScratch[0] = 0
+    uvScratch[1] = 0
+    uvScratch[2] = sprite.tileX ? sprite.width / (sprite.tileSizeX ?? iw) : 1
+    uvScratch[3] = sprite.tileY ? sprite.height / (sprite.tileSizeY ?? ih) : 1
   }
-  // Tiling: UV width/height > 1 causes the texture to repeat (needs REPEAT wrap mode)
-  // tileSizeX/tileSizeY control how many pixels each tile repeat covers
-  uvScratch[0] = 0
-  uvScratch[1] = 0
-  uvScratch[2] = sprite.tileX ? sprite.width / (sprite.tileSizeX ?? iw) : 1
-  uvScratch[3] = sprite.tileY ? sprite.height / (sprite.tileSizeY ?? ih) : 1
-  return uvScratch
 }
 
 // ── Post-process options ──────────────────────────────────────────────────────
@@ -863,15 +881,19 @@ export class RenderSystem implements System {
   // Reused across frames (grow/shrink via .length, never reallocated) to
   // avoid allocating one wrapper object per visible sprite just to sort by
   // (layer, z, texture) — this runs every render frame.
-  private readonly _sortIndices: number[] = []
+  private _sortOrder = new Int32Array(1024)
+  private _sortKeys = new Float64Array(1024)
+  private _sortOrderLen = -1
   private readonly _sortLayers: number[] = []
   private readonly _sortZs: number[] = []
-  private readonly _sortTexs: string[] = []
   private readonly _sortTexRanks: number[] = []
   /** texture key → small integer rank, so the frame sort compares numbers not strings */
   private readonly _texRankCache = new Map<string, number>()
   private _texNextRank = 0
-  private readonly _sortedRenderables: EntityId[] = []
+  private _texRankEpoch = 0
+  private readonly _visSprites: SpriteComponent[] = []
+  private readonly _visInfo: SpriteTexInfo[] = []
+  private readonly _visIds: EntityId[] = []
 
   // ── Dynamic canvas textures (texSubImage2D optimization) ─────────────────
   private readonly _dynamicCanvases = new Map<
@@ -1671,6 +1693,175 @@ export class RenderSystem implements System {
     d[base + 18] = vh
   }
 
+  private startSpriteImageLoad(sprite: SpriteComponent): void {
+    const src = sprite.src!
+    let img = this.imageCache.get(src)
+    if (!img) {
+      const el = new Image()
+      img = el
+      el.src = src
+      this.imageCache.set(src, el)
+      el.onload = () => {
+        const gl = this.gl
+        const tex = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, tex)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, el)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+        this.textures.set(el.src, tex)
+        this.touchTexture(el.src)
+      }
+      el.onerror = () => {
+        console.warn(`[WebGLRenderSystem] Failed to load image: ${el.src}`)
+        this.imageCache.delete(el.src)
+      }
+    }
+    sprite.image = img
+  }
+
+  private spriteTexInfo(sprite: SpriteComponent): SpriteTexInfo {
+    let info = (sprite as SpriteWithInfo)._rinfo
+    const tiled = !!(sprite.tileX || sprite.tileY)
+    if (
+      info === undefined ||
+      info.image !== sprite.image ||
+      info.src !== sprite.src ||
+      info.dyn !== sprite.dynamicSrc ||
+      info.sampling !== sprite.sampling ||
+      info.tiled !== tiled ||
+      (info.iw === 0 && info.color !== sprite.color) ||
+      hasCustomShape(sprite)
+    ) {
+      info = {
+        image: sprite.image,
+        src: sprite.src,
+        dyn: sprite.dynamicSrc,
+        sampling: sprite.sampling,
+        tiled,
+        color: '',
+        key: getTextureKey(sprite),
+        rank: 0,
+        epoch: -1,
+        iw: 0,
+        ih: 0,
+        glKey: null,
+        r: 1,
+        g: 1,
+        b: 1,
+        a: 1,
+      }
+      this.refreshSpriteColor(info, sprite.color)
+      if ((sprite as SpriteWithInfo)._rinfo === undefined)
+        Object.defineProperty(sprite, '_rinfo', { value: info, writable: true, enumerable: false })
+      else (sprite as SpriteWithInfo)._rinfo = info
+    }
+    if (info.iw === 0 && info.image && info.image.complete && info.image.naturalWidth > 0) {
+      info.iw = info.image.naturalWidth
+      info.ih = info.image.naturalHeight
+      const src = info.image.src
+      info.glKey = src ? (tiled ? `${src}:repeat` : src) : null
+    }
+    if (info.epoch !== this._texRankEpoch) {
+      let rank = this._texRankCache.get(info.key)
+      if (rank === undefined) {
+        if (this._texRankCache.size > 4096) {
+          this._texRankCache.clear()
+          this._texNextRank = 0
+          this._texRankEpoch++
+        }
+        rank = this._texNextRank++
+        this._texRankCache.set(info.key, rank)
+      }
+      info.rank = rank
+      info.epoch = this._texRankEpoch
+    }
+    return info
+  }
+
+  private refreshSpriteColor(info: SpriteTexInfo, color: string): void {
+    const c = parseCSSColor(color)
+    info.color = color
+    info.r = c[0]
+    info.g = c[1]
+    info.b = c[2]
+    info.a = c[3]
+  }
+
+  private ensureSpriteTexture(info: SpriteTexInfo, image: HTMLImageElement): void {
+    const cacheKey = info.glKey!
+    if (!this.textures.has(cacheKey)) {
+      const gl = this.gl
+      const tex = gl.createTexture()!
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+      const wrap = info.tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
+      this.textures.set(cacheKey, tex)
+    }
+    this.touchTexture(cacheKey)
+  }
+
+  // Returns renderable indices ordered by (layer, z, texture rank, index).
+  // Reuses last frame's order when still valid; otherwise packs the key into
+  // one float and uses the native typed-array sort.
+  private sortVisible(m: number): Int32Array {
+    const L = this._sortLayers
+    const Z = this._sortZs
+    const R = this._sortTexRanks
+    let idx = this._sortOrder
+    if (this._sortOrderLen === m) {
+      let ok = true
+      for (let i = 1; i < m; i++) {
+        const a = idx[i - 1]
+        const b = idx[i]
+        const d = L[a] - L[b] || Z[a] - Z[b] || R[a] - R[b] || a - b
+        if (d > 0) {
+          ok = false
+          break
+        }
+      }
+      if (ok) return idx
+    }
+    if (idx.length < m) {
+      idx = this._sortOrder = new Int32Array(Math.max(m, idx.length * 2))
+      this._sortKeys = new Float64Array(idx.length)
+    }
+    this._sortOrderLen = m
+    let lMin = Infinity,
+      lMax = -Infinity,
+      zMin = Infinity,
+      zMax = -Infinity,
+      rMax = 0,
+      ints = true
+    for (let i = 0; i < m; i++) {
+      const l = L[i],
+        z = Z[i]
+      if (l < lMin) lMin = l
+      if (l > lMax) lMax = l
+      if (z < zMin) zMin = z
+      if (z > zMax) zMax = z
+      if (R[i] > rMax) rMax = R[i]
+      if ((l | 0) !== l || (z | 0) !== z) ints = false
+    }
+    const lSpan = lMax - lMin + 1
+    const zSpan = zMax - zMin + 1
+    const rSpan = rMax + 1
+    if (m > 0 && ints && lSpan * zSpan * rSpan * m < 2 ** 52) {
+      const keys = this._sortKeys.subarray(0, m)
+      for (let i = 0; i < m; i++) keys[i] = (((L[i] - lMin) * zSpan + (Z[i] - zMin)) * rSpan + R[i]) * m + i
+      keys.sort()
+      for (let i = 0; i < m; i++) idx[i] = keys[i] % m
+    } else {
+      const tmp = Array.from({ length: m }, (_, i) => i)
+      tmp.sort((a, b) => L[a] - L[b] || Z[a] - Z[b] || R[a] - R[b] || a - b)
+      for (let i = 0; i < m; i++) idx[i] = tmp[i]
+    }
+    return idx
+  }
+
   // ── Main update loop ───────────────────────────────────────────────────────
 
   update(world: ECSWorld, dt: number): void {
@@ -2008,133 +2199,56 @@ export class RenderSystem implements System {
     const viewB = camY + halfVH + 32 / zoom
 
     const renderableIds = world.query('Transform', 'Sprite')
-    // Pre-extract sortable fields once per entity into reused scratch
-    // buffers (parallel arrays, indexed by position in `renderableIds`).
-    // The previous comparator called world.getComponent twice and
-    // getTextureKey twice per comparison, costing N*log(N) hash lookups +
-    // texture-key recomputes every frame; using parallel arrays sorted by
-    // index also avoids allocating one wrapper object per sprite per frame.
     const n = renderableIds.length
-    const sortIndices = this._sortIndices
+    const visSprites = this._visSprites
+    const visInfo = this._visInfo
     const sortLayers = this._sortLayers
     const sortZs = this._sortZs
-    const sortTexs = this._sortTexs
     const sortTexRanks = this._sortTexRanks
-    sortIndices.length = n
-    sortLayers.length = n
-    sortZs.length = n
-    sortTexs.length = n
-    sortTexRanks.length = n
+    const m = n
     for (let r = 0; r < n; r++) {
-      sortIndices[r] = r
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
+      if (sprite.src && !sprite.image && sprite.visible) this.startSpriteImageLoad(sprite)
+      const info = this.spriteTexInfo(sprite)
+      visSprites[r] = sprite
+      visInfo[r] = info
+      this._visIds[r] = id
       sortLayers[r] = this.layers.getOrder(sprite.layer)
       sortZs[r] = sprite.zIndex
-      const texKey = getTextureKey(sprite)
-      sortTexs[r] = texKey
-      // Numeric rank per unique texture key — the comparator below runs
-      // N·logN times per frame, and string comparison is far slower than a
-      // float compare. Ranks only need to distinguish keys (batch grouping
-      // relies on equality), not preserve lexicographic order.
-      let rank = this._texRankCache.get(texKey)
-      if (rank === undefined) {
-        if (this._texRankCache.size > 4096) {
-          this._texRankCache.clear()
-          this._texNextRank = 0
-        }
-        rank = this._texNextRank++
-        this._texRankCache.set(texKey, rank)
-      }
-      sortTexRanks[r] = rank
+      sortTexRanks[r] = info.rank
     }
-    sortIndices.sort((a, b) => {
-      if (sortLayers[a] !== sortLayers[b]) return sortLayers[a] - sortLayers[b]
-      if (sortZs[a] !== sortZs[b]) return sortZs[a] - sortZs[b]
-      return sortTexRanks[a] - sortTexRanks[b]
-    })
-    const renderables = this._sortedRenderables
-    renderables.length = n
-    for (let r = 0; r < n; r++) renderables[r] = renderableIds[sortIndices[r]]
 
+    const sortIndices = this.sortVisible(m)
+
+    const hasSquash = world.query('SquashStretch').length > 0
     let batchCount = 0
     let batchKey = ''
     let batchSampling: Sampling | undefined
     let batchBlendMode: string = 'normal'
     let batchShapeRef: SpriteComponent | undefined
+    let ensuredKey: string | null = null
 
-    for (let i = 0; i <= renderables.length; i++) {
-      // Sentinel: flush remaining batch at end of list
-      if (i === renderables.length) {
-        this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
-        break
-      }
-
-      const id = renderables[i]
-      const transform = world.getComponent<TransformComponent>(id, TID_Transform)!
-      const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
+    for (let i = 0; i < m; i++) {
+      const k = sortIndices[i]
+      const sprite = visSprites[k]
       if (!sprite.visible) continue
-
-      // Frustum culling: bounding-sphere test in world space
+      const transform = world.getComponent<TransformComponent>(this._visIds[k], TID_Transform)!
       const scx = transform.x + sprite.offsetX
       const scy = transform.y + sprite.offsetY
       const shw = sprite.width * transform.scaleX * 0.5
       const shh = sprite.height * transform.scaleY * 0.5
       const sr = Math.sqrt(shw * shw + shh * shh)
       if (scx + sr < viewL || scx - sr > viewR || scy + sr < viewT || scy - sr > viewB) continue
+      const info = visInfo[k]
 
-      // Ensure we have a GL texture for this sprite's image.
-      // Sprite.tsx already loads the image via AssetManager (with correct BASE_URL resolution)
-      // and sets sprite.image. Use that directly to create the texture synchronously.
-      if (sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0) {
-        const tiled = sprite.tileX || sprite.tileY
-        const cacheKey = sprite.image.src ? (tiled ? `${sprite.image.src}:repeat` : sprite.image.src) : null
-        if (cacheKey && !this.textures.has(cacheKey)) {
-          const gl = this.gl
-          const tex = gl.createTexture()!
-          gl.bindTexture(gl.TEXTURE_2D, tex)
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sprite.image)
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-          const wrap = tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
-          this.textures.set(cacheKey, tex)
-          this.touchTexture(cacheKey)
-        } else if (cacheKey) {
-          this.touchTexture(cacheKey)
-        }
-      } else if (sprite.src && !sprite.image) {
-        // Fallback: image not yet loaded by AssetManager — start loading it
-        let img = this.imageCache.get(sprite.src)
-        if (!img) {
-          img = new Image()
-          img.src = sprite.src
-          this.imageCache.set(sprite.src, img)
-          img.onload = () => {
-            const gl = this.gl
-            const tex = gl.createTexture()!
-            gl.bindTexture(gl.TEXTURE_2D, tex)
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img!)
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-            this.textures.set(img!.src, tex)
-            this.touchTexture(img!.src)
-          }
-          img.onerror = () => {
-            console.warn(`[WebGLRenderSystem] Failed to load image: ${img!.src}`)
-            this.imageCache.delete(img!.src)
-          }
-        }
-        sprite.image = img
+      if (info.glKey !== null && info.glKey !== ensuredKey) {
+        this.ensureSpriteTexture(info, sprite.image!)
+        ensuredKey = info.glKey
       }
 
-      // Reuse the texture key computed during the sort pass — recomputing it
-      // here cost another string concat + hash lookup per sprite per frame.
-      const key = sortTexs[sortIndices[i]]
+      const key = info.key
       const spriteBlend = sprite.blendMode ?? 'normal'
-
-      // Flush if texture group or blend mode changes, or buffer is full
       if (((key !== batchKey || spriteBlend !== batchBlendMode) && batchCount > 0) || batchCount >= MAX_INSTANCES) {
         this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
         batchCount = 0
@@ -2142,32 +2256,29 @@ export class RenderSystem implements System {
       batchKey = key
       batchSampling = sprite.sampling
       batchBlendMode = spriteBlend
-      if (key.startsWith('__shape__')) batchShapeRef = sprite
-      else batchShapeRef = undefined
+      batchShapeRef = key.startsWith('__shape__') ? sprite : undefined
 
-      const ss = world.getComponent<SquashStretchComponent>(id, TID_Squash)
-      const scaleXMod = ss ? ss.currentScaleX : 1
-      const scaleYMod = ss ? ss.currentScaleY : 1
-      // Textured sprites use white tint so the texture shows true colors;
-      // only solid-color sprites use the color property as fill.
-      const hasTexture =
-        (sprite.image && sprite.image.complete && sprite.image.naturalWidth > 0) ||
-        (sprite.dynamicSrc !== undefined && this._dynamicCanvases.has(sprite.dynamicSrc))
-      const opacity = sprite.opacity ?? 1
-      // WHITE is a shared frozen tuple — `[1,1,1,1]` here allocated a fresh
-      // array for every textured sprite every frame.
-      let r: number, g: number, b: number
-      let a: number
-      if (hasTexture) {
-        r = 1
-        g = 1
-        b = 1
-        a = 1
-      } else {
-        ;[r, g, b, a] = parseCSSColor(sprite.color)
+      let scaleXMod = 1
+      let scaleYMod = 1
+      if (hasSquash) {
+        const ss = world.getComponent<SquashStretchComponent>(this._visIds[k], TID_Squash)
+        if (ss) {
+          scaleXMod = ss.currentScaleX
+          scaleYMod = ss.currentScaleY
+        }
       }
-      a *= opacity
-      // Apply tint: blend tint color into rgb channels
+      const hasTexture = info.iw > 0 || (info.dyn !== undefined && this._dynamicCanvases.has(info.dyn))
+      let r: number, g: number, b: number, a: number
+      if (hasTexture) {
+        r = g = b = a = 1
+      } else {
+        if (info.color !== sprite.color) this.refreshSpriteColor(info, sprite.color)
+        r = info.r
+        g = info.g
+        b = info.b
+        a = info.a
+      }
+      a *= sprite.opacity ?? 1
       if (sprite.tint && (sprite.tintOpacity ?? 0) > 0) {
         const [tr, tg, tb] = parseCSSColor(sprite.tint)
         const t = sprite.tintOpacity ?? 0.3
@@ -2175,32 +2286,33 @@ export class RenderSystem implements System {
         g = g * (1 - t) + tg * t
         b = b * (1 - t) + tb * t
       }
-      const uv = getUVRect(sprite)
+      writeUV(sprite, info.iw, info.ih)
 
-      this.writeInstance(
-        batchCount * FLOATS_PER_INSTANCE,
-        transform.x,
-        transform.y,
-        sprite.width * transform.scaleX * scaleXMod,
-        sprite.height * transform.scaleY * scaleYMod,
-        transform.rotation,
-        sprite.anchorX,
-        sprite.anchorY,
-        sprite.offsetX,
-        sprite.offsetY,
-        sprite.flipX,
-        sprite.flipY ?? false,
-        r,
-        g,
-        b,
-        a,
-        uv[0],
-        uv[1],
-        uv[2],
-        uv[3],
-      )
+      const d = this.instanceData
+      const base = batchCount * FLOATS_PER_INSTANCE
+      d[base] = transform.x
+      d[base + 1] = transform.y
+      d[base + 2] = sprite.width * transform.scaleX * scaleXMod
+      d[base + 3] = sprite.height * transform.scaleY * scaleYMod
+      d[base + 4] = transform.rotation
+      d[base + 5] = sprite.anchorX
+      d[base + 6] = sprite.anchorY
+      d[base + 7] = sprite.offsetX
+      d[base + 8] = sprite.offsetY
+      d[base + 9] = sprite.flipX ? 1 : 0
+      d[base + 10] = sprite.flipY ? 1 : 0
+      d[base + 11] = r
+      d[base + 12] = g
+      d[base + 13] = b
+      d[base + 14] = a
+      d[base + 15] = uvScratch[0]
+      d[base + 16] = uvScratch[1]
+      d[base + 17] = uvScratch[2]
+      d[base + 18] = uvScratch[3]
       batchCount++
     }
+    this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
+    batchCount = 0
 
     // ── Text rendering pass ───────────────────────────────────────────────────
     // Text entities are rendered as textured quads using offscreen Canvas2D textures.
