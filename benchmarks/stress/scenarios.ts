@@ -1,0 +1,250 @@
+/**
+ * Stress scenarios shared by the headless (Node) runner and the browser page.
+ * Each scenario builds an ECS world on a RenderSystem and exposes `step()`,
+ * which advances the simulation and renders one frame through the same system
+ * order as <Game>: sim (external data / scripts) -> physics -> render.
+ */
+import { ECSWorld, EventBus, createEngineStats, createTransform } from '@cubeforge/core'
+import type { EngineStats, EntityId, TransformComponent } from '@cubeforge/core'
+import { RenderSystem, createSprite, createCamera2D } from '@cubeforge/renderer'
+import { PhysicsSystem } from '@cubeforge/physics'
+
+export interface ScenarioContext {
+  canvas: HTMLCanvasElement
+  /** Image used as the sprite atlas (a real loaded image in the browser, a stub headless). */
+  atlas: HTMLImageElement
+  /** Creates a canvas for the dynamic-canvas scenario. */
+  createCanvas(w: number, h: number): HTMLCanvasElement
+  now(): number
+}
+
+export interface Scenario {
+  name: string
+  description: string
+  world: ECSWorld
+  renderer: RenderSystem
+  stats: EngineStats
+  /** Phase timings of the last step, ms. */
+  simMs: number
+  step(): void
+}
+
+export interface ScenarioDef {
+  name: string
+  description: string
+  setup(ctx: ScenarioContext): Scenario
+}
+
+const W = 1280
+const H = 720
+const DT = 1 / 60
+const ATLAS = 256
+const FRAME = 16
+
+/** Deterministic PRNG (mulberry32). */
+function rng(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function base(
+  ctx: ScenarioContext,
+  name: string,
+  description: string,
+  cam: { x: number; y: number; zoom?: number },
+  sim: (world: ECSWorld) => void,
+): Scenario {
+  const world = new ECSWorld()
+  const events = new EventBus()
+  const physics = new PhysicsSystem(980, events)
+  const renderer = new RenderSystem(ctx.canvas, new Map())
+  const stats = createEngineStats(renderer.stats)
+  const camId = world.createEntity()
+  world.addComponent(camId, createCamera2D({ x: cam.x, y: cam.y, zoom: cam.zoom ?? 1, background: '#000000' }))
+
+  const sc: Scenario = {
+    name,
+    description,
+    world,
+    renderer,
+    stats,
+    simMs: 0,
+    step() {
+      const t0 = ctx.now()
+      sim(world)
+      const t1 = ctx.now()
+      physics.update(world, DT)
+      const t2 = ctx.now()
+      renderer.update(world, DT)
+      const t3 = ctx.now()
+      sc.simMs = t1 - t0
+      stats.scriptMs = t1 - t0
+      stats.physicsMs = t2 - t1
+      stats.renderMs = t3 - t2
+      stats.updateMs = t3 - t0
+      stats.systemsMs = t2 - t0
+      stats.entityCount = world.entityCount
+      stats.frame++
+    },
+  }
+  return sc
+}
+
+function addAtlasSprite(
+  world: ECSWorld,
+  ctx: ScenarioContext,
+  x: number,
+  y: number,
+  frame: number,
+  zIndex = 0,
+): { id: EntityId; t: TransformComponent } {
+  const id = world.createEntity()
+  const t = createTransform(x, y)
+  world.addComponent(id, t)
+  world.addComponent(
+    id,
+    createSprite({
+      width: FRAME,
+      height: FRAME,
+      image: ctx.atlas,
+      src: ctx.atlas.src,
+      frameWidth: FRAME,
+      frameHeight: FRAME,
+      frameColumns: ATLAS / FRAME,
+      frameIndex: frame,
+      zIndex,
+    }),
+  )
+  return { id, t }
+}
+
+/** N moving atlas sprites whose positions come from an external struct-of-arrays sim. */
+function movingSprites(n: number): ScenarioDef {
+  return {
+    name: `sprites-${n}`,
+    description: `${n} atlas sprites moved every frame from external SoA data`,
+    setup(ctx) {
+      const r = rng(1)
+      const xs = new Float32Array(n)
+      const ys = new Float32Array(n)
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      const transforms: TransformComponent[] = []
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        for (let i = 0; i < n; i++) {
+          let x = xs[i] + vx[i]
+          let y = ys[i] + vy[i]
+          if (x < 0 || x > W) vx[i] = -vx[i]
+          if (y < 0 || y > H) vy[i] = -vy[i]
+          x = xs[i] = x
+          y = ys[i] = y
+          const t = transforms[i]
+          t.x = x
+          t.y = y
+        }
+      })
+      for (let i = 0; i < n; i++) {
+        xs[i] = r() * W
+        ys[i] = r() * H
+        vx[i] = (r() - 0.5) * 4
+        vy[i] = (r() - 0.5) * 4
+        transforms.push(addAtlasSprite(sc.world, ctx, xs[i], ys[i], (r() * 256) | 0, (r() * 4) | 0).t)
+      }
+      return sc
+    },
+  }
+}
+
+/** Keeps `live` entities alive, destroying and re-creating `perFrame` of them every frame. */
+function churn(live: number, perFrame: number): ScenarioDef {
+  return {
+    name: `churn-${live}x${perFrame}`,
+    description: `${live} live sprites, ${perFrame} destroyed + ${perFrame} created per frame (${perFrame * 60}/s each way)`,
+    setup(ctx) {
+      const r = rng(2)
+      const ids: EntityId[] = []
+      let cursor = 0
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, (world) => {
+        for (let k = 0; k < perFrame; k++) {
+          world.destroyEntity(ids[cursor])
+          ids[cursor] = addAtlasSprite(world, ctx, r() * W, r() * H, (r() * 256) | 0).id
+          cursor = (cursor + 1) % live
+        }
+      })
+      for (let i = 0; i < live; i++) ids.push(addAtlasSprite(sc.world, ctx, r() * W, r() * H, (r() * 256) | 0).id)
+      return sc
+    },
+  }
+}
+
+/**
+ * A cols x rows tile world built the only way the engine allows today: one
+ * Transform+Sprite entity per tile. The camera pans so culling has work to do.
+ */
+function tileWorld(cols: number, rows: number): ScenarioDef {
+  return {
+    name: `tiles-${cols}x${rows}`,
+    description: `${cols * rows} static tile entities (one per tile), panning camera, ${FRAME}px tiles`,
+    setup(ctx) {
+      const r = rng(3)
+      let f = 0
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, (world) => {
+        const cam = world.getComponent<{ type: 'Camera2D'; x: number; y: number }>(
+          world.queryOne('Camera2D')!,
+          'Camera2D',
+        )!
+        f++
+        cam.x = W / 2 + ((f * 4) % (cols * FRAME - W))
+        cam.y = H / 2 + ((f * 2) % (rows * FRAME - H))
+      })
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          addAtlasSprite(sc.world, ctx, x * FRAME + FRAME / 2, y * FRAME + FRAME / 2, (r() * 256) | 0, -10)
+        }
+      }
+      return sc
+    },
+  }
+}
+
+/** One large canvas (e.g. a pre-rendered map) drawn as a sprite, redrawn and marked dirty every frame. */
+function dynamicCanvas(w: number, h: number): ScenarioDef {
+  return {
+    name: `dyncanvas-${w}x${h}`,
+    description: `one ${w}x${h} dynamic canvas, a few pixels changed and marked dirty every frame`,
+    setup(ctx) {
+      const canvas = ctx.createCanvas(w, h)
+      const g = canvas.getContext('2d')!
+      let f = 0
+      let renderer: RenderSystem | null = null
+      const sc = base(ctx, this.name, this.description, { x: w / 2, y: h / 2, zoom: Math.min(W / w, H / h) }, () => {
+        f++
+        g.fillStyle = f & 1 ? '#3a7' : '#a73'
+        g.fillRect((f * 16) % w, ((f * 16) / w) * 16, 16, 16)
+        renderer!.markDynamicCanvasDirty('map')
+      })
+      renderer = sc.renderer
+      renderer.registerDynamicCanvas('map', canvas)
+      const id = sc.world.createEntity()
+      sc.world.addComponent(id, createTransform(w / 2, h / 2))
+      sc.world.addComponent(id, createSprite({ width: w, height: h, dynamicSrc: 'map' }))
+      return sc
+    },
+  }
+}
+
+export const SCENARIOS: ScenarioDef[] = [
+  movingSprites(3000),
+  movingSprites(10000),
+  churn(3000, 200),
+  tileWorld(600, 300),
+  dynamicCanvas(4800, 2400),
+]
+
+export const VIEWPORT = { width: W, height: H, atlasSize: ATLAS }
