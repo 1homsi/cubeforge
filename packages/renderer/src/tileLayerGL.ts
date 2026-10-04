@@ -1,0 +1,493 @@
+import type { ECSWorld } from '@cubeforge/core'
+import { isTilesetReady, visibleTileRange, type TileLayerData, type TileLayerComponent } from './tileLayer'
+
+// One quad per visible page; the fragment shader looks the tile id up in an
+// integer index texture and fetches the exact atlas texel (no filtering, so no
+// bleeding or seams at any zoom / DPR).
+const TILE_VERT = `#version 300 es
+precision highp float;
+layout(location = 0) in vec2 a_corner;
+uniform vec4 u_rect;
+uniform vec2 u_origin;
+uniform vec2 u_tileWorld;
+uniform vec2 u_pageOrigin;
+uniform vec2 u_camPos;
+uniform float u_zoom;
+uniform vec2 u_canvasSize;
+uniform vec2 u_shake;
+out vec2 v_tile;
+void main() {
+  vec2 t = mix(u_rect.xy, u_rect.zw, a_corner);
+  vec2 world = u_origin + t * u_tileWorld;
+  float cx = 2.0 * u_zoom / u_canvasSize.x * (world.x - u_camPos.x) + 2.0 * u_shake.x / u_canvasSize.x;
+  float cy = -2.0 * u_zoom / u_canvasSize.y * (world.y - u_camPos.y) - 2.0 * u_shake.y / u_canvasSize.y;
+  gl_Position = vec4(cx, cy, 0.0, 1.0);
+  v_tile = t - u_pageOrigin;
+}
+`
+
+const TILE_FRAG = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp usampler2D;
+in vec2 v_tile;
+uniform sampler2D u_atlas;
+uniform usampler2D u_index;
+uniform usampler2D u_lut;
+uniform uint u_lutSize;
+uniform int u_lutW;
+uniform ivec2 u_pageSize;
+uniform ivec4 u_ts;
+uniform int u_margin;
+uniform float u_opacity;
+out vec4 fragColor;
+void main() {
+  ivec2 cell = clamp(ivec2(floor(v_tile)), ivec2(0), u_pageSize - 1);
+  uint id = texelFetch(u_index, cell, 0).r;
+  if (id == 0u) discard;
+  if (id < u_lutSize) id = texelFetch(u_lut, ivec2(int(id) % u_lutW, int(id) / u_lutW), 0).r;
+  if (id == 0u) discard;
+  int t = int(id - 1u);
+  ivec2 tsz = u_ts.xy;
+  ivec2 px = clamp(ivec2(floor(fract(v_tile) * vec2(tsz))), ivec2(0), tsz - 1);
+  ivec2 org = ivec2(u_margin) + ivec2(t % u_ts.z, t / u_ts.z) * (tsz + u_ts.w);
+  vec4 c = texelFetch(u_atlas, org + px, 0);
+  fragColor = vec4(c.rgb, c.a * u_opacity);
+}
+`
+
+const MAX_PAGE = 4096
+const MAX_LUT_W = 2048
+
+interface Page {
+  tex: WebGLTexture
+  x0: number
+  y0: number
+  w: number
+  h: number
+}
+
+interface LayerGL {
+  pages: Page[]
+  pagesX: number
+  pageTiles: number
+  wide: boolean
+  fullVersion: number
+  lutTex: WebGLTexture | null
+  lutW: number
+  lutCap: number
+  lutPad: Uint32Array | null
+  lutVersion: number
+  atlasTex: WebGLTexture | null
+  atlasImage: unknown
+  drawnRevision: number
+  seenFrame: number
+}
+
+interface Uniforms {
+  rect: WebGLUniformLocation | null
+  origin: WebGLUniformLocation | null
+  tileWorld: WebGLUniformLocation | null
+  pageOrigin: WebGLUniformLocation | null
+  camPos: WebGLUniformLocation | null
+  zoom: WebGLUniformLocation | null
+  canvasSize: WebGLUniformLocation | null
+  shake: WebGLUniformLocation | null
+  lutSize: WebGLUniformLocation | null
+  lutW: WebGLUniformLocation | null
+  pageSize: WebGLUniformLocation | null
+  ts: WebGLUniformLocation | null
+  margin: WebGLUniformLocation | null
+  opacity: WebGLUniformLocation | null
+}
+
+export interface TileLayerRenderStats {
+  /** Index-texture sub-uploads this frame (one per dirty chunk, or one per page on a full replace). */
+  indexUploads: number
+  /** Index texels uploaded this frame. */
+  uploadedTexels: number
+  lutUploads: number
+  drawCalls: number
+}
+
+function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
+  const s = gl.createShader(type)!
+  gl.shaderSource(s, src)
+  gl.compileShader(s)
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    throw new Error(`[TileLayer] shader compile error: ${gl.getShaderInfoLog(s)}`)
+  }
+  return s
+}
+
+/** WebGL2 renderer for {@link TileLayerData} components. Owned by the RenderSystem. */
+export class TileLayerRenderer {
+  readonly stats: TileLayerRenderStats = { indexUploads: 0, uploadedTexels: 0, lutUploads: 0, drawCalls: 0 }
+  private program: WebGLProgram | null = null
+  private vao: WebGLVertexArrayObject | null = null
+  private vbo: WebGLBuffer | null = null
+  private dummyLut: WebGLTexture | null = null
+  private u: Uniforms | null = null
+  private maxTex = 2048
+  private readonly states = new Map<TileLayerData, LayerGL>()
+  private readonly layers: TileLayerData[] = []
+  private readonly range = new Int32Array(4)
+  private time = 0
+  private frame = 0
+  private lastLayerCount = 0
+
+  constructor(private readonly gl: WebGL2RenderingContext) {}
+
+  /**
+   * Collect layers, advance animations and upload pending changes.
+   * Returns true when the tile image changed since the last frame.
+   */
+  prepare(world: ECSWorld, dt: number): boolean {
+    const st = this.stats
+    st.indexUploads = 0
+    st.uploadedTexels = 0
+    st.lutUploads = 0
+    st.drawCalls = 0
+    this.frame++
+    this.time += dt
+    const layers = this.layers
+    layers.length = 0
+    const ids = world.query('TileLayer')
+    for (let i = 0; i < ids.length; i++) {
+      const c = world.getComponent<TileLayerComponent>(ids[i], 'TileLayer')
+      if (!c) continue
+      const l = c.layer
+      // insertion sort by zIndex (few layers, stable)
+      let j = layers.length
+      layers.push(l)
+      while (j > 0 && layers[j - 1].zIndex > l.zIndex) {
+        layers[j] = layers[j - 1]
+        j--
+      }
+      layers[j] = l
+    }
+
+    let changed = layers.length !== this.lastLayerCount
+    this.lastLayerCount = layers.length
+
+    if (layers.length > 0) {
+      this.ensureProgram()
+      for (let i = 0; i < layers.length; i++) {
+        const layer = layers[i]
+        layer.updateAnimations(this.time)
+        const s = this.ensureLayer(layer)
+        s.seenFrame = this.frame
+        this.upload(layer, s)
+        if (s.drawnRevision !== layer.revision) changed = true
+        else if (s.atlasImage !== layer.tileset.image && isTilesetReady(layer.tileset)) changed = true
+      }
+    }
+
+    if (this.states.size > layers.length) {
+      for (const [layer, s] of this.states) {
+        if (s.seenFrame !== this.frame) {
+          this.deleteLayer(s)
+          this.states.delete(layer)
+        }
+      }
+    }
+    return changed
+  }
+
+  render(
+    camX: number,
+    camY: number,
+    zoom: number,
+    canvasW: number,
+    canvasH: number,
+    shakeX: number,
+    shakeY: number,
+  ): void {
+    this.stats.drawCalls = 0
+    const layers = this.layers
+    if (layers.length === 0 || !this.program || !this.u) return
+    const { gl } = this
+    const u = this.u
+    gl.useProgram(this.program)
+    gl.bindVertexArray(this.vao)
+    gl.uniform2f(u.camPos, camX, camY)
+    gl.uniform1f(u.zoom, zoom)
+    gl.uniform2f(u.canvasSize, canvasW, canvasH)
+    gl.uniform2f(u.shake, shakeX, shakeY)
+    const halfW = canvasW / (2 * zoom)
+    const halfH = canvasH / (2 * zoom)
+    const cx = camX - shakeX / zoom
+    const cy = camY - shakeY / zoom
+    const r = this.range
+
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i]
+      const s = this.states.get(layer)!
+      s.drawnRevision = layer.revision
+      if (!layer.visible || layer.opacity <= 0 || !isTilesetReady(layer.tileset)) continue
+      if (!visibleTileRange(layer, cx - halfW, cy - halfH, cx + halfW, cy + halfH, r)) continue
+      if (s.atlasImage !== layer.tileset.image) this.uploadAtlas(layer, s)
+
+      const ts = layer.tileset
+      gl.uniform2f(u.origin, layer.x, layer.y)
+      gl.uniform2f(u.tileWorld, layer.tileWorldWidth, layer.tileWorldHeight)
+      gl.uniform4i(u.ts, ts.tileWidth, ts.tileHeight, ts.columns, ts.spacing ?? 0)
+      gl.uniform1i(u.margin, ts.margin ?? 0)
+      gl.uniform1f(u.opacity, layer.opacity)
+      gl.uniform1ui(u.lutSize, s.lutTex ? layer.lutSize : 0)
+      gl.uniform1i(u.lutW, s.lutW || 1)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, s.atlasTex)
+      gl.activeTexture(gl.TEXTURE2)
+      gl.bindTexture(gl.TEXTURE_2D, s.lutTex ?? this.dummyLut)
+      gl.activeTexture(gl.TEXTURE1)
+
+      for (let p = 0; p < s.pages.length; p++) {
+        const pg = s.pages[p]
+        const x0 = Math.max(r[0], pg.x0)
+        const y0 = Math.max(r[1], pg.y0)
+        const x1 = Math.min(r[2], pg.x0 + pg.w)
+        const y1 = Math.min(r[3], pg.y0 + pg.h)
+        if (x1 <= x0 || y1 <= y0) continue
+        gl.bindTexture(gl.TEXTURE_2D, pg.tex)
+        gl.uniform4f(u.rect, x0, y0, x1, y1)
+        gl.uniform2f(u.pageOrigin, pg.x0, pg.y0)
+        gl.uniform2i(u.pageSize, pg.w, pg.h)
+        gl.drawArrays(gl.TRIANGLES, 0, 6)
+        this.stats.drawCalls++
+      }
+    }
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindVertexArray(null)
+  }
+
+  /** GL objects die with the context; drop them so they are rebuilt lazily. */
+  contextRestored(): void {
+    this.states.clear()
+    this.program = null
+    this.vao = null
+    this.vbo = null
+    this.dummyLut = null
+    this.u = null
+    this.lastLayerCount = -1
+  }
+
+  dispose(): void {
+    const { gl } = this
+    for (const s of this.states.values()) this.deleteLayer(s)
+    this.states.clear()
+    if (this.program) gl.deleteProgram(this.program)
+    if (this.vao) gl.deleteVertexArray(this.vao)
+    if (this.vbo) gl.deleteBuffer(this.vbo)
+    if (this.dummyLut) gl.deleteTexture(this.dummyLut)
+    this.contextRestored()
+  }
+
+  private ensureProgram(): void {
+    if (this.program) return
+    const { gl } = this
+    const prog = gl.createProgram()!
+    const vs = compile(gl, gl.VERTEX_SHADER, TILE_VERT)
+    const fs = compile(gl, gl.FRAGMENT_SHADER, TILE_FRAG)
+    gl.attachShader(prog, vs)
+    gl.attachShader(prog, fs)
+    gl.linkProgram(prog)
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      throw new Error(`[TileLayer] program link error: ${gl.getProgramInfoLog(prog)}`)
+    }
+    gl.deleteShader(vs)
+    gl.deleteShader(fs)
+    this.program = prog
+    const loc = (n: string) => gl.getUniformLocation(prog, n)
+    this.u = {
+      rect: loc('u_rect'),
+      origin: loc('u_origin'),
+      tileWorld: loc('u_tileWorld'),
+      pageOrigin: loc('u_pageOrigin'),
+      camPos: loc('u_camPos'),
+      zoom: loc('u_zoom'),
+      canvasSize: loc('u_canvasSize'),
+      shake: loc('u_shake'),
+      lutSize: loc('u_lutSize'),
+      lutW: loc('u_lutW'),
+      pageSize: loc('u_pageSize'),
+      ts: loc('u_ts'),
+      margin: loc('u_margin'),
+      opacity: loc('u_opacity'),
+    }
+    gl.useProgram(prog)
+    gl.uniform1i(loc('u_atlas'), 0)
+    gl.uniform1i(loc('u_index'), 1)
+    gl.uniform1i(loc('u_lut'), 2)
+
+    this.vao = gl.createVertexArray()
+    gl.bindVertexArray(this.vao)
+    this.vbo = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1]), gl.STATIC_DRAW)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0)
+    gl.bindVertexArray(null)
+
+    this.dummyLut = this.createIntTexture(1, 1, true)
+    this.maxTex = Math.min(MAX_PAGE, (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) || 2048)
+  }
+
+  private createIntTexture(w: number, h: number, wide: boolean): WebGLTexture {
+    const { gl } = this
+    const tex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texStorage2D(gl.TEXTURE_2D, 1, wide ? gl.R32UI : gl.R16UI, w, h)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    return tex
+  }
+
+  private ensureLayer(layer: TileLayerData): LayerGL {
+    let s = this.states.get(layer)
+    if (s) return s
+    const pageTiles = Math.max(layer.chunkSize, Math.floor(this.maxTex / layer.chunkSize) * layer.chunkSize)
+    const wide = layer.tiles instanceof Uint32Array
+    const pages: Page[] = []
+    const pagesX = Math.ceil(layer.width / pageTiles)
+    const pagesY = Math.ceil(layer.height / pageTiles)
+    for (let py = 0; py < pagesY; py++) {
+      for (let px = 0; px < pagesX; px++) {
+        const x0 = px * pageTiles
+        const y0 = py * pageTiles
+        const w = Math.min(pageTiles, layer.width - x0)
+        const h = Math.min(pageTiles, layer.height - y0)
+        pages.push({ tex: this.createIntTexture(w, h, wide), x0, y0, w, h })
+      }
+    }
+    s = {
+      pages,
+      pagesX,
+      pageTiles,
+      wide,
+      fullVersion: -1,
+      lutTex: null,
+      lutW: 0,
+      lutCap: 0,
+      lutPad: null,
+      lutVersion: -1,
+      atlasTex: null,
+      atlasImage: null,
+      drawnRevision: -1,
+      seenFrame: 0,
+    }
+    this.states.set(layer, s)
+    return s
+  }
+
+  private upload(layer: TileLayerData, s: LayerGL): void {
+    const { gl } = this
+    const needFull = s.fullVersion !== layer.fullVersion
+    if (needFull || layer.dirtyCount > 0) {
+      const fmt = gl.RED_INTEGER
+      const type = s.wide ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+      gl.activeTexture(gl.TEXTURE1)
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+      gl.pixelStorei(gl.UNPACK_ROW_LENGTH, layer.width)
+      if (needFull) {
+        for (let p = 0; p < s.pages.length; p++) {
+          const pg = s.pages[p]
+          this.subUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h, fmt, type)
+        }
+        s.fullVersion = layer.fullVersion
+      } else {
+        const rect = layer.dirtyRect
+        for (let k = 0; k < layer.dirtyCount; k++) {
+          const o = layer.dirtyList[k] * 4
+          const x0 = rect[o]
+          const y0 = rect[o + 1]
+          const pg = s.pages[Math.floor(y0 / s.pageTiles) * s.pagesX + Math.floor(x0 / s.pageTiles)]
+          this.subUpload(layer, pg, x0, y0, rect[o + 2] - x0 + 1, rect[o + 3] - y0 + 1, fmt, type)
+        }
+      }
+      layer.clearDirty()
+      gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0)
+      gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0)
+      gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0)
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4)
+      gl.activeTexture(gl.TEXTURE0)
+    }
+    if (s.lutVersion !== layer.lutVersion) this.uploadLut(layer, s)
+  }
+
+  private subUpload(
+    layer: TileLayerData,
+    pg: Page,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    fmt: number,
+    type: number,
+  ): void {
+    const { gl } = this
+    gl.bindTexture(gl.TEXTURE_2D, pg.tex)
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x)
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, fmt, type, layer.tiles, 0)
+    this.stats.indexUploads++
+    this.stats.uploadedTexels += w * h
+  }
+
+  private uploadLut(layer: TileLayerData, s: LayerGL): void {
+    const { gl } = this
+    s.lutVersion = layer.lutVersion
+    const lut = layer.lut
+    if (!lut) {
+      if (s.lutTex) gl.deleteTexture(s.lutTex)
+      s.lutTex = null
+      s.lutW = 0
+      s.lutCap = 0
+      s.lutPad = null
+      return
+    }
+    const w = Math.min(lut.length, MAX_LUT_W)
+    const h = Math.ceil(lut.length / w)
+    if (!s.lutTex || s.lutCap !== w * h || s.lutW !== w) {
+      if (s.lutTex) gl.deleteTexture(s.lutTex)
+      s.lutTex = this.createIntTexture(w, h, true)
+      s.lutW = w
+      s.lutCap = w * h
+      s.lutPad = w * h === lut.length ? null : new Uint32Array(w * h)
+    }
+    let src = lut
+    if (s.lutPad) {
+      s.lutPad.set(lut)
+      src = s.lutPad
+    }
+    gl.activeTexture(gl.TEXTURE2)
+    gl.bindTexture(gl.TEXTURE_2D, s.lutTex)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RED_INTEGER, gl.UNSIGNED_INT, src, 0)
+    gl.activeTexture(gl.TEXTURE0)
+    this.stats.lutUploads++
+  }
+
+  private uploadAtlas(layer: TileLayerData, s: LayerGL): void {
+    const { gl } = this
+    if (s.atlasTex) gl.deleteTexture(s.atlasTex)
+    const tex = gl.createTexture()!
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, layer.tileset.image as TexImageSource)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    s.atlasTex = tex
+    s.atlasImage = layer.tileset.image
+  }
+
+  private deleteLayer(s: LayerGL): void {
+    const { gl } = this
+    for (const pg of s.pages) gl.deleteTexture(pg.tex)
+    if (s.lutTex) gl.deleteTexture(s.lutTex)
+    if (s.atlasTex) gl.deleteTexture(s.atlasTex)
+  }
+}
