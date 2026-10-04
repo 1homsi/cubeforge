@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 /**
  * Height-field collider — a strip of terrain defined by a 1D array of heights.
@@ -31,6 +32,7 @@ export function createHeightFieldCollider(
   heights: number[],
   opts?: Partial<HeightFieldColliderComponent>,
 ): HeightFieldColliderComponent {
+  registerPhysics()
   return {
     type: 'HeightFieldCollider',
     heights: [...heights],

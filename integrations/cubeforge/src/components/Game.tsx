@@ -6,6 +6,7 @@ import {
   AssetManager,
   ScriptSystem,
   createEngineStats,
+  getPhysicsFactory,
   type GameLoopMode,
   type Plugin,
   type System,
@@ -32,7 +33,6 @@ function timedSystem(name: string, system: System, timings: Map<string, number>)
  * omits them so physics and devtools stay out of its import graph.
  */
 export interface GameFeatures {
-  createPhysics?: (gravity: number, events: EventBus) => PhysicsSystem
   createDebugSystem?: (overlay: HTMLCanvasElement) => System
   DevToolsOverlay?: React.ComponentType<{
     handle: DevToolsHandle
@@ -145,7 +145,6 @@ export function Game({
     const viteEnv = (import.meta as unknown as { env?: { BASE_URL?: string } }).env
     assets.baseURL = (viteEnv?.BASE_URL ?? '/').replace(/\/$/, '')
     ecs.assets = assets
-    const physics = features.createPhysics?.(gravity, events)
     const entityIds = new Map<string, number>()
 
     // Always use the WebGL2 render system
@@ -174,8 +173,16 @@ export function Game({
 
     // System order: scripts → physics → render → (debug) → plugins
     ecs.addSystem(timedSystem('ScriptSystem', new ScriptSystem(input), systemTimings))
-    if (physics) ecs.addSystem(timedSystem('PhysicsSystem', physics, systemTimings))
-    ecs.addSystem(timedSystem('RenderSystem', renderSystem, systemTimings))
+    const timedRender = timedSystem('RenderSystem', renderSystem, systemTimings)
+    ecs.addSystem(timedRender)
+    // Physics attaches on the first frame after any physics component exists.
+    const attachPhysics = (): void => {
+      const create = getPhysicsFactory()
+      if (!create) return
+      const physics = create(state.gravity ?? gravity, events) as PhysicsSystem
+      state.physics = physics
+      ecs.addSystem(timedSystem('PhysicsSystem', physics, systemTimings), timedRender)
+    }
     if (debugSystem) ecs.addSystem(timedSystem('DebugSystem', debugSystem, systemTimings))
 
     input.attach(canvas)
@@ -193,6 +200,7 @@ export function Game({
         const t0 = performance.now()
         if (lastFrameStart > 0) stats.frameIntervalMs = t0 - lastFrameStart
         lastFrameStart = t0
+        if (state.physics === undefined) attachPhysics()
         ecs.update(dt)
         stats.updateMs = performance.now() - t0
         stats.renderMs = systemTimings.get('RenderSystem') ?? 0
@@ -244,7 +252,8 @@ export function Game({
       ecs,
       input,
       activeRenderSystem,
-      physics,
+      physics: undefined,
+      gravity,
       events,
       assets,
       loop,
@@ -393,7 +402,9 @@ export function Game({
 
   // Sync gravity changes
   useEffect(() => {
-    engine?.physics?.setGravity(gravity)
+    if (!engine) return
+    engine.gravity = gravity
+    engine.physics?.setGravity(gravity)
   }, [gravity, engine])
 
   const canvasStyle: CSSProperties = {

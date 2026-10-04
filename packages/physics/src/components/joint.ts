@@ -1,4 +1,5 @@
 import type { Component, EntityId } from '@cubeforge/core'
+import { registerPhysics } from '../provide'
 
 export type JointType = 'distance' | 'spring' | 'revolute' | 'rope' | 'fixed' | 'prismatic' | 'weld' | 'generic'
 
@@ -121,6 +122,7 @@ export function createJoint(opts: {
   axisLockY?: AxisLock
   axisLockRotation?: AxisLock
 }): JointComponent {
+  registerPhysics()
   return {
     type: 'Joint',
     jointType: opts.jointType,

@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 export interface BoxColliderComponent extends Component {
   readonly type: 'BoxCollider'
@@ -50,6 +51,7 @@ export function createBoxCollider(
   height: number,
   opts?: Partial<BoxColliderComponent>,
 ): BoxColliderComponent {
+  registerPhysics()
   return {
     type: 'BoxCollider',
     width,

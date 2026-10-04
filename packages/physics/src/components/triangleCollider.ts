@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 export interface TriangleColliderComponent extends Component {
   readonly type: 'TriangleCollider'
@@ -29,6 +30,7 @@ export function createTriangleCollider(
   c: { x: number; y: number },
   opts?: Partial<TriangleColliderComponent>,
 ): TriangleColliderComponent {
+  registerPhysics()
   return {
     type: 'TriangleCollider',
     a: { ...a },

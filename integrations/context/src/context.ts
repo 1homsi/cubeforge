@@ -10,8 +10,10 @@ export interface EngineState {
   input: InputManager
   /** The active WebGL2 render system. */
   activeRenderSystem?: System
-  /** Undefined when the game was mounted with `<Game>` from `cubeforge/render`. */
+  /** Attached on the first frame after a physics component is created; undefined before. */
   physics?: PhysicsSystem
+  /** Current gravity, applied when physics attaches. */
+  gravity?: number
   events: EventBus
   assets: AssetManager
   loop: GameLoop

@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 export interface CircleColliderComponent extends Component {
   readonly type: 'CircleCollider'
@@ -31,6 +32,7 @@ export interface CircleColliderComponent extends Component {
 }
 
 export function createCircleCollider(radius: number, opts?: Partial<CircleColliderComponent>): CircleColliderComponent {
+  registerPhysics()
   return {
     type: 'CircleCollider',
     radius,

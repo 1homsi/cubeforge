@@ -50,10 +50,14 @@ export async function measure(entry, symbols) {
     symlinkSync(pkgDir, path.join(dir, 'node_modules/cubeforge'), 'dir')
     const src = path.join(dir, 'entry.js')
     writeFileSync(src, `export { ${symbols.join(', ')} } from '${entry}'\n`)
+    // Code splitting like an app bundler: dynamic import() targets (e.g. devtools)
+    // become lazy chunks and are not counted as the initial load.
     const result = await build({
       entryPoints: [src],
       absWorkingDir: dir,
       bundle: true,
+      splitting: true,
+      outdir: path.join(dir, 'out'),
       minify: true,
       format: 'esm',
       platform: 'browser',
@@ -63,8 +67,22 @@ export async function measure(entry, symbols) {
       external: ['react', 'react-dom', 'react/jsx-runtime'],
       logLevel: 'error',
     })
-    const code = result.outputFiles[0].contents
-    const inputs = Object.entries(result.metafile.outputs[Object.keys(result.metafile.outputs)[0]].inputs)
+    const outputs = result.metafile.outputs
+    const entryOut = Object.keys(outputs).find((k) => outputs[k].entryPoint)
+    const initial = new Set([entryOut])
+    for (const queue = [entryOut]; queue.length > 0; ) {
+      for (const imp of outputs[queue.pop()].imports) {
+        if (imp.kind === 'import-statement' && !imp.external && !initial.has(imp.path)) {
+          initial.add(imp.path)
+          queue.push(imp.path)
+        }
+      }
+    }
+    const byPath = new Map(result.outputFiles.map((f) => [path.basename(f.path), f.contents]))
+    const parts = [...initial].map((k) => byPath.get(path.basename(k)) ?? new Uint8Array())
+    const code = Buffer.concat(parts.map((p) => Buffer.from(p)))
+    const inputs = [...initial]
+      .flatMap((k) => Object.entries(outputs[k].inputs))
       .map(([file, info]) => ({ file: file.replace(/^.*?integrations\/cubeforge\//, ''), bytes: info.bytesInOutput }))
       .filter((i) => i.bytes > 0)
       .sort((a, b) => b.bytes - a.bytes)

@@ -29,7 +29,7 @@ const SYMBOLS = [
   'useGestures',
 ] as const
 
-async function mountAndGetEngine(Game: typeof renderEntry.Game): Promise<EngineState> {
+async function mountAndGetEngine(Game: typeof renderEntry.Game | typeof mainEntry.Game): Promise<EngineState> {
   let engine: EngineState | null = null
   function Probe() {
     engine = renderEntry.useGame()
@@ -64,8 +64,15 @@ describe('cubeforge/render entry', () => {
     expect(engine.systemTimings).toBeInstanceOf(Map)
   })
 
-  it('main entry Game still includes physics', async () => {
+  it('main entry Game attaches physics only once a physics component exists', async () => {
     const engine = await mountAndGetEngine(mainEntry.Game)
-    expect(engine.physics).toBeDefined()
+    const { getPhysicsFactory } = await import('@cubeforge/core')
+    if (!getPhysicsFactory()) {
+      await new Promise((r) => setTimeout(r, 50))
+      expect(engine.physics).toBeUndefined()
+    }
+    const { createRigidBody } = await import('@cubeforge/physics')
+    createRigidBody()
+    await vi.waitFor(() => expect(engine.physics).toBeDefined(), { timeout: 1000 })
   })
 })

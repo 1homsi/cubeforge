@@ -116,16 +116,17 @@ fractional zoom. GPU textures are freed the frame after the layer unmounts and r
 context restore. Without WebGL, `TileLayerCanvasRenderer` draws the same layer onto any 2D context
 with cached chunk canvases.
 
-## Smaller bundles: `cubeforge/render`
+## Bundle size
 
 The package ships one ESM file per module and declares `"sideEffects": false`,
-so bundlers keep only what you import. If your game needs rendering but not
-physics (for example a simulation that runs outside React), import from
-`cubeforge/render`. It provides `Game`, `World`, `Entity`, `Transform`, `Sprite`,
-`Camera2D`, `useGame`, `useEntity`, `useCamera`, `useDynamicCanvas` and
-`useGestures`, about 26 kB gzip, against about 53 kB for the same imports from
-`cubeforge`. Its `Game` runs without a physics system and does not support the
-`debug` or `devtools` props.
+so bundlers keep only what you import. Importing `Game`, `World`, `Entity`,
+`Camera2D`, `Sprite` and a few hooks costs about 33 kB gzip. Physics is attached
+automatically the first time a physics component (`RigidBody`, any collider,
+`Joint`) is created, so it is only bundled when you use it. The debug overlay and
+devtools load on demand when the `debug` or `devtools` prop is set.
+
+`cubeforge/render` is a smaller barrel with just the rendering, camera, layer and
+core hooks; its `Game` does not support the `debug` or `devtools` props.
 
 ## Links
 

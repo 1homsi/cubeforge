@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 /**
  * Capsule (pill) shaped collider — two circles connected by a rectangle.
@@ -34,6 +35,7 @@ export function createCapsuleCollider(
   height: number,
   opts?: Partial<CapsuleColliderComponent>,
 ): CapsuleColliderComponent {
+  registerPhysics()
   return {
     type: 'CapsuleCollider',
     width,

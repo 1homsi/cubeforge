@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 /**
  * Half-space (infinite plane) collider — defined by an outward-facing normal
@@ -26,6 +27,7 @@ export interface HalfSpaceColliderComponent extends Component {
 }
 
 export function createHalfSpaceCollider(opts?: Partial<HalfSpaceColliderComponent>): HalfSpaceColliderComponent {
+  registerPhysics()
   return {
     type: 'HalfSpaceCollider',
     normalX: 0,

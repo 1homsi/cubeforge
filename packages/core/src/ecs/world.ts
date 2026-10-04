@@ -991,8 +991,11 @@ export class ECSWorld {
     return this.liveComponentsAt(slot, knownCount).map(_cloneComponent)
   }
 
-  addSystem(system: System): void {
-    this.systems.push(system)
+  /** Appends `system`, or inserts it before `before` when given and present. */
+  addSystem(system: System, before?: System): void {
+    const i = before ? this.systems.indexOf(before) : -1
+    if (i === -1) this.systems.push(system)
+    else this.systems.splice(i, 0, system)
   }
 
   removeSystem(system: System): void {

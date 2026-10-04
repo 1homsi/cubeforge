@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 /**
  * Triangle-mesh collider — an arbitrary concave shape defined by vertices
@@ -30,6 +31,7 @@ export function createTriMeshCollider(
   indices: number[],
   opts?: Partial<TriMeshColliderComponent>,
 ): TriMeshColliderComponent {
+  registerPhysics()
   return {
     type: 'TriMeshCollider',
     vertices: vertices.map((v) => ({ ...v })),

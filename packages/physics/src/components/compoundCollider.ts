@@ -1,4 +1,5 @@
 import type { Component } from '@cubeforge/core'
+import { registerPhysics } from '../provide'
 
 export interface ColliderShape {
   type: 'box' | 'circle'
@@ -28,6 +29,7 @@ export function createCompoundCollider(
   shapes: ColliderShape[],
   opts?: Partial<Omit<CompoundColliderComponent, 'type' | 'shapes'>>,
 ): CompoundColliderComponent {
+  registerPhysics()
   return {
     type: 'CompoundCollider',
     shapes,

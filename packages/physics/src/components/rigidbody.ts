@@ -1,4 +1,5 @@
 import type { Component } from '@cubeforge/core'
+import { registerPhysics } from '../provide'
 
 export interface RigidBodyComponent extends Component {
   readonly type: 'RigidBody'
@@ -112,6 +113,7 @@ export interface RigidBodyComponent extends Component {
 }
 
 export function createRigidBody(opts?: Partial<RigidBodyComponent>): RigidBodyComponent {
+  registerPhysics()
   return {
     type: 'RigidBody',
     vx: 0,

@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 /**
  * Line segment collider — a thin edge between two points.
@@ -36,6 +37,7 @@ export function createSegmentCollider(
   end: { x: number; y: number },
   opts?: Partial<SegmentColliderComponent>,
 ): SegmentColliderComponent {
+  registerPhysics()
   return {
     type: 'SegmentCollider',
     start: { ...start },

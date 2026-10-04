@@ -1,5 +1,6 @@
 import type { Component } from '@cubeforge/core'
 import type { CombineRule } from '../combineRules'
+import { registerPhysics } from '../provide'
 
 export interface ConvexPolygonColliderComponent extends Component {
   readonly type: 'ConvexPolygonCollider'
@@ -23,6 +24,7 @@ export function createConvexPolygonCollider(
   vertices: { x: number; y: number }[],
   opts?: Partial<ConvexPolygonColliderComponent>,
 ): ConvexPolygonColliderComponent {
+  registerPhysics()
   return {
     type: 'ConvexPolygonCollider',
     vertices: [...vertices],
