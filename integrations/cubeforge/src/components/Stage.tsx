@@ -1,5 +1,5 @@
 import React from 'react'
-import { Game } from './Game'
+import { Game } from './FullGame'
 
 type GameProps = React.ComponentProps<typeof Game>
 

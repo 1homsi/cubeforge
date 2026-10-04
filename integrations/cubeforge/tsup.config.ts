@@ -1,20 +1,12 @@
 import { defineConfig } from 'tsup'
 
+// JS is emitted per module by build.mjs; tsup only bundles the .d.ts files.
+// @cubeforge/* types are inlined because those packages are not published.
 export default defineConfig({
-  entry: ['src/index.ts', 'src/advanced.ts'],
+  entry: ['src/index.ts', 'src/advanced.ts', 'src/render.ts'],
   format: ['esm'],
-  dts: true,
+  dts: { only: true, resolve: [/^@cubeforge\//] },
   external: ['react', 'react-dom', 'react/jsx-runtime'],
-  // Bundle the @cubeforge/* workspace packages into dist (v0.8.x behaviour).
-  // They are listed in package.json dependencies for monorepo ergonomics,
-  // but tsup auto-externalises dependencies — without this, the published
-  // package would import packages that don't exist on npm.
   noExternal: [/^@cubeforge\//],
-  outExtension: () => ({ js: '.js' }),
-  esbuildOptions(options) {
-    options.jsx = 'automatic'
-    options.jsxDev = false // production JSX → react/jsx-runtime, not react/jsx-dev-runtime
-  },
-  clean: true,
-  sourcemap: false,
+  clean: false,
 })

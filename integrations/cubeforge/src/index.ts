@@ -1,5 +1,5 @@
 // Components
-export { Game } from './components/Game'
+export { Game } from './components/FullGame'
 export { Stage } from './components/Stage'
 export { World } from './components/World'
 export { Entity } from './components/Entity'

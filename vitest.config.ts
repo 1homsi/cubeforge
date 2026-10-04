@@ -11,8 +11,10 @@ const sourceAliases = {
   '@cubeforge/net': new URL('./packages/net/src/index.ts', import.meta.url).pathname,
   '@cubeforge/physics': new URL('./packages/physics/src/index.ts', import.meta.url).pathname,
   '@cubeforge/renderer': new URL('./packages/renderer/src/index.ts', import.meta.url).pathname,
-  cubeforge: new URL('./integrations/cubeforge/src/index.ts', import.meta.url).pathname,
+  // Subpaths before the bare name: Vite matches aliases by prefix, in order.
   'cubeforge/advanced': new URL('./integrations/cubeforge/src/advanced.ts', import.meta.url).pathname,
+  'cubeforge/render': new URL('./integrations/cubeforge/src/render.ts', import.meta.url).pathname,
+  cubeforge: new URL('./integrations/cubeforge/src/index.ts', import.meta.url).pathname,
 }
 
 export default defineConfig({

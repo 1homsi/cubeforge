@@ -10,7 +10,8 @@ export interface EngineState {
   input: InputManager
   /** The active WebGL2 render system. */
   activeRenderSystem?: System
-  physics: PhysicsSystem
+  /** Undefined when the game was mounted with `<Game>` from `cubeforge/render`. */
+  physics?: PhysicsSystem
   events: EventBus
   assets: AssetManager
   loop: GameLoop
