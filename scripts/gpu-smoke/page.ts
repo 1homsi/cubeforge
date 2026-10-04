@@ -71,6 +71,10 @@ try {
   out.overlapTopIsYellow = px(205, 205)
   out.magentaOnly = px(214, 214)
   out.glError = gl.getError()
+  rs.setScreenTint(0.5, 0.5, 1, 1, 'multiply')
+  rs.update(world, 1 / 60)
+  out.nightTile = px(40, 40)
+  rs.setScreenTint(1, 1, 1, 0)
   // far zoom: average-colour path
   world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 0.05
   tiles.jitter = 0.5

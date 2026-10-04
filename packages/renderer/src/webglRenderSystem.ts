@@ -945,6 +945,7 @@ export class RenderSystem implements System {
   private _texNextRank = 0
   private _texRankEpoch = 0
   private readonly _spriteLayers: SpriteLayer[] = []
+  private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
   private _layerImageTextures = new WeakMap<object, WebGLTexture>()
   private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
   private readonly _layerCam: LayerCamera = {
@@ -1085,6 +1086,32 @@ export class RenderSystem implements System {
    *
    * Use the returned `id` as the `dynamicSrc` on a `<Sprite>` component.
    */
+  /**
+   * Tint the whole view after world sprites and layers, before text, e.g. a
+   * day/night cycle ('multiply') or fog/flash ('normal'/'additive'). `a` is
+   * the strength (0 = off). Cheap enough to change every frame.
+   */
+  setScreenTint(
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    mode: 'multiply' | 'normal' | 'additive' = 'multiply',
+  ): void {
+    const t = this._screenTint
+    if (t.r === r && t.g === g && t.b === b && t.a === a && t.mode === mode) return
+    t.r = r
+    t.g = g
+    t.b = b
+    t.a = a
+    t.mode = mode
+    this._overlayRevision++
+  }
+
+  clearScreenTint(): void {
+    this.setScreenTint(1, 1, 1, 0)
+  }
+
   addSpriteLayer(layer: SpriteLayer): void {
     if (!this._spriteLayers.includes(layer)) this._spriteLayers.push(layer)
     this._overlayRevision++
@@ -2042,6 +2069,48 @@ export class RenderSystem implements System {
     this.gl.useProgram(this.program)
   }
 
+  private drawScreenTint(camX: number, camY: number, zoom: number, w: number, h: number): void {
+    const { gl } = this
+    const t = this._screenTint
+    let r = t.r,
+      g = t.g,
+      b = t.b,
+      a = t.a
+    if (t.mode === 'multiply') {
+      // dst * mix(1, color, a): fold strength into the colour, then DST_COLOR x ZERO.
+      r = 1 - a + a * r
+      g = 1 - a + a * g
+      b = 1 - a + a * b
+      a = 1
+      gl.blendFunc(gl.DST_COLOR, gl.ZERO)
+    } else this.applyBlendMode(t.mode)
+    // Oversized so shake never exposes an edge.
+    this.writeInstance(
+      0,
+      camX,
+      camY,
+      (w / zoom) * 1.5,
+      (h / zoom) * 1.5,
+      0,
+      0.5,
+      0.5,
+      0,
+      0,
+      false,
+      false,
+      r,
+      g,
+      b,
+      a,
+      0,
+      0,
+      1,
+      1,
+    )
+    this.flushWithTex(1, this.whiteTexture, false)
+    this.applyBlendMode('normal')
+  }
+
   private resolveLayerAtlas(atlas: LayerAtlas): ResolvedAtlas | null {
     const out = this._resolvedAtlas
     if (atlas.dynamicSrc !== undefined) {
@@ -2683,6 +2752,8 @@ export class RenderSystem implements System {
     }
     this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
     batchCount = 0
+
+    if (this._screenTint.a > 0) this.drawScreenTint(camX, camY, zoom, Wl, Hl)
 
     // ── Text rendering pass ───────────────────────────────────────────────────
     // Text entities are rendered as textured quads using offscreen Canvas2D textures.
