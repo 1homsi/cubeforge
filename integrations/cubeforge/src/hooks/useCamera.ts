@@ -36,6 +36,12 @@ export interface CameraControls {
    * Returns the current camera zoom level.
    */
   getZoom(): number
+  /**
+   * Set the zoom while keeping the world point under a screen position fixed
+   * (canvas CSS pixels, e.g. from a wheel or pinch event). Use for
+   * zoom-to-cursor.
+   */
+  zoomAt(screenX: number, screenY: number, zoom: number): void
 }
 
 /**
@@ -100,6 +106,20 @@ export function useCamera(): CameraControls {
         if (camId === undefined) return { x: 0, y: 0 }
         const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
         return cam ? { x: cam.x, y: cam.y } : { x: 0, y: 0 }
+      },
+
+      zoomAt(screenX, screenY, zoom) {
+        const camId = engine.ecs.queryOne('Camera2D')
+        if (camId === undefined) return
+        const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')
+        if (!cam || zoom <= 0) return
+        const canvas = engine.canvas
+        const dx = screenX - (canvas.clientWidth || canvas.width) / 2
+        const dy = screenY - (canvas.clientHeight || canvas.height) / 2
+        cam.x += dx / cam.zoom - dx / zoom
+        cam.y += dy / cam.zoom - dy / zoom
+        cam.zoom = zoom
+        engine.loop.markDirty()
       },
 
       getZoom() {

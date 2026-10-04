@@ -174,3 +174,32 @@ describe('Camera2D component', () => {
     expect(cam?.background).toBe('#1a1a2e')
   })
 })
+
+describe('useCamera().zoomAt', () => {
+  it('keeps the world point under the cursor fixed', async () => {
+    const { useCamera } = await import('../hooks/useCamera')
+    const engine = makeEngine()
+    ;(engine.loop as unknown as { markDirty: () => void }).markDirty = vi.fn()
+    engine.canvas.width = 800
+    engine.canvas.height = 600
+    let cam!: ReturnType<typeof useCamera>
+    function Probe() {
+      cam = useCamera()
+      return null
+    }
+    render(
+      <Wrapper engine={engine}>
+        <Camera2D x={100} y={50} zoom={1} />
+        <Probe />
+      </Wrapper>,
+    )
+    const c = getCameraComponent(engine)!
+    const worldAt = (sx: number, sy: number) => ({ x: c.x + (sx - 400) / c.zoom, y: c.y + (sy - 300) / c.zoom })
+    const before = worldAt(600, 100)
+    act(() => cam.zoomAt(600, 100, 2.5))
+    const after = worldAt(600, 100)
+    expect(c.zoom).toBe(2.5)
+    expect(after.x).toBeCloseTo(before.x, 6)
+    expect(after.y).toBeCloseTo(before.y, 6)
+  })
+})
