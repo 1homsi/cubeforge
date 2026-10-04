@@ -109,12 +109,78 @@ Cost model:
 | `setTiles(array)` / `fill(id)` | O(tiles) copy + one full index upload (360 KB for 600x300 Uint16). |
 | Animated tiles | O(animations) per frame on the CPU and a tiny lookup-table upload when a frame flips; zero per-tile work. |
 | Idle frame | No uploads, no allocation. |
+| `setTint(x, y, 0xRRGGBBAA)` | O(1), shares the tile dirty rects. `setTints(bytes)` re-uploads the tint layer once. |
+
+Variation and colour, all evaluated per pixel in the shader:
+
+```ts
+useTileLayer({
+  ...,
+  variants: { 5: [5, 21, 22, 23] }, // grass: per-cell pick by tileHash(x, y)
+  jitter: 0.12,                      // hashed per-tile brightness variation
+  tinted: true,                      // RGBA per tile, multiplied with the tile colour
+})
+water.setTints(colourFromDepthAndBiome) // width * height * 4 bytes
+ground.visualTile(x, y)                 // the id actually drawn (variant + animation)
+```
+
+Below about 2 device pixels per tile (e.g. zoom 0.05 with 16 px tiles) each tile is drawn with its
+atlas tile's average colour, so far zoom doesn't shimmer.
 
 Tile layers draw after parallax backgrounds and before all sprites, ordered by `zIndex` among
 themselves. Sampling uses `texelFetch` on exact atlas texels, so there is no bleeding or seams at
 fractional zoom. GPU textures are freed the frame after the layer unmounts and rebuilt after a GL
 context restore. Without WebGL, `TileLayerCanvasRenderer` draws the same layer onto any 2D context
 with cached chunk canvases.
+
+## Thousands of sprites: `useSpriteLayer`
+
+For crowds driven by simulation data (people, animals, buildings) use a sprite layer instead of one
+`<Entity>` per object: typed arrays, no React node or entity per sprite.
+
+```tsx
+const crowd = useSpriteLayer({
+  atlases: [
+    { src: '/people.png', frameWidth: 16, frameHeight: 16 },
+    { src: '/buildings.png', frameWidth: 32, frameHeight: 32 },
+  ],
+  sortByKey: true, // draw by sortKey (e.g. y) so people and buildings interleave by depth
+  zIndex: 5,
+})
+
+// per simulation tick
+crowd.resize(sim.count)
+for (let i = 0; i < sim.count; i++) {
+  crowd.x[i] = sim.x[i]
+  crowd.y[i] = sim.y[i] + Math.sin(t + i) * 2 // e.g. fish bobbing
+  crowd.w[i] = crowd.h[i] = 16 * sim.scale[i]
+  crowd.atlas[i] = sim.isBuilding[i] ? 1 : 0
+  crowd.frame[i] = sim.frame[i]
+  crowd.color[i] = 0xffffff00 | Math.round(255 * sim.alpha[i]) // tint + alpha (fade on death)
+  crowd.sortKey[i] = sim.y[i]
+  crowd.ids[i] = sim.organismId[i]
+}
+crowd.touch()
+
+const id = crowd.pick(worldX, worldY) // your id of the topmost sprite, -1 if none
+```
+
+Up to 8 atlases draw in one instanced call. The y-sort is incremental (near-linear when keys drift
+between frames): about 0.13 ms CPU per frame for 3,000 moving, re-sorted sprites. `pick` walks the
+draw order from the top and ignores rotation.
+
+## Overlays and camera
+
+- `useScreenTint().set(r, g, b, strength, mode)`: full-view tint drawn after sprites and layers and
+  before text. Use `'multiply'` for day/night, `'normal'` for fog or weather, `'additive'` for a flash.
+- Emotes and bubbles: a second sprite layer with a higher `zIndex`, positioned above each person.
+  Text labels are `<Text>` entities (one cached texture per unique string).
+- Hazard overlays: a second `TileLayer` with semi-transparent tiles or a tint layer.
+- `useCameraPanZoom({ minZoom, maxZoom, wheelSpeed, inertia, friction, onTap })`: drag to pan with
+  mouse or touch, inertia, wheel and pinch zoom around the cursor, and `onTap` (with world
+  coordinates) for click-to-select. Combine with `<Camera2D pixelSnap />`.
+- `useCamera().zoomAt(screenX, screenY, zoom)` and `useCoordinates()` work in canvas CSS pixels at
+  any devicePixelRatio.
 
 ## Bundle size
 
