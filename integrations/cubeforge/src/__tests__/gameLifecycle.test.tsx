@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import React, { StrictMode, useContext } from 'react'
+import { StrictMode, useContext } from 'react'
 import { render, act } from '@testing-library/react'
 
 vi.mock('@cubeforge/renderer', async (orig) => {

@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest'
-import React from 'react'
 import { render, act } from '@testing-library/react'
 import { ECSWorld, EventBus, AssetManager, createTransform } from '@cubeforge/core'
 import { EngineContext, type EngineState } from '../context'
@@ -83,8 +82,29 @@ describe('useGestures', () => {
     const { unmount } = render(<G />)
     act(() => {
       window.dispatchEvent(touchEvent('touchstart', [[1, 100, 100]], [[1, 100, 100]]))
-      window.dispatchEvent(touchEvent('touchstart', [[2, 120, 100]], [[1, 100, 100], [2, 120, 100]]))
-      window.dispatchEvent(touchEvent('touchmove', [[1, 20, 100], [2, 200, 100]], [[1, 20, 100], [2, 200, 100]]))
+      window.dispatchEvent(
+        touchEvent(
+          'touchstart',
+          [[2, 120, 100]],
+          [
+            [1, 100, 100],
+            [2, 120, 100],
+          ],
+        ),
+      )
+      window.dispatchEvent(
+        touchEvent(
+          'touchmove',
+          [
+            [1, 20, 100],
+            [2, 200, 100],
+          ],
+          [
+            [1, 20, 100],
+            [2, 200, 100],
+          ],
+        ),
+      )
       window.dispatchEvent(touchEvent('touchend', [[1, 20, 100]], [[2, 200, 100]]))
       window.dispatchEvent(touchEvent('touchend', [[2, 200, 100]], []))
     })

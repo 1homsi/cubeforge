@@ -28,8 +28,7 @@ function run(seed: number, steps: number) {
   const issued = new Set<EntityId>()
   let counter = 0
 
-  const pickAny = (): EntityId | undefined =>
-    everIssued.length ? everIssued[int(everIssued.length)] : undefined
+  const pickAny = (): EntityId | undefined => (everIssued.length ? everIssued[int(everIssued.length)] : undefined)
   const pickLive = (): EntityId | undefined => {
     if (!model.size) return undefined
     const ids = [...model.keys()]
