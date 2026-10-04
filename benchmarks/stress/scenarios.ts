@@ -6,7 +6,14 @@
  */
 import { ECSWorld, EventBus, createEngineStats, createTransform } from '@cubeforge/core'
 import type { EngineStats, EntityId, TransformComponent } from '@cubeforge/core'
-import { RenderSystem, createSprite, createCamera2D } from '@cubeforge/renderer'
+import {
+  RenderSystem,
+  SpriteLayer,
+  TileLayerData,
+  createSprite,
+  createCamera2D,
+  createTileLayerComponent,
+} from '@cubeforge/renderer'
 import { PhysicsSystem } from '@cubeforge/physics'
 
 export interface ScenarioContext {
@@ -239,12 +246,117 @@ function dynamicCanvas(w: number, h: number): ScenarioDef {
   }
 }
 
+/** Same motion as sprites-N, but through a SpriteLayer (typed arrays, no entities). */
+function spriteLayer(n: number): ScenarioDef {
+  return {
+    name: `spritelayer-${n}`,
+    description: `${n} atlas sprites in one SpriteLayer, moved every frame`,
+    setup(ctx) {
+      const r = rng(1)
+      const layer = new SpriteLayer({
+        image: ctx.atlas,
+        frameWidth: FRAME,
+        frameHeight: FRAME,
+        frameColumns: ATLAS / FRAME,
+        capacity: n,
+      })
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        const X = layer.x
+        const Y = layer.y
+        for (let i = 0; i < n; i++) {
+          const x = X[i] + vx[i]
+          const y = Y[i] + vy[i]
+          if (x < 0 || x > W) vx[i] = -vx[i]
+          if (y < 0 || y > H) vy[i] = -vy[i]
+          X[i] = x
+          Y[i] = y
+        }
+        layer.touch()
+      })
+      for (let i = 0; i < n; i++) {
+        layer.add(r() * W, r() * H, FRAME, FRAME, (r() * 256) | 0)
+        vx[i] = (r() - 0.5) * 4
+        vy[i] = (r() - 0.5) * 4
+      }
+      sc.renderer.addSpriteLayer(layer)
+      return sc
+    },
+  }
+}
+
+/** The same tile world as one TileLayer, with 10 tile edits per frame. */
+function tileLayer(cols: number, rows: number): ScenarioDef {
+  return {
+    name: `tilelayer-${cols}x${rows}`,
+    description: `${cols * rows} tiles in one TileLayer, 10 setTile per frame, panning camera`,
+    setup(ctx) {
+      const r = rng(3)
+      const tiles = new Uint16Array(cols * rows)
+      for (let i = 0; i < tiles.length; i++) tiles[i] = 1 + ((r() * 256) | 0)
+      const layer = new TileLayerData({
+        width: cols,
+        height: rows,
+        tiles,
+        tileset: { image: ctx.atlas, tileWidth: FRAME, tileHeight: FRAME, columns: ATLAS / FRAME },
+      })
+      let f = 0
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, (world) => {
+        const cam = world.getComponent<{ type: 'Camera2D'; x: number; y: number }>(
+          world.queryOne('Camera2D')!,
+          'Camera2D',
+        )!
+        f++
+        cam.x = W / 2 + ((f * 4) % (cols * FRAME - W))
+        cam.y = H / 2 + ((f * 2) % (rows * FRAME - H))
+        for (let k = 0; k < 10; k++) layer.setTile((r() * cols) | 0, (r() * rows) | 0, 1 + ((r() * 256) | 0))
+      })
+      const id = sc.world.createEntity()
+      sc.world.addComponent(id, createTileLayerComponent(layer))
+      return sc
+    },
+  }
+}
+
+/** dyncanvas-WxH with the changed 16x16 region passed to markDirty. */
+function dynamicCanvasRect(w: number, h: number): ScenarioDef {
+  return {
+    name: `dyncanvas-rect-${w}x${h}`,
+    description: `one ${w}x${h} dynamic canvas, 16x16 changed and marked dirty by rect every frame`,
+    setup(ctx) {
+      const canvas = ctx.createCanvas(w, h)
+      const g = canvas.getContext('2d')!
+      let f = 0
+      let renderer: RenderSystem | null = null
+      const sc = base(ctx, this.name, this.description, { x: w / 2, y: h / 2, zoom: Math.min(W / w, H / h) }, () => {
+        f++
+        const x = (f * 16) % w
+        const y = (((f * 16) / w) | 0) * 16
+        g.fillStyle = f & 1 ? '#3a7' : '#a73'
+        g.fillRect(x, y, 16, 16)
+        renderer!.markDynamicCanvasDirty('map', x, y, 16, 16)
+      })
+      renderer = sc.renderer
+      renderer.registerDynamicCanvas('map', canvas)
+      const id = sc.world.createEntity()
+      sc.world.addComponent(id, createTransform(w / 2, h / 2))
+      sc.world.addComponent(id, createSprite({ width: w, height: h, dynamicSrc: 'map' }))
+      return sc
+    },
+  }
+}
+
 export const SCENARIOS: ScenarioDef[] = [
   movingSprites(3000),
   movingSprites(10000),
+  spriteLayer(3000),
+  spriteLayer(10000),
   churn(3000, 200),
   tileWorld(600, 300),
+  tileLayer(600, 300),
   dynamicCanvas(4800, 2400),
+  dynamicCanvasRect(4800, 2400),
 ]
 
 export const VIEWPORT = { width: W, height: H, atlasSize: ATLAS }

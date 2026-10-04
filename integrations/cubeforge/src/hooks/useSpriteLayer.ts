@@ -26,6 +26,7 @@ export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
 
   useLayoutEffect(() => {
     layer.src = options.src
+    layer.image = options.image
     layer.dynamicSrc = options.dynamicSrc
     if (options.frameWidth !== undefined) layer.frameWidth = options.frameWidth
     if (options.frameHeight !== undefined) layer.frameHeight = options.frameHeight
@@ -40,6 +41,7 @@ export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
   }, [
     layer,
     options.src,
+    options.image,
     options.dynamicSrc,
     options.frameWidth,
     options.frameHeight,

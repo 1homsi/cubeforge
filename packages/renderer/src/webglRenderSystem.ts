@@ -943,6 +943,7 @@ export class RenderSystem implements System {
   private _texNextRank = 0
   private _texRankEpoch = 0
   private readonly _spriteLayers: SpriteLayer[] = []
+  private readonly _layerImageTextures = new WeakMap<object, WebGLTexture>()
   private _spriteLayerVersion = 0
   private readonly _visSprites: SpriteComponent[] = []
   private readonly _visInfo: SpriteTexInfo[] = []
@@ -1940,6 +1941,25 @@ export class RenderSystem implements System {
       tex = entry.tex
       iw = entry.texW
       ih = entry.texH
+    } else if (layer.image !== undefined) {
+      const img = layer.image
+      iw = (img as HTMLImageElement).naturalWidth ?? img.width
+      ih = (img as HTMLImageElement).naturalHeight ?? img.height
+      if (!iw || !ih) return
+      let t = this._layerImageTextures.get(img)
+      if (!t) {
+        const { gl } = this
+        t = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, t)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
+        this._statTex(t, iw, ih)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+        this._layerImageTextures.set(img, t)
+      }
+      tex = t
     } else if (layer.src !== undefined) {
       tex = this.loadTexture(layer.src)
       if (tex === this.whiteTexture) return
@@ -2441,6 +2461,7 @@ export class RenderSystem implements System {
     }
 
     this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY)
+    this.stats.drawCalls += this._tileLayers.stats.drawCalls
 
     // ── Upload camera uniforms for sprite program ──────────────────────────────
     gl.useProgram(this.program)
@@ -2487,7 +2508,7 @@ export class RenderSystem implements System {
       const r = n + j
       sortLayers[r] = this.layers.getOrder(layer.layer)
       sortZs[r] = layer.zIndex
-      sortTexRanks[r] = this.textureRank(layer.dynamicSrc ?? layer.src ?? '__color__')
+      sortTexRanks[r] = this.textureRank(layer.dynamicSrc ?? layer.src ?? (layer.image ? '__layerimg__' : '__color__'))
     }
     const sortIndices = this.sortVisible(m)
 

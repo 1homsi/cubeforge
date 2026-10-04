@@ -243,6 +243,9 @@ export class RecordingGL {
   getProgramParameter(): boolean {
     return true
   }
+  getParameter(): number {
+    return 4096
+  }
   getShaderInfoLog(): string {
     return ''
   }
@@ -264,7 +267,16 @@ for (const name of [
   'clearColor',
   'compileShader',
   'deleteFramebuffer',
+  'deleteBuffer',
+  'deleteProgram',
   'deleteShader',
+  'deleteVertexArray',
+  'pixelStorei',
+  'texStorage2D',
+  'uniform1ui',
+  'uniform2i',
+  'uniform4f',
+  'uniform4i',
   'disable',
   'enable',
   'enableVertexAttribArray',

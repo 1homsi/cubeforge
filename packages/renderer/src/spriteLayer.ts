@@ -5,6 +5,8 @@ export interface SpriteLayerOptions {
   capacity?: number
   /** Image URL for the layer's texture (one texture per layer). */
   src?: string
+  /** Or an already loaded image / canvas. */
+  image?: SpriteLayerImage
   /** Or a dynamic canvas id from useDynamicCanvas. */
   dynamicSrc?: string
   /** Grid atlas cell size in texture pixels; `frame` indexes cells row-major. */
@@ -19,6 +21,8 @@ export interface SpriteLayerOptions {
   anchorY?: number
   visible?: boolean
 }
+
+export type SpriteLayerImage = HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas
 
 export const SPRITE_FLIP_X = 1
 export const SPRITE_FLIP_Y = 2
@@ -47,6 +51,7 @@ export class SpriteLayer {
   ids!: Int32Array
 
   src: string | undefined
+  image: SpriteLayerImage | undefined
   dynamicSrc: string | undefined
   frameWidth: number
   frameHeight: number
@@ -60,6 +65,7 @@ export class SpriteLayer {
 
   constructor(options: SpriteLayerOptions = {}) {
     this.src = options.src
+    this.image = options.image
     this.dynamicSrc = options.dynamicSrc
     this.frameWidth = options.frameWidth ?? 0
     this.frameHeight = options.frameHeight ?? 0
