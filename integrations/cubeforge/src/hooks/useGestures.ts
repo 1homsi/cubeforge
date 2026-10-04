@@ -112,6 +112,7 @@ export function useGestures(handlers: GestureHandlers, opts: GestureOptions = {}
 
       if (e.touches.length === 2) {
         pinchActive = true
+        starts = []
         prevPinchDist = pinchDist(e.touches[0], e.touches[1])
         prevPinchScale = 1
         handlersRef.current.onPinchStart?.()

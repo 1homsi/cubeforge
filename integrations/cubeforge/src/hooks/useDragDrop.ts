@@ -114,6 +114,7 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
     if (!engine || entityId === null || entityId === undefined || options?.disabled) return
     const canvas = engine.canvas
     let dragging = false
+    let pointerId = -1
     let startEntityX = 0
     let startEntityY = 0
     let startWorldX = 0
@@ -135,6 +136,7 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
 
       e.stopPropagation()
       dragging = true
+      pointerId = e.pointerId
       startEntityX = t.x
       startEntityY = t.y
       startWorldX = world.x
@@ -156,7 +158,7 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
 
     const onPointerMove = (e: PointerEvent) => {
       const drag = getActiveDrag(engine)
-      if (!dragging || !drag) return
+      if (!dragging || !drag || e.pointerId !== pointerId) return
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
       if (!t) return
       const rect = canvas.getBoundingClientRect()
@@ -187,8 +189,8 @@ export function useDraggable(options?: DraggableOptions): DraggableControls {
       engine.loop.markDirty()
     }
 
-    const onPointerUp = () => {
-      if (!dragging) return
+    const onPointerUp = (e: PointerEvent) => {
+      if (!dragging || e.pointerId !== pointerId) return
       dragging = false
       const t = engine.ecs.getComponent<TransformComponent>(entityId as EntityId, 'Transform')
       const drag = getActiveDrag(engine)

@@ -132,6 +132,7 @@ export function Game({
   const [assetsReady, setAssetsReady] = useState(asyncAssets)
   const [webglError, setWebglError] = useState<string | null>(null)
   const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
+  const [dpr, setDpr] = useState(() => (typeof window !== 'undefined' && window.devicePixelRatio) || 1)
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -371,8 +372,15 @@ export function Game({
 
   // Sync canvas dimensions when width/height props change (HiDPI-aware)
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const mq = window.matchMedia(`(resolution: ${dpr}dppx)`)
+    const onChange = () => setDpr(window.devicePixelRatio || 1)
+    mq.addEventListener?.('change', onChange)
+    return () => mq.removeEventListener?.('change', onChange)
+  }, [dpr])
+
+  useEffect(() => {
     if (!engine) return
-    const dpr = window.devicePixelRatio || 1
     const physW = Math.round(width * dpr)
     const physH = Math.round(height * dpr)
     const canvas = engine.canvas
@@ -380,7 +388,7 @@ export function Game({
     if (canvas.height !== physH) canvas.height = physH
     canvas.style.width = `${width}px`
     canvas.style.height = `${height}px`
-  }, [width, height, engine])
+  }, [width, height, engine, dpr])
 
   // Sync gravity changes
   useEffect(() => {

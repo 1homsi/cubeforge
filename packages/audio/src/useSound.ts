@@ -162,7 +162,7 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
   const rateRef = useRef(opts.playbackRate ?? 1)
   const onEndedRef = useRef(opts.onEnded)
   const acquiredSrcRef = useRef<string | null>(null)
-  const maxInstances = opts.maxInstances ?? 4
+  const maxInstances = Math.max(1, opts.maxInstances ?? 4)
 
   // Keep onEnded ref current without re-running the effect
   onEndedRef.current = opts.onEnded
@@ -181,6 +181,7 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     return () => {
       cancelled = true
       for (const entry of activeInstances.current) {
+        entry.source.onended = null
         try {
           entry.source.stop()
         } catch {

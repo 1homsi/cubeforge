@@ -16,6 +16,7 @@ export class AssetManager {
   private audio = new Map<string, AudioBuffer>()
   private audioPromises = new Map<string, Promise<AudioBuffer>>()
   private audioCtx: AudioContext | null = null
+  private releaseUnlock: () => void = () => {}
   private activeSources = new Map<string, Set<AudioBufferSourceNode>>()
   private _loaded = 0
   private _total = 0
@@ -32,6 +33,7 @@ export class AssetManager {
   private getAudioContext(): AudioContext {
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext()
+      this.releaseUnlock = resumeOnGesture(this.audioCtx)
     }
     return this.audioCtx
   }
@@ -215,6 +217,7 @@ export class AssetManager {
    */
   dispose(): void {
     this.stopAll()
+    this.releaseUnlock()
     try {
       this.audioCtx?.close()
     } catch {
@@ -238,4 +241,20 @@ export class AssetManager {
   preloadAudio(srcs: string[]): Promise<AudioBuffer[]> {
     return Promise.all(srcs.map((src) => this.loadAudio(src)))
   }
+}
+
+const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchend'] as const
+
+// Autoplay policy: a context created before a user gesture starts suspended.
+function resumeOnGesture(ctx: AudioContext): () => void {
+  if (ctx.state !== 'suspended' || typeof window === 'undefined') return () => {}
+  const off = () => {
+    for (const e of UNLOCK_EVENTS) window.removeEventListener(e, unlock, true)
+  }
+  const unlock = () => {
+    if (ctx.state !== 'suspended') return off()
+    Promise.resolve(ctx.resume()).then(off, () => {})
+  }
+  for (const e of UNLOCK_EVENTS) window.addEventListener(e, unlock, true)
+  return off
 }
