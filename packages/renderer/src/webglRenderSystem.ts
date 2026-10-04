@@ -477,6 +477,20 @@ interface SpriteTexInfo {
   a: number
 }
 
+interface DynamicCanvasEntry {
+  canvas: HTMLCanvasElement | OffscreenCanvas
+  tex: WebGLTexture
+  dirty: boolean
+  version: number
+  texW: number
+  texH: number
+  // Pending dirty region; x1 < 0 means the whole canvas.
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
 type SpriteWithInfo = SpriteComponent & { _rinfo?: SpriteTexInfo }
 
 function hasCustomShape(sprite: SpriteComponent): boolean {
@@ -896,10 +910,7 @@ export class RenderSystem implements System {
   private readonly _visIds: EntityId[] = []
 
   // ── Dynamic canvas textures (texSubImage2D optimization) ─────────────────
-  private readonly _dynamicCanvases = new Map<
-    string,
-    { canvas: HTMLCanvasElement; tex: WebGLTexture; dirty: boolean; version: number }
-  >()
+  private readonly _dynamicCanvases = new Map<string, DynamicCanvasEntry>()
   private _textureRevision = 0
   private _overlayRevision = 0
 
@@ -1017,7 +1028,7 @@ export class RenderSystem implements System {
    *
    * Use the returned `id` as the `dynamicSrc` on a `<Sprite>` component.
    */
-  registerDynamicCanvas(id: string, canvas: HTMLCanvasElement): void {
+  registerDynamicCanvas(id: string, canvas: HTMLCanvasElement | OffscreenCanvas): void {
     const { gl } = this
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
@@ -1026,22 +1037,73 @@ export class RenderSystem implements System {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    this._dynamicCanvases.set(id, { canvas, tex, dirty: false, version: ++this._textureRevision })
+    this._dynamicCanvases.set(id, {
+      canvas,
+      tex,
+      dirty: false,
+      version: ++this._textureRevision,
+      texW: canvas.width,
+      texH: canvas.height,
+      x0: 0,
+      y0: 0,
+      x1: 0,
+      y1: 0,
+    })
     this.textures.set(id, tex)
     this.touchTexture(id)
   }
 
   /**
-   * Mark a dynamic canvas as modified so it will be re-uploaded to the GPU
-   * (via `texSubImage2D`) at the start of the next rendered frame.
-   * Only call this after actually drawing new content to the canvas.
+   * Mark a dynamic canvas as modified so it is re-uploaded before the next
+   * frame. Pass a rect to upload only that region; rects accumulate as a union.
    */
-  markDynamicCanvasDirty(id: string): void {
+  markDynamicCanvasDirty(id: string, x?: number, y?: number, w?: number, h?: number): void {
     const entry = this._dynamicCanvases.get(id)
-    if (entry) {
-      entry.dirty = true
-      entry.version = ++this._textureRevision
+    if (!entry) return
+    if (x === undefined || y === undefined || w === undefined || h === undefined) {
+      entry.x1 = -1
+    } else if (!entry.dirty) {
+      entry.x0 = x
+      entry.y0 = y
+      entry.x1 = x + w
+      entry.y1 = y + h
+    } else if (entry.x1 >= 0) {
+      entry.x0 = Math.min(entry.x0, x)
+      entry.y0 = Math.min(entry.y0, y)
+      entry.x1 = Math.max(entry.x1, x + w)
+      entry.y1 = Math.max(entry.y1, y + h)
     }
+    entry.dirty = true
+    entry.version = ++this._textureRevision
+  }
+
+  private uploadDynamicCanvas(entry: DynamicCanvasEntry): void {
+    const { gl } = this
+    const c = entry.canvas
+    gl.bindTexture(gl.TEXTURE_2D, entry.tex)
+    entry.dirty = false
+    if (c.width !== entry.texW || c.height !== entry.texH) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c)
+      entry.texW = c.width
+      entry.texH = c.height
+      return
+    }
+    const x0 = Math.max(0, Math.floor(entry.x0))
+    const y0 = Math.max(0, Math.floor(entry.y0))
+    const x1 = Math.min(c.width, Math.ceil(entry.x1))
+    const y1 = Math.min(c.height, Math.ceil(entry.y1))
+    if (entry.x1 < 0 || (x0 === 0 && y0 === 0 && x1 === c.width && y1 === c.height)) {
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, c)
+      return
+    }
+    if (x1 <= x0 || y1 <= y0) return
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, c.width)
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x0)
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y0)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x0, y0, x1 - x0, y1 - y0, gl.RGBA, gl.UNSIGNED_BYTE, c)
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0)
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0)
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0)
   }
 
   /** Remove a registered dynamic canvas and free its GPU texture. */
@@ -2097,10 +2159,7 @@ export class RenderSystem implements System {
     // ── Dynamic canvas re-uploads (texSubImage2D) ────────────────────────────
     // Only re-uploads canvases that have been marked dirty since the last frame.
     for (const entry of this._dynamicCanvases.values()) {
-      if (!entry.dirty) continue
-      gl.bindTexture(gl.TEXTURE_2D, entry.tex)
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, entry.canvas)
-      entry.dirty = false
+      if (entry.dirty) this.uploadDynamicCanvas(entry)
     }
 
     // ── Idle frame skip ───────────────────────────────────────────────────────

@@ -12,14 +12,15 @@ export interface DynamicCanvasHandle {
    * Call after drawing to schedule a GPU upload before the next frame.
    * The renderer uses `texSubImage2D` to re-upload only when dirty,
    * so skipping this call when the canvas hasn't changed avoids unnecessary
-   * CPU→GPU transfers.
+   * CPU→GPU transfers. Pass the changed rect (canvas pixels) to upload only
+   * that region; calls within a frame are merged into one bounding rect.
    */
-  markDirty(): void
+  markDirty(x?: number, y?: number, width?: number, height?: number): void
 }
 
 type DynamicCanvasRenderer = {
   registerDynamicCanvas?: (id: string, canvas: HTMLCanvasElement) => void
-  markDynamicCanvasDirty?: (id: string) => void
+  markDynamicCanvasDirty?: (id: string, x?: number, y?: number, w?: number, h?: number) => void
   unregisterDynamicCanvas?: (id: string) => void
 }
 
@@ -86,11 +87,14 @@ export function useDynamicCanvas(width: number, height: number): DynamicCanvasHa
     }
   }, [engine, id, canvas, ctx])
 
-  const markDirty = useCallback(() => {
-    const rs = engine.activeRenderSystem as DynamicCanvasRenderer
-    rs.markDynamicCanvasDirty?.(id)
-    engine.loop.markDirty()
-  }, [engine, id])
+  const markDirty = useCallback(
+    (x?: number, y?: number, width?: number, height?: number) => {
+      const rs = engine.activeRenderSystem as DynamicCanvasRenderer
+      rs.markDynamicCanvasDirty?.(id, x, y, width, height)
+      engine.loop.markDirty()
+    },
+    [engine, id],
+  )
 
   return useMemo(() => ({ id, canvas, ctx, markDirty }), [id, canvas, ctx, markDirty])
 }
