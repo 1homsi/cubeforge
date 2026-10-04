@@ -368,6 +368,41 @@ function wakePair(a: RigidBodyComponent, b: RigidBodyComponent): void {
 
 /** Shared immutable placeholder for entities excluded from spatial pairing. */
 
+// Map whose clear() is O(1): entries carry the generation they were written
+// in, so refilling every step overwrites slots instead of rehashing a fresh
+// table. Stale entries are pruned when they outnumber live ones.
+class GenerationCache<V> {
+  private readonly map = new Map<number, { gen: number; value: V }>()
+  private gen = 0
+  private live = 0
+
+  get(key: number): V | undefined {
+    const e = this.map.get(key)
+    return e !== undefined && e.gen === this.gen ? e.value : undefined
+  }
+
+  set(key: number, value: V): void {
+    const e = this.map.get(key)
+    if (e === undefined) this.map.set(key, { gen: this.gen, value })
+    else {
+      e.gen = this.gen
+      e.value = value
+    }
+    this.live++
+  }
+
+  clear(): void {
+    if (this.map.size > 64 && this.map.size > this.live * 2) {
+      const gen = this.gen
+      this.map.forEach((e, k) => {
+        if (e.gen !== gen) this.map.delete(k)
+      })
+    }
+    this.gen++
+    this.live = 0
+  }
+}
+
 // ── Physics System ──────────────────────────────────────────────────────────
 
 export class PhysicsSystem implements System {
@@ -388,7 +423,7 @@ export class PhysicsSystem implements System {
   private staticPrevPos = new Map<EntityId, { x: number; y: number }>()
 
   // Manifold cache for warm starting
-  private manifoldCache = new Map<number, ContactManifold>()
+  private manifoldCache = new GenerationCache<ContactManifold>()
 
   // BVH cache for TriMesh colliders
   private bvhCache = new Map<number, BVH>()
