@@ -6,6 +6,7 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -16,11 +17,16 @@
       "types": "./dist/advanced.d.ts",
       "import": "./dist/advanced.js",
       "default": "./dist/advanced.js"
+    },
+    "./render": {
+      "types": "./dist/render.d.ts",
+      "import": "./dist/render.js",
+      "default": "./dist/render.js"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsup"
+    "build": "node build.mjs && tsup"
   },
   "files": [
     "dist"
@@ -30,6 +36,16 @@
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
+    "@cubeforge/audio": "workspace:*",
+    "@cubeforge/context": "workspace:*",
+    "@cubeforge/core": "workspace:*",
+    "@cubeforge/devtools": "workspace:*",
+    "@cubeforge/editor": "workspace:*",
+    "@cubeforge/gameplay": "workspace:*",
+    "@cubeforge/input": "workspace:*",
+    "@cubeforge/net": "workspace:*",
+    "@cubeforge/physics": "workspace:*",
+    "@cubeforge/renderer": "workspace:*",
     "tsup": "^8.0.0"
   },
   "keywords": [
@@ -43,17 +59,5 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/1homsi/cubeforge"
-  },
-  "dependencies": {
-    "@cubeforge/audio": "workspace:*",
-    "@cubeforge/context": "workspace:*",
-    "@cubeforge/core": "workspace:*",
-    "@cubeforge/devtools": "workspace:*",
-    "@cubeforge/editor": "workspace:*",
-    "@cubeforge/gameplay": "workspace:*",
-    "@cubeforge/input": "workspace:*",
-    "@cubeforge/net": "workspace:*",
-    "@cubeforge/physics": "workspace:*",
-    "@cubeforge/renderer": "workspace:*"
   }
 }

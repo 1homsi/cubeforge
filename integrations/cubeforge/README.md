@@ -75,6 +75,17 @@ export default function MyGame() {
 }
 ```
 
+## Smaller bundles: `cubeforge/render`
+
+The package ships one ESM file per module and declares `"sideEffects": false`,
+so bundlers keep only what you import. If your game needs rendering but not
+physics (for example a simulation that runs outside React), import from
+`cubeforge/render`. It provides `Game`, `World`, `Entity`, `Transform`, `Sprite`,
+`Camera2D`, `useGame`, `useEntity`, `useCamera`, `useDynamicCanvas` and
+`useGestures`, about 26 kB gzip, against about 53 kB for the same imports from
+`cubeforge`. Its `Game` runs without a physics system and does not support the
+`debug` or `devtools` props.
+
 ## Links
 
 - [Documentation](https://cubeforge.dev)

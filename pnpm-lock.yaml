@@ -26,7 +26,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitest/coverage-v8':
         specifier: ^2.1.9
-        version: 2.1.9(vitest@2.1.9(@types/node@20.19.37)(happy-dom@14.12.3))
+        version: 2.1.9(supports-color@7.2.0)(vitest@2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)(supports-color@7.2.0))
       esbuild:
         specifier: ^0.21.0
         version: 0.21.5
@@ -44,13 +44,13 @@ importers:
         version: 19.2.6(react@19.2.6)
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.8)(supports-color@7.2.0)(typescript@5.9.3)
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^2.0.0
-        version: 2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)
+        version: 2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)(supports-color@7.2.0)
 
   integrations/context:
     dependencies:
@@ -72,6 +72,13 @@ importers:
 
   integrations/cubeforge:
     dependencies:
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.6
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
       '@cubeforge/audio':
         specifier: workspace:*
         version: link:../../packages/audio
@@ -102,16 +109,9 @@ importers:
       '@cubeforge/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
-      react:
-        specifier: ^19.2.6
-        version: 19.2.6
-      react-dom:
-        specifier: ^19.2.6
-        version: 19.2.6(react@19.2.6)
-    devDependencies:
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.8)(supports-color@7.2.0)(typescript@5.9.3)
 
   integrations/devtools:
     dependencies:
@@ -139,7 +139,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.8)(supports-color@7.2.0)(typescript@5.9.3)
 
   integrations/editor:
     dependencies:
@@ -158,7 +158,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.8)(supports-color@7.2.0)(typescript@5.9.3)
 
   integrations/gameplay:
     dependencies:
@@ -183,7 +183,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.8)(supports-color@7.2.0)(typescript@5.9.3)
 
   packages/audio:
     dependencies:
@@ -193,7 +193,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.8)(supports-color@7.2.0)(typescript@5.9.3)
 
   packages/core: {}
 
@@ -1698,21 +1698,21 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
-  '@vitest/coverage-v8@2.1.9(vitest@2.1.9(@types/node@20.19.37)(happy-dom@14.12.3))':
+  '@vitest/coverage-v8@2.1.9(supports-color@7.2.0)(vitest@2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)(supports-color@7.2.0))':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-report: 3.0.1
-      istanbul-lib-source-maps: 5.0.6
+      istanbul-lib-source-maps: 5.0.6(supports-color@7.2.0)
       istanbul-reports: 3.2.0
       magic-string: 0.30.21
       magicast: 0.3.5
       std-env: 3.10.0
       test-exclude: 7.0.2
       tinyrainbow: 1.2.0
-      vitest: 2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)
+      vitest: 2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -1831,9 +1831,11 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  debug@4.4.3:
+  debug@4.4.3(supports-color@7.2.0):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 7.2.0
 
   deep-eql@5.0.2: {}
 
@@ -1961,10 +1963,10 @@ snapshots:
       make-dir: 4.0.0
       supports-color: 7.2.0
 
-  istanbul-lib-source-maps@5.0.6:
+  istanbul-lib-source-maps@5.0.6(supports-color@7.2.0):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       istanbul-lib-coverage: 3.2.2
     transitivePeerDependencies:
       - supports-color
@@ -2219,13 +2221,13 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  tsup@8.5.1(postcss@8.5.8)(typescript@5.9.3):
+  tsup@8.5.1(postcss@8.5.8)(supports-color@7.2.0)(typescript@5.9.3):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.3)
       cac: 6.7.14
       chokidar: 4.0.3
       consola: 3.4.2
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       esbuild: 0.27.3
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
@@ -2253,10 +2255,10 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  vite-node@2.1.9(@types/node@20.19.37):
+  vite-node@2.1.9(@types/node@20.19.37)(supports-color@7.2.0):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       es-module-lexer: 1.7.0
       pathe: 1.1.2
       vite: 5.4.21(@types/node@20.19.37)
@@ -2280,7 +2282,7 @@ snapshots:
       '@types/node': 20.19.37
       fsevents: 2.3.3
 
-  vitest@2.1.9(@types/node@20.19.37)(happy-dom@14.12.3):
+  vitest@2.1.9(@types/node@20.19.37)(happy-dom@14.12.3)(supports-color@7.2.0):
     dependencies:
       '@vitest/expect': 2.1.9
       '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@20.19.37))
@@ -2290,7 +2292,7 @@ snapshots:
       '@vitest/spy': 2.1.9
       '@vitest/utils': 2.1.9
       chai: 5.3.3
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       expect-type: 1.3.0
       magic-string: 0.30.21
       pathe: 1.1.2
@@ -2300,7 +2302,7 @@ snapshots:
       tinypool: 1.1.1
       tinyrainbow: 1.2.0
       vite: 5.4.21(@types/node@20.19.37)
-      vite-node: 2.1.9(@types/node@20.19.37)
+      vite-node: 2.1.9(@types/node@20.19.37)(supports-color@7.2.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.19.37
