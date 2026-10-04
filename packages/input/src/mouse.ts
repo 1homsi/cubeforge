@@ -33,8 +33,12 @@ export class Mouse {
   }
 
   private onMouseUp = (e: MouseEvent): void => {
-    this.held.delete(e.button)
-    this.justReleased.add(e.button)
+    if (this.held.delete(e.button)) this.justReleased.add(e.button)
+  }
+
+  private onBlur = (): void => {
+    for (const b of this.held) this.justReleased.add(b)
+    this.held.clear()
   }
 
   private onContextMenu = (e: Event): void => {
@@ -47,6 +51,11 @@ export class Mouse {
     target.addEventListener('mousedown', this.onMouseDown)
     target.addEventListener('mouseup', this.onMouseUp)
     target.addEventListener('contextmenu', this.onContextMenu)
+    // Releases outside the target (or after focus loss) would otherwise leave buttons stuck.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mouseup', this.onMouseUp)
+      window.addEventListener('blur', this.onBlur)
+    }
   }
 
   detach(): void {
@@ -55,6 +64,10 @@ export class Mouse {
     this.target.removeEventListener('mousedown', this.onMouseDown)
     this.target.removeEventListener('mouseup', this.onMouseUp)
     this.target.removeEventListener('contextmenu', this.onContextMenu)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mouseup', this.onMouseUp)
+      window.removeEventListener('blur', this.onBlur)
+    }
     this.target = null
   }
 

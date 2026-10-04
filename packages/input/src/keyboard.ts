@@ -23,16 +23,24 @@ export class Keyboard {
     this.justReleased.add(e.key)
   }
 
+  // Keyup never arrives for keys held while the window loses focus.
+  private onBlur = (): void => {
+    for (const k of this.held) this.justReleased.add(k)
+    this.held.clear()
+  }
+
   attach(target: EventTarget = window): void {
     this.target = target
     target.addEventListener('keydown', this.onKeyDown as EventListener)
     target.addEventListener('keyup', this.onKeyUp as EventListener)
+    if (typeof window !== 'undefined') window.addEventListener('blur', this.onBlur)
   }
 
   detach(): void {
     if (!this.target) return
     this.target.removeEventListener('keydown', this.onKeyDown as EventListener)
     this.target.removeEventListener('keyup', this.onKeyUp as EventListener)
+    if (typeof window !== 'undefined') window.removeEventListener('blur', this.onBlur)
     this.target = null
   }
 
