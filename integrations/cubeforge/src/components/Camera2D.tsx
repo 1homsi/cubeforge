@@ -18,6 +18,8 @@ interface Camera2DProps {
   /** World-space offset applied to the follow target (look-ahead, vertical bias, etc.) */
   followOffsetX?: number
   followOffsetY?: number
+  /** Snap the camera to whole device pixels (crisp pixel art at any zoom / devicePixelRatio). */
+  pixelSnap?: boolean
 }
 
 export function Camera2D({
@@ -31,6 +33,7 @@ export function Camera2D({
   deadZone,
   followOffsetX = 0,
   followOffsetY = 0,
+  pixelSnap = false,
 }: Camera2DProps) {
   const engine = useContext(EngineContext)!
 
@@ -49,6 +52,7 @@ export function Camera2D({
         deadZone,
         followOffsetX,
         followOffsetY,
+        pixelSnap,
       }),
     )
 
@@ -71,7 +75,21 @@ export function Camera2D({
     cam.deadZone = deadZone
     cam.followOffsetX = followOffsetX
     cam.followOffsetY = followOffsetY
-  }, [followEntity, x, y, zoom, smoothing, background, bounds, deadZone, followOffsetX, followOffsetY, engine])
+    cam.pixelSnap = pixelSnap
+  }, [
+    followEntity,
+    x,
+    y,
+    zoom,
+    smoothing,
+    background,
+    bounds,
+    deadZone,
+    followOffsetX,
+    followOffsetY,
+    pixelSnap,
+    engine,
+  ])
 
   return null
 }

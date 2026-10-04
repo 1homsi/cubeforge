@@ -25,6 +25,18 @@ export { MovingPlatform } from './components/MovingPlatform'
 export type { Waypoint } from './components/MovingPlatform'
 export { Checkpoint } from './components/Checkpoint'
 export { Tilemap } from './components/Tilemap'
+export { TileLayer, useTileLayer } from './components/TileLayer'
+export type { TileLayerProps } from './components/TileLayer'
+export { TileLayerData, TileLayerCanvasRenderer, visibleTileRange, visibleChunkRange } from '@cubeforge/renderer'
+export type {
+  TileIdArray,
+  Tileset,
+  TilesetImage,
+  TileAnimation,
+  TileLayerOptions,
+  TileLayerComponent,
+  TileLayerRenderStats,
+} from '@cubeforge/renderer'
 export { ParallaxLayer } from './components/ParallaxLayer'
 export { ScreenFlash } from './components/ScreenFlash'
 export { CameraZone } from './components/CameraZone'

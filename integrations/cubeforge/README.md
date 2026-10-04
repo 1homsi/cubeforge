@@ -75,6 +75,47 @@ export default function MyGame() {
 }
 ```
 
+## Large tile worlds: `<TileLayer>`
+
+`<Tilemap>` loads Tiled maps and creates one entity + sprite per tile, which is fine for small levels.
+For big, mostly static grids (hundreds of thousands of tiles) use `<TileLayer>`: the tiles live in one
+typed array and are drawn by the GPU, never as entities.
+
+```tsx
+import { TileLayer, useTileLayer, Camera2D } from 'cubeforge'
+
+function Ground({ sim }) {
+  const ground = useTileLayer({
+    width: 600,
+    height: 300, // 180k tiles, Uint16Array; 0 = empty, id n = atlas tile n - 1
+    tileset: { src: '/tiles.png', tileWidth: 16, tileHeight: 16, columns: 32, spacing: 0, margin: 0 },
+    animations: { 12: { frames: [12, 13, 14, 13], duration: 0.2 } }, // water shimmer
+  })
+  useEffect(() => {
+    sim.onTileChanged = (x, y, id) => ground.setTile(x, y, id) // no React re-render
+    sim.onSeason = (tiles) => ground.setTiles(tiles)
+  }, [ground])
+  return <TileLayer layer={ground} zIndex={0} />
+}
+// <Camera2D pixelSnap /> keeps pixel art crisp while panning at any zoom / devicePixelRatio.
+```
+
+Cost model:
+
+| Operation | Cost |
+|---|---|
+| Draw (WebGL2) | One quad per visible 4096x4096-tile page (one draw for a 600x300 map); per-pixel cost only for on-screen pixels. Off-screen tiles cost nothing. |
+| `setTile(x, y, id)` | O(1). Next frame uploads the dirty rect of each touched 32x32 chunk (`texSubImage2D`, one texel for a single edit). |
+| `setTiles(array)` / `fill(id)` | O(tiles) copy + one full index upload (360 KB for 600x300 Uint16). |
+| Animated tiles | O(animations) per frame on the CPU and a tiny lookup-table upload when a frame flips; zero per-tile work. |
+| Idle frame | No uploads, no allocation. |
+
+Tile layers draw after parallax backgrounds and before all sprites, ordered by `zIndex` among
+themselves. Sampling uses `texelFetch` on exact atlas texels, so there is no bleeding or seams at
+fractional zoom. GPU textures are freed the frame after the layer unmounts and rebuilt after a GL
+context restore. Without WebGL, `TileLayerCanvasRenderer` draws the same layer onto any 2D context
+with cached chunk canvases.
+
 ## Links
 
 - [Documentation](https://cubeforge.dev)
