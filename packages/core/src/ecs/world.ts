@@ -400,6 +400,18 @@ export class ECSWorld {
       const movedId = this.idOfSlot[lastSlot]
       this.idOfSlot[slot] = movedId
       this.slotOfId[movedId] = slot
+      // The moved entity's component pointers are indexed by its OLD slot in
+      // every column. Re-home them under the new slot, otherwise the moved
+      // entity silently loses all of its components (getComponent returns
+      // undefined and queries still list it).
+      for (let tid = 0; tid < this.columns.length; tid++) {
+        const col = this.columns[tid]
+        const movedDense = col.sparse[lastSlot]
+        if (movedDense === -1) continue
+        col.sparse[slot] = movedDense
+        col.ownerSlot[movedDense] = slot
+        col.sparse[lastSlot] = -1
+      }
     }
     this.slotOfId[id] = -1
 
