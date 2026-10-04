@@ -34,5 +34,8 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Bundle size budget (11-symbol import)
+        run: pnpm run size:check
+
       - name: Packed package smoke test
         run: node scripts/publish-packages.mjs smoke
