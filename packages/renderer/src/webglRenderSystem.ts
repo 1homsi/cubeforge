@@ -284,7 +284,7 @@ const MAX_INSTANCES = 16384
 /** Maximum sprite texture cache entries before evicting least-recently-used. */
 const MAX_SPRITE_TEXTURES = 1024
 /** Maximum text texture cache entries before evicting oldest. */
-const MAX_TEXT_CACHE = 200
+const MAX_TEXT_CACHE = 512
 
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
@@ -810,7 +810,9 @@ export class RenderSystem implements System {
    * key to the end and evicting the oldest is the first iteration step —
    * both O(1), avoiding the array indexOf/splice that scaled with cache size.
    */
-  private readonly textureLRU: Map<string, true> = new Map()
+  // key -> frame last used; Map order is recency order.
+  private readonly textureLRU = new Map<string, number>()
+  private _frame = 0
   private readonly imageCache = new Map<string, HTMLImageElement>()
 
   // Cached uniform locations — sprite program
@@ -834,9 +836,7 @@ export class RenderSystem implements System {
   private pUCanvasSize!: WebGLUniformLocation
 
   // ── Text texture cache ────────────────────────────────────────────────────
-  private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number }>()
-  /** Insertion-order key list for LRU-style eviction. */
-  private readonly textureCacheKeys: string[] = []
+  private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number; frame: number }>()
 
   // ── Shape texture cache ─────────────────────────────────────────────────
   private readonly shapeTextures = new Map<string, WebGLTexture>()
@@ -873,16 +873,15 @@ export class RenderSystem implements System {
 
   /** Record a texture key as recently used; evict LRU entries if over limit. */
   private touchTexture(key: string): void {
-    // Re-insert moves the key to the end of Map iteration order, so it
-    // becomes the most-recent entry. delete+set are both O(1).
-    if (this.textureLRU.has(key)) this.textureLRU.delete(key)
-    this.textureLRU.set(key, true)
-
-    while (this.textureLRU.size > MAX_SPRITE_TEXTURES) {
-      // First key in a Map is the oldest insert. iterator.next() is O(1).
-      const evict = this.textureLRU.keys().next().value
-      if (evict === undefined) break
-      this.textureLRU.delete(evict)
+    const lru = this.textureLRU
+    if (lru.has(key)) lru.delete(key)
+    lru.set(key, this._frame)
+    while (lru.size > MAX_SPRITE_TEXTURES) {
+      const [evict, usedIn] = lru.entries().next().value as [string, number]
+      // Everything left was drawn this frame; allow a temporary overshoot.
+      if (usedIn === this._frame) break
+      lru.delete(evict)
+      if (this._dynamicCanvases.has(evict)) continue
       const tex = this.textures.get(evict)
       if (tex) {
         this.gl.deleteTexture(tex)
@@ -1348,7 +1347,6 @@ export class RenderSystem implements System {
     this.textures.clear()
     this.textureLRU.clear()
     this.textureCache.clear()
-    this.textureCacheKeys.length = 0
     this.shapeTextures.clear()
     this.parallaxTextures.clear()
     this._layerImageTextures = new WeakMap()
@@ -1636,23 +1634,23 @@ export class RenderSystem implements System {
 
   private getOrCreateTextTexture(text: TextComponent): { tex: WebGLTexture; w: number; h: number } | null {
     const key = this.getTextTextureKey(text)
-    const cached = this.textureCache.get(key)
+    const cache = this.textureCache
+    const cached = cache.get(key)
     if (cached) {
       this.stats.textCacheHits++
+      cache.delete(key)
+      cache.set(key, cached)
+      cached.frame = this._frame
       return cached
     }
     this.stats.textCacheMisses++
 
-    // Evict oldest if over cap
-    if (this.textureCache.size >= MAX_TEXT_CACHE) {
-      const oldest = this.textureCacheKeys.shift()
-      if (oldest) {
-        const old = this.textureCache.get(oldest)
-        if (old) {
-          this.gl.deleteTexture(old.tex)
-          this._statTexFree(old.tex)
-        }
-        this.textureCache.delete(oldest)
+    if (cache.size >= MAX_TEXT_CACHE) {
+      const [oldest, old] = cache.entries().next().value as [string, { tex: WebGLTexture; frame: number }]
+      if (old.frame !== this._frame) {
+        this.gl.deleteTexture(old.tex)
+        this._statTexFree(old.tex)
+        cache.delete(oldest)
       }
     }
 
@@ -1684,9 +1682,8 @@ export class RenderSystem implements System {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
-    const entry = { tex, w: textW, h: textH }
+    const entry = { tex, w: textW, h: textH, frame: this._frame }
     this.textureCache.set(key, entry)
-    this.textureCacheKeys.push(key)
     return entry
   }
 
@@ -2216,6 +2213,7 @@ export class RenderSystem implements System {
       this._tileLayers.contextRestored()
     }
     resetRenderFrameStats(this.stats)
+    this._frame++
     // Intern component types once per frame — numeric IDs skip the string
     // hash on every per-entity getComponent below.
     const TID_Transform = world.typeId('Transform')

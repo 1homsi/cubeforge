@@ -72,3 +72,15 @@ describe('dynamic canvas dirty rects', () => {
     expect(uploads()).toEqual([])
   })
 })
+
+describe('texture LRU', () => {
+  it('never evicts a registered dynamic canvas texture', () => {
+    const { rs, calls } = setup()
+    const touch = (rs as unknown as { touchTexture(k: string): void }).touchTexture.bind(rs)
+    for (let i = 0; i < 1100; i++) touch(`img${i}`)
+    expect(calls.filter(([n]) => n === 'deleteTexture').length).toBe(0)
+    ;(rs as unknown as { _frame: number })._frame++
+    touch('one-more')
+    expect(calls.filter(([n]) => n === 'deleteTexture').length).toBe(0)
+  })
+})
