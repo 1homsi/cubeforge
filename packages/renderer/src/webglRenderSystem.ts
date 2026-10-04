@@ -10,6 +10,7 @@
 
 import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
+import { createRenderStats, resetRenderFrameStats, type RenderStats } from '@cubeforge/core'
 import {
   VERT_SRC,
   FRAG_SRC,
@@ -883,6 +884,7 @@ export class RenderSystem implements System {
       const tex = this.textures.get(evict)
       if (tex) {
         this.gl.deleteTexture(tex)
+        this._statTexFree(tex)
         this.textures.delete(evict)
       }
     }
@@ -894,6 +896,33 @@ export class RenderSystem implements System {
   private _contextLostWarned = false
   private contactFlashPoints: { x: number; y: number; ttl: number }[] = []
   private _highlightEntityId: number | null = null
+
+  /** Live counters, mutated in place each frame. See {@link RenderStats}. */
+  readonly stats: RenderStats = createRenderStats()
+  private readonly _texBytes = new Map<WebGLTexture, number>()
+
+  getStats(): RenderStats {
+    return this.stats
+  }
+
+  private _statTex(tex: WebGLTexture, w: number, h: number): void {
+    const b = w * h * 4
+    const s = this.stats
+    s.textureBytes += b - (this._texBytes.get(tex) ?? 0)
+    this._texBytes.set(tex, b)
+    s.textureCount = this._texBytes.size
+    s.textureUploads++
+    s.textureUploadBytes += b
+  }
+
+  private _statTexFree(tex: WebGLTexture | null): void {
+    if (!tex) return
+    const b = this._texBytes.get(tex)
+    if (b === undefined) return
+    this._texBytes.delete(tex)
+    this.stats.textureBytes -= b
+    this.stats.textureCount = this._texBytes.size
+  }
 
   // FPS tracking
   private frameTimes: number[] = []
@@ -1054,6 +1083,7 @@ export class RenderSystem implements System {
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas)
+    this._statTex(tex, canvas.width, canvas.height)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -1103,7 +1133,9 @@ export class RenderSystem implements System {
     const c = entry.canvas
     gl.bindTexture(gl.TEXTURE_2D, entry.tex)
     entry.dirty = false
+    this.stats.textureUploads++
     if (c.width !== entry.texW || c.height !== entry.texH) {
+      this.stats.textureUploadBytes += c.width * c.height * 4
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c)
       entry.texW = c.width
       entry.texH = c.height
@@ -1114,10 +1146,12 @@ export class RenderSystem implements System {
     const x1 = Math.min(c.width, Math.ceil(entry.x1))
     const y1 = Math.min(c.height, Math.ceil(entry.y1))
     if (entry.x1 < 0 || (x0 === 0 && y0 === 0 && x1 === c.width && y1 === c.height)) {
+      this.stats.textureUploadBytes += c.width * c.height * 4
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, c)
       return
     }
     if (x1 <= x0 || y1 <= y0) return
+    this.stats.textureUploadBytes += (x1 - x0) * (y1 - y0) * 4
     gl.pixelStorei(gl.UNPACK_ROW_LENGTH, c.width)
     gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x0)
     gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y0)
@@ -1132,6 +1166,7 @@ export class RenderSystem implements System {
     const entry = this._dynamicCanvases.get(id)
     if (!entry) return
     this.gl.deleteTexture(entry.tex)
+    this._statTexFree(entry.tex)
     this._dynamicCanvases.delete(id)
     this.textures.delete(id)
     this._textureRevision++
@@ -1188,9 +1223,11 @@ export class RenderSystem implements System {
     ): [WebGLFramebuffer, WebGLTexture] => {
       if (prevFBO) gl.deleteFramebuffer(prevFBO)
       if (prevTex) gl.deleteTexture(prevTex)
+      this._statTexFree(prevTex)
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      this._statTex(tex, w, h)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -1250,6 +1287,7 @@ export class RenderSystem implements System {
       gl.bindTexture(gl.TEXTURE_2D, this._ppBlurTex1!)
       gl.uniform2f(this._ppBlurDir!, 0.0, 1.0)
       gl.drawArrays(gl.TRIANGLES, 0, 6)
+      this.stats.drawCalls += 3
 
       bloomTex = this._ppBlurTex2!
     }
@@ -1276,6 +1314,7 @@ export class RenderSystem implements System {
     gl.uniform2f(this._ppCmpCanvasSize!, W, H)
 
     gl.drawArrays(gl.TRIANGLES, 0, 6)
+    this.stats.drawCalls++
 
     // Restore GL state for next frame's regular rendering
     gl.enable(gl.BLEND)
@@ -1411,6 +1450,7 @@ export class RenderSystem implements System {
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas)
+    this._statTex(tex, SIZE, SIZE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -1423,9 +1463,11 @@ export class RenderSystem implements System {
   private loadTexture(src: string): WebGLTexture {
     const cached = this.textures.get(src)
     if (cached) {
+      this.stats.textureCacheHits++
       this.touchTexture(src)
       return cached
     }
+    this.stats.textureCacheMisses++
 
     // Strip :s=... sampling and :repeat suffixes used for cache keys — not part of the actual URL
     let imgSrc = src
@@ -1440,6 +1482,7 @@ export class RenderSystem implements System {
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, existing)
+      this._statTex(tex, existing.naturalWidth, existing.naturalHeight)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -1460,6 +1503,7 @@ export class RenderSystem implements System {
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
+        this._statTex(tex, img.naturalWidth, img.naturalHeight)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         const wrap = tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
@@ -1494,6 +1538,7 @@ export class RenderSystem implements System {
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img!)
+        this._statTex(tex, img!.naturalWidth, img!.naturalHeight)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
@@ -1516,14 +1561,21 @@ export class RenderSystem implements System {
   private getOrCreateTextTexture(text: TextComponent): { tex: WebGLTexture; w: number; h: number } | null {
     const key = this.getTextTextureKey(text)
     const cached = this.textureCache.get(key)
-    if (cached) return cached
+    if (cached) {
+      this.stats.textCacheHits++
+      return cached
+    }
+    this.stats.textCacheMisses++
 
     // Evict oldest if over cap
     if (this.textureCache.size >= MAX_TEXT_CACHE) {
       const oldest = this.textureCacheKeys.shift()
       if (oldest) {
         const old = this.textureCache.get(oldest)
-        if (old) this.gl.deleteTexture(old.tex)
+        if (old) {
+          this.gl.deleteTexture(old.tex)
+          this._statTexFree(old.tex)
+        }
         this.textureCache.delete(oldest)
       }
     }
@@ -1550,6 +1602,7 @@ export class RenderSystem implements System {
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen)
+    this._statTex(tex, textW, textH)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -1597,6 +1650,7 @@ export class RenderSystem implements System {
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen)
+    this._statTex(tex, size, size)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -1668,9 +1722,11 @@ export class RenderSystem implements System {
     const { gl } = this
     if (this._idleFBO) gl.deleteFramebuffer(this._idleFBO)
     if (this._idleTex) gl.deleteTexture(this._idleTex)
+    this._statTexFree(this._idleTex)
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    this._statTex(tex, w, h)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -1717,6 +1773,9 @@ export class RenderSystem implements System {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
+    this.stats.drawCalls++
+    this.stats.batches++
+    this.stats.instances += count
     if (blendMode && blendMode !== 'normal') this.applyBlendMode('normal')
   }
 
@@ -1729,6 +1788,8 @@ export class RenderSystem implements System {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer)
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData, 0, count * FLOATS_PER_INSTANCE)
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count)
+    this.stats.drawCalls++
+    this.stats.instances += count
   }
 
   // ── Write one sprite instance into instanceData ───────────────────────────
@@ -1790,6 +1851,7 @@ export class RenderSystem implements System {
         const tex = gl.createTexture()!
         gl.bindTexture(gl.TEXTURE_2D, tex)
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, el)
+        this._statTex(tex, el.naturalWidth, el.naturalHeight)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         this.textures.set(el.src, tex)
@@ -1970,13 +2032,15 @@ export class RenderSystem implements System {
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+      this._statTex(tex, info.iw, info.ih)
+      this.stats.textureCacheMisses++
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
       const wrap = info.tiled ? gl.REPEAT : gl.CLAMP_TO_EDGE
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
       this.textures.set(cacheKey, tex)
-    }
+    } else this.stats.textureCacheHits++
     this.touchTexture(cacheKey)
   }
 
@@ -2056,6 +2120,7 @@ export class RenderSystem implements System {
       console.info('[Cubeforge] WebGL context restored — resuming rendering.')
       this._tileLayers.contextRestored()
     }
+    resetRenderFrameStats(this.stats)
     // Intern component types once per frame — numeric IDs skip the string
     // hash on every per-entity getComponent below.
     const TID_Transform = world.typeId('Transform')
@@ -2313,6 +2378,7 @@ export class RenderSystem implements System {
     }
 
     // ── Post-process: redirect scene to off-screen FBO ────────────────────────
+    this.stats.frames++
     const ppEnabled = this._anyPPEnabled
     if (ppEnabled) {
       this._ensurePPPrograms()
@@ -2370,6 +2436,7 @@ export class RenderSystem implements System {
         gl.uniform2f(this.pUUvOffset, uvOffsetX, uvOffsetY)
         gl.uniform2f(this.pUTexSize, imgW, imgH)
         gl.drawArrays(gl.TRIANGLES, 0, 6)
+        this.stats.drawCalls++
       }
     }
 
@@ -2443,6 +2510,7 @@ export class RenderSystem implements System {
         continue
       }
       const sprite = visSprites[k]
+      this.stats.spritesConsidered++
       if (!sprite.visible) continue
       const transform = world.getComponent<TransformComponent>(this._visIds[k], TID_Transform)!
       const scx = transform.x + sprite.offsetX
@@ -2450,7 +2518,10 @@ export class RenderSystem implements System {
       const shw = sprite.width * transform.scaleX * 0.5
       const shh = sprite.height * transform.scaleY * 0.5
       const sr = Math.sqrt(shw * shw + shh * shh)
-      if (scx + sr < viewL || scx - sr > viewR || scy + sr < viewT || scy - sr > viewB) continue
+      if (scx + sr < viewL || scx - sr > viewR || scy + sr < viewT || scy - sr > viewB) {
+        this.stats.spritesCulled++
+        continue
+      }
       const info = visInfo[k]
 
       if (info.glKey !== null && info.glKey !== ensuredKey) {

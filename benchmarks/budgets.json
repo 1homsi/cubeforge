@@ -1,0 +1,14 @@
+{
+  "_comment": "Ceilings for `node benchmarks/run.mjs --ci`. Counters are deterministic; medianMs is ~10x the dev-machine baseline so CI noise cannot trip it. Tighten these when a perf change lowers a number.",
+  "sprites-3000": { "medianMs": 10, "allocBytesPerFrame": 2000000, "drawCalls": 2, "batches": 1 },
+  "sprites-10000": { "medianMs": 30, "allocBytesPerFrame": 6000000, "drawCalls": 2, "batches": 1 },
+  "churn-3000x200": { "medianMs": 10, "allocBytesPerFrame": 2500000, "drawCalls": 2, "batches": 1 },
+  "tiles-600x300": { "medianMs": 160, "allocBytesPerFrame": 5000000, "drawCalls": 2, "batches": 1 },
+  "dyncanvas-4800x2400": {
+    "medianMs": 5,
+    "allocBytesPerFrame": 200000,
+    "drawCalls": 2,
+    "batches": 1,
+    "textureUploadBytesPerFrame": 46080000
+  }
+}

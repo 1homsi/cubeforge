@@ -60,3 +60,7 @@ export type { MultibodyLink, Spatial3, SpatialInertia3 } from '@cubeforge/physic
 // ── BVH ─────────────────────────────────────────────────────────────────────
 export { buildBVH, queryBVH, queryBVHCircle } from '@cubeforge/physics'
 export type { BVH, Triangle2D } from '@cubeforge/physics'
+
+// Headless rendering for unit tests and benchmarks (no GPU).
+export { RecordingGL, createRecordingCanvas, decodeInstances, installHeadlessCanvasDOM } from '@cubeforge/renderer'
+export type { RecordedDraw, RecordedInstance, RecordedTexture, RecordingCanvas } from '@cubeforge/renderer'

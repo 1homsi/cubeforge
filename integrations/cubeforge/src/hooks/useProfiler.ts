@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { EngineContext } from '../context'
+import { copyEngineStats, type EngineStats } from '@cubeforge/core'
 
 export interface ProfilerData {
   fps: number
@@ -77,4 +78,23 @@ export function useProfiler(): ProfilerData {
   }, [engine])
 
   return data
+}
+
+/**
+ * Samples the engine's live {@link EngineStats} every `intervalMs` (default 500)
+ * and returns a copy. Collection is always on and allocation-free; this hook only
+ * allocates when it publishes a sample. Returns null until the engine is ready.
+ */
+export function useEngineStats(intervalMs = 500): EngineStats | null {
+  const engine = useContext(EngineContext)
+  const [sample, setSample] = useState<EngineStats | null>(null)
+
+  useEffect(() => {
+    const live = engine?.getStats?.()
+    if (!live) return
+    const id = setInterval(() => setSample(copyEngineStats(live)), intervalMs)
+    return () => clearInterval(id)
+  }, [engine, intervalMs])
+
+  return sample
 }

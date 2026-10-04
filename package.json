@@ -9,6 +9,8 @@
     "format": "prettier --write 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}' 'integrations/*/src/**/*.{ts,tsx}'",
     "prepare": "git config core.hooksPath .githooks",
+    "bench": "node benchmarks/run.mjs",
+    "bench:ci": "node benchmarks/run.mjs --ci",
     "pack:smoke": "pnpm build && node scripts/publish-packages.mjs smoke"
   },
   "devDependencies": {

@@ -45,3 +45,17 @@ export { resolveClip, evaluateConditions } from './renderSystem'
 export { DebugOverlayRenderer } from './canvas2d'
 export { createPostProcessStack, vignetteEffect, scanlineEffect, chromaticAberrationEffect } from './postProcess'
 export type { PostProcessEffect, PostProcessStack } from './postProcess'
+export {
+  RecordingGL,
+  createRecordingCanvas,
+  decodeInstances,
+  installHeadlessCanvasDOM,
+  INSTANCE_FLOATS,
+} from './testing/recordingGL'
+export type {
+  RecordedDraw,
+  RecordedInstance,
+  RecordedTexture,
+  RecordingCanvas,
+  RecordingGLOptions,
+} from './testing/recordingGL'

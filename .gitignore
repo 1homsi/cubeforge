@@ -7,3 +7,4 @@ coverage/
 bun.lock
 examples/
 phys.cpuprofile
+benchmarks/.out/

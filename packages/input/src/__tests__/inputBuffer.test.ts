@@ -128,12 +128,15 @@ describe('InputBuffer', () => {
   describe('update', () => {
     it('increments frame counter so same action can be recorded again', () => {
       const buf = new InputBuffer()
-      buf.record('jump', 1.0)
+      // update() prunes against performance.now(), so timestamps must be current
+      // (a fixed 1.0 s timestamp gets pruned once the process is >1.2 s old).
+      const t = performance.now() / 1000
+      buf.record('jump', t)
       buf.update()
-      buf.record('jump', 1.0) // different frame, should succeed
+      buf.record('jump', t) // different frame, should succeed
       // Consume both
-      expect(buf.consume('jump', 1.0)).toBe(true)
-      expect(buf.consume('jump', 1.0)).toBe(true)
+      expect(buf.consume('jump', t)).toBe(true)
+      expect(buf.consume('jump', t)).toBe(true)
     })
   })
 })
