@@ -227,6 +227,20 @@ export function Sprite({
   useEffect(() => {
     const comp = engine.ecs.getComponent<SpriteComponent>(entityId, 'Sprite')
     if (!comp) return
+    comp.width = width
+    comp.height = height
+    comp.offsetX = offsetX
+    comp.offsetY = offsetY
+    comp.anchorX = anchorX
+    comp.anchorY = anchorY
+    comp.frameWidth = frameWidth
+    comp.frameHeight = frameHeight
+    comp.frameColumns = frameColumns
+    comp.tileX = tileX
+    comp.tileY = tileY
+    comp.tileSizeX = tileSizeX
+    comp.tileSizeY = tileSizeY
+    comp.sampling = sampling
     comp.color = color
     comp.dynamicSrc = dynamicSrc
     comp.visible = visible
@@ -247,6 +261,20 @@ export function Sprite({
     comp.starPoints = starPoints
     comp.starInnerRadius = starInnerRadius
   }, [
+    width,
+    height,
+    offsetX,
+    offsetY,
+    anchorX,
+    anchorY,
+    frameWidth,
+    frameHeight,
+    frameColumns,
+    tileX,
+    tileY,
+    tileSizeX,
+    tileSizeY,
+    sampling,
     color,
     dynamicSrc,
     visible,

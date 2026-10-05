@@ -87,14 +87,29 @@ export function Camera2D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Sync prop changes
+  // Position props apply only when x / y themselves change, so a panned or followed camera is
+  // not reset when an unrelated prop changes.
+  useEffect(() => {
+    const camId = engine.ecs.queryOne('Camera2D')
+    if (camId === undefined) return
+    const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')!
+    cam.x = x
+    cam.y = y
+  }, [x, y, engine])
+
+  // Object props (bounds, deadZone) are compared by value: inline JSX creates a new object on
+  // every render, which must not count as a change.
+  const bx = bounds?.x
+  const by = bounds?.y
+  const bw = bounds?.width
+  const bh = bounds?.height
+  const dw = deadZone?.w
+  const dh = deadZone?.h
   useEffect(() => {
     const camId = engine.ecs.queryOne('Camera2D')
     if (camId === undefined) return
     const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')!
     cam.followEntityId = followEntity
-    cam.x = x
-    cam.y = y
     cam.zoom = zoom
     cam.smoothing = smoothing
     cam.background = background
@@ -103,15 +118,18 @@ export function Camera2D({
     cam.followOffsetX = followOffsetX
     cam.followOffsetY = followOffsetY
     cam.pixelSnap = pixelSnap
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     followEntity,
-    x,
-    y,
     zoom,
     smoothing,
     background,
-    bounds,
-    deadZone,
+    bx,
+    by,
+    bw,
+    bh,
+    dw,
+    dh,
     followOffsetX,
     followOffsetY,
     pixelSnap,

@@ -255,4 +255,37 @@ describe('Camera2D followPoint / followSprite', () => {
     expect(cam.followPoint).toBeUndefined()
     expect(cam.followSprite).toBeUndefined()
   })
+
+  it('keeps a panned camera when a new but equal bounds object is passed on re-render', () => {
+    const engine = makeEngine()
+    const view = render(
+      <Wrapper engine={engine}>
+        <Camera2D x={100} y={100} bounds={{ x: 0, y: 0, width: 5000, height: 5000 }} />
+      </Wrapper>,
+    )
+    const cam = getCameraComponent(engine)!
+    cam.x = 3000
+    cam.y = 2500
+    view.rerender(
+      <Wrapper engine={engine}>
+        <Camera2D x={100} y={100} bounds={{ x: 0, y: 0, width: 5000, height: 5000 }} />
+      </Wrapper>,
+    )
+    expect([cam.x, cam.y]).toEqual([3000, 2500])
+    // A real change of the bounds is still applied, without moving the camera.
+    view.rerender(
+      <Wrapper engine={engine}>
+        <Camera2D x={100} y={100} bounds={{ x: 0, y: 0, width: 4000, height: 4000 }} />
+      </Wrapper>,
+    )
+    expect(cam.bounds).toEqual({ x: 0, y: 0, width: 4000, height: 4000 })
+    expect([cam.x, cam.y]).toEqual([3000, 2500])
+    // Changing x / y props does move it.
+    view.rerender(
+      <Wrapper engine={engine}>
+        <Camera2D x={200} y={100} bounds={{ x: 0, y: 0, width: 4000, height: 4000 }} />
+      </Wrapper>,
+    )
+    expect(cam.x).toBe(200)
+  })
 })
