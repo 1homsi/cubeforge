@@ -33,8 +33,6 @@ export interface CameraPanZoomOptions {
    * apps update UI without polling the camera every frame.
    */
   onChange?: (camera: { x: number; y: number; zoom: number }) => void
-  /** Like `onChange` but only when the zoom level changed; receives the new zoom. */
-  onZoom?: (zoom: number) => void
   /** Press released without dragging, in canvas CSS px and world units. */
   onTap?: (e: { screenX: number; screenY: number; worldX: number; worldY: number; button: number }) => void
 }
@@ -71,7 +69,6 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
     let lastMove = 0
     let glide = 0
     let notifyFrame = 0
-    let reportedZoom: number | undefined
 
     const cam = (): Camera2DComponent | undefined => {
       const id = engine.ecs.queryOne('Camera2D')
@@ -97,16 +94,12 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
     // markDirty() so it runs behind the engine's frame and sees bounds/follow already applied.
     const changed = () => {
       engine.loop.markDirty()
-      if (notifyFrame || (!opts.current.onChange && !opts.current.onZoom)) return
+      if (notifyFrame || !opts.current.onChange) return
       notifyFrame = requestAnimationFrame(() => {
         notifyFrame = 0
         const c = cam()
         if (!c) return
         opts.current.onChange?.({ x: c.x, y: c.y, zoom: c.zoom })
-        if (reportedZoom !== c.zoom) {
-          if (reportedZoom !== undefined) opts.current.onZoom?.(c.zoom)
-          reportedZoom = c.zoom
-        }
       })
     }
     const stopGlide = () => {
@@ -120,7 +113,6 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       stopGlide()
       const p = local(e)
       ptrs.set(e.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y, ax: p.x, ay: p.y })
-      reportedZoom = cam()?.zoom
       canvas.setPointerCapture?.(e.pointerId)
       vx = vy = 0
       lastMove = performance.now()

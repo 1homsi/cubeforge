@@ -148,11 +148,10 @@ describe('useCameraPanZoom', () => {
     }
     const flush = () => act(() => frames.splice(0).forEach((f) => f()))
 
-    it('onChange fires once per frame with the camera, onZoom only when the zoom changed', () => {
+    it('onChange fires once per frame with the camera (position and zoom)', () => {
       stubRaf()
       const onChange = vi.fn()
-      const onZoom = vi.fn()
-      const { cam, ptr, wheel } = setup({ inertia: false, onChange, onZoom })
+      const { cam, ptr, wheel } = setup({ inertia: false, onChange })
       ptr('pointerdown', 100, 100)
       ptr('pointermove', 120, 100)
       ptr('pointermove', 140, 100)
@@ -160,13 +159,12 @@ describe('useCameraPanZoom', () => {
       flush()
       expect(onChange).toHaveBeenCalledTimes(1)
       expect(onChange).toHaveBeenLastCalledWith({ x: cam.x, y: cam.y, zoom: 1 })
-      expect(onZoom).not.toHaveBeenCalled()
       ptr('pointerup', 140, 100)
       wheel(-100, 400, 300)
       flush()
       expect(onChange).toHaveBeenCalledTimes(2)
-      expect(onZoom).toHaveBeenCalledTimes(1)
-      expect(onZoom).toHaveBeenCalledWith(cam.zoom)
+      expect(onChange).toHaveBeenLastCalledWith({ x: cam.x, y: cam.y, zoom: cam.zoom })
+      expect(cam.zoom).toBeGreaterThan(1)
     })
 
     it('does not fire after unmount', () => {
