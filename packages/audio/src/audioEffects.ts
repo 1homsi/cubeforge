@@ -1,4 +1,4 @@
-import { getAudioCtx, getGroupGainNode } from './audioContext'
+import { getAudioCtx, getAudioState, getGroupGainNode } from './audioContext'
 import type { AudioGroup } from './audioContext'
 
 // ─── Effect option types ─────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ export type GroupEffectOptions =
 // ─── Effect chain registry ────────────────────────────────────────────────────
 
 /** Tracks the inserted effect node (and optional extra nodes) per group. */
-const groupEffectNodes = new Map<AudioGroup | 'master', { entry: AudioNode; exit: AudioNode }>()
+const groupEffectNodes = (): Map<string, { entry: AudioNode; exit: AudioNode }> => getAudioState().effects
 
 // ─── Effect factory ───────────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ export function setGroupEffect(group: AudioGroup | 'master', opts: GroupEffectOp
   groupGain.connect(chain.entry)
   chain.exit.connect(downstream)
 
-  groupEffectNodes.set(group, chain)
+  groupEffectNodes().set(group, chain)
 }
 
 /**
@@ -139,7 +139,7 @@ export function setGroupEffect(group: AudioGroup | 'master', opts: GroupEffectOp
  * clearGroupEffect('master')    // remove muffling
  */
 export function clearGroupEffect(group: AudioGroup | 'master'): void {
-  const chain = groupEffectNodes.get(group)
+  const chain = groupEffectNodes().get(group)
   if (!chain) return
 
   const ctx = getAudioCtx()
@@ -158,5 +158,5 @@ export function clearGroupEffect(group: AudioGroup | 'master'): void {
   }
 
   groupGain.connect(downstream)
-  groupEffectNodes.delete(group)
+  groupEffectNodes().delete(group)
 }
