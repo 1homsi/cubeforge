@@ -2,6 +2,12 @@ export * from './components/sprite'
 export * from './renderLayers'
 export * from './textureFilter'
 export * from './components/camera2d'
+export type {
+  CameraFollowPoint,
+  CameraFollowPointProvider,
+  CameraFollowLayer,
+  CameraFollowSprite,
+} from './cameraFollow'
 export * from './components/animationState'
 export * from './components/animator'
 export * from './components/squashStretch'

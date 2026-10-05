@@ -1,10 +1,33 @@
 import { useEffect, useContext } from 'react'
-import { createCamera2D, type Camera2DComponent } from '@cubeforge/renderer'
+import {
+  createCamera2D,
+  type Camera2DComponent,
+  type CameraFollowPointProvider,
+  type CameraFollowSprite,
+} from '@cubeforge/renderer'
 import { EngineContext } from '../context'
 
-interface Camera2DProps {
+export interface Camera2DProps {
   /** String ID of entity to follow */
   followEntity?: string
+  /**
+   * Follow a world-space point read every frame, e.g.
+   * `followPoint={() => ({ x: layer.x[i], y: layer.y[i] })}`. Return null or
+   * undefined to hold the camera where it is. Uses the same smoothing, dead
+   * zone, follow offset and bounds as `followEntity`.
+   *
+   * Priority when several are set: `followPoint` > `followSprite` > `followEntity`.
+   * Define the function once (module scope, `useCallback` or a ref read) so it is stable.
+   */
+  followPoint?: CameraFollowPointProvider
+  /**
+   * Follow one sprite of a `SpriteLayer`: `{ layer, index }` by slot, or
+   * `{ layer, id }` by the id in `layer.ids` (first match, the slot is cached
+   * and re-checked every frame). A hidden or removed sprite holds the camera.
+   * Same smoothing, dead zone, follow offset and bounds as `followEntity`.
+   * Priority: `followPoint` > `followSprite` > `followEntity`.
+   */
+  followSprite?: CameraFollowSprite
   /** Initial camera X position in world space (default 0 = world origin at screen center) */
   x?: number
   /** Initial camera Y position in world space (default 0 = world origin at screen center) */
@@ -24,6 +47,8 @@ interface Camera2DProps {
 
 export function Camera2D({
   followEntity,
+  followPoint,
+  followSprite,
   x = 0,
   y = 0,
   zoom = 1,
@@ -43,6 +68,8 @@ export function Camera2D({
       entityId,
       createCamera2D({
         followEntityId: followEntity,
+        followPoint,
+        followSprite,
         x,
         y,
         zoom,
@@ -90,6 +117,20 @@ export function Camera2D({
     pixelSnap,
     engine,
   ])
+
+  // Follow targets sync on their own so an inline `followPoint` arrow (new identity every
+  // render) does not re-apply the position props above.
+  const spriteLayer = followSprite?.layer
+  const spriteIndex = followSprite?.index
+  const spriteId = followSprite?.id
+  useEffect(() => {
+    const camId = engine.ecs.queryOne('Camera2D')
+    if (camId === undefined) return
+    const cam = engine.ecs.getComponent<Camera2DComponent>(camId, 'Camera2D')!
+    cam.followPoint = followPoint
+    cam.followSprite = spriteLayer ? { layer: spriteLayer, index: spriteIndex, id: spriteId } : undefined
+    cam._followSpriteIndex = undefined
+  }, [followPoint, spriteLayer, spriteIndex, spriteId, engine])
 
   return null
 }

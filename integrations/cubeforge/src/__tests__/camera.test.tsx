@@ -203,3 +203,56 @@ describe('useCamera().zoomAt', () => {
     expect(after.y).toBeCloseTo(before.y, 6)
   })
 })
+
+describe('Camera2D followPoint / followSprite', () => {
+  const layerStub = (id = 7) =>
+    ({
+      x: new Float32Array([5]),
+      y: new Float32Array([6]),
+      ids: new Int32Array([id]),
+      flags: new Uint8Array(1),
+      count: 1,
+    }) as never
+
+  it('passes followPoint and followSprite to the camera component', () => {
+    const engine = makeEngine()
+    const followPoint = () => ({ x: 1, y: 2 })
+    const layer = layerStub()
+    render(
+      <Wrapper engine={engine}>
+        <Camera2D followPoint={followPoint} followSprite={{ layer, id: 7 }} />
+      </Wrapper>,
+    )
+    const cam = getCameraComponent(engine)!
+    expect(cam.followPoint).toBe(followPoint)
+    expect(cam.followSprite).toEqual({ layer, index: undefined, id: 7 })
+    expect(cam.followEntityId).toBeUndefined()
+  })
+
+  it('updates the follow targets on rerender without resetting the camera position', () => {
+    const engine = makeEngine()
+    const layer = layerStub()
+    const { rerender } = render(
+      <Wrapper engine={engine}>
+        <Camera2D followPoint={() => ({ x: 1, y: 1 })} />
+      </Wrapper>,
+    )
+    const cam = getCameraComponent(engine)!
+    cam.x = 123
+    const next = () => ({ x: 2, y: 2 })
+    rerender(
+      <Wrapper engine={engine}>
+        <Camera2D followPoint={next} followSprite={{ layer, index: 0 }} />
+      </Wrapper>,
+    )
+    expect(cam.followPoint).toBe(next)
+    expect(cam.followSprite?.index).toBe(0)
+    rerender(
+      <Wrapper engine={engine}>
+        <Camera2D />
+      </Wrapper>,
+    )
+    expect(cam.followPoint).toBeUndefined()
+    expect(cam.followSprite).toBeUndefined()
+  })
+})

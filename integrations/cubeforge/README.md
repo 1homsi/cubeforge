@@ -179,6 +179,10 @@ draw order from the top and ignores rotation.
 - `useCameraPanZoom({ minZoom, maxZoom, wheelSpeed, inertia, friction, onTap })`: drag to pan with
   mouse or touch, inertia, wheel and pinch zoom around the cursor, and `onTap` (with world
   coordinates) for click-to-select. Combine with `<Camera2D pixelSnap />`.
+- `<Camera2D followPoint={() => ({ x, y })} />` follows any point (return null to hold) and
+  `<Camera2D followSprite={{ layer, index }} />` (or `{ layer, id }`) follows a sprite layer sprite;
+  a hidden or removed sprite holds the camera. Both share the smoothing, dead zone, offset and
+  bounds of `followEntity`. Priority: `followPoint` > `followSprite` > `followEntity`.
 - `useCamera().zoomAt(screenX, screenY, zoom)` and `useCoordinates()` work in canvas CSS pixels at
   any devicePixelRatio.
 
