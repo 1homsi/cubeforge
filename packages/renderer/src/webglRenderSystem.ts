@@ -24,7 +24,14 @@ import { parseCSSColor } from './colorParser'
 import type { SpriteLayer, LayerAtlas } from './spriteLayer'
 import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLayerGL'
 import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
-import { spriteLayerRendererFactory, tileRendererFactory, type TileRenderer } from './layerRegistry'
+import {
+  spriteLayerRendererFactory,
+  textLayerRendererFactory,
+  tileRendererFactory,
+  type TileRenderer,
+} from './layerRegistry'
+import type { TextLayer } from './textLayer'
+import type { TextLayerRenderer } from './textLayerGL'
 import {
   type Sampling,
   resolveSampling,
@@ -968,6 +975,9 @@ export class RenderSystem implements System {
   private _texNextRank = 1
   private _texRankEpoch = 0
   private readonly _spriteLayers: SpriteLayer[] = []
+  private readonly _textLayers: TextLayer[] = []
+  private _textLayerRenderer: TextLayerRenderer | null = null
+  private _textLayerVersion = 0
   private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
   private _layerImageTextures = new WeakMap<object, WebGLTexture>()
   private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
@@ -1159,6 +1169,18 @@ export class RenderSystem implements System {
   /** Ids of all registered dynamic canvases. */
   dynamicCanvasIds(): string[] {
     return [...this._dynamicCanvases.keys()]
+  }
+
+  /** Add a {@link TextLayer}; it sorts with sprites by `layer` + `zIndex`. */
+  addTextLayer(layer: TextLayer): void {
+    if (!this._textLayers.includes(layer)) this._textLayers.push(layer)
+    this._overlayRevision++
+  }
+
+  removeTextLayer(layer: TextLayer): void {
+    const i = this._textLayers.indexOf(layer)
+    if (i >= 0) this._textLayers.splice(i, 1)
+    this._overlayRevision++
   }
 
   registerDynamicCanvas(id: string, canvas: HTMLCanvasElement | OffscreenCanvas): void {
@@ -1453,6 +1475,7 @@ export class RenderSystem implements System {
     }
     this._tileLayers?.contextRestored()
     this._spriteLayerRenderer?.contextRestored()
+    this._textLayerRenderer?.contextRestored()
     this._textureRevision++
   }
 
@@ -1479,6 +1502,7 @@ export class RenderSystem implements System {
     if (this._idleTex) gl.deleteTexture(this._idleTex)
     this._tileLayers?.dispose()
     this._spriteLayerRenderer?.dispose()
+    this._textLayerRenderer?.dispose()
     this.textures.clear()
     this.shapeTextures.clear()
     this.parallaxTextures.clear()
@@ -2114,6 +2138,35 @@ export class RenderSystem implements System {
     this.gl.useProgram(this.program)
   }
 
+  private drawTextLayer(layer: TextLayer, viewL: number, viewR: number, viewT: number, viewB: number): void {
+    const cam = this._layerCam
+    cam.viewL = viewL
+    cam.viewR = viewR
+    cam.viewT = viewT
+    cam.viewB = viewB
+    if (!this._textLayerRenderer) {
+      const r = textLayerRendererFactory()?.(this.gl) ?? null
+      if (!r) return
+      r.sink = {
+        texture: (tex, w, h) => this._statTex(tex, w, h),
+        free: (tex) => this._statTexFree(tex),
+        upload: (bytes) => {
+          this.stats.textureUploads++
+          this.stats.textureUploadBytes += bytes
+        },
+      }
+      this._textLayerRenderer = r
+    }
+    const r = this._textLayerRenderer
+    r.drawCalls = 0
+    r.instances = 0
+    r.draw(layer, cam)
+    this.stats.drawCalls += r.drawCalls
+    this.stats.batches += r.drawCalls
+    this.stats.instances += r.instances
+    this.gl.useProgram(this.program)
+  }
+
   private drawScreenTint(camX: number, camY: number, zoom: number, w: number, h: number): void {
     const { gl } = this
     const t = this._screenTint
@@ -2572,6 +2625,14 @@ export class RenderSystem implements System {
         this._overlayRevision++
       }
     }
+    if (this._textLayers.length > 0) {
+      let v = 0
+      for (const layer of this._textLayers) v += layer.version + (layer.visible ? 1 : 0) + layer.opacity
+      if (v !== this._textLayerVersion) {
+        this._textLayerVersion = v
+        this._overlayRevision++
+      }
+    }
     if (this._idleSkip) {
       this._ensureIdleFBO(W, H)
       const hash = this._computeSceneHash(world, camX, camY, zoom, shakeX, shakeY, background)
@@ -2691,7 +2752,9 @@ export class RenderSystem implements System {
     const layers = this._spriteLayers
     const tileSorted = this._tileLayers?.sorted ?? NO_TILE_LAYERS
     const nSprites = n + layers.length
-    const m = nSprites + tileSorted.length
+    const nt = nSprites + tileSorted.length
+    const textLayers = this._textLayers
+    const m = nt + textLayers.length
     for (let r = 0; r < n; r++) {
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
@@ -2718,6 +2781,13 @@ export class RenderSystem implements System {
       sortZs[r] = tileSorted[j].zIndex
       sortTexRanks[r] = 0
     }
+    for (let j = 0; j < textLayers.length; j++) {
+      const layer = textLayers[j]
+      const r = nt + j
+      sortLayers[r] = this.layers.getOrder(layer.layer)
+      sortZs[r] = layer.zIndex
+      sortTexRanks[r] = this.textureRank('__textlayer__')
+    }
     const sortIndices = this.sortVisible(m)
 
     const hasSquash = world.query('SquashStretch').length > 0
@@ -2736,7 +2806,8 @@ export class RenderSystem implements System {
         batchKey = ''
         ensuredKey = null
         if (k < nSprites) this.drawSpriteLayer(layers[k - n], viewL, viewR, viewT, viewB)
-        else this.drawSortedTileLayer(tileSorted[k - nSprites])
+        else if (k < nt) this.drawSortedTileLayer(tileSorted[k - nSprites])
+        else this.drawTextLayer(textLayers[k - nt], viewL, viewR, viewT, viewB)
         continue
       }
       const sprite = visSprites[k]

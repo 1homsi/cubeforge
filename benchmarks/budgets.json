@@ -5,6 +5,7 @@
   "spritelayer-3000": { "medianMs": 1, "allocBytesPerFrame": 300000, "drawCalls": 2, "batches": 1 },
   "spritelayer-depth-3000": { "medianMs": 2, "allocBytesPerFrame": 300000, "drawCalls": 2, "batches": 1 },
   "spritelayer-10000": { "medianMs": 3, "allocBytesPerFrame": 300000, "drawCalls": 2, "batches": 1 },
+  "textlayer-1000": { "medianMs": 2, "allocBytesPerFrame": 300000, "drawCalls": 1, "batches": 1 },
   "churn-3000x200": { "medianMs": 5, "allocBytesPerFrame": 1500000, "drawCalls": 2, "batches": 1 },
   "tiles-600x300": { "medianMs": 120, "allocBytesPerFrame": 300000, "drawCalls": 2, "batches": 1 },
   "tilelayer-600x300": { "medianMs": 1, "allocBytesPerFrame": 300000, "drawCalls": 2, "batches": 1 },

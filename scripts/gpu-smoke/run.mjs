@@ -30,17 +30,20 @@ if (!chrome) {
 }
 
 const dir = mkdtempSync(path.join(tmpdir(), 'cubeforge-gpu-'))
-try {
+
+/** Bundle `entry`, run it in headless Chrome and return the JSON it leaves in `data-out`. */
+async function runPage(entry) {
+  const name = path.basename(entry, '.ts')
   await build({
-    entryPoints: [path.join(here, 'page.ts')],
+    entryPoints: [path.join(here, entry)],
     bundle: true,
     format: 'iife',
-    outfile: path.join(dir, 'smoke.js'),
+    outfile: path.join(dir, `${name}.js`),
     logLevel: 'error',
   })
   writeFileSync(
-    path.join(dir, 'index.html'),
-    '<!doctype html><html><body><script src="smoke.js"></script></body></html>',
+    path.join(dir, `${name}.html`),
+    `<!doctype html><html><body><script src="${name}.js"></script></body></html>`,
   )
   // Chrome sometimes exits non-zero after --dump-dom succeeded; the dumped DOM is what counts.
   const run = () =>
@@ -54,7 +57,7 @@ try {
         '--enable-unsafe-swiftshader',
         '--allow-file-access-from-files',
         '--dump-dom',
-        `file://${path.join(dir, 'index.html')}`,
+        `file://${path.join(dir, `${name}.html`)}`,
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 },
     )
@@ -65,29 +68,52 @@ try {
     dom = e && typeof e.stdout === 'string' ? e.stdout : ''
   }
   const m = /data-out="([^"]*)"/.exec(dom)
-  if (!m) throw new Error('gpu-smoke: page produced no output')
-  const out = JSON.parse(m[1].replace(/&quot;/g, '"'))
-  const expect = {
-    tintedTile: '0,255,0,255',
-    blueTile: '0,0,255,255',
-    whiteTile: '255,255,255,255',
-    overlapTopIsYellow: '255,255,0,255',
-    magentaOnly: '255,0,255,255',
-    nightTile: '128,128,255,255',
-    retintedAfterSetTiles: '0,0,255,255',
-    glError: 0,
-    glError2: 0,
-    spriteBelowDecor: '255,0,0,255',
-    decorAboveLowSprite: '0,255,0,255',
-    highSpriteAboveDecor: '255,255,0,255',
-    glError3: 0,
-  }
+  if (!m) throw new Error(`gpu-smoke: ${entry} produced no output`)
+  return JSON.parse(m[1].replace(/&quot;/g, '"'))
+}
+
+function check(label, out, expect) {
   const failures = Object.entries(expect).filter(([k, v]) => out[k] !== v)
   if (out.error || failures.length) {
-    console.error('gpu-smoke failed:', JSON.stringify(out, null, 2))
+    console.error(`gpu-smoke (${label}) failed:`, JSON.stringify(out, null, 2))
     process.exit(1)
   }
-  console.log('gpu-smoke: tile layer (tint, variants, avg colour) and multi-atlas sprite layer render correctly')
+}
+
+try {
+  {
+    const out = await runPage('page.ts')
+    const expect = {
+      tintedTile: '0,255,0,255',
+      blueTile: '0,0,255,255',
+      whiteTile: '255,255,255,255',
+      overlapTopIsYellow: '255,255,0,255',
+      magentaOnly: '255,0,255,255',
+      nightTile: '128,128,255,255',
+      retintedAfterSetTiles: '0,0,255,255',
+      glError: 0,
+      glError2: 0,
+      spriteBelowDecor: '255,0,0,255',
+      decorAboveLowSprite: '0,255,0,255',
+      highSpriteAboveDecor: '255,255,0,255',
+      glError3: 0,
+    }
+    check('layers', out, expect)
+    console.log('gpu-smoke: tile layer (tint, variants, avg colour) and multi-atlas sprite layer render correctly')
+  }
+  {
+    const out = await runPage('text.ts')
+    check('text', out, {
+      glError: 0,
+      whiteText: 'ok',
+      tintedText: 'ok',
+      alphaText: 'ok',
+      belowSpriteZ: 'ok',
+      aboveSpriteZ: 'ok',
+      oneDrawPerLayer: 1,
+    })
+    console.log('gpu-smoke: glyph-atlas text layer renders correctly (tint, alpha, z-order, one draw)')
+  }
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

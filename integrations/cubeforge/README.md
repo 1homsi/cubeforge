@@ -267,6 +267,49 @@ atlas.dispose()                      // free the texture and the id
 The handle is the hook's handle (`id`, `canvas`, `ctx`, `markDirty`) plus `width`, `height`, `resize`,
 `dispose`. Every call wakes an on-demand loop. `createDynamicCanvas` throws on a duplicate `id`.
 
+## Thousands of labels: `useTextLayer`
+
+One `<Text>` entity costs one texture and one draw call. For name tags, damage numbers and map labels
+use a text layer: every label is a row in typed arrays and all glyphs come from one shared atlas
+(rasterised on demand), so 1,000 labels are **one instanced draw** (about 0.2 ms CPU headless, against
+roughly 27 ms GPU / 50 ms CPU for 1,000 `<Text>` entities).
+
+```tsx
+const names = useTextLayer({
+  fontFamily: 'Helvetica, sans-serif',
+  fontSize: 12, // nominal size, also the default run size
+  outlineColor: '#000',
+  outlineWidth: 3, // baked into the glyphs (as are shadowColor / shadowBlur / weight / italic)
+  zIndex: 20, // sorts with sprites and sprite layers by layer + zIndex
+})
+const title = names.addStyle({ fontSize: 28, weight: 'bold', outlineWidth: 0 }) // more styles, same atlas
+
+// per tick
+names.clear()
+for (const p of people) names.add(p.name, p.x, p.y - 12, { color: 0xffd84aff, alpha: p.alpha })
+names.add('Village of Oak', 400, 50, { style: title })
+names.add('Long text wraps at maxWidth\nand honours newlines', 150, 180, {
+  wordWrap: true,
+  maxWidth: 140,
+  align: 'center', // 'left' | 'center' | 'right'
+  anchorX: 0.5, // 0..1 anchor of the text block
+  anchorY: 0,
+  rotation: -0.5,
+})
+names.setText(i, 'Renamed') // re-lays out only that run
+const hit = names.pick(worldX, worldY) // id of the topmost label under the point, -1 if none
+```
+
+Per run you can set `size`, `color` (0xRRGGBBAA or a CSS colour; multiplies the baked colour), `alpha`,
+`anchorX/anchorY`, `align`, `maxWidth`/`wordWrap`, `lineHeight`, `rotation` and `style`. The arrays
+(`x`, `y`, `size`, `color`, `alpha`, `flags`...) can be written directly, then call `touch()`.
+
+Limits: glyphs are laid out one code point at a time (no kerning, no shaping), so right-to-left and
+complex scripts (Arabic, Devanagari) belong in `<Text>`. Pass the same `atlas: new GlyphAtlas(...)` to
+several layers to share glyphs, or tune `pageSize` / `maxPages` / `resolution` (raster pixels per
+nominal font pixel, default 2). When all pages fill, the atlas clears itself and re-rasterises what is
+visible.
+
 ## Overlays and camera
 
 - `useScreenTint().set(r, g, b, strength, mode)`: full-view tint drawn after sprites and layers and
