@@ -200,6 +200,24 @@ Up to 8 atlases draw in one instanced call. The y-sort is incremental (near-line
 between frames): about 0.13 ms CPU per frame for 3,000 moving, re-sorted sprites. `pick` walks the
 draw order from the top and ignores rotation.
 
+## Dynamic canvases at runtime (texture atlases that grow)
+
+`useDynamicCanvas(w, h)` fixes the count and size at mount. To create, resize and free canvases by id
+at runtime, use `engine.createDynamicCanvas` (also on `RenderSystem`):
+
+```tsx
+const engine = useGame()
+const atlas = engine.createDynamicCanvas!({ id: 'bld-atlas', width: 1024, height: 1024 })
+atlas.ctx.drawImage(sprite, 0, 0)
+atlas.markDirty(0, 0, 64, 64)       // upload only that rect
+atlas.resize(1024, 2048)             // grow; pixels are kept top-left, the GPU texture is re-created
+const layer = useSpriteLayer({ dynamicSrc: atlas.id, frameWidth: 64, frameHeight: 64 })
+atlas.dispose()                      // free the texture and the id
+```
+
+The handle is the hook's handle (`id`, `canvas`, `ctx`, `markDirty`) plus `width`, `height`, `resize`,
+`dispose`. Every call wakes an on-demand loop. `createDynamicCanvas` throws on a duplicate `id`.
+
 ## Overlays and camera
 
 - `useScreenTint().set(r, g, b, strength, mode)`: full-view tint drawn after sprites and layers and

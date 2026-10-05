@@ -3,7 +3,7 @@ import type { ECSWorld, EventBus, AssetManager, EntityId, System, EngineStats } 
 import type { InputManager } from '@cubeforge/input'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import type { GameLoop } from '@cubeforge/core'
-import type { PostProcessStack } from '@cubeforge/renderer'
+import type { PostProcessStack, DynamicCanvasOptions, ManagedDynamicCanvas } from '@cubeforge/renderer'
 
 export interface EngineState {
   ecs: ECSWorld
@@ -32,6 +32,13 @@ export interface EngineState {
    * allocation). Copy with `copyEngineStats` if you need to keep a sample.
    */
   stats?: EngineStats
+  /**
+   * Create a dynamic canvas by id at runtime (no React hook): resizable and
+   * disposable, so texture atlases can be created and grown. Wakes an on-demand
+   * loop whenever it changes. Draw with `handle.ctx`, call `handle.markDirty(rect?)`,
+   * show it with `dynamicSrc: handle.id` on a Sprite or a SpriteLayer atlas.
+   */
+  createDynamicCanvas?(options: DynamicCanvasOptions): ManagedDynamicCanvas
   /** Returns the live {@link stats} object. */
   getStats?(): EngineStats
 }

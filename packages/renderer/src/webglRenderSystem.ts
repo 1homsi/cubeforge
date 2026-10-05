@@ -23,6 +23,7 @@ import {
 import { parseCSSColor } from './colorParser'
 import type { SpriteLayer, LayerAtlas } from './spriteLayer'
 import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLayerGL'
+import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
 import { spriteLayerRendererFactory, tileRendererFactory, type TileRenderer } from './layerRegistry'
 import {
   type Sampling,
@@ -1143,6 +1144,21 @@ export class RenderSystem implements System {
     const i = this._spriteLayers.indexOf(layer)
     if (i >= 0) this._spriteLayers.splice(i, 1)
     this._overlayRevision++
+  }
+
+  /** Whether a dynamic canvas with this id is registered. */
+  hasDynamicCanvas(id: string): boolean {
+    return this._dynamicCanvases.has(id)
+  }
+
+  /** Create a dynamic canvas by id at runtime (resizable, disposable). See {@link ManagedDynamicCanvas}. */
+  createDynamicCanvas(opts: DynamicCanvasOptions): ManagedDynamicCanvas {
+    return createDynamicCanvasHandle(this, opts)
+  }
+
+  /** Ids of all registered dynamic canvases. */
+  dynamicCanvasIds(): string[] {
+    return [...this._dynamicCanvases.keys()]
   }
 
   registerDynamicCanvas(id: string, canvas: HTMLCanvasElement | OffscreenCanvas): void {

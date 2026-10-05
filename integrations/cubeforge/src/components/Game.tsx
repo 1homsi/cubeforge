@@ -263,6 +263,14 @@ export function Game({
       postProcessStack,
       stats,
       getStats: () => stats,
+      createDynamicCanvas: (opts) =>
+        renderSystem.createDynamicCanvas({
+          ...opts,
+          onChange: () => {
+            opts.onChange?.()
+            loop.markDirty()
+          },
+        }),
     }
     setEngine(state)
 

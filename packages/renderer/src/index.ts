@@ -22,6 +22,15 @@ export * from './components/nineSlice'
 export * from './components/mask'
 export * from './components/shapes'
 export { RenderSystem } from './webglRenderSystem'
+export { createDynamicCanvasHandle } from './dynamicCanvas'
+export type {
+  DynamicCanvasHandleBase,
+  DynamicCanvasHost,
+  DynamicCanvasOptions,
+  DynamicCanvasSource,
+  ManagedDynamicCanvas,
+  ResizeDynamicCanvasOptions,
+} from './dynamicCanvas'
 export {
   SpriteLayer,
   SPRITE_FLIP_X,
