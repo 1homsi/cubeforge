@@ -82,3 +82,15 @@ export type {
   RecordingCanvas,
   RecordingGLOptions,
 } from './testing/recordingGL'
+export { TextLayer, GlyphAtlas, layoutText, TEXT_HIDDEN, TEXT_WORD_WRAP } from './textLayer'
+export type {
+  TextLayerOptions,
+  TextRunOptions,
+  TextRunAlign,
+  RunLayout,
+  GlyphAtlasOptions,
+  GlyphStyleOptions,
+  Glyph,
+  AtlasStyle,
+  AtlasPage,
+} from './textLayer'

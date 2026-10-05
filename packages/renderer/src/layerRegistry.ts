@@ -2,6 +2,7 @@ import type { ECSWorld } from '@cubeforge/core'
 import type { TileLayerRenderStats } from './tileLayerGL'
 import type { SpriteLayerRenderer } from './spriteLayerGL'
 import type { TileLayerData } from './tileLayer'
+import type { TextLayerRenderer } from './textLayerGL'
 
 export interface TileRenderer {
   readonly stats: TileLayerRenderStats
@@ -30,6 +31,7 @@ type Factory<T> = (gl: WebGL2RenderingContext) => T
 // create a tile or sprite layer don't bundle their renderers.
 let tileFactory: Factory<TileRenderer> | null = null
 let spriteFactory: Factory<SpriteLayerRenderer> | null = null
+let textFactory: Factory<TextLayerRenderer> | null = null
 
 export function registerTileRenderer(f: Factory<TileRenderer>): void {
   tileFactory ??= f
@@ -42,4 +44,11 @@ export function tileRendererFactory(): Factory<TileRenderer> | null {
 }
 export function spriteLayerRendererFactory(): Factory<SpriteLayerRenderer> | null {
   return spriteFactory
+}
+
+export function registerTextLayerRenderer(f: Factory<TextLayerRenderer>): void {
+  textFactory ??= f
+}
+export function textLayerRendererFactory(): Factory<TextLayerRenderer> | null {
+  return textFactory
 }

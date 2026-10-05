@@ -9,6 +9,7 @@ import type { EngineStats, EntityId, TransformComponent } from '@cubeforge/core'
 import {
   RenderSystem,
   SpriteLayer,
+  TextLayer,
   TileLayerData,
   createSprite,
   createCamera2D,
@@ -325,6 +326,43 @@ function depthLayer(n: number): ScenarioDef {
   }
 }
 
+/** Human Box shape: a floating name above every person, a few renamed each frame. */
+function textLayer(n: number): ScenarioDef {
+  return {
+    name: `textlayer-${n}`,
+    description: `${n} labels in one TextLayer (glyph atlas), moved every frame, 25 renamed per frame`,
+    setup(ctx) {
+      const r = rng(5)
+      const layer = new TextLayer({ fontSize: 12, outlineColor: '#000000', outlineWidth: 3 })
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      let f = 0
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        const X = layer.x
+        const Y = layer.y
+        f++
+        for (let i = 0; i < n; i++) {
+          const x = X[i] + vx[i]
+          const y = Y[i] + vy[i]
+          if (x < 0 || x > W) vx[i] = -vx[i]
+          if (y < 0 || y > H) vy[i] = -vy[i]
+          X[i] = x
+          Y[i] = y
+        }
+        for (let k = 0; k < 25; k++) layer.setText((f * 25 + k) % n, `Person ${(f * 7 + k) % 100}`)
+        layer.touch()
+      })
+      for (let i = 0; i < n; i++) {
+        layer.add(`Person ${i % 100}`, r() * W, r() * H)
+        vx[i] = (r() - 0.5) * 2
+        vy[i] = (r() - 0.5) * 2
+      }
+      sc.renderer.addTextLayer(layer)
+      return sc
+    },
+  }
+}
+
 /** The same tile world as one TileLayer, with 10 tile edits per frame. */
 function tileLayer(cols: number, rows: number): ScenarioDef {
   return {
@@ -392,6 +430,7 @@ export const SCENARIOS: ScenarioDef[] = [
   spriteLayer(3000),
   spriteLayer(10000),
   depthLayer(3000),
+  textLayer(1000),
   churn(3000, 200),
   tileWorld(600, 300),
   tileLayer(600, 300),

@@ -28,6 +28,7 @@ export type { EntityId, ECSWorld, TransformComponent } from '@cubeforge/core'
 export type { SpriteComponent } from '@cubeforge/renderer'
 export { TileLayer, useTileLayer } from './components/TileLayer'
 export { useSpriteLayer } from './hooks/useSpriteLayer'
+export { useTextLayer } from './hooks/useTextLayer'
 export { useScreenTint } from './hooks/useScreenTint'
 export { useCameraPanZoom } from './hooks/useCameraPanZoom'
 export type { CameraPanZoomOptions } from './hooks/useCameraPanZoom'
@@ -36,6 +37,10 @@ export { useCoordinates } from './hooks/useCoordinates'
 export { useEngineStats } from './hooks/useProfiler'
 export {
   SpriteLayer,
+  TextLayer,
+  GlyphAtlas,
+  TEXT_HIDDEN,
+  TEXT_WORD_WRAP,
   SPRITE_FLIP_X,
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
@@ -43,6 +48,7 @@ export {
   TileLayerData,
   tileHash,
 } from '@cubeforge/renderer'
+export type { TextLayerOptions, TextRunOptions, GlyphStyleOptions } from '@cubeforge/renderer'
 export type { SpriteLayerOptions, LayerAtlas, TileLayerOptions, Tileset, TileAnimation } from '@cubeforge/renderer'
 export { StatsOverlay } from './components/StatsOverlay'
 export { Script } from './components/Script'
