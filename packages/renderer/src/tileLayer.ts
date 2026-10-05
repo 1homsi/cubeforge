@@ -48,7 +48,18 @@ export interface TileLayerOptions {
   /** Chunk edge in tiles for dirty tracking and the Canvas2D cache. Default 32. */
   chunkSize?: number
   animations?: Record<number, TileAnimation>
-  /** Per-cell alternatives: drawing `id` shows `variants[id][tileHash(x, y) % n]` (before animation). */
+  /**
+   * Per-cell alternatives. Keys and values are tile ids, in the same id space as
+   * `tiles` and the atlas (`0` is empty, id `n` is atlas tile `n - 1`), so a
+   * variant may be any atlas tile, including another variant's key.
+   *
+   * A cell holding `id` draws `variants[id][tileHash(x, y) % min(255, list.length)]`,
+   * then the animation frame for that result. The choice depends only on the
+   * cell coordinates, so it never changes when tiles around it are edited and
+   * is the same on every renderer. Lists are capped at 255 entries (extra
+   * entries are ignored). Use {@link TileLayerData.variantAt} to read the chosen
+   * id from CPU code instead of replicating the hash.
+   */
   variants?: Record<number, number[]>
   /** Per-tile brightness variation from the tile hash, 0..1. Default 0. */
   jitter?: number
@@ -70,7 +81,13 @@ export interface TileLayerComponent extends Component {
   layer: TileLayerData
 }
 
-export function createTileLayerComponent(layer: TileLayerData): TileLayerComponent {
+/**
+ * Wrap a layer as a component. Pass `wake` (usually `() => engine.loop.markDirty()`)
+ * when adding the layer imperatively so on-demand loops wake on every change;
+ * it is assigned to `layer.onChange`. The `<TileLayer>` component does this for you.
+ */
+export function createTileLayerComponent(layer: TileLayerData, wake?: () => void): TileLayerComponent {
+  if (wake) layer.onChange = wake
   return { type: 'TileLayer', layer }
 }
 
@@ -85,9 +102,9 @@ export class TileLayerData {
   readonly chunksX: number
   readonly chunksY: number
   readonly tiles: TileIdArray
-  tileset: Tileset
-  tileWorldWidth: number
-  tileWorldHeight: number
+  private _tileset: Tileset
+  private _tileWorldWidth: number
+  private _tileWorldHeight: number
   private _x: number
   private _y: number
   private _zIndex: number
@@ -128,7 +145,12 @@ export class TileLayerData {
   variantVersion = 0
   private variantLists: Record<number, number[]> = {}
 
-  /** Called after any mutation (the React component uses it to wake on-demand loops). */
+  /**
+   * Called after any mutation, including the `visible`/`x`/`y`/`zIndex`/`opacity`/
+   * `tileset` setters. The `<TileLayer>` component points it at `engine.loop.markDirty()`
+   * so on-demand loops wake; for a layer added imperatively pass a wake callback to
+   * `createTileLayerComponent(layer, wake)` or assign it yourself.
+   */
   onChange: (() => void) | null = null
 
   constructor(opts: TileLayerOptions) {
@@ -143,9 +165,9 @@ export class TileLayerData {
     const n = this.width * this.height
     this.tiles = opts.wideIds ? new Uint32Array(n) : new Uint16Array(n)
     if (opts.tiles) this.copyIn(opts.tiles)
-    this.tileset = opts.tileset
-    this.tileWorldWidth = opts.tileWorldWidth ?? opts.tileset.tileWidth
-    this.tileWorldHeight = opts.tileWorldHeight ?? opts.tileset.tileHeight
+    this._tileset = opts.tileset
+    this._tileWorldWidth = opts.tileWorldWidth ?? opts.tileset.tileWidth
+    this._tileWorldHeight = opts.tileWorldHeight ?? opts.tileset.tileHeight
     this._x = opts.x ?? 0
     this._y = opts.y ?? 0
     this._zIndex = opts.zIndex ?? 0
@@ -203,7 +225,12 @@ export class TileLayerData {
     this.onChange?.()
   }
 
-  /** Replace the variant table. Keys and values are tile ids. */
+  /**
+   * Replace the variant table. Keys and values are tile ids (the same id space as
+   * `tiles` and the atlas). A cell holding `id` draws
+   * `variants[id][tileHash(x, y) % min(255, list.length)]`, before animation;
+   * lists are capped at 255 entries. Use {@link variantAt} for the chosen id.
+   */
   setVariants(variants: Record<number, number[]>): void {
     this.variantLists = variants
     let maxId = -1
@@ -238,12 +265,50 @@ export class TileLayerData {
     this.onChange?.()
   }
 
+  /**
+   * The tile id chosen at (x, y) after variants but before animation: the stored
+   * id when it has no variants, else `list[tileHash(x, y) % min(255, list.length)]`.
+   * Out of bounds returns 0. Lets CPU models agree with the renderer without
+   * replicating the hash.
+   */
+  variantAt(x: number, y: number): number {
+    const id = this.getTile(x, y)
+    const list = this.variantLists[id]
+    if (list && list.length > 0) return list[tileHash(x, y) % Math.min(255, list.length)]
+    return id
+  }
+
   /** The id actually drawn at (x, y): variant by hash, then animation frame. */
   visualTile(x: number, y: number): number {
-    let id = this.getTile(x, y)
-    const list = this.variantLists[id]
-    if (list && list.length > 0) id = list[tileHash(x, y) % Math.min(255, list.length)]
-    return this.resolveTile(id)
+    return this.resolveTile(this.variantAt(x, y))
+  }
+
+  get tileset(): Tileset {
+    return this._tileset
+  }
+  set tileset(v: Tileset) {
+    if (v === this._tileset) return
+    this._tileset = v
+    this.revision++
+    this.onChange?.()
+  }
+  get tileWorldWidth(): number {
+    return this._tileWorldWidth
+  }
+  set tileWorldWidth(v: number) {
+    if (v === this._tileWorldWidth) return
+    this._tileWorldWidth = v
+    this.revision++
+    this.onChange?.()
+  }
+  get tileWorldHeight(): number {
+    return this._tileWorldHeight
+  }
+  set tileWorldHeight(v: number) {
+    if (v === this._tileWorldHeight) return
+    this._tileWorldHeight = v
+    this.revision++
+    this.onChange?.()
   }
 
   get x(): number {
@@ -253,6 +318,7 @@ export class TileLayerData {
     if (v === this._x) return
     this._x = v
     this.revision++
+    this.onChange?.()
   }
   get y(): number {
     return this._y
@@ -261,6 +327,7 @@ export class TileLayerData {
     if (v === this._y) return
     this._y = v
     this.revision++
+    this.onChange?.()
   }
   get zIndex(): number {
     return this._zIndex
@@ -269,6 +336,7 @@ export class TileLayerData {
     if (v === this._zIndex) return
     this._zIndex = v
     this.revision++
+    this.onChange?.()
   }
   get opacity(): number {
     return this._opacity
@@ -277,6 +345,7 @@ export class TileLayerData {
     if (v === this._opacity) return
     this._opacity = v
     this.revision++
+    this.onChange?.()
   }
   get visible(): boolean {
     return this._visible
@@ -285,6 +354,7 @@ export class TileLayerData {
     if (v === this._visible) return
     this._visible = v
     this.revision++
+    this.onChange?.()
   }
 
   getTile(x: number, y: number): number {
@@ -322,6 +392,55 @@ export class TileLayerData {
     }
     this.revision++
     this.onChange?.()
+  }
+
+  /**
+   * Mark `w` x `h` tiles from (x, y) as changed after writing `layer.tiles`
+   * directly. Clipped to the layer; every chunk the rect overlaps is queued for
+   * upload with the overlapping part as its dirty rect. Cheaper than `touch()`
+   * for local edits. For a single cell prefer `setTile`.
+   */
+  markDirtyRect(x: number, y: number, w: number, h: number): void {
+    const x0 = Math.max(0, Math.floor(x))
+    const y0 = Math.max(0, Math.floor(y))
+    const x1 = Math.min(this.width, Math.ceil(x + w)) - 1
+    const y1 = Math.min(this.height, Math.ceil(y + h)) - 1
+    if (!(x1 >= x0 && y1 >= y0)) return
+    const cs = this.chunkSize
+    for (let cy = (y0 / cs) | 0, cyEnd = (y1 / cs) | 0; cy <= cyEnd; cy++) {
+      for (let cx = (x0 / cs) | 0, cxEnd = (x1 / cs) | 0; cx <= cxEnd; cx++) {
+        const c = cy * this.chunksX + cx
+        this.chunkVersion[c]++
+        const rx0 = Math.max(x0, cx * cs)
+        const ry0 = Math.max(y0, cy * cs)
+        const rx1 = Math.min(x1, cx * cs + cs - 1)
+        const ry1 = Math.min(y1, cy * cs + cs - 1)
+        const r = c * 4
+        if (this.dirtyFlag[c] === 0) {
+          this.dirtyFlag[c] = 1
+          this.dirtyList[this.dirtyCount++] = c
+          this.dirtyRect[r] = rx0
+          this.dirtyRect[r + 1] = ry0
+          this.dirtyRect[r + 2] = rx1
+          this.dirtyRect[r + 3] = ry1
+        } else {
+          if (rx0 < this.dirtyRect[r]) this.dirtyRect[r] = rx0
+          if (ry0 < this.dirtyRect[r + 1]) this.dirtyRect[r + 1] = ry0
+          if (rx1 > this.dirtyRect[r + 2]) this.dirtyRect[r + 2] = rx1
+          if (ry1 > this.dirtyRect[r + 3]) this.dirtyRect[r + 3] = ry1
+        }
+      }
+    }
+    this.revision++
+    this.onChange?.()
+  }
+
+  /**
+   * Call after writing `layer.tiles` directly when the changed area is unknown
+   * or large: marks the whole layer dirty (a full re-upload on the next frame).
+   */
+  touch(): void {
+    this.markAllDirty()
   }
 
   /** Replace every tile (copied). Length must equal width * height. */
