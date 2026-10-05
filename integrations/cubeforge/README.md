@@ -195,7 +195,17 @@ setters that wake an on-demand loop (they call `layer.onChange`). `<TileLayer>` 
 `createTileLayerComponent(layer, () => engine.loop.markDirty())`.
 
 Below about 2 device pixels per tile (e.g. zoom 0.05 with 16 px tiles) each tile is drawn with its
-atlas tile's average colour, so far zoom doesn't shimmer.
+atlas tile's average colour, so far zoom doesn't shimmer. The threshold is `farZoomPx` (default 2, `0`
+turns the average off).
+
+Between 1:1 and that point, point-sampling shimmers when panning. `minFilter: 'mipmap'` filters the
+minified atlas instead: a per-tile mip pyramid (built once per atlas image on the first zoomed-out draw,
+about +33% atlas memory) blended trilinearly in the shader. Tiles never bleed into each other, and
+magnified or 1:1 drawing stays exact texels:
+
+```ts
+useTileLayer({ ..., minFilter: 'mipmap', farZoomPx: 1 }) // 'nearest' (default) keeps exact point sampling
+```
 
 By default tile layers draw after parallax backgrounds and before all sprites, ordered by `zIndex`
 among themselves. Give a layer a `renderLayer` to opt in to the shared draw order instead: it is then
