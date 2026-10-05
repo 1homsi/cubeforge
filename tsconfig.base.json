@@ -22,6 +22,7 @@
       "@cubeforge/input": ["packages/input/src/index.ts"],
       "@cubeforge/net": ["packages/net/src/index.ts"],
       "@cubeforge/physics": ["packages/physics/src/index.ts"],
+      "@cubeforge/renderer/canvas2d": ["packages/renderer/src/canvas2dRenderSystem.ts"],
       "@cubeforge/renderer": ["packages/renderer/src/index.ts"],
       "cubeforge": ["integrations/cubeforge/src/index.ts"],
       "cubeforge/advanced": ["integrations/cubeforge/src/advanced.ts"],

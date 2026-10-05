@@ -12,7 +12,14 @@ import {
   type System,
 } from '@cubeforge/core'
 import { InputManager, type TouchPreventDefault } from '@cubeforge/input'
-import { RenderSystem, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
+import {
+  RenderSystem,
+  createPostProcessStack,
+  type DynamicCanvasOptions,
+  type ManagedDynamicCanvas,
+  type Sampling,
+} from '@cubeforge/renderer'
+import type { RenderStats } from '@cubeforge/core'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
 import type { DevToolsHandle } from '@cubeforge/devtools'
@@ -43,6 +50,20 @@ export interface GameFeatures {
   maxDevtoolsFrames?: number
 }
 
+/** What <Game> needs from a render system; the WebGL2 and Canvas2D ones both fit. */
+type GameRenderSystem = System & {
+  readonly stats: RenderStats
+  setDefaultSampling(sampling: Sampling): void
+  createDynamicCanvas(options: DynamicCanvasOptions): ManagedDynamicCanvas
+  dispose(): void
+}
+type Canvas2DCtor = new (canvas: HTMLCanvasElement, entityIds: Map<string, number>) => GameRenderSystem
+
+/** Rendering backend: WebGL2, Canvas2D, or WebGL2 with an automatic Canvas2D fallback. */
+export type RendererBackend = 'auto' | 'webgl' | 'canvas2d'
+
+let warnedFallback = false
+
 export interface GameControls {
   pause(): void
   resume(): void
@@ -67,6 +88,16 @@ export interface GameProps {
   onReady?: (controls: GameControls) => void
   /** Enable time-travel debugging overlay (frame scrubber + entity inspector). */
   devtools?: boolean
+  /**
+   * Rendering backend (default 'auto'):
+   * - 'auto'     — WebGL2, falling back to Canvas2D (with one console warning) when WebGL2 is unavailable
+   * - 'webgl'    — WebGL2 only; shows an error panel when it is unavailable
+   * - 'canvas2d' — Canvas2D only, no WebGL2 context is created. No post-process effects.
+   *
+   * The Canvas2D renderer loads on demand, so it adds nothing to the initial bundle.
+   * **Captured at mount.**
+   */
+  renderer?: RendererBackend
   /** Run the simulation in deterministic mode using a seeded RNG. */
   deterministic?: boolean
   /** Seed for the deterministic RNG (default 0). Only used when deterministic=true. */
@@ -130,6 +161,7 @@ export function Game({
   seed = 0,
   asyncAssets = false,
   sampling,
+  renderer = 'auto',
   onReady,
   plugins,
   mode = 'realtime',
@@ -148,11 +180,65 @@ export function Game({
   const [engine, setEngine] = useState<EngineState | null>(null)
   const [assetsReady, setAssetsReady] = useState(asyncAssets)
   const [webglError, setWebglError] = useState<string | null>(null)
+  // Set once the lazy Canvas2D renderer has loaded; re-runs the engine effect with it.
+  const [canvas2d, setCanvas2d] = useState<Canvas2DCtor | null>(null)
+  // Bumped to remount the canvas when a failed WebGL attempt left it unusable for 2D.
+  const [canvasGen, setCanvasGen] = useState(0)
   const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
   const [dpr, setDpr] = useState(() => (typeof window !== 'undefined' && window.devicePixelRatio) || 1)
 
   useEffect(() => {
     const canvas = canvasRef.current!
+    const entityIds = new Map<string, number>()
+
+    let renderSystem!: GameRenderSystem
+    let wantCanvas2d = renderer === 'canvas2d' || canvas2d !== null
+    if (!wantCanvas2d) {
+      try {
+        renderSystem = new RenderSystem(canvas, entityIds)
+      } catch {
+        if (renderer === 'webgl') {
+          setWebglError(
+            'WebGL2 is required to run this game. Please use a modern browser such as Chrome, Firefox, Edge, or Safari 15+.',
+          )
+          return
+        }
+        wantCanvas2d = true
+        if (!warnedFallback) {
+          warnedFallback = true
+          console.warn(
+            '[Cubeforge] WebGL2 is unavailable; using the Canvas2D renderer (no post-process effects, lower performance).',
+          )
+        }
+      }
+    }
+    if (wantCanvas2d) {
+      if (!canvas2d) {
+        let cancelled = false
+        import('./canvas2dBackend').then(
+          (m) => {
+            if (!cancelled) setCanvas2d(() => m.Canvas2DRenderSystem as Canvas2DCtor)
+          },
+          () => {
+            if (!cancelled) setWebglError('The Canvas2D renderer failed to load.')
+          },
+        )
+        return () => {
+          cancelled = true
+        }
+      }
+      try {
+        renderSystem = new canvas2d(canvas, entityIds)
+      } catch {
+        if (renderer === 'auto' && canvasGen === 0) {
+          // A failed WebGL attempt can leave the canvas locked to its GL mode: use a fresh one.
+          setCanvasGen(1)
+        } else {
+          setWebglError('Neither WebGL2 nor Canvas 2D is available in this browser.')
+        }
+        return
+      }
+    }
     const ecs = new ECSWorld()
     if (deterministic) ecs.setDeterministicSeed(seed)
     const input = new InputManager()
@@ -162,18 +248,7 @@ export function Game({
     const viteEnv = (import.meta as unknown as { env?: { BASE_URL?: string } }).env
     assets.baseURL = (viteEnv?.BASE_URL ?? '/').replace(/\/$/, '')
     ecs.assets = assets
-    const entityIds = new Map<string, number>()
 
-    // Always use the WebGL2 render system
-    let renderSystem: RenderSystem
-    try {
-      renderSystem = new RenderSystem(canvas, entityIds)
-    } catch {
-      setWebglError(
-        'WebGL2 is required to run this game. Please use a modern browser such as Chrome, Firefox, Edge, or Safari 15+.',
-      )
-      return
-    }
     if (sampling) renderSystem.setDefaultSampling(sampling)
     const activeRenderSystem: System = renderSystem
 
@@ -271,6 +346,7 @@ export function Game({
       ecs,
       input,
       activeRenderSystem,
+      renderBackend: wantCanvas2d ? 'canvas2d' : 'webgl',
       physics: undefined,
       gravity,
       events,
@@ -378,7 +454,7 @@ export function Game({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canvas2d, canvasGen])
 
   // Start loop once initial scene sprites are loaded.
   // Because React runs child effects before parent effects, all Sprite useEffects
@@ -474,7 +550,7 @@ export function Game({
         }}
       >
         <span style={{ fontSize: 24 }}>⚠</span>
-        <strong>WebGL2 Not Available</strong>
+        <strong>Rendering Not Available</strong>
         <span style={{ color: '#78909c', fontSize: 11, maxWidth: 380 }}>{webglError}</span>
       </div>
     )
@@ -483,7 +559,14 @@ export function Game({
   return (
     <EngineContext.Provider value={engine}>
       <div ref={wrapperRef} style={wrapperStyle}>
-        <canvas ref={canvasRef} width={width} height={height} style={canvasStyle} className={className} />
+        <canvas
+          key={canvasGen}
+          ref={canvasRef}
+          width={width}
+          height={height}
+          style={canvasStyle}
+          className={className}
+        />
         {debug && (
           <canvas
             ref={debugCanvasRef}
