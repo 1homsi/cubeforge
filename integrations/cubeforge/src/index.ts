@@ -345,6 +345,7 @@ export type { PostProcessEffect, PostProcessStack } from '@cubeforge/renderer'
 export type { PostProcessOptions } from '@cubeforge/renderer'
 
 // Types and utilities from engine packages
+export { EngineContext, EntityContext } from './context'
 export type { EngineState } from './context'
 export type { GameControls } from './components/Game'
 export type { EntityId, ECSWorld, ScriptUpdateFn, Plugin, WorldSnapshot, GameLoopMode } from '@cubeforge/core'

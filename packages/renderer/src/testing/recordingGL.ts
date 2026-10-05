@@ -343,13 +343,28 @@ export function createRecordingCanvas(width = 800, height = 600, opts: Recording
   return canvas as unknown as RecordingCanvas
 }
 
+export interface HeadlessCanvasOptions {
+  /**
+   * Replace an existing `HTMLCanvasElement.getContext` (jsdom's stub) so every
+   * canvas, including the one `<Game>` renders, gets a {@link RecordingGL}.
+   * Without it an existing `getContext` is left alone.
+   */
+  force?: boolean
+  /** Options for the {@link RecordingGL} each canvas receives. */
+  recording?: RecordingGLOptions
+  /** Called once per canvas when its WebGL2 context is first requested. */
+  onContext?: (canvas: HTMLCanvasElement, gl: RecordingGL) => void
+}
+
 /**
  * Makes the renderer's offscreen canvases (text, shapes, particles) work without
  * a real canvas implementation. In plain Node it installs a minimal `document`;
  * under happy-dom/jsdom it gives `HTMLCanvasElement` a no-op `getContext` when
- * the environment has none. Returns a function that undoes the change.
+ * the environment has none (or always, with `force`). A canvas keeps one
+ * RecordingGL across `getContext('webgl2')` calls, like a real one. Returns a
+ * function that undoes the change.
  */
-export function installHeadlessCanvasDOM(): () => void {
+export function installHeadlessCanvasDOM(options: HeadlessCanvasOptions = {}): () => void {
   const g = globalThis as unknown as {
     document?: unknown
     HTMLCanvasElement?: { prototype: { getContext?: unknown } }
@@ -366,18 +381,28 @@ export function installHeadlessCanvasDOM(): () => void {
     }
   }
   const proto = g.HTMLCanvasElement?.prototype
-  if (!proto || typeof proto.getContext === 'function') return noop
+  if (!proto || (typeof proto.getContext === 'function' && !options.force)) return noop
+  const previous = Object.getOwnPropertyDescriptor(proto, 'getContext')
   const ctxs = new WeakMap<object, unknown>()
-  proto.getContext = function (this: { width: number; height: number }, kind: string) {
+  const gls = new WeakMap<object, RecordingGL>()
+  proto.getContext = function (this: HTMLCanvasElement, kind: string) {
     if (kind === '2d') {
       let c = ctxs.get(this)
       if (!c) ctxs.set(this, (c = createNoop2D(this)))
       return c
     }
-    if (kind === 'webgl2') return new RecordingGL(this)
+    if (kind === 'webgl2') {
+      let gl = gls.get(this)
+      if (!gl) {
+        gls.set(this, (gl = new RecordingGL(this, options.recording)))
+        options.onContext?.(this, gl)
+      }
+      return gl
+    }
     return null
   }
   return () => {
-    delete proto.getContext
+    if (previous) Object.defineProperty(proto, 'getContext', previous)
+    else delete proto.getContext
   }
 }
