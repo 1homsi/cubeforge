@@ -464,7 +464,11 @@ export class TileLayerRenderer {
 
   private upload(layer: TileLayerData, s: LayerGL): void {
     const { gl } = this
-    if (layer.tints && s.tintVersion !== layer.tintVersion) this.uploadTintsFull(layer, s)
+    let tintsFresh = false
+    if (layer.tints && s.tintVersion !== layer.tintVersion) {
+      this.uploadTintsFull(layer, s)
+      tintsFresh = true
+    }
     const needFull = s.fullVersion !== layer.fullVersion
     if (needFull || layer.dirtyCount > 0) {
       const fmt = gl.RED_INTEGER
@@ -476,6 +480,9 @@ export class TileLayerRenderer {
         for (let p = 0; p < s.pages.length; p++) {
           const pg = s.pages[p]
           this.subUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h, fmt, type)
+          // setTiles/fill drop the pending dirty list, so a setTint made in the same frame would
+          // otherwise never reach the GPU: re-upload the page's tints with the full replace.
+          if (layer.tints && pg.tint && !tintsFresh) this.tintUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h)
         }
         s.fullVersion = layer.fullVersion
       } else {

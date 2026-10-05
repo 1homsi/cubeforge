@@ -449,6 +449,27 @@ describe('TileLayer variation, tints and jitter', () => {
     expect(tintUploads()).toHaveLength(1)
   })
 
+  it('uploads a setTint made in the same frame as setTiles / fill', () => {
+    const { gl, calls, reset } = fakeGL()
+    const r = new TileLayerRenderer(gl)
+    const l = makeLayer({ tinted: true })
+    const world = worldWith(l)
+    r.prepare(world, 0)
+    const tintUploads = () => calls.filter((c) => c[0] === 'texSubImage2D' && c[1][8] === l.tints)
+    for (const rewrite of [() => l.setTiles(l.tiles), () => l.fill(2)]) {
+      reset()
+      rewrite()
+      l.setTint(1, 1, 0x0000ffff)
+      r.prepare(world, 0)
+      // Some upload must cover tile (1, 1) of the first page, and read the new bytes.
+      const covers = tintUploads().some((c) => {
+        const [, , x, y, w, h] = c[1] as number[]
+        return x <= 1 && y <= 1 && x + w > 1 && y + h > 1
+      })
+      expect(covers).toBe(true)
+    }
+  })
+
   it('passes jitter and tint flags to the shader', () => {
     const { gl, calls } = fakeGL()
     const r = new TileLayerRenderer(gl)
