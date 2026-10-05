@@ -77,9 +77,25 @@ export interface TileLayerOptions {
   variants?: Record<number, number[]>
   /** Per-tile brightness variation from the tile hash, 0..1. Default 0. */
   jitter?: number
+  /**
+   * How the tile atlas is sampled when more than one atlas texel falls on a device
+   * pixel (zoomed out). `'nearest'` (default): exact texels, crisp at any zoom but
+   * shimmers when panning zoomed out. `'mipmap'`: a per-tile mip pyramid (built once
+   * per atlas image, on the first minified draw) blended trilinearly in the shader;
+   * tiles never bleed into their neighbours, and magnified/1:1 drawing stays exact.
+   */
+  minFilter?: TileMinFilter
+  /**
+   * Below this many device pixels per tile the tile is drawn with its atlas tile's
+   * average colour instead of sampling texels. Default 2; 0 turns the average off
+   * (useful with `minFilter: 'mipmap'`, whose top level is that average).
+   */
+  farZoomPx?: number
   /** Allocate the per-tile RGBA tint layer up front (otherwise on first setTint). */
   tinted?: boolean
 }
+
+export type TileMinFilter = 'nearest' | 'mipmap'
 
 /** Stable per-cell hash shared with the tile shader (variants, jitter). */
 export function tileHash(x: number, y: number): number {
@@ -154,6 +170,8 @@ export class TileLayerData {
   /** Bumped when the tint layer is (re)allocated or fully replaced. */
   tintVersion = 0
   private _jitter = 0
+  private _minFilter: TileMinFilter = 'nearest'
+  private _farZoomPx = 2
   /** Packed variant table: heads ((start << 8) | count) for ids < variantSize, then the id lists. */
   variantTable: Uint32Array | null = null
   variantSize = 0
@@ -196,7 +214,28 @@ export class TileLayerData {
     if (opts.animations) this.setAnimations(opts.animations)
     if (opts.variants) this.setVariants(opts.variants)
     this._jitter = opts.jitter ?? 0
+    this._minFilter = opts.minFilter ?? 'nearest'
+    this._farZoomPx = opts.farZoomPx ?? 2
     if (opts.tinted) this.enableTints()
+  }
+
+  get minFilter(): TileMinFilter {
+    return this._minFilter
+  }
+  set minFilter(v: TileMinFilter) {
+    if (v === this._minFilter) return
+    this._minFilter = v
+    this.revision++
+    this.onChange?.()
+  }
+  get farZoomPx(): number {
+    return this._farZoomPx
+  }
+  set farZoomPx(v: number) {
+    if (v === this._farZoomPx) return
+    this._farZoomPx = v
+    this.revision++
+    this.onChange?.()
   }
 
   get jitter(): number {

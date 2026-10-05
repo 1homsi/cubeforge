@@ -1,4 +1,5 @@
 import type { ECSWorld } from '@cubeforge/core'
+import { buildTileMips } from './tileMips'
 import { isTilesetReady, visibleTileRange, type TileLayerData, type TileLayerComponent } from './tileLayer'
 
 // One quad per visible page; the fragment shader looks the tile id up in an
@@ -37,6 +38,8 @@ uniform usampler2D u_lut;
 uniform usampler2D u_var;
 uniform sampler2D u_tint;
 uniform sampler2D u_avg;
+uniform sampler2D u_mip;
+uniform float u_lod;
 uniform uint u_lutSize;
 uniform int u_lutW;
 uniform uint u_varSize;
@@ -60,6 +63,22 @@ uint tileHash(uvec2 p) {
 uint fetchU(usampler2D t, int w, uint i) {
   return texelFetch(t, ivec2(int(i) % w, int(i) / w), 0).r;
 }
+// Bilinear tap inside one tile of mip level L (clamped to the tile: no bleeding), premultiplied.
+vec4 mipTap(int t, int L, vec2 f) {
+  ivec2 tsz = max(u_ts.xy >> L, ivec2(1));
+  vec2 p = f * vec2(tsz) - 0.5;
+  vec2 pf = floor(p);
+  vec2 w = p - pf;
+  ivec2 i0 = clamp(ivec2(pf), ivec2(0), tsz - 1);
+  ivec2 i1 = clamp(ivec2(pf) + 1, ivec2(0), tsz - 1);
+  ivec2 org = ivec2(t % u_ts.z, t / u_ts.z) * tsz;
+  vec4 a = texelFetch(u_mip, org + i0, L);
+  vec4 b = texelFetch(u_mip, org + ivec2(i1.x, i0.y), L);
+  vec4 c = texelFetch(u_mip, org + ivec2(i0.x, i1.y), L);
+  vec4 d = texelFetch(u_mip, org + i1, L);
+  a.rgb *= a.a; b.rgb *= b.a; c.rgb *= c.a; d.rgb *= d.a;
+  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
+}
 void main() {
   ivec2 cell = clamp(ivec2(floor(v_tile)), ivec2(0), u_pageSize - 1);
   uint id = texelFetch(u_index, cell, 0).r;
@@ -76,6 +95,14 @@ void main() {
   vec4 c;
   if (u_useAvg == 1) {
     c = texelFetch(u_avg, ivec2(t % u_ts.z, t / u_ts.z), 0);
+  } else if (u_lod > 0.0) {
+    // Minified: blend two levels of the per-tile mip pyramid (trilinear), no cross-tile bleeding.
+    int l0 = int(floor(u_lod));
+    vec2 f = fract(v_tile);
+    vec4 m = mipTap(t, l0, f);
+    float fr = u_lod - float(l0);
+    if (fr > 0.0) m = mix(m, mipTap(t, l0 + 1, f), fr);
+    c = vec4(m.a > 0.0 ? m.rgb / m.a : vec3(0.0), m.a);
   } else {
     ivec2 tsz = u_ts.xy;
     ivec2 px = clamp(ivec2(floor(fract(v_tile) * vec2(tsz))), ivec2(0), tsz - 1);
@@ -114,6 +141,9 @@ interface LayerGL {
   atlasTex: WebGLTexture | null
   atlasImage: unknown
   avgTex: WebGLTexture | null
+  mipTex: WebGLTexture | null
+  mipLevels: number
+  mipImage: unknown
   tintVersion: number
   varTex: WebGLTexture | null
   varW: number
@@ -143,6 +173,7 @@ interface Uniforms {
   jitter: WebGLUniformLocation | null
   hasTint: WebGLUniformLocation | null
   useAvg: WebGLUniformLocation | null
+  lod: WebGLUniformLocation | null
 }
 
 export interface TileLayerRenderStats {
@@ -317,7 +348,20 @@ export class TileLayerRenderer {
       gl.uniform1f(u.jitter, layer.jitter)
       // Below ~2 device pixels per tile, one texel per pixel aliases; use the tile's average colour.
       const pxPerTile = Math.min(layer.tileWorldWidth, layer.tileWorldHeight) * zoom * dpr
-      gl.uniform1i(u.useAvg, s.avgTex && pxPerTile < 2 ? 1 : 0)
+      gl.uniform1i(u.useAvg, s.avgTex && pxPerTile < layer.farZoomPx ? 1 : 0)
+      // Minified: atlas texels per device pixel; mipmap mode filters instead of point-sampling.
+      let lod = 0
+      if (layer.minFilter === 'mipmap') {
+        const texelsPerPx = Math.max(
+          ts.tileWidth / (layer.tileWorldWidth * zoom * dpr),
+          ts.tileHeight / (layer.tileWorldHeight * zoom * dpr),
+        )
+        if (texelsPerPx > 1.2) {
+          if (s.mipImage !== ts.image) this.uploadMips(layer, s)
+          if (s.mipTex) lod = Math.min(Math.log2(texelsPerPx), s.mipLevels)
+        }
+      }
+      gl.uniform1f(u.lod, lod)
       const tinted = layer.tints !== null
       gl.uniform1i(u.hasTint, tinted ? 1 : 0)
       gl.activeTexture(gl.TEXTURE0)
@@ -328,6 +372,8 @@ export class TileLayerRenderer {
       gl.bindTexture(gl.TEXTURE_2D, s.varTex ?? this.dummyLut)
       gl.activeTexture(gl.TEXTURE5)
       gl.bindTexture(gl.TEXTURE_2D, s.avgTex ?? this.dummyRGBA)
+      gl.activeTexture(gl.TEXTURE6)
+      gl.bindTexture(gl.TEXTURE_2D, s.mipTex ?? this.dummyRGBA)
 
       for (let p = 0; p < s.pages.length; p++) {
         const pg = s.pages[p]
@@ -413,6 +459,7 @@ export class TileLayerRenderer {
       jitter: loc('u_jitter'),
       hasTint: loc('u_hasTint'),
       useAvg: loc('u_useAvg'),
+      lod: loc('u_lod'),
     }
     gl.useProgram(prog)
     gl.uniform1i(loc('u_atlas'), 0)
@@ -421,6 +468,7 @@ export class TileLayerRenderer {
     gl.uniform1i(loc('u_var'), 3)
     gl.uniform1i(loc('u_tint'), 4)
     gl.uniform1i(loc('u_avg'), 5)
+    gl.uniform1i(loc('u_mip'), 6)
 
     this.vao = gl.createVertexArray()
     gl.bindVertexArray(this.vao)
@@ -481,6 +529,9 @@ export class TileLayerRenderer {
       atlasTex: null,
       atlasImage: null,
       avgTex: null,
+      mipTex: null,
+      mipLevels: 0,
+      mipImage: null,
       tintVersion: -1,
       varTex: null,
       varW: 0,
@@ -654,6 +705,39 @@ export class TileLayerRenderer {
     s.atlasImage = layer.tileset.image
     if (s.avgTex) gl.deleteTexture(s.avgTex)
     s.avgTex = this.createAverageTexture(layer)
+    if (s.mipTex) gl.deleteTexture(s.mipTex)
+    s.mipTex = null
+    s.mipImage = null
+  }
+
+  /**
+   * Per-tile mip pyramid (box filter, alpha-weighted) in one texture with explicit
+   * levels: tile t at level L sits at ((t % columns) * (tw >> L), (t / columns) * (th >> L)).
+   * Built once per atlas image, on the first minified draw. Null if the atlas can't be read.
+   */
+  private uploadMips(layer: TileLayerData, s: LayerGL): void {
+    const { gl } = this
+    s.mipImage = layer.tileset.image
+    if (s.mipTex) gl.deleteTexture(s.mipTex)
+    s.mipTex = null
+    s.mipLevels = 0
+    const ts = layer.tileset
+    const levels = buildTileMips(ts)
+    if (!levels) return
+    const tex = gl.createTexture()!
+    gl.activeTexture(gl.TEXTURE6)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texStorage2D(gl.TEXTURE_2D, levels.length, gl.RGBA8, levels[0].w, levels[0].h)
+    for (let L = 0; L < levels.length; L++) {
+      gl.texSubImage2D(gl.TEXTURE_2D, L, 0, 0, levels[L].w, levels[L].h, gl.RGBA, gl.UNSIGNED_BYTE, levels[L].data)
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.activeTexture(gl.TEXTURE0)
+    s.mipTex = tex
+    s.mipLevels = levels.length - 1
   }
 
   /** One texel per atlas tile holding its mean colour; null if the atlas can't be read. */
@@ -723,6 +807,7 @@ export class TileLayerRenderer {
     if (s.lutTex) gl.deleteTexture(s.lutTex)
     if (s.atlasTex) gl.deleteTexture(s.atlasTex)
     if (s.avgTex) gl.deleteTexture(s.avgTex)
+    if (s.mipTex) gl.deleteTexture(s.mipTex)
     if (s.varTex) gl.deleteTexture(s.varTex)
   }
 }

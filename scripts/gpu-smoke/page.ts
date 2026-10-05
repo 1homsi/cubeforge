@@ -116,6 +116,35 @@ try {
   out.decorAboveLowSprite = px(105, 95)
   out.highSpriteAboveDecor = px(125, 95)
   out.glError3 = gl.getError()
+
+  // tile atlas filtering: a 1px checkerboard zoomed out 4x is mid grey with mipmaps
+  const checker = document.createElement('canvas')
+  checker.width = 16
+  checker.height = 16
+  const cg = checker.getContext('2d')!
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      cg.fillStyle = (x + y) % 2 ? '#ffffff' : '#000000'
+      cg.fillRect(x, y, 1, 1)
+    }
+  const mipLayer = new TileLayerData({
+    width: 4,
+    height: 4,
+    tileset: { image: checker, tileWidth: 16, tileHeight: 16, columns: 1 },
+    minFilter: 'mipmap',
+    farZoomPx: 0,
+    zIndex: 5,
+    x: 100,
+    y: 100, // 64x64 world, 16x16 px at zoom 0.25 around screen (121..137)
+  })
+  mipLayer.fill(1)
+  world.addComponent(world.createEntity(), createTileLayerComponent(mipLayer))
+  world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 0.25
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.mipCheckerGrey = px(129, 129)
+  out.mipCheckerGreyB = px(125, 133)
+  out.glError5 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }

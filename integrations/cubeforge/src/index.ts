@@ -47,6 +47,7 @@ export type {
   TilesetImage,
   TileAnimation,
   TileLayerOptions,
+  TileMinFilter,
   TileLayerComponent,
   TileLayerRenderStats,
 } from '@cubeforge/renderer'

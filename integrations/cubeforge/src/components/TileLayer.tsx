@@ -39,6 +39,8 @@ export function useTileLayer(options: TileLayerOptions): TileLayerData {
     layer.setVariants(variants ?? {})
   }
   layer.jitter = jitter ?? 0
+  layer.minFilter = options.minFilter ?? 'nearest'
+  layer.farZoomPx = options.farZoomPx ?? 2
   return layer
 }
 
