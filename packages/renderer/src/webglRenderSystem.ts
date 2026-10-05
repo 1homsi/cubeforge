@@ -21,6 +21,7 @@ import {
   COMPOSITE_FRAG_SRC,
 } from './shaders'
 import { parseCSSColor } from './colorParser'
+import { clampCameraToBounds } from './components/camera2d'
 import type { SpriteLayer, LayerAtlas } from './spriteLayer'
 import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLayerGL'
 import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
@@ -2440,12 +2441,7 @@ export class RenderSystem implements System {
         }
       }
 
-      if (cam.bounds) {
-        const halfW = Wl / (2 * cam.zoom)
-        const halfH = Hl / (2 * cam.zoom)
-        cam.x = Math.max(cam.bounds.x + halfW, Math.min(cam.bounds.x + cam.bounds.width - halfW, cam.x))
-        cam.y = Math.max(cam.bounds.y + halfH, Math.min(cam.bounds.y + cam.bounds.height - halfH, cam.y))
-      }
+      if (cam.bounds) clampCameraToBounds(cam, Wl / (2 * cam.zoom), Hl / (2 * cam.zoom))
 
       if (cam.shakeTimer > 0) {
         cam.shakeTimer -= dt

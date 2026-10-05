@@ -101,4 +101,55 @@ describe('Sprite component', () => {
     })
     expect(engine.ecs.getComponent(entityId, 'Sprite')).toBeUndefined()
   })
+
+  it('propagates size, offset, anchor, frame, tiling and sampling prop changes to the component', async () => {
+    let view!: ReturnType<typeof renderSprite>
+    await act(async () => {
+      view = renderSprite({ width: 10, height: 20 })
+    })
+    const tree = (props: Record<string, unknown>) => (
+      <EngineContext.Provider value={engine}>
+        <EntityContext.Provider value={entityId}>
+          <Sprite width={10} height={20} {...props} />
+        </EntityContext.Provider>
+      </EngineContext.Provider>
+    )
+    await act(async () => {
+      view.rerender(
+        tree({
+          width: 1152,
+          height: 896,
+          offsetX: 3,
+          offsetY: 4,
+          anchorX: 0,
+          anchorY: 1,
+          frameWidth: 16,
+          frameHeight: 24,
+          frameColumns: 4,
+          tileX: true,
+          tileY: true,
+          tileSizeX: 8,
+          tileSizeY: 9,
+          sampling: 'linear',
+        }),
+      )
+    })
+    const s = getSprite<Record<string, unknown>>()
+    expect(s).toMatchObject({
+      width: 1152,
+      height: 896,
+      offsetX: 3,
+      offsetY: 4,
+      anchorX: 0,
+      anchorY: 1,
+      frameWidth: 16,
+      frameHeight: 24,
+      frameColumns: 4,
+      tileX: true,
+      tileY: true,
+      tileSizeX: 8,
+      tileSizeY: 9,
+      sampling: 'linear',
+    })
+  })
 })

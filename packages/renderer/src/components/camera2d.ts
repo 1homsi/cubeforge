@@ -58,3 +58,19 @@ export function createCamera2D(opts?: Partial<Camera2DComponent>): Camera2DCompo
     ...opts,
   }
 }
+
+/**
+ * Keep a camera whose view is `halfW` x `halfH` world units (half extents) inside `bounds`.
+ * On an axis where the bounds are smaller than the view the camera centres on the bounds
+ * instead of pinning to the top/left edge.
+ */
+export function clampCameraToBounds(
+  cam: { x: number; y: number; bounds?: { x: number; y: number; width: number; height: number } },
+  halfW: number,
+  halfH: number,
+): void {
+  const b = cam.bounds
+  if (!b) return
+  cam.x = b.width <= 2 * halfW ? b.x + b.width / 2 : Math.max(b.x + halfW, Math.min(b.x + b.width - halfW, cam.x))
+  cam.y = b.height <= 2 * halfH ? b.y + b.height / 2 : Math.max(b.y + halfH, Math.min(b.y + b.height - halfH, cam.y))
+}
