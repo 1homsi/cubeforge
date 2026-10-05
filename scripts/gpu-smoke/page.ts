@@ -75,6 +75,11 @@ try {
   rs.update(world, 1 / 60)
   out.nightTile = px(40, 40)
   rs.setScreenTint(1, 1, 1, 0)
+  // a tint set in the same frame as a full tile replace must still reach the GPU
+  tiles.setTiles(tiles.tiles)
+  tiles.setTint(0, 0, 0x0000ffff)
+  rs.update(world, 1 / 60)
+  out.retintedAfterSetTiles = px(8, 8)
   // far zoom: average-colour path
   world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 0.05
   tiles.jitter = 0.5

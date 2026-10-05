@@ -66,6 +66,7 @@ try {
     overlapTopIsYellow: '255,255,0,255',
     magentaOnly: '255,0,255,255',
     nightTile: '128,128,255,255',
+    retintedAfterSetTiles: '0,0,255,255',
     glError: 0,
     glError2: 0,
   }
