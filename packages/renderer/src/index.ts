@@ -38,8 +38,9 @@ export {
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
   MAX_LAYER_ATLASES,
+  ATLASES_PER_DRAW,
 } from './spriteLayer'
-export type { SpriteLayerOptions, LayerAtlas, SpriteLayerImage } from './spriteLayer'
+export type { SpriteLayerOptions, LayerAtlas, AtlasFrame, SpriteLayerImage } from './spriteLayer'
 export {
   TileLayerData,
   createTileLayerComponent,

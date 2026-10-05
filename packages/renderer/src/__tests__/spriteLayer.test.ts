@@ -19,6 +19,7 @@ function setup() {
   const draws: number[] = []
   const uploads: Float32Array[] = []
   const tex: string[] = []
+  const params: [string, string, string][] = []
   const gl = new Proxy({} as Record<string, unknown>, {
     get(_t, p: string) {
       if (/^[A-Z_0-9]+$/.test(p)) return p
@@ -29,13 +30,15 @@ function setup() {
         return (_t: unknown, _o: unknown, data: Float32Array, src: number, len: number) =>
           uploads.push(data.slice(src, src + len))
       if (p === 'texImage2D' || p === 'texSubImage2D') return () => tex.push(p)
+      if (p === 'texParameteri')
+        return (_t: unknown, pname: string, value: string) => params.push([_t as string, pname, value])
       if (p === 'getShaderParameter' || p === 'getProgramParameter') return () => true
       return () => true
     },
   })
   const canvas = { width: 200, height: 100, clientWidth: 200, clientHeight: 100, getContext: () => gl }
   const rs = new RenderSystem(canvas as unknown as HTMLCanvasElement, new Map())
-  return { rs, world: new ECSWorld(), draws, uploads, tex }
+  return { rs, world: new ECSWorld(), draws, uploads, tex, params }
 }
 
 describe('SpriteLayer', () => {
@@ -137,5 +140,117 @@ describe('SpriteLayer', () => {
     expect(sub()).toBe(1)
     rs.update(world, 1 / 60)
     expect(sub()).toBe(1)
+  })
+
+  const img = (w: number, h = 16) =>
+    ({ width: w, height: h, naturalWidth: w, naturalHeight: h }) as unknown as HTMLImageElement
+  /** Decoded instances of the last upload: uv rect and atlas unit per instance. */
+  const lastUVs = (uploads: Float32Array[], n: number) =>
+    Array.from({ length: n }, (_, k) => {
+      const d = uploads[uploads.length - 1]
+      return { uv: Array.from(d.subarray(k * 20 + 13, k * 20 + 17)), unit: d[k * 20 + 17] }
+    })
+
+  it('uses an explicit frame table for UV rects and skips out-of-range frames', () => {
+    const { rs, world, draws, uploads } = setup()
+    const layer = new SpriteLayer({
+      image: img(64, 32),
+      frames: [
+        { x: 0, y: 0, w: 16, h: 32 },
+        { x: 32, y: 8, w: 32, h: 8 },
+      ],
+    })
+    layer.add(0, 0, 8, 8, 0)
+    layer.add(10, 0, 8, 8, 1)
+    layer.add(20, 0, 8, 8, 2) // no such frame
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    expect(draws).toEqual([2])
+    const [a, b] = lastUVs(uploads, 2)
+    expect(a.uv).toEqual([0, 0, 0.25, 1])
+    expect(b.uv).toEqual([0.5, 0.25, 0.5, 0.25])
+  })
+
+  it('insets frame and grid UVs by the given texture pixels', () => {
+    const { rs, world, uploads } = setup()
+    const layer = new SpriteLayer({
+      atlases: [
+        { image: img(64, 32), frames: [{ x: 16, y: 0, w: 16, h: 16 }], inset: 1 },
+        { image: img(64, 32), frameWidth: 32, frameHeight: 32, inset: 2 },
+      ],
+    })
+    layer.add(0, 0, 8, 8, 0)
+    layer.add(10, 0, 8, 8, 0)
+    layer.atlas[1] = 1
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    const [a, b] = lastUVs(uploads, 2)
+    expect(a.uv).toEqual([17 / 64, 1 / 32, 14 / 64, 14 / 32])
+    expect(b.uv).toEqual([2 / 64, 2 / 32, 28 / 64, 28 / 32])
+  })
+
+  it('grids honour spacing and margin', () => {
+    const { rs, world, uploads } = setup()
+    const layer = new SpriteLayer({
+      image: img(70, 40),
+      frameWidth: 16,
+      frameHeight: 16,
+      frameSpacing: 2,
+      frameMargin: 3,
+    })
+    layer.add(0, 0, 8, 8, 0)
+    layer.add(10, 0, 8, 8, 1)
+    layer.add(20, 0, 8, 8, 4) // 4 columns of (70 - 6 + 2) / 18 = 3 -> second row, column 1
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    const [a, b, c] = lastUVs(uploads, 3)
+    expect(a.uv.map((n) => +n.toFixed(5))).toEqual([3 / 70, 3 / 40, 16 / 70, 16 / 40].map((n) => +n.toFixed(5)))
+    expect(b.uv[0]).toBeCloseTo(21 / 70)
+    expect(c.uv[0]).toBeCloseTo(21 / 70)
+    expect(c.uv[1]).toBeCloseTo(21 / 40)
+  })
+
+  it('draws more than 8 atlases: one call per run of sprites in the same group of 8', () => {
+    const { rs, world, draws, uploads } = setup()
+    const atlases = Array.from({ length: 20 }, () => ({ image: img(16), frameWidth: 16, frameHeight: 16 }))
+    const layer = new SpriteLayer({ atlases, sortByKey: true })
+    // atlas, sortKey: groups 0 0 1 1 2 0 -> runs of (0,0) (1,1) (2) (0)
+    ;[0, 7, 8, 15, 19, 3].forEach((atlas, n) => {
+      const i = layer.add(n * 10, 0, 8, 8)
+      layer.atlas[i] = atlas
+      layer.sortKey[i] = n
+    })
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    expect(draws).toEqual([2, 2, 1, 1])
+    // local unit = atlas & 7 (the shader picks the texture by unit)
+    const units = uploads.flatMap((u) => Array.from({ length: u.length / 20 }, (_, k) => u[k * 20 + 17]))
+    expect(units).toEqual([0, 7, 0, 7, 3, 3])
+    layer.sortByKey = false
+    layer.sortKey.fill(0)
+    draws.length = 0
+    layer.touch()
+    rs.update(world, 1 / 60)
+    expect(draws).toEqual([2, 2, 1, 1])
+  })
+
+  it('applies per-atlas sampling over the layer sampling', () => {
+    const { rs, world, params } = setup()
+    const layer = new SpriteLayer({
+      sampling: 'nearest',
+      atlases: [
+        { image: img(16), frameWidth: 16, frameHeight: 16, sampling: 'linear' },
+        { image: img(16), frameWidth: 16, frameHeight: 16 },
+      ],
+    })
+    layer.add(0, 0, 8, 8)
+    const j = layer.add(10, 0, 8, 8)
+    layer.atlas[j] = 1
+    rs.addSpriteLayer(layer)
+    params.length = 0
+    rs.update(world, 1 / 60)
+    const mins = params.filter((p) => p[1] === 'TEXTURE_MIN_FILTER').map((p) => p[2])
+    expect(mins).toContain('LINEAR')
+    expect(mins).toContain('NEAREST')
   })
 })

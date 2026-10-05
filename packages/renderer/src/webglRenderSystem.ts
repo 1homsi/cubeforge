@@ -2209,7 +2209,7 @@ export class RenderSystem implements System {
       cam,
       (i) => this.resolveLayerAtlas(layer.atlases[i]),
       this.whiteTexture,
-      (tex) => this.applySampling(tex, layer.sampling),
+      (i, tex) => this.applySampling(tex, layer.atlases[i].sampling ?? layer.sampling),
     )
     this.stats.drawCalls += r.drawCalls
     this.stats.batches += r.drawCalls

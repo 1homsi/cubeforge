@@ -166,6 +166,47 @@ try {
   out.stackBottomLeftUntouched = px(10, 245) === '255,0,255,255' ? 'flipped' : 'ok'
   out.stackKeepsScene = px(128, 128) === '255,0,255,255' ? 'overwritten' : 'ok'
   out.glError6 = gl.getError()
+  world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 1
+  tiles.jitter = 0
+  // sprite layer: 12 atlases (two bind groups, drawn in depth order) and a frame table
+  const many = new SpriteLayer({
+    atlases: Array.from({ length: 12 }, (_, i) => ({
+      image: solid([i === 9 ? '#00ffff' : i === 0 ? '#ff0000' : '#ffffff']),
+      frameWidth: 16,
+      frameHeight: 16,
+    })),
+    sortByKey: true,
+    zIndex: 30,
+  })
+  const m0 = many.add(150, 50, 16, 16)
+  many.atlas[m0] = 0
+  many.sortKey[m0] = 1
+  const m9 = many.add(156, 56, 16, 16)
+  many.atlas[m9] = 9
+  many.sortKey[m9] = 2
+  const m0b = many.add(190, 50, 16, 16) // red again after the group switch: draws on top of cyan
+  many.atlas[m0b] = 0
+  many.sortKey[m0b] = 3
+  const m9b = many.add(196, 56, 16, 16)
+  many.atlas[m9b] = 9
+  many.sortKey[m9b] = 0
+  rs.addSpriteLayer(many)
+  const framed = new SpriteLayer({
+    image: solid(['#00ff00', '#ff00ff']),
+    frames: [{ x: 16, y: 0, w: 16, h: 16 }],
+    inset: 2,
+    zIndex: 40,
+  })
+  framed.add(230, 50, 16, 16, 0)
+  rs.addSpriteLayer(framed)
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.groupTopIsCyan = px(162, 62) // only the cyan (atlas 9, key 2) sprite covers it
+  out.groupUnderIsRed = px(144, 44) // only the red (atlas 0, key 1) sprite
+  out.groupOverlapTopCyan = px(155, 55)
+  out.groupSwitchRedOnTop = px(192, 52)
+  out.frameTableMagenta = px(230, 50)
+  out.glError4 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }

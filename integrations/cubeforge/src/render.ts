@@ -52,6 +52,7 @@ export type { TextLayerOptions, TextRunOptions, GlyphStyleOptions } from '@cubef
 export type {
   SpriteLayerOptions,
   LayerAtlas,
+  AtlasFrame,
   TileLayerOptions,
   TileMinFilter,
   Tileset,

@@ -255,7 +255,30 @@ crowd.touch()
 const id = crowd.pick(worldX, worldY) // your id of the topmost sprite, -1 if none
 ```
 
-Up to 8 atlases draw in one instanced call. The y-sort is incremental (near-linear when keys drift
+Up to 256 atlases per layer. Atlases bind in groups of 8 (`atlas >> 3`); consecutive sprites (in draw
+order) whose atlases share a group draw in one instanced call, a change of group starts a new call,
+so keep frequently interleaved sprite types in the same group of 8.
+
+Frames: a uniform grid (`frameWidth`, `frameHeight`, optional `frameSpacing`, `frameMargin`,
+`frameColumns`) or an explicit frame table for irregular atlases, with an optional `inset` (texture
+pixels shaved off every side of each frame's UVs so linear filtering and mipmaps cannot bleed
+neighbours in):
+
+```ts
+useSpriteLayer({
+  atlases: [
+    { src: '/buildings.png', frames: [{ x: 0, y: 0, w: 96, h: 80 }, { x: 96, y: 0, w: 64, h: 64 }], inset: 0.5 },
+    { src: '/people.png', frameWidth: 16, frameHeight: 16, sampling: 'nearest' }, // per-atlas sampling
+    { src: '/decals.png', frameWidth: 64, frameHeight: 64, sampling: 'linear' },
+  ],
+})
+layer.frame[i] = 1 // index into that atlas's frame table (sprites with an unknown frame are not drawn)
+```
+
+Each atlas can set its own `sampling` (overrides the layer's `sampling`), so pixel art and soft decals
+share one layer.
+
+The y-sort is incremental (near-linear when keys drift
 between frames): about 0.13 ms CPU per frame for 3,000 moving, re-sorted sprites. `pick` walks the
 draw order from the top and ignores rotation.
 

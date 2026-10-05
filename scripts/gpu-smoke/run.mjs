@@ -106,6 +106,12 @@ try {
       stackBottomLeftUntouched: 'ok',
       stackKeepsScene: 'ok',
       glError6: 0,
+      groupTopIsCyan: '0,255,255,255',
+      groupUnderIsRed: '255,0,0,255',
+      groupOverlapTopCyan: '0,255,255,255',
+      groupSwitchRedOnTop: '255,0,0,255',
+      frameTableMagenta: '255,0,255,255',
+      glError4: 0,
     }
     check('layers', out, expect)
     console.log('gpu-smoke: tile layer (tint, variants, avg colour) and multi-atlas sprite layer render correctly')
