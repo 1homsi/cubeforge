@@ -22,8 +22,11 @@ import type { NineSliceComponent } from './components/nineSlice'
 import { DebugOverlayRenderer } from './canvas2d'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
 import { createPostProcessStack, type PostProcessStack } from './postProcess'
+import { hasPointOrSpriteFollow, resolveCameraFollowTarget, type CameraFollowPoint } from './cameraFollow'
 
 const imageCache = new Map<string, HTMLImageElement>()
+/** Scratch follow target, reused every frame (no per-frame allocation). */
+const followTarget: CameraFollowPoint = { x: 0, y: 0 }
 
 /** Generate a consistent HSL colour for a collision layer name. */
 function layerColor(layer: string, alpha: number): string {
@@ -128,31 +131,45 @@ export class RenderSystem implements System {
         this.pendingShake = null
       }
 
-      if (cam.followEntityId) {
+      let hasTarget = false
+      let tx = 0
+      let ty = 0
+      if (hasPointOrSpriteFollow(cam)) {
+        // followPoint > followSprite > followEntity; a missing target holds the camera
+        if (resolveCameraFollowTarget(cam, followTarget)) {
+          hasTarget = true
+          tx = followTarget.x
+          ty = followTarget.y
+        }
+      } else if (cam.followEntityId) {
         const targetId = this.entityIds.get(cam.followEntityId)
-        if (targetId !== undefined) {
-          const targetTransform = world.getComponent<TransformComponent>(targetId, 'Transform')
-          if (targetTransform) {
-            const tx = targetTransform.x + (cam.followOffsetX ?? 0)
-            const ty = targetTransform.y + (cam.followOffsetY ?? 0)
-            if (cam.deadZone) {
-              // Only move camera if target is outside dead zone
-              const halfW = cam.deadZone.w / 2
-              const halfH = cam.deadZone.h / 2
-              const dx = tx - cam.x
-              const dy = ty - cam.y
-              if (dx > halfW) cam.x = tx - halfW
-              else if (dx < -halfW) cam.x = tx + halfW
-              if (dy > halfH) cam.y = ty - halfH
-              else if (dy < -halfH) cam.y = ty + halfH
-            } else if (cam.smoothing > 0) {
-              cam.x += (tx - cam.x) * (1 - cam.smoothing)
-              cam.y += (ty - cam.y) * (1 - cam.smoothing)
-            } else {
-              cam.x = tx
-              cam.y = ty
-            }
-          }
+        const targetTransform =
+          targetId !== undefined ? world.getComponent<TransformComponent>(targetId, 'Transform') : undefined
+        if (targetTransform) {
+          hasTarget = true
+          tx = targetTransform.x
+          ty = targetTransform.y
+        }
+      }
+      if (hasTarget) {
+        tx += cam.followOffsetX ?? 0
+        ty += cam.followOffsetY ?? 0
+        if (cam.deadZone) {
+          // Only move camera if target is outside dead zone
+          const halfW = cam.deadZone.w / 2
+          const halfH = cam.deadZone.h / 2
+          const dx = tx - cam.x
+          const dy = ty - cam.y
+          if (dx > halfW) cam.x = tx - halfW
+          else if (dx < -halfW) cam.x = tx + halfW
+          if (dy > halfH) cam.y = ty - halfH
+          else if (dy < -halfH) cam.y = ty + halfH
+        } else if (cam.smoothing > 0) {
+          cam.x += (tx - cam.x) * (1 - cam.smoothing)
+          cam.y += (ty - cam.y) * (1 - cam.smoothing)
+        } else {
+          cam.x = tx
+          cam.y = ty
         }
       }
 

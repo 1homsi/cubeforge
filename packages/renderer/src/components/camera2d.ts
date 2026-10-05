@@ -1,4 +1,5 @@
 import type { Component } from '@cubeforge/core'
+import type { CameraFollowPointProvider, CameraFollowSprite } from '../cameraFollow'
 
 export interface Camera2DComponent extends Component {
   readonly type: 'Camera2D'
@@ -8,6 +9,18 @@ export interface Camera2DComponent extends Component {
   zoom: number
   /** String ID of entity to follow */
   followEntityId?: string
+  /**
+   * Follow a world-space point returned each frame. Takes priority over
+   * `followSprite` and `followEntityId`. Returning null/undefined holds the camera.
+   */
+  followPoint?: CameraFollowPointProvider
+  /**
+   * Follow one sprite of a SpriteLayer by index or id. Takes priority over
+   * `followEntityId`; a hidden or removed sprite holds the camera.
+   */
+  followSprite?: CameraFollowSprite
+  /** @internal cached index for `followSprite.id` lookups */
+  _followSpriteIndex?: number
   /** Lerp factor for smooth follow (0 = instant, values like 0.85 = smooth) */
   smoothing: number
   /** Background fill color */

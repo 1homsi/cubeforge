@@ -13,6 +13,13 @@ export { CapsuleCollider } from './components/CapsuleCollider'
 export { CompoundCollider } from './components/CompoundCollider'
 export { Script } from './components/Script'
 export { Camera2D } from './components/Camera2D'
+export type { Camera2DProps } from './components/Camera2D'
+export type {
+  CameraFollowPoint,
+  CameraFollowPointProvider,
+  CameraFollowLayer,
+  CameraFollowSprite,
+} from '@cubeforge/renderer'
 export { Animation } from './components/Animation'
 export { AnimatedSprite, defineAnimations } from './components/AnimatedSprite'
 export type { AnimatedSpriteProps, AnimationSet } from './components/AnimatedSprite'

@@ -33,6 +33,13 @@ import {
   DEFAULT_SAMPLING,
 } from './textureFilter'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
+import {
+  hasPointOrSpriteFollow,
+  resolveCameraFollowTarget,
+  type CameraFollowPoint,
+  type CameraFollowPointProvider,
+  type CameraFollowSprite,
+} from './cameraFollow'
 import type { TileLayerRenderStats } from './tileLayerGL'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
@@ -83,6 +90,9 @@ interface Camera2DComponent {
   y: number
   zoom: number
   followEntityId?: string
+  followPoint?: CameraFollowPointProvider
+  followSprite?: CameraFollowSprite
+  _followSpriteIndex?: number
   smoothing: number
   background: string
   bounds?: { x: number; y: number; width: number; height: number }
@@ -463,6 +473,8 @@ function getTextureKey(sprite: SpriteComponent): string {
 // Scratch buffer for UV rects — avoids allocating a 4-tuple per sprite per
 // frame. Consumed immediately by writeInstance at the only call site.
 const uvScratch: [number, number, number, number] = [0, 0, 1, 1]
+/** Scratch follow target, reused every frame (no per-frame allocation). */
+const followTarget: CameraFollowPoint = { x: 0, y: 0 }
 
 // Per-sprite cache of everything derived from its texture inputs, so the hot
 // loop skips string building and DOM getters (img.src/complete/naturalWidth).
@@ -2299,39 +2311,52 @@ export class RenderSystem implements System {
       const cam = world.getComponent<Camera2DComponent>(camId, 'Camera2D')!
       background = cam.background
 
-      if (cam.followEntityId) {
+      let hasTarget = false
+      let tx = 0
+      let ty = 0
+      if (hasPointOrSpriteFollow(cam)) {
+        // followPoint > followSprite > followEntity; a missing target holds the camera
+        if (resolveCameraFollowTarget(cam, followTarget)) {
+          hasTarget = true
+          tx = followTarget.x
+          ty = followTarget.y
+        }
+      } else if (cam.followEntityId) {
         const targetId = this.entityIds.get(cam.followEntityId)
-        if (targetId !== undefined) {
-          const t = world.getComponent<TransformComponent>(targetId, 'Transform')
-          if (t) {
-            const tx = t.x + (cam.followOffsetX ?? 0)
-            const ty = t.y + (cam.followOffsetY ?? 0)
-            if (cam.deadZone) {
-              const halfW = cam.deadZone.w / 2
-              const halfH = cam.deadZone.h / 2
-              const dx = tx - cam.x,
-                dy = ty - cam.y
-              if (dx > halfW) cam.x = tx - halfW
-              else if (dx < -halfW) cam.x = tx + halfW
-              if (dy > halfH) cam.y = ty - halfH
-              else if (dy < -halfH) cam.y = ty + halfH
-            } else if (cam.smoothing > 0) {
-              const distSq = (tx - cam.x) ** 2 + (ty - cam.y) ** 2
-              // Snap instantly when target teleports (>400px jump)
-              if (distSq > 160000) {
-                cam.x = tx
-                cam.y = ty
-              } else {
-                // Same response as a per-frame lerp at 60 fps, at any frame rate.
-                const k = 1 - Math.pow(cam.smoothing, dt * 60)
-                cam.x += (tx - cam.x) * k
-                cam.y += (ty - cam.y) * k
-              }
-            } else {
-              cam.x = tx
-              cam.y = ty
-            }
+        const t = targetId !== undefined ? world.getComponent<TransformComponent>(targetId, 'Transform') : undefined
+        if (t) {
+          hasTarget = true
+          tx = t.x
+          ty = t.y
+        }
+      }
+      if (hasTarget) {
+        tx += cam.followOffsetX ?? 0
+        ty += cam.followOffsetY ?? 0
+        if (cam.deadZone) {
+          const halfW = cam.deadZone.w / 2
+          const halfH = cam.deadZone.h / 2
+          const dx = tx - cam.x,
+            dy = ty - cam.y
+          if (dx > halfW) cam.x = tx - halfW
+          else if (dx < -halfW) cam.x = tx + halfW
+          if (dy > halfH) cam.y = ty - halfH
+          else if (dy < -halfH) cam.y = ty + halfH
+        } else if (cam.smoothing > 0) {
+          const distSq = (tx - cam.x) ** 2 + (ty - cam.y) ** 2
+          // Snap instantly when target teleports (>400px jump)
+          if (distSq > 160000) {
+            cam.x = tx
+            cam.y = ty
+          } else {
+            // Same response as a per-frame lerp at 60 fps, at any frame rate.
+            const k = 1 - Math.pow(cam.smoothing, dt * 60)
+            cam.x += (tx - cam.x) * k
+            cam.y += (ty - cam.y) * k
           }
+        } else {
+          cam.x = tx
+          cam.y = ty
         }
       }
 

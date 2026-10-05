@@ -7,6 +7,13 @@ export { Entity } from './components/Entity'
 export { Transform } from './components/Transform'
 export { Sprite } from './components/Sprite'
 export { Camera2D } from './components/Camera2D'
+export type { Camera2DProps } from './components/Camera2D'
+export type {
+  CameraFollowPoint,
+  CameraFollowPointProvider,
+  CameraFollowLayer,
+  CameraFollowSprite,
+} from '@cubeforge/renderer'
 export { useGame } from './hooks/useGame'
 export { useEntity } from './hooks/useEntity'
 export { useCamera } from './hooks/useCamera'
