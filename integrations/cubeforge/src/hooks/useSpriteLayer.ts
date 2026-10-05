@@ -19,6 +19,10 @@ type SpriteLayerRenderer = {
  * for (let i = 0; i < sim.count; i++) people.set(i, sim.x[i], sim.y[i], sim.frame[i])
  * const hovered = people.pick(worldX, worldY)
  * ```
+ *
+ * Mutating through the layer's methods (`set`, `add`, `touch()` ...) wakes an `onDemand` loop.
+ * After writing the typed arrays directly call `layer.touch()`; after repainting a canvas used
+ * as `image` call `layer.markAtlasDirty()`.
  */
 export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
   const engine = useGame()
@@ -63,8 +67,13 @@ export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
   useLayoutEffect(() => {
     const rs = engine.activeRenderSystem as SpriteLayerRenderer
     rs.addSpriteLayer?.(layer)
+    // touch(), set(), add() ... wake an onDemand loop; realtime loops ignore the call.
+    layer.onChange = () => engine.loop.markDirty()
     engine.loop.markDirty()
-    return () => rs.removeSpriteLayer?.(layer)
+    return () => {
+      layer.onChange = null
+      rs.removeSpriteLayer?.(layer)
+    }
   }, [engine, layer])
 
   return layer

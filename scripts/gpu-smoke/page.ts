@@ -43,9 +43,10 @@ try {
   const te = world.createEntity()
   world.addComponent(te, createTileLayerComponent(tiles))
 
+  const yellowAtlas = solid(['#ffff00'])
   const layer = new SpriteLayer({
     atlases: [
-      { image: solid(['#ffff00']), frameWidth: 16, frameHeight: 16 },
+      { image: yellowAtlas, frameWidth: 16, frameHeight: 16 },
       { image: solid(['#ff00ff']), frameWidth: 16, frameHeight: 16 },
     ],
     sortByKey: true,
@@ -82,6 +83,15 @@ try {
   tiles.setTint(0, 0, 0x0000ffff)
   rs.update(world, 1 / 60)
   out.retintedAfterSetTiles = px(8, 8)
+  // repainting a canvas used as a layer image shows up after markAtlasDirty()
+  rs.update(world, 1 / 60)
+  out.atlasBeforeRepaint = px(192, 192)
+  const g2 = yellowAtlas.getContext('2d')!
+  g2.fillStyle = '#ff0000'
+  g2.fillRect(0, 0, 16, 16)
+  layer.markAtlasDirty(0)
+  rs.update(world, 1 / 60)
+  out.atlasAfterRepaint = px(192, 192)
   // far zoom: average-colour path
   world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 0.05
   tiles.jitter = 0.5
