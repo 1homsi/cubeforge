@@ -58,6 +58,8 @@ export interface TileLayerOptions {
    * Omit it to keep the legacy behaviour: drawn beneath all sprites.
    */
   renderLayer?: string
+  /** Label shown in the per-layer stats (`stats.layers`). Default `tiles<N>` by draw order. */
+  name?: string
   opacity?: number
   /** Chunk edge in tiles for dirty tracking and the Canvas2D cache. Default 32. */
   chunkSize?: number
@@ -137,6 +139,8 @@ export class TileLayerData {
   private _tileset: Tileset
   private _tileWorldWidth: number
   private _tileWorldHeight: number
+  /** Label in the per-layer stats; empty = auto (`tiles<N>`). */
+  name: string
   private _x: number
   private _y: number
   private _zIndex: number
@@ -197,7 +201,7 @@ export class TileLayerData {
   onChange: (() => void) | null = null
 
   constructor(opts: TileLayerOptions) {
-    registerTileRenderer((gl) => new TileLayerRenderer(gl))
+    registerTileRenderer((gl, stats) => new TileLayerRenderer(gl, stats))
     const { width, height } = opts
     if (!(width > 0 && height > 0)) throw new Error('[TileLayer] width and height must be positive')
     this.width = width | 0
@@ -214,6 +218,7 @@ export class TileLayerData {
     this._x = opts.x ?? 0
     this._y = opts.y ?? 0
     this._zIndex = opts.zIndex ?? 0
+    this.name = opts.name ?? ''
     this._opacity = opts.opacity ?? 1
     this._renderLayer = opts.renderLayer
     const chunks = this.chunksX * this.chunksY

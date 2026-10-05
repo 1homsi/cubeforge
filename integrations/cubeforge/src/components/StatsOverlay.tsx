@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import type { EngineStats } from '@cubeforge/core'
 import { useEngineStats } from '../hooks/useProfiler'
 
 export interface StatsOverlayProps {
@@ -12,7 +13,19 @@ const kb = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$
 const ms = (n: number) => n.toFixed(2)
 const rate = (hit: number, miss: number) => (hit + miss === 0 ? '-' : `${Math.round((100 * hit) / (hit + miss))}%`)
 
-/** Frame timings, draw calls, instances, textures and cache hit rates. Place inside <Game>. */
+const gpu = (s: EngineStats) =>
+  s.render.gpuTimerSupported === false
+    ? 'n/a'
+    : s.gpuMs === null
+      ? '...'
+      : `${ms(s.gpuMs)} (avg ${ms(s.gpuMsAvg ?? s.gpuMs)})`
+
+/**
+ * Frame timings (CPU and GPU), draw calls, instances, textures (tile layers included),
+ * tile layer uploads, a per-layer breakdown and cache hit rates. Place inside <Game>.
+ * Mounting it turns on GPU timing; the `gpu ms` row reads `n/a` where the browser
+ * has no timer query support.
+ */
 export function StatsOverlay({ interval = 500, corner = 'top-left', style }: StatsOverlayProps) {
   const s = useEngineStats(interval)
   if (!s) return null
@@ -24,6 +37,7 @@ export function StatsOverlay({ interval = 500, corner = 'top-left', style }: Sta
     ['script ms', ms(s.scriptMs)],
     ['physics ms', ms(s.physicsMs)],
     ['render ms', ms(s.renderMs)],
+    ['gpu ms', gpu(s)],
     ['entities', `${s.entityCount}`],
     ['draws', `${r.drawCalls}`],
     ['instances', `${r.instances}`],
@@ -33,6 +47,23 @@ export function StatsOverlay({ interval = 500, corner = 'top-left', style }: Sta
     ['tex cache', rate(r.textureCacheHits, r.textureCacheMisses)],
     ['text cache', rate(r.textCacheHits, r.textCacheMisses)],
   ]
+  const t = s.tileLayerStats
+  if (s.layers.some((l) => l.kind === 'tile') || t.textureCount > 0) {
+    rows.splice(
+      rows.findIndex(([k]) => k === 'tex cache'),
+      0,
+      ['tile draws', `${t.drawCalls}`],
+      ['tile idx up', `${t.indexUploads} / ${kb(t.uploadedTexels)} texels`],
+      ['tile tex', `${t.textureCount} / ${kb(t.textureBytes)}B`],
+    )
+  }
+  // One line per drawn layer: instances (sprite quads / tile cells), draw calls, upload bytes.
+  for (const l of s.layers) {
+    rows.push([
+      `${l.kind === 'tile' ? 'T' : 'S'} ${l.name}`,
+      `z${l.zIndex} ${kb(l.instances)} i ${l.drawCalls} d ${kb(l.uploadBytes)}B`,
+    ])
+  }
   return (
     <div
       style={{
@@ -44,13 +75,14 @@ export function StatsOverlay({ interval = 500, corner = 'top-left', style }: Sta
         color: '#e6e6e6',
         background: 'rgba(0,0,0,0.7)',
         borderRadius: 4,
+        whiteSpace: 'pre',
         pointerEvents: 'none',
         zIndex: 10,
         ...style,
       }}
     >
-      {rows.map(([k, val]) => (
-        <div key={k}>
+      {rows.map(([k, val], i) => (
+        <div key={i}>
           {k.padEnd(11, ' ')}
           {val}
         </div>

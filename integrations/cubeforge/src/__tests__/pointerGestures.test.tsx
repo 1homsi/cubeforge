@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest'
 import { render, act } from '@testing-library/react'
-import { ECSWorld, EventBus, AssetManager, createTransform } from '@cubeforge/core'
+import { ECSWorld, EventBus, AssetManager, createTransform, createEngineStats } from '@cubeforge/core'
 import { EngineContext, type EngineState } from '../context'
 import { useDraggable } from '../hooks/useDragDrop'
 import { useGestures } from '../hooks/useGestures'
@@ -11,6 +11,7 @@ function makeEngine(): EngineState {
   Object.defineProperty(canvas, 'clientWidth', { value: 200 })
   Object.defineProperty(canvas, 'clientHeight', { value: 100 })
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 100 }) as DOMRect
+  const stats = createEngineStats()
   return {
     ecs: new ECSWorld(),
     events: new EventBus(),
@@ -22,6 +23,8 @@ function makeEngine(): EngineState {
     entityIds: new Map(),
     systemTimings: new Map(),
     postProcessStack: {} as never,
+    stats,
+    getStats: () => stats,
   }
 }
 

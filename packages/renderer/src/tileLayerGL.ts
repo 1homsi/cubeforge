@@ -1,4 +1,10 @@
-import type { ECSWorld } from '@cubeforge/core'
+import {
+  createTileLayerRenderStats,
+  type ECSWorld,
+  type LayerStats,
+  type RenderStats,
+  type TileLayerRenderStats,
+} from '@cubeforge/core'
 import { buildTileMips } from './tileMips'
 import { isTilesetReady, visibleTileRange, type TileLayerData, type TileLayerComponent } from './tileLayer'
 
@@ -182,14 +188,7 @@ interface Uniforms {
   lod: WebGLUniformLocation | null
 }
 
-export interface TileLayerRenderStats {
-  /** Index-texture sub-uploads this frame (one per dirty chunk, or one per page on a full replace). */
-  indexUploads: number
-  /** Index texels uploaded this frame. */
-  uploadedTexels: number
-  lutUploads: number
-  drawCalls: number
-}
+export type { TileLayerRenderStats }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
   const s = gl.createShader(type)!
@@ -203,7 +202,10 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
 
 /** WebGL2 renderer for {@link TileLayerData} components. Owned by the RenderSystem. */
 export class TileLayerRenderer {
-  readonly stats: TileLayerRenderStats = { indexUploads: 0, uploadedTexels: 0, lutUploads: 0, drawCalls: 0 }
+  /** Per-layer entries of the current frame, in draw order (same objects every frame). */
+  readonly layerStats: LayerStats[] = []
+  private cur: LayerStats = TileLayerRenderer.noLayer()
+  private readonly texBytes = new Map<WebGLTexture, number>()
   private program: WebGLProgram | null = null
   private vao: WebGLVertexArrayObject | null = null
   private vbo: WebGLBuffer | null = null
@@ -221,7 +223,64 @@ export class TileLayerRenderer {
   private frame = 0
   private lastLayerCount = 0
 
-  constructor(private readonly gl: WebGL2RenderingContext) {}
+  // What `fold` has already added to the render stats this frame / for live textures.
+  private foldU = 0
+  private foldB = 0
+  private foldTex = 0
+
+  constructor(
+    private readonly gl: WebGL2RenderingContext,
+    readonly stats: TileLayerRenderStats = createTileLayerRenderStats(),
+  ) {}
+
+  fold(s: RenderStats, own: number, first: boolean): void {
+    const t = this.stats
+    if (first) {
+      this.foldU = this.foldB = 0
+      for (const e of this.layerStats) s.layers.push(e)
+    }
+    s.textureUploads += t.textureUploads - this.foldU
+    s.textureUploadBytes += t.textureUploadBytes - this.foldB
+    s.textureBytes += t.textureBytes - this.foldTex
+    s.textureCount = own + t.textureCount
+    this.foldU = t.textureUploads
+    this.foldB = t.textureUploadBytes
+    this.foldTex = t.textureBytes
+  }
+
+  private static noLayer(): LayerStats {
+    return { kind: 'tile', name: '', zIndex: 0, instances: 0, drawCalls: 0, uploadBytes: 0 }
+  }
+
+  /** Counts a texture upload of `bytes` against the frame totals and the current layer. */
+  private up(bytes: number): void {
+    const st = this.stats
+    st.textureUploads++
+    st.textureUploadBytes += bytes
+    this.cur.uploadBytes += bytes
+  }
+
+  /** Registers a live texture's size (called on every create, again on re-size). */
+  private track<T extends WebGLTexture | null>(tex: T, bytes: number): T {
+    if (tex) {
+      const st = this.stats
+      st.textureBytes += bytes - (this.texBytes.get(tex) ?? 0)
+      this.texBytes.set(tex, bytes)
+      st.textureCount = this.texBytes.size
+    }
+    return tex
+  }
+
+  private free(tex: WebGLTexture | null): void {
+    if (!tex) return
+    const b = this.texBytes.get(tex)
+    if (b !== undefined) {
+      this.texBytes.delete(tex)
+      this.stats.textureBytes -= b
+      this.stats.textureCount = this.texBytes.size
+    }
+    this.gl.deleteTexture(tex)
+  }
 
   /**
    * Collect layers, advance animations and upload pending changes.
@@ -233,6 +292,8 @@ export class TileLayerRenderer {
     st.uploadedTexels = 0
     st.lutUploads = 0
     st.drawCalls = 0
+    st.textureUploads = 0
+    st.textureUploadBytes = 0
     this.frame++
     this.time += dt
     const layers = this.layers
@@ -259,10 +320,20 @@ export class TileLayerRenderer {
     let changed = layers.length !== this.lastLayerCount
     this.lastLayerCount = layers.length
 
+    const ls = this.layerStats
+    while (ls.length < layers.length) ls.push(TileLayerRenderer.noLayer())
+    ls.length = layers.length
+
     if (layers.length > 0) {
       this.ensureProgram()
       for (let i = 0; i < layers.length; i++) {
         const layer = layers[i]
+        const e = (this.cur = ls[i])
+        e.name = layer.name || `tiles${i}`
+        e.zIndex = layer.zIndex
+        e.instances = 0
+        e.drawCalls = 0
+        e.uploadBytes = 0
         layer.updateAnimations(this.time)
         const s = this.ensureLayer(layer)
         s.seenFrame = this.frame
@@ -336,6 +407,7 @@ export class TileLayerRenderer {
       const layer = layers[i]
       if (only ? layer !== only : (layer.renderLayer !== undefined) !== sortedOnly) continue
       const s = this.states.get(layer)!
+      this.cur = this.layerStats[i]
       s.drawnRevision = layer.revision
       if (!layer.visible || layer.opacity <= 0 || !isTilesetReady(layer.tileset)) continue
       if (!visibleTileRange(layer, cx - halfW, cy - halfH, cx + halfW, cy + halfH, r)) continue
@@ -402,6 +474,8 @@ export class TileLayerRenderer {
         gl.uniform2i(u.pageSize, pg.w, pg.h)
         gl.drawArrays(gl.TRIANGLES, 0, 6)
         this.stats.drawCalls++
+        this.cur.drawCalls++
+        this.cur.instances += (x1 - x0) * (y1 - y0)
       }
     }
     gl.activeTexture(gl.TEXTURE0)
@@ -411,6 +485,9 @@ export class TileLayerRenderer {
   /** GL objects die with the context; drop them so they are rebuilt lazily. */
   contextRestored(): void {
     this.states.clear()
+    this.texBytes.clear()
+    this.stats.textureCount = 0
+    this.stats.textureBytes = 0
     this.program = null
     this.vao = null
     this.vbo = null
@@ -491,16 +568,17 @@ export class TileLayerRenderer {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0)
     gl.bindVertexArray(null)
 
-    this.dummyLut = this.createIntTexture(1, 1, true)
+    this.dummyLut = this.createIntTexture(1, 1, true, false)
     this.dummyRGBA = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, this.dummyRGBA)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]))
     this.maxTex = Math.min(MAX_PAGE, (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) || 2048)
   }
 
-  private createIntTexture(w: number, h: number, wide: boolean): WebGLTexture {
+  private createIntTexture(w: number, h: number, wide: boolean, count = true): WebGLTexture {
     const { gl } = this
     const tex = gl.createTexture()!
+    if (count) this.track(tex, w * h * (wide ? 4 : 2))
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texStorage2D(gl.TEXTURE_2D, 1, wide ? gl.R32UI : gl.R16UI, w, h)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
@@ -617,7 +695,7 @@ export class TileLayerRenderer {
     gl.pixelStorei(gl.UNPACK_ROW_LENGTH, layer.width)
     for (const pg of s.pages) {
       if (!pg.tint) {
-        pg.tint = gl.createTexture()!
+        pg.tint = this.track(gl.createTexture()!, pg.w * pg.h * 4)
         gl.bindTexture(gl.TEXTURE_2D, pg.tint)
         gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, pg.w, pg.h)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
@@ -639,6 +717,7 @@ export class TileLayerRenderer {
     gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x)
     gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y)
     gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, layer.tints!, 0)
+    this.up(w * h * 4)
     gl.activeTexture(gl.TEXTURE1)
   }
 
@@ -649,7 +728,7 @@ export class TileLayerRenderer {
     gl.pixelStorei(gl.UNPACK_ROW_LENGTH, layer.width)
     for (const pg of s.pages) {
       if (!pg.bias) {
-        pg.bias = gl.createTexture()!
+        pg.bias = this.track(gl.createTexture()!, pg.w * pg.h * 4)
         gl.bindTexture(gl.TEXTURE_2D, pg.bias)
         gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, pg.w, pg.h)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
@@ -671,13 +750,14 @@ export class TileLayerRenderer {
     gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x)
     gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y)
     gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, layer.biases!, 0)
+    this.up(w * h * 4)
     gl.activeTexture(gl.TEXTURE1)
   }
 
   private uploadVariants(layer: TileLayerData, s: LayerGL): void {
     const { gl } = this
     s.varVersion = layer.variantVersion
-    if (s.varTex) gl.deleteTexture(s.varTex)
+    this.free(s.varTex)
     s.varTex = null
     const table = layer.variantTable
     if (!table) return
@@ -688,6 +768,7 @@ export class TileLayerRenderer {
     s.varTex = this.createIntTexture(w, h, true)
     s.varW = w
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RED_INTEGER, gl.UNSIGNED_INT, data, 0)
+    this.up(w * h * 4)
   }
 
   private subUpload(
@@ -707,6 +788,7 @@ export class TileLayerRenderer {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, fmt, type, layer.tiles, 0)
     this.stats.indexUploads++
     this.stats.uploadedTexels += w * h
+    this.up(w * h * (layer.tiles instanceof Uint32Array ? 4 : 2))
   }
 
   private uploadLut(layer: TileLayerData, s: LayerGL): void {
@@ -714,7 +796,7 @@ export class TileLayerRenderer {
     s.lutVersion = layer.lutVersion
     const lut = layer.lut
     if (!lut) {
-      if (s.lutTex) gl.deleteTexture(s.lutTex)
+      this.free(s.lutTex)
       s.lutTex = null
       s.lutW = 0
       s.lutCap = 0
@@ -724,7 +806,7 @@ export class TileLayerRenderer {
     const w = Math.min(lut.length, MAX_LUT_W)
     const h = Math.ceil(lut.length / w)
     if (!s.lutTex || s.lutCap !== w * h || s.lutW !== w) {
-      if (s.lutTex) gl.deleteTexture(s.lutTex)
+      this.free(s.lutTex)
       s.lutTex = this.createIntTexture(w, h, true)
       s.lutW = w
       s.lutCap = w * h
@@ -740,24 +822,29 @@ export class TileLayerRenderer {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RED_INTEGER, gl.UNSIGNED_INT, src, 0)
     gl.activeTexture(gl.TEXTURE0)
     this.stats.lutUploads++
+    this.up(w * h * 4)
   }
 
   private uploadAtlas(layer: TileLayerData, s: LayerGL): void {
     const { gl } = this
-    if (s.atlasTex) gl.deleteTexture(s.atlasTex)
+    this.free(s.atlasTex)
     const tex = gl.createTexture()!
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, layer.tileset.image as TexImageSource)
+    const im = layer.tileset.image as { width?: number; height?: number; naturalWidth?: number; naturalHeight?: number }
+    const atlasBytes = (im.naturalWidth || im.width || 0) * (im.naturalHeight || im.height || 0) * 4
+    this.track(tex, atlasBytes)
+    this.up(atlasBytes)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     s.atlasTex = tex
     s.atlasImage = layer.tileset.image
-    if (s.avgTex) gl.deleteTexture(s.avgTex)
+    this.free(s.avgTex)
     s.avgTex = this.createAverageTexture(layer)
-    if (s.mipTex) gl.deleteTexture(s.mipTex)
+    this.free(s.mipTex)
     s.mipTex = null
     s.mipImage = null
   }
@@ -770,7 +857,7 @@ export class TileLayerRenderer {
   private uploadMips(layer: TileLayerData, s: LayerGL): void {
     const { gl } = this
     s.mipImage = layer.tileset.image
-    if (s.mipTex) gl.deleteTexture(s.mipTex)
+    this.free(s.mipTex)
     s.mipTex = null
     s.mipLevels = 0
     const ts = layer.tileset
@@ -788,6 +875,10 @@ export class TileLayerRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     gl.activeTexture(gl.TEXTURE0)
+    this.track(
+      tex,
+      levels.reduce((a, l) => a + l.w * l.h * 4, 0),
+    )
     s.mipTex = tex
     s.mipLevels = levels.length - 1
   }
@@ -840,6 +931,8 @@ export class TileLayerRenderer {
       gl.activeTexture(gl.TEXTURE5)
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cols, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, out)
+      this.track(tex, cols * rows * 4)
+      this.up(cols * rows * 4)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
       gl.activeTexture(gl.TEXTURE0)
@@ -851,16 +944,15 @@ export class TileLayerRenderer {
   }
 
   private deleteLayer(s: LayerGL): void {
-    const { gl } = this
     for (const pg of s.pages) {
-      gl.deleteTexture(pg.tex)
-      if (pg.tint) gl.deleteTexture(pg.tint)
-      if (pg.bias) gl.deleteTexture(pg.bias)
+      this.free(pg.tex)
+      this.free(pg.tint)
+      this.free(pg.bias)
     }
-    if (s.lutTex) gl.deleteTexture(s.lutTex)
-    if (s.atlasTex) gl.deleteTexture(s.atlasTex)
-    if (s.avgTex) gl.deleteTexture(s.avgTex)
-    if (s.mipTex) gl.deleteTexture(s.mipTex)
-    if (s.varTex) gl.deleteTexture(s.varTex)
+    this.free(s.lutTex)
+    this.free(s.atlasTex)
+    this.free(s.avgTex)
+    this.free(s.mipTex)
+    this.free(s.varTex)
   }
 }

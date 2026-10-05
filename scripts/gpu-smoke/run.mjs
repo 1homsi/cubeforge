@@ -56,6 +56,7 @@ async function runPage(entry) {
         '--use-angle=swiftshader',
         '--enable-unsafe-swiftshader',
         '--allow-file-access-from-files',
+        '--virtual-time-budget=10000',
         '--dump-dom',
         `file://${path.join(dir, `${name}.html`)}`,
       ],
@@ -152,6 +153,22 @@ try {
     })
     console.log(
       'gpu-smoke: glyph-atlas text layer renders correctly (tint, alpha, z-order, one draw) and Text components keep their full style',
+    )
+  }
+  {
+    const out = await runPage('stats.ts')
+    check('stats', out, {
+      layerKinds: 'tile,sprite',
+      layerDrawCalls: '1,1',
+      tileTexturesCounted: true,
+      noGpuByDefault: true,
+      gpuMsOk: true,
+      gpuFlagMatches: true,
+      gpuOff: true,
+      glError: 0,
+    })
+    console.log(
+      `gpu-smoke: stats layers, tile textures and GPU timer (supported: ${out.gpuTimerSupported}) are consistent`,
     )
   }
 } finally {

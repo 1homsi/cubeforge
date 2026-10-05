@@ -52,6 +52,21 @@ export interface RecordedInstance {
 
 export interface RecordingGLOptions {
   captureInstances?: boolean
+  /**
+   * Fake EXT_disjoint_timer_query_webgl2: `getExtension` returns the extension and
+   * timer queries work. Results arrive `latency` rendered frames after the query ends (default 2)
+   * and measure `ns` nanoseconds (default 2e6, adjustable later via `gl.timerNs`).
+   */
+  timerQuery?: boolean | { latency?: number; ns?: number }
+}
+
+export interface RecordedQuery {
+  id: number
+  state: 'idle' | 'active' | 'ended'
+  ns: number
+  /** Frame count (`gl.frames`) from which the result is available. */
+  readyFrame: number
+  deleted: boolean
 }
 
 let nextObjId = 1
@@ -148,6 +163,22 @@ export class RecordingGL {
   contextLost = false
   captureInstances: boolean
 
+  // Timer query fake (see RecordingGLOptions.timerQuery).
+  readonly TIME_ELAPSED_EXT = 0x88bf
+  readonly GPU_DISJOINT_EXT = 0x8fbb
+  readonly QUERY_RESULT = 0x8866
+  readonly QUERY_RESULT_AVAILABLE = 0x8867
+  readonly timerSupported: boolean
+  timerLatency: number
+  /** Nanoseconds the next ended query reports. */
+  timerNs: number
+  /** Report a GPU_DISJOINT_EXT event on the next read (it clears itself, like the real flag). */
+  disjoint = false
+  /** Every timer-query call (getExtension, createQuery, beginQuery, endQuery, getQueryParameter, deleteQuery). */
+  queryOps = 0
+  readonly queries: RecordedQuery[] = []
+  private activeQuery: RecordedQuery | null = null
+
   private boundTexture: RecordedTexture | null = null
   private lastInstanceSrc: ArrayBufferView | null = null
 
@@ -156,6 +187,50 @@ export class RecordingGL {
     opts: RecordingGLOptions = {},
   ) {
     this.captureInstances = opts.captureInstances ?? false
+    const tq = opts.timerQuery
+    this.timerSupported = !!tq
+    this.timerLatency = (typeof tq === 'object' ? tq.latency : undefined) ?? 2
+    this.timerNs = (typeof tq === 'object' ? tq.ns : undefined) ?? 2e6
+  }
+
+  getExtension(name: string): object | null {
+    if (name !== 'EXT_disjoint_timer_query_webgl2') return null
+    this.queryOps++
+    return this.timerSupported
+      ? { TIME_ELAPSED_EXT: this.TIME_ELAPSED_EXT, GPU_DISJOINT_EXT: this.GPU_DISJOINT_EXT }
+      : null
+  }
+  createQuery(): RecordedQuery {
+    this.queryOps++
+    const q: RecordedQuery = { id: nextObjId++, state: 'idle', ns: 0, readyFrame: 0, deleted: false }
+    this.queries.push(q)
+    return q
+  }
+  deleteQuery(q: RecordedQuery | null): void {
+    this.queryOps++
+    if (q) q.deleted = true
+  }
+  beginQuery(_target: number, q: RecordedQuery): void {
+    this.queryOps++
+    // Real WebGL raises INVALID_OPERATION when a query is already active or reused while pending.
+    if (this.activeQuery) throw new Error('beginQuery: a query is already active')
+    q.state = 'active'
+    this.activeQuery = q
+  }
+  endQuery(): void {
+    this.queryOps++
+    const q = this.activeQuery
+    if (!q) throw new Error('endQuery: no active query')
+    q.state = 'ended'
+    q.ns = this.timerNs
+    q.readyFrame = this.frames + this.timerLatency
+    this.activeQuery = null
+  }
+  getQueryParameter(q: RecordedQuery, pname: number): number | boolean {
+    this.queryOps++
+    if (pname === this.QUERY_RESULT_AVAILABLE) return q.state === 'ended' && this.frames >= q.readyFrame
+    q.state = 'idle'
+    return q.ns
   }
 
   isContextLost(): boolean {
@@ -243,7 +318,13 @@ export class RecordingGL {
   getProgramParameter(): boolean {
     return true
   }
-  getParameter(): number {
+  getParameter(pname?: number): number | boolean {
+    if (pname === this.GPU_DISJOINT_EXT) {
+      this.queryOps++
+      const d = this.disjoint
+      this.disjoint = false
+      return d
+    }
     return 4096
   }
   getShaderInfoLog(): string {

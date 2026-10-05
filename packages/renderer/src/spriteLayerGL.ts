@@ -7,6 +7,7 @@ import {
   SPRITE_UNTEXTURED,
 } from './spriteLayerFlags'
 import type { SpriteLayer, AtlasFrame } from './spriteLayer'
+import type { LayerStats } from '@cubeforge/core'
 
 const FLOATS = 20
 const MAX_BATCH = 16384
@@ -118,6 +119,9 @@ export class SpriteLayerRenderer {
   private readonly ready = new Uint8Array(MAX_LAYER_ATLASES)
   drawCalls = 0
   instances = 0
+  /** Instance-buffer bytes uploaded by the last `draw`. */
+  uploadBytes = 0
+  private readonly rows: LayerStats[] = []
 
   constructor(private readonly gl: WebGL2RenderingContext) {}
 
@@ -170,6 +174,24 @@ export class SpriteLayerRenderer {
     attr(8, 4)
     attr(9, 1)
     gl.bindVertexArray(null)
+  }
+
+  /** Appends the last `draw`'s counters for `layer` to the per-layer stats `out`. */
+  record(out: LayerStats[], layer: SpriteLayer): void {
+    const e = (this.rows[out.length] ??= {
+      kind: 'sprite',
+      name: '',
+      zIndex: 0,
+      instances: 0,
+      drawCalls: 0,
+      uploadBytes: 0,
+    })
+    e.name = layer.name
+    e.zIndex = layer.zIndex
+    e.instances = this.instances
+    e.drawCalls = this.drawCalls
+    e.uploadBytes = this.uploadBytes
+    out.push(e)
   }
 
   /** GL objects died with the context; rebuild on next draw. */
@@ -379,5 +401,6 @@ export class SpriteLayerRenderer {
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, n)
     this.drawCalls++
     this.instances += n
+    this.uploadBytes += n * FLOATS * 4
   }
 }

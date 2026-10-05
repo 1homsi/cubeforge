@@ -56,8 +56,9 @@ import {
   type CameraFollowPointProvider,
   type CameraFollowSprite,
 } from './cameraFollow'
-import type { TileLayerRenderStats } from './tileLayerGL'
+import type { TileLayerRenderStats } from '@cubeforge/core'
 import type { TileLayerData } from './tileLayer'
+import type { GpuTiming } from './gpuTimer'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
@@ -831,15 +832,9 @@ export function computeWebGLSceneHash({
  */
 export class RenderSystem implements System {
   private _tileLayers: TileRenderer | null = null
-  private static readonly _noTileStats: TileLayerRenderStats = {
-    indexUploads: 0,
-    uploadedTexels: 0,
-    lutUploads: 0,
-    drawCalls: 0,
-  }
   /** Per-frame TileLayer upload/draw counters. */
   get tileLayerStats(): TileLayerRenderStats {
-    return this._tileLayers?.stats ?? RenderSystem._noTileStats
+    return this.stats.tile
   }
   /** Default background used when no Camera2D component exists */
   defaultBackground = '#1a1a2e'
@@ -953,9 +948,25 @@ export class RenderSystem implements System {
   /** Live counters, mutated in place each frame. See {@link RenderStats}. */
   readonly stats: RenderStats = createRenderStats()
   private readonly _texBytes = new Map<WebGLTexture, number>()
+  private _gpu: GpuTiming | null = null
+  private _gpuWanted = false
+  private _gpuLoad: Promise<GpuTiming> | null = null
 
-  getStats(): RenderStats {
-    return this.stats
+  /**
+   * Turn GPU frame timing on or off (`stats.gpuMs` / `gpuMsAvg`). Off by default
+   * and free while off. Needs EXT_disjoint_timer_query_webgl2; resolves to false
+   * (and `stats.gpuTimerSupported` becomes false) when it is unavailable. Results
+   * are read a few frames late and never stall the pipeline.
+   */
+  setGpuTiming(enabled: boolean): Promise<boolean> {
+    this._gpuWanted = enabled
+    if (!enabled) return Promise.resolve(this._gpu?.set(false) ?? false)
+    return (this._gpuLoad ??= import('./gpuTimer').then(
+      (m) => (this._gpu = new m.GpuTiming(this.gl, this.stats)),
+    )).then(
+      (g) => g.set(this._gpuWanted),
+      () => ((this.stats.gpuTimerSupported = false), false),
+    )
   }
 
   private _statTex(tex: WebGLTexture, w: number, h: number): void {
@@ -963,7 +974,7 @@ export class RenderSystem implements System {
     const s = this.stats
     s.textureBytes += b - (this._texBytes.get(tex) ?? 0)
     this._texBytes.set(tex, b)
-    s.textureCount = this._texBytes.size
+    s.textureCount = this._texBytes.size + (this._tileLayers?.stats.textureCount ?? 0)
     s.textureUploads++
     s.textureUploadBytes += b
   }
@@ -974,7 +985,7 @@ export class RenderSystem implements System {
     if (b === undefined) return
     this._texBytes.delete(tex)
     this.stats.textureBytes -= b
-    this.stats.textureCount = this._texBytes.size
+    this.stats.textureCount = this._texBytes.size + (this._tileLayers?.stats.textureCount ?? 0)
   }
 
   // FPS tracking
@@ -1612,6 +1623,8 @@ export class RenderSystem implements System {
     this._shapes?.dispose()
     for (const e of this._gradientTex.values()) gl.deleteTexture(e.tex)
     this._gradientTex.clear()
+    this._gpu?.dispose()
+    this._gpuWanted = false
     this.textures.clear()
     this.shapeTextures.clear()
     this.parallaxTextures.clear()
@@ -2314,6 +2327,7 @@ export class RenderSystem implements System {
     if (!r) return
     r.drawCalls = 0
     r.instances = 0
+    r.uploadBytes = 0
     r.draw(
       layer,
       cam,
@@ -2324,6 +2338,7 @@ export class RenderSystem implements System {
     this.stats.drawCalls += r.drawCalls
     this.stats.batches += r.drawCalls
     this.stats.instances += r.instances
+    r.record(this.stats.layers, layer)
     this.gl.useProgram(this.program)
   }
 
@@ -2332,6 +2347,7 @@ export class RenderSystem implements System {
     const before = t.stats.drawCalls
     t.drawSorted(layer)
     this.stats.drawCalls += t.stats.drawCalls - before
+    t.fold(this.stats, this._texBytes.size, false)
     this.gl.useProgram(this.program)
   }
 
@@ -2568,6 +2584,7 @@ export class RenderSystem implements System {
       this._contextLostWarned = false
       console.info('[Cubeforge] WebGL context restored — resuming rendering.')
       this._tileLayers?.contextRestored()
+      this._gpu?.contextRestored()
     }
     resetRenderFrameStats(this.stats)
     this._frame++
@@ -2815,9 +2832,12 @@ export class RenderSystem implements System {
 
     if (!this._tileLayers) {
       const make = tileRendererFactory()
-      if (make) this._tileLayers = make(gl)
+      if (make) this._tileLayers = make(gl, this.stats.tile)
     }
-    if (this._tileLayers?.prepare(world, dt)) this._prevSceneHash = -1
+    if (this._tileLayers) {
+      if (this._tileLayers.prepare(world, dt)) this._prevSceneHash = -1
+      this._tileLayers.fold(this.stats, this._texBytes.size, true)
+    }
 
     // ── Idle frame skip ───────────────────────────────────────────────────────
     // When enabled, hash visible entity state. If unchanged from last frame,
@@ -2854,6 +2874,7 @@ export class RenderSystem implements System {
 
     // ── Post-process: redirect scene to off-screen FBO ────────────────────────
     this.stats.frames++
+    this._gpu?.begin()
     const ppEnabled = this._anyPPEnabled
     if (ppEnabled) {
       this._ensurePPPrograms()
@@ -2918,6 +2939,7 @@ export class RenderSystem implements System {
     if (this._tileLayers) {
       this._tileLayers.render(camX, camY, zoom, Wl, Hl, shakeX, shakeY, W / Wl)
       this.stats.drawCalls += this._tileLayers.stats.drawCalls
+      this._tileLayers.fold(this.stats, this._texBytes.size, false)
     }
 
     // ── Upload camera uniforms for sprite program ──────────────────────────────
@@ -3709,6 +3731,8 @@ export class RenderSystem implements System {
       gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST)
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     }
+
+    this._gpu?.end()
 
     // ── FPS tracking ─────────────────────────────────────────────────────────
     const now = performance.now()
