@@ -16,15 +16,37 @@ export interface CameraPanZoomOptions {
   buttons?: number[]
   /** Pointer travel (CSS px) before a press becomes a drag instead of a tap. Default 6. */
   dragThreshold?: number
+  /**
+   * Largest wheel delta in pixels used for one event, so a fast spin or a high-resolution wheel
+   * zooms a bounded step. Default 150; `Infinity` disables the clamp.
+   */
+  wheelMaxDelta?: number
+  /** Pixels per line for line-mode wheel events (`deltaMode` 1). Default 16. */
+  lineHeight?: number
+  /** Pixels per page for page-mode wheel events (`deltaMode` 2). Default: the canvas height. */
+  pageHeight?: number
+  /** CSS `touch-action` set on the canvas while mounted. Default `'none'` (the hook handles every gesture). */
+  touchAction?: string
+  /**
+   * Called at most once per frame after the hook moved or zoomed the camera (drag, glide, pinch,
+   * wheel), after the engine rendered that frame, so camera bounds are already applied. Lets
+   * apps update UI without polling the camera every frame.
+   */
+  onChange?: (camera: { x: number; y: number; zoom: number }) => void
   /** Press released without dragging, in canvas CSS px and world units. */
   onTap?: (e: { screenX: number; screenY: number; worldX: number; worldY: number; button: number }) => void
 }
 
 interface Ptr {
+  /** Latest position. */
   x: number
   y: number
+  /** Press position. */
   sx: number
   sy: number
+  /** Position the camera has been panned to so far (a drag catches up from here). */
+  ax: number
+  ay: number
 }
 
 /**
@@ -46,6 +68,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
     let vy = 0
     let lastMove = 0
     let glide = 0
+    let notifyFrame = 0
 
     const cam = (): Camera2DComponent | undefined => {
       const id = engine.ecs.queryOne('Camera2D')
@@ -67,6 +90,18 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       c.y += dy / c.zoom - dy / z
       c.zoom = z
     }
+    // The camera changed: wake the loop, then report once per frame. The report is queued after
+    // markDirty() so it runs behind the engine's frame and sees bounds/follow already applied.
+    const changed = () => {
+      engine.loop.markDirty()
+      if (notifyFrame || !opts.current.onChange) return
+      notifyFrame = requestAnimationFrame(() => {
+        notifyFrame = 0
+        const c = cam()
+        if (!c) return
+        opts.current.onChange?.({ x: c.x, y: c.y, zoom: c.zoom })
+      })
+    }
     const stopGlide = () => {
       if (glide) cancelAnimationFrame(glide)
       glide = 0
@@ -77,7 +112,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       if (e.pointerType === 'mouse' && !(opts.current.buttons ?? [0, 1, 2]).includes(e.button)) return
       stopGlide()
       const p = local(e)
-      ptrs.set(e.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y })
+      ptrs.set(e.pointerId, { x: p.x, y: p.y, sx: p.x, sy: p.y, ax: p.x, ay: p.y })
       canvas.setPointerCapture?.(e.pointerId)
       vx = vy = 0
       lastMove = performance.now()
@@ -94,6 +129,8 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       const c = cam()
       const q = local(e)
       if (!dragging && Math.hypot(q.x - p.sx, q.y - p.sy) >= (opts.current.dragThreshold ?? 6)) dragging = true
+      // Not dragging yet: remember the position but leave `ax/ay` at the press point, so the
+      // travel before the threshold is applied on the first dragged frame.
       if (!c || !dragging) {
         p.x = q.x
         p.y = q.y
@@ -105,6 +142,8 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
         const midY0 = (a.y + b.y) / 2
         p.x = q.x
         p.y = q.y
+        p.ax = q.x
+        p.ay = q.y
         const midX = (a.x + b.x) / 2
         const midY = (a.y + b.y) / 2
         const dist = Math.hypot(a.x - b.x, a.y - b.y)
@@ -114,10 +153,10 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
         pinchDist = dist
         vx = vy = 0
       } else {
-        const dx = (q.x - p.x) / c.zoom
-        const dy = (q.y - p.y) / c.zoom
-        p.x = q.x
-        p.y = q.y
+        const dx = (q.x - p.ax) / c.zoom
+        const dy = (q.y - p.ay) / c.zoom
+        p.x = p.ax = q.x
+        p.y = p.ay = q.y
         c.x -= dx
         c.y -= dy
         const now = performance.now()
@@ -127,7 +166,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
         vx = vx * 0.6 + (-dx / dt) * 0.4
         vy = vy * 0.6 + (-dy / dt) * 0.4
       }
-      engine.loop.markDirty()
+      changed()
     }
 
     const onUp = (e: PointerEvent) => {
@@ -139,6 +178,9 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
         // Continue as a one-finger pan from where the remaining finger is.
         pinchDist = 0
         vx = vy = 0
+        const rest = [...ptrs.values()][0]
+        rest.ax = rest.x
+        rest.ay = rest.y
         return
       }
       if (ptrs.size > 0) return
@@ -165,7 +207,7 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
           vy *= k
           c.x += vx * dt
           c.y += vy * dt
-          engine.loop.markDirty()
+          changed()
           glide = Math.hypot(vx, vy) > 5 ? requestAnimationFrame(step) : 0
         }
         glide = requestAnimationFrame(step)
@@ -179,14 +221,22 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
       if (!c) return
       e.preventDefault()
       stopGlide()
-      const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY
+      const o = opts.current
+      const raw =
+        e.deltaMode === 1
+          ? e.deltaY * (o.lineHeight ?? 16)
+          : e.deltaMode === 2
+            ? e.deltaY * (o.pageHeight ?? size().h)
+            : e.deltaY
+      const max = o.wheelMaxDelta ?? 150
+      const px = Math.max(-max, Math.min(max, raw))
       const p = local(e)
-      zoomAt(c, p.x, p.y, c.zoom * Math.exp(-px * (opts.current.wheelSpeed ?? 0.0015)))
-      engine.loop.markDirty()
+      zoomAt(c, p.x, p.y, c.zoom * Math.exp(-px * (o.wheelSpeed ?? 0.0015)))
+      changed()
     }
 
     const prevTouchAction = canvas.style.touchAction
-    canvas.style.touchAction = 'none'
+    canvas.style.touchAction = opts.current.touchAction ?? 'none'
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerup', onUp)
@@ -194,6 +244,8 @@ export function useCameraPanZoom(options: CameraPanZoomOptions = {}): void {
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       stopGlide()
+      if (notifyFrame) cancelAnimationFrame(notifyFrame)
+      notifyFrame = 0
       canvas.style.touchAction = prevTouchAction
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
