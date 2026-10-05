@@ -178,4 +178,32 @@ describe('TouchInput', () => {
       expect(points[0].y).toBe(100) // 150 - 50
     })
   })
+
+  describe('preventDefault option', () => {
+    const run = (mode: boolean | 'move') => {
+      touch.preventDefault = mode
+      touch.attach(el as unknown as HTMLElement)
+      const pts = [{ identifier: 0, clientX: 50, clientY: 60 }]
+      const evts = {
+        touchstart: createTouchEvent(pts),
+        touchmove: createTouchEvent(pts),
+        touchend: createTouchEvent(pts),
+      }
+      for (const [type, e] of Object.entries(evts)) el.dispatch(type, e)
+      return Object.fromEntries(Object.entries(evts).map(([k, e]) => [k, e.preventDefault.mock.calls.length > 0]))
+    }
+
+    it('cancels start, move and end by default (unchanged behaviour)', () => {
+      expect(touch.preventDefault).toBe(true)
+      expect(run(true)).toEqual({ touchstart: true, touchmove: true, touchend: true })
+    })
+
+    it("'move' lets the tap through as a click but still blocks scrolling", () => {
+      expect(run('move')).toEqual({ touchstart: false, touchmove: true, touchend: false })
+    })
+
+    it('false cancels nothing but still tracks touches', () => {
+      expect(run(false)).toEqual({ touchstart: false, touchmove: false, touchend: false })
+    })
+  })
 })
