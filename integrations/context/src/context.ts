@@ -4,6 +4,7 @@ import type { InputManager } from '@cubeforge/input'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import type { GameLoop } from '@cubeforge/core'
 import type { PostProcessStack, DynamicCanvasOptions, ManagedDynamicCanvas } from '@cubeforge/renderer'
+import type { CaptureFrame } from './capture'
 
 export interface EngineState {
   ecs: ECSWorld
@@ -41,6 +42,13 @@ export interface EngineState {
   createDynamicCanvas?(options: DynamicCanvasOptions): ManagedDynamicCanvas
   /** Returns the live {@link stats} object. */
   getStats?(): EngineStats
+  /**
+   * Render a frame now and read it back as an image (PNG blob by default;
+   * `bitmap`/`canvas` and a target size are options). Works with the browser
+   * clearing the WebGL drawing buffer between frames because the render and the
+   * copy happen in the same task. Excludes the debug overlay and any HTML.
+   */
+  captureFrame?: CaptureFrame
 }
 
 export const EngineContext = createContext<EngineState | null>(null)

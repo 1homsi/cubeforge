@@ -15,6 +15,7 @@ import { InputManager, type TouchPreventDefault } from '@cubeforge/input'
 import { RenderSystem, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
+import type { CaptureFrame } from '@cubeforge/context'
 import type { DevToolsHandle } from '@cubeforge/devtools'
 
 /** Wraps a System to record execution time into a shared timings map. */
@@ -290,6 +291,11 @@ export function Game({
             loop.markDirty()
           },
         }),
+      // Loaded on first use so the encoder glue stays out of the main bundle.
+      captureFrame: (async (opts) => {
+        const { captureFrame } = await import('../utils/capture')
+        return captureFrame({ canvas, render: () => renderSystem.update(ecs, 0) }, opts)
+      }) as CaptureFrame,
     }
     setEngine(state)
 

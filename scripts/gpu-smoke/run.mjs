@@ -56,6 +56,8 @@ async function runPage(entry) {
         '--use-angle=swiftshader',
         '--enable-unsafe-swiftshader',
         '--allow-file-access-from-files',
+        // Lets the page's async work (blob encoding) finish before the DOM is dumped.
+        '--virtual-time-budget=10000',
         '--dump-dom',
         `file://${path.join(dir, `${name}.html`)}`,
       ],
@@ -158,6 +160,27 @@ try {
     console.log(
       'gpu-smoke: glyph-atlas text layer renders correctly (tint, alpha, z-order, one draw) and Text components keep their full style',
     )
+  }
+  {
+    const out = await runPage('capture.ts')
+    check('capture', out, {
+      captureSize: '256x256',
+      captureNotBlack: true,
+      captureEqualsScreen: true,
+      captureTile: '255,255,255,255',
+      blobType: 'image/png',
+      blobEqualsScreen: true,
+      bitmapEqualsScreen: true,
+      smallSize: '64x64',
+      smallTile: '255,255,255,255',
+      bigSize: '512x512',
+      bigEdge: '0,0,255,255|255,255,255,255',
+      scaledEdgeIsBlurred: true,
+      canvasRestored: '256x256',
+      stillRenders: true,
+      glErrorCapture: 0,
+    })
+    console.log('gpu-smoke: captureFrame matches the on-screen frame in every result type, at any size')
   }
 } finally {
   rmSync(dir, { recursive: true, force: true })
