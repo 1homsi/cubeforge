@@ -6,6 +6,10 @@ interface TextProps {
   text: string
   fontSize?: number
   fontFamily?: string
+  fontWeight?: string | number
+  fontStyle?: 'normal' | 'italic'
+  /** Render layer to sort with sprites by (with `zIndex`). Default: draw above all sprites. */
+  layer?: string
   color?: string
   align?: CanvasTextAlign
   baseline?: CanvasTextBaseline
@@ -29,6 +33,9 @@ export function Text({
   text,
   fontSize = 16,
   fontFamily = 'monospace',
+  fontWeight,
+  fontStyle,
+  layer,
   color = '#ffffff',
   align = 'center',
   baseline = 'middle',
@@ -55,6 +62,9 @@ export function Text({
       text,
       fontSize,
       fontFamily,
+      fontWeight,
+      fontStyle,
+      layer,
       color,
       align,
       baseline,
@@ -83,6 +93,16 @@ export function Text({
     const comp = engine.ecs.getComponent<TextComponent>(entityId, 'Text')
     if (!comp) return
     comp.text = text
+    comp.fontSize = fontSize
+    comp.fontFamily = fontFamily
+    comp.fontWeight = fontWeight
+    comp.fontStyle = fontStyle
+    comp.layer = layer
+    comp.align = align
+    comp.baseline = baseline
+    comp.maxWidth = maxWidth
+    comp.offsetX = offsetX
+    comp.offsetY = offsetY
     comp.color = color
     comp.visible = visible
     comp.zIndex = zIndex
@@ -97,6 +117,16 @@ export function Text({
     comp.opacity = opacity
   }, [
     text,
+    fontSize,
+    fontFamily,
+    fontWeight,
+    fontStyle,
+    layer,
+    align,
+    baseline,
+    maxWidth,
+    offsetX,
+    offsetY,
     color,
     visible,
     zIndex,

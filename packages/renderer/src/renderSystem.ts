@@ -692,7 +692,7 @@ export class RenderSystem implements System {
       ctx.rotate(transform.rotation)
       if (text.opacity != null) ctx.globalAlpha = text.opacity
 
-      ctx.font = `${text.fontSize}px ${text.fontFamily}`
+      ctx.font = `${text.fontStyle === 'italic' ? 'italic ' : ''}${text.fontWeight ?? 'normal'} ${text.fontSize}px ${text.fontFamily}`
       ctx.textAlign = text.align
       ctx.textBaseline = text.baseline
 
