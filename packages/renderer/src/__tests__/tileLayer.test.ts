@@ -462,3 +462,107 @@ describe('TileLayer variation, tints and jitter', () => {
     expect(set('u_hasTint')).toContain(0)
   })
 })
+
+describe('TileLayer API polish', () => {
+  const rect = (l: TileLayerData, c: number) => Array.from(l.dirtyRect.subarray(c * 4, c * 4 + 4))
+
+  it('markDirtyRect queues every overlapped chunk with the clipped rect', () => {
+    const l = makeLayer({ chunkSize: 32 }) // 19 x 10 chunks
+    const rev = l.revision
+    const wake = vi.fn()
+    l.onChange = wake
+    l.tiles[l.width * 30 + 30] = 4 // in-place write
+    l.markDirtyRect(30, 30, 4, 4) // straddles chunks (0,0) (1,0) (0,1) (1,1)
+    expect(l.dirtyCount).toBe(4)
+    const got = new Map(Array.from(l.dirtyList.subarray(0, 4), (c) => [c, rect(l, c)]))
+    expect(got.get(0)).toEqual([30, 30, 31, 31])
+    expect(got.get(1)).toEqual([32, 30, 33, 31])
+    expect(got.get(l.chunksX)).toEqual([30, 32, 31, 33])
+    expect(got.get(l.chunksX + 1)).toEqual([32, 32, 33, 33])
+    expect(l.chunkVersion[0]).toBe(1)
+    expect(l.revision).toBe(rev + 1)
+    expect(wake).toHaveBeenCalledTimes(1)
+    expect(l.fullVersion).toBe(0)
+  })
+
+  it('markDirtyRect merges with existing dirty rects and clips to the layer', () => {
+    const l = makeLayer({ chunkSize: 32 })
+    l.setTile(5, 5, 2)
+    l.markDirtyRect(-10, -10, 20, 20) // clipped to 0..9
+    expect(l.dirtyCount).toBe(1)
+    expect(rect(l, 0)).toEqual([0, 0, 9, 9])
+    l.clearDirty()
+    l.markDirtyRect(l.width - 2, l.height - 2, 50, 50)
+    expect(l.dirtyCount).toBe(1)
+    expect(rect(l, l.dirtyList[0])).toEqual([l.width - 2, l.height - 2, l.width - 1, l.height - 1])
+    l.clearDirty()
+    const rev = l.revision
+    l.markDirtyRect(l.width + 5, 0, 3, 3)
+    l.markDirtyRect(0, 0, 0, 5)
+    expect(l.dirtyCount).toBe(0)
+    expect(l.revision).toBe(rev)
+  })
+
+  it('touch bumps fullVersion, revision and wakes', () => {
+    const l = makeLayer()
+    const wake = vi.fn()
+    l.onChange = wake
+    const full = l.fullVersion
+    const rev = l.revision
+    l.touch()
+    expect(l.fullVersion).toBe(full + 1)
+    expect(l.revision).toBe(rev + 1)
+    expect(l.dirtyCount).toBe(0)
+    expect(wake).toHaveBeenCalledTimes(1)
+  })
+
+  it('imperative setters wake on-demand loops and ignore no-ops', () => {
+    const l = makeLayer()
+    const wake = vi.fn()
+    l.onChange = wake
+    const rev = l.revision
+    l.visible = false
+    l.x = 5
+    l.y = 6
+    l.zIndex = 2
+    l.opacity = 0.5
+    l.tileWorldWidth = 8
+    l.tileWorldHeight = 8
+    l.tileset = { ...l.tileset }
+    expect(wake).toHaveBeenCalledTimes(8)
+    expect(l.revision).toBe(rev + 8)
+    l.visible = false
+    l.x = 5
+    l.tileset = l.tileset
+    expect(wake).toHaveBeenCalledTimes(8)
+    expect(l.tileWorldWidth).toBe(8)
+  })
+
+  it('createTileLayerComponent wires an optional wake callback', () => {
+    const l = makeLayer()
+    const wake = vi.fn()
+    createTileLayerComponent(l, wake)
+    l.opacity = 0.2
+    expect(wake).toHaveBeenCalledTimes(1)
+  })
+
+  it('variantAt matches visualTile without animation', () => {
+    const l = makeLayer({ variants: { 3: [3, 7, 8] } })
+    for (let x = 0; x < 12; x++) l.setTile(x, 2, 3)
+    l.setTile(0, 3, 9)
+    for (let x = 0; x < 12; x++) {
+      expect(l.variantAt(x, 2)).toBe([3, 7, 8][tileHash(x, 2) % 3])
+      expect(l.variantAt(x, 2)).toBe(l.visualTile(x, 2))
+    }
+    expect(l.variantAt(0, 3)).toBe(9)
+    expect(l.variantAt(-1, 0)).toBe(0)
+  })
+
+  it('variant lists are capped at 255 entries', () => {
+    const list = Array.from({ length: 300 }, (_, i) => i + 1)
+    const l = makeLayer({ variants: { 2: list } })
+    l.setTile(1, 1, 2)
+    expect(l.variantAt(1, 1)).toBe(list[tileHash(1, 1) % 255])
+    expect(l.variantTable![2] & 255).toBe(255)
+  })
+})

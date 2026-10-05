@@ -106,6 +106,8 @@ Cost model:
 |---|---|
 | Draw (WebGL2) | One quad per visible 4096x4096-tile page (one draw for a 600x300 map); per-pixel cost only for on-screen pixels. Off-screen tiles cost nothing. |
 | `setTile(x, y, id)` | O(1). Next frame uploads the dirty rect of each touched 32x32 chunk (`texSubImage2D`, one texel for a single edit). |
+| `markDirtyRect(x, y, w, h)` | After writing `layer.tiles` in place: clipped to the layer, queues each overlapped chunk with its part of the rect, like `setTile` for an area. |
+| `touch()` | After writing `layer.tiles` in place when the area is unknown: marks everything dirty (same cost as `setTiles`, without the copy). |
 | `setTiles(array)` / `fill(id)` | O(tiles) copy + one full index upload (360 KB for 600x300 Uint16). |
 | Animated tiles | O(animations) per frame on the CPU and a tiny lookup-table upload when a frame flips; zero per-tile work. |
 | Idle frame | No uploads, no allocation. |
@@ -123,6 +125,25 @@ useTileLayer({
 water.setTints(colourFromDepthAndBiome) // width * height * 4 bytes
 ground.visualTile(x, y)                 // the id actually drawn (variant + animation)
 ```
+
+Variants share the tile id space with the atlas (`0` is empty, id `n` is atlas tile `n - 1`). A cell
+holding `id` draws `variants[id][tileHash(x, y) % min(255, list.length)]`, then its animation frame.
+The pick depends only on the cell coordinates, so it is stable across edits, and lists are capped at
+255 entries. `tileHash` is exported, and `layer.variantAt(x, y)` returns the id picked at a cell
+(before animation) so CPU models need not replicate the hash.
+
+Writing `layer.tiles` directly is allowed; tell the layer afterwards:
+
+```ts
+ground.tiles[y * ground.width + x] = id
+ground.markDirtyRect(x, y, 1, 1)  // or markDirtyRect(x0, y0, w, h) for a block
+ground.touch()                     // unknown extent: re-upload everything
+```
+
+`visible`, `x`, `y`, `zIndex`, `opacity`, `tileset`, `tileWorldWidth` and `tileWorldHeight` are
+setters that wake an on-demand loop (they call `layer.onChange`). `<TileLayer>` wires `onChange` to
+`engine.loop.markDirty()`; for a layer added to the world imperatively use
+`createTileLayerComponent(layer, () => engine.loop.markDirty())`.
 
 Below about 2 device pixels per tile (e.g. zoom 0.05 with 16 px tiles) each tile is drawn with its
 atlas tile's average colour, so far zoom doesn't shimmer.

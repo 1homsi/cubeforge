@@ -28,7 +28,6 @@ export function useTileLayer(options: TileLayerOptions): TileLayerData {
   if (syncedTileset.current !== tileset) {
     syncedTileset.current = tileset
     layer.tileset = tileset
-    layer.revision++
   }
   if (syncedAnims.current !== animations) {
     syncedAnims.current = animations
