@@ -12,6 +12,7 @@ import {
   TextLayer,
   TileLayerData,
   createSprite,
+  createText,
   createCamera2D,
   createTileLayerComponent,
 } from '@cubeforge/renderer'
@@ -363,6 +364,42 @@ function textLayer(n: number): ScenarioDef {
   }
 }
 
+/** 1,000 <Text> entities with an outline: the old one-texture-and-draw-per-entity cost. */
+function textEntities(n: number): ScenarioDef {
+  return {
+    name: `text-entities-${n}`,
+    description: `${n} Text entities (outlined, moving), batched through the glyph atlas`,
+    setup(ctx) {
+      const r = rng(7)
+      const ts: TransformComponent[] = []
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        for (let i = 0; i < n; i++) {
+          const t = ts[i]
+          t.x += vx[i]
+          t.y += vy[i]
+          if (t.x < 0 || t.x > W) vx[i] = -vx[i]
+          if (t.y < 0 || t.y > H) vy[i] = -vy[i]
+        }
+      })
+      for (let i = 0; i < n; i++) {
+        const id = sc.world.createEntity()
+        const t = createTransform(r() * W, r() * H)
+        ts.push(t)
+        sc.world.addComponent(id, t)
+        sc.world.addComponent(
+          id,
+          createText({ text: `Person ${i % 100}`, fontSize: 12, strokeColor: '#000000', strokeWidth: 3 }),
+        )
+        vx[i] = (r() - 0.5) * 2
+        vy[i] = (r() - 0.5) * 2
+      }
+      return sc
+    },
+  }
+}
+
 /** The same tile world as one TileLayer, with 10 tile edits per frame. */
 function tileLayer(cols: number, rows: number): ScenarioDef {
   return {
@@ -431,6 +468,7 @@ export const SCENARIOS: ScenarioDef[] = [
   spriteLayer(10000),
   depthLayer(3000),
   textLayer(1000),
+  textEntities(1000),
   churn(3000, 200),
   tileWorld(600, 300),
   tileLayer(600, 300),

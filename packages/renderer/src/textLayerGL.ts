@@ -212,11 +212,13 @@ export class TextLayerRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
     const d = this.data
+    const order = layer.sortByKey ? layer.drawOrder() : null
     for (let p = 0; p < atlas.pages.length; p++) {
       const page = atlas.pages[p]
       let batch = 0
       let bound = false
-      for (let i = 0; i < count; i++) {
+      for (let k0 = 0; k0 < count; k0++) {
+        const i = order ? order[k0] : k0
         const flags = layer.flags[i]
         if (flags & TEXT_HIDDEN) continue
         const lay = layer.layoutIfCached(i)

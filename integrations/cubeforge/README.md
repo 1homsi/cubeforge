@@ -320,6 +320,17 @@ several layers to share glyphs, or tune `pageSize` / `maxPages` / `resolution` (
 nominal font pixel, default 2). When all pages fill, the atlas clears itself and re-rasterises what is
 visible.
 
+### `<Text>` on WebGL
+
+`<Text>` now batches through the same glyph atlas: 1,000 labels are one draw call (0.3 ms CPU headless)
+instead of one texture and draw each. On the WebGL path it honours `align`, `baseline`, `wordWrap` /
+`maxWidth` / `lineHeight` (newlines too), `strokeColor` / `strokeWidth`, `shadowColor` / `shadowOffsetX` /
+`shadowOffsetY` / `shadowBlur` and `opacity`, and takes `fontWeight` and `fontStyle="italic"`. Set
+`layer="name"` to sort a text with sprites by `layer` + `zIndex` (unset keeps the old behaviour: above all
+sprites, ordered by `zIndex`). Right-to-left / complex scripts and a `maxWidth` squeeze without `wordWrap`
+use a per-entity canvas texture instead (cache keyed on every style input, 4,096 entries, re-rasterised
+at 1x/2x/4x as you zoom).
+
 ## Overlays and camera
 
 - `useScreenTint().set(r, g, b, strength, mode)`: full-view tint drawn after sprites and layers and

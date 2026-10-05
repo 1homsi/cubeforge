@@ -43,7 +43,7 @@ async function runPage(entry) {
   })
   writeFileSync(
     path.join(dir, `${name}.html`),
-    `<!doctype html><html><body><script src="${name}.js"></script></body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"></head><body><script src="${name}.js"></script></body></html>`,
   )
   // Chrome sometimes exits non-zero after --dump-dom succeeded; the dumped DOM is what counts.
   const run = () =>
@@ -114,8 +114,20 @@ try {
       belowSpriteZ: 'ok',
       aboveSpriteZ: 'ok',
       oneDrawPerLayer: 1,
+      entityWhite: 'ok',
+      entityRed: 'ok',
+      entityOpacity: 'ok',
+      entityStroke: 'ok',
+      entityAlignRight: 'ok',
+      entityBaselineTop: 'ok',
+      entityWrap: 'ok',
+      entitySqueeze: 'ok',
+      glError2: 0,
+      glError3: 0,
     })
-    console.log('gpu-smoke: glyph-atlas text layer renders correctly (tint, alpha, z-order, one draw)')
+    console.log(
+      'gpu-smoke: glyph-atlas text layer renders correctly (tint, alpha, z-order, one draw) and Text components keep their full style',
+    )
   }
 } finally {
   rmSync(dir, { recursive: true, force: true })

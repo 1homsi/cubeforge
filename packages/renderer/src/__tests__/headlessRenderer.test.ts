@@ -56,12 +56,13 @@ describe('headless recording renderer', () => {
     expect(rs.stats.instances).toBe(2)
   })
 
-  it('resets per-frame counters every frame and tracks text cache hits', () => {
+  it('resets per-frame counters every frame and tracks text cache hits (canvas-path text)', () => {
     const { rs, world } = setup(false)
     addSprite(world, 0, 0, { width: 10, height: 10 })
     const t = world.createEntity()
     world.addComponent(t, createTransform(0, 0))
-    world.addComponent(t, createText({ text: 'hi' }))
+    // Complex scripts use per-entity textures; plain text batches through the glyph atlas.
+    world.addComponent(t, createText({ text: 'مرحبا' }))
     rs.update(world, 1 / 60)
     const draws1 = rs.stats.drawCalls
     const texBytes = rs.stats.textureBytes

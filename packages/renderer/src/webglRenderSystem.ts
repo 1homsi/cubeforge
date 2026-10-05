@@ -27,12 +27,14 @@ import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLa
 import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
 import {
   spriteLayerRendererFactory,
+  textEntityBatcherFactory,
   textLayerRendererFactory,
   tileRendererFactory,
   type TileRenderer,
 } from './layerRegistry'
 import type { TextLayer } from './textLayer'
 import type { TextLayerRenderer } from './textLayerGL'
+import type { EntityTextBatcher } from './textEntities'
 import {
   type Sampling,
   resolveSampling,
@@ -268,6 +270,9 @@ interface TextComponent {
   text: string
   fontSize: number
   fontFamily: string
+  fontWeight?: string | number
+  fontStyle?: 'normal' | 'italic'
+  layer?: string
   color: string
   align: CanvasTextAlign
   baseline: CanvasTextBaseline
@@ -307,7 +312,7 @@ const NO_TILE_LAYERS: readonly TileLayerData[] = []
 /** Maximum sprite texture cache entries before evicting least-recently-used. */
 const MAX_SPRITE_TEXTURES = 1024
 /** Maximum text texture cache entries before evicting oldest. */
-const MAX_TEXT_CACHE = 512
+const MAX_TEXT_CACHE = 4096
 
 // ── GL helpers ────────────────────────────────────────────────────────────────
 
@@ -734,6 +739,9 @@ export function computeWebGLSceneHash({
     mix((text.fontSize ?? 16) * 100)
     mixString(text.fontFamily ?? 'monospace')
     mixString(text.color ?? '#ffffff')
+    mixString(String(text.fontWeight ?? ''))
+    mixString(text.fontStyle ?? '')
+    mixString(text.layer ?? '')
     mixString(text.align)
     mixString(text.baseline)
     mix(text.zIndex)
@@ -867,7 +875,10 @@ export class RenderSystem implements System {
   private pUCanvasSize!: WebGLUniformLocation
 
   // ── Text texture cache ────────────────────────────────────────────────────
-  private readonly textureCache = new Map<string, { tex: WebGLTexture; w: number; h: number; frame: number }>()
+  private readonly textureCache = new Map<
+    string,
+    { tex: WebGLTexture; w: number; h: number; ax: number; ay: number; frame: number }
+  >()
 
   // ── Shape texture cache ─────────────────────────────────────────────────
   private readonly shapeTextures = new Map<string, WebGLTexture>()
@@ -979,6 +990,9 @@ export class RenderSystem implements System {
   private readonly _textLayers: TextLayer[] = []
   private _textLayerRenderer: TextLayerRenderer | null = null
   private _textLayerVersion = 0
+  private _entityText: EntityTextBatcher | null = null
+  private _textWarned = false
+  private readonly _sortTextLayers: TextLayer[] = []
   private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
   private _layerImageTextures = new WeakMap<object, WebGLTexture>()
   private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
@@ -1735,12 +1749,17 @@ export class RenderSystem implements System {
 
   // ── Text texture management ───────────────────────────────────────────────
 
-  private getTextTextureKey(text: TextComponent): string {
-    return `${text.text}|${text.fontSize ?? 16}|${text.fontFamily ?? 'monospace'}|${text.color ?? '#ffffff'}`
+  /** Raster scale (1, 2 or 4 texels per world px) for per-entity text, so zoomed text stays sharp. */
+  private _textRasterScale(zoomDpr: number): number {
+    return zoomDpr <= 1 ? 1 : zoomDpr <= 2 ? 2 : 4
   }
 
-  private getOrCreateTextTexture(text: TextComponent): { tex: WebGLTexture; w: number; h: number } | null {
-    const key = this.getTextTextureKey(text)
+  private getOrCreateTextTexture(
+    batcher: EntityTextBatcher,
+    text: TextComponent,
+    scale: number,
+  ): { tex: WebGLTexture; w: number; h: number; ax: number; ay: number } | null {
+    const key = batcher.rasterKey(text as never, scale)
     const cache = this.textureCache
     const cached = cache.get(key)
     if (cached) {
@@ -1752,44 +1771,29 @@ export class RenderSystem implements System {
     }
     this.stats.textCacheMisses++
 
+    // Evict least-recently-used entries, never ones drawn this frame.
     if (cache.size >= MAX_TEXT_CACHE) {
-      const [oldest, old] = cache.entries().next().value as [string, { tex: WebGLTexture; frame: number }]
-      if (old.frame !== this._frame) {
+      for (const [k, old] of cache) {
+        if (cache.size < MAX_TEXT_CACHE) break
+        if (old.frame === this._frame) break
         this.gl.deleteTexture(old.tex)
         this._statTexFree(old.tex)
-        cache.delete(oldest)
+        cache.delete(k)
       }
     }
 
-    // Render text to an offscreen canvas
-    const offscreen = document.createElement('canvas')
-    const ctx2d = offscreen.getContext('2d')!
-    const font = `${text.fontSize ?? 16}px ${text.fontFamily ?? 'monospace'}`
-    ctx2d.font = font
-    const metrics = ctx2d.measureText(text.text)
-    const textW = Math.ceil(metrics.width) + 4
-    const textH = Math.ceil((text.fontSize ?? 16) * 1.5) + 4
-    offscreen.width = textW
-    offscreen.height = textH
-
-    // Re-apply font after resize (canvas resize resets state)
-    ctx2d.font = font
-    ctx2d.fillStyle = text.color ?? '#ffffff'
-    ctx2d.textAlign = 'left'
-    ctx2d.textBaseline = 'top'
-    ctx2d.fillText(text.text, 2, 2, text.maxWidth)
-
+    const r = batcher.raster(text as never, scale)
     const gl = this.gl
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreen)
-    this._statTex(tex, textW, textH)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, r.canvas)
+    this._statTex(tex, r.w, r.h)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
-    const entry = { tex, w: textW, h: textH, frame: this._frame }
+    const entry = { tex, w: r.w, h: r.h, ax: r.ax, ay: r.ay, frame: this._frame }
     this.textureCache.set(key, entry)
     return entry
   }
@@ -2738,6 +2742,14 @@ export class RenderSystem implements System {
     const viewT = camY - halfVH - 32 / zoom
     const viewB = camY + halfVH + 32 / zoom
 
+    // Text entities: batch plain text through the glyph atlas (layers join the sort below).
+    let entityText = this._entityText
+    if (!entityText && world.query('Transform', 'Text').length > 0) {
+      const make = textEntityBatcherFactory()
+      if (make) entityText = this._entityText = make()
+    }
+    entityText?.sync(world, zoom * (W / Wl))
+
     const renderableIds = world.query('Transform', 'Sprite')
     const n = renderableIds.length
     const visSprites = this._visSprites
@@ -2749,7 +2761,10 @@ export class RenderSystem implements System {
     const tileSorted = this._tileLayers?.sorted ?? NO_TILE_LAYERS
     const nSprites = n + layers.length
     const nt = nSprites + tileSorted.length
-    const textLayers = this._textLayers
+    const textLayers = this._sortTextLayers
+    textLayers.length = 0
+    for (const l of this._textLayers) textLayers.push(l)
+    if (entityText) for (const l of entityText.sortedLayers) textLayers.push(l)
     const m = nt + textLayers.length
     for (let r = 0; r < n; r++) {
       const id = renderableIds[r]
@@ -2896,20 +2911,23 @@ export class RenderSystem implements System {
     if (this._screenTint.a > 0) this.drawScreenTint(camX, camY, zoom, Wl, Hl)
 
     // ── Text rendering pass ───────────────────────────────────────────────────
-    // Text entities are rendered as textured quads using offscreen Canvas2D textures.
-    const textEntities = world.query('Transform', 'Text')
-    textEntities.sort((a: EntityId, b: EntityId) => {
-      const ta = world.getComponent<TextComponent>(a, TID_Text)!
-      const tb = world.getComponent<TextComponent>(b, TID_Text)!
-      return ta.zIndex - tb.zIndex
-    })
+    // Plain text was batched into glyph-atlas runs (one draw per page). Text the
+    // atlas cannot lay out (complex scripts, maxWidth squeeze), or every Text
+    // when the batcher is not bundled, goes through per-entity canvas textures.
+    if (entityText) this.drawTextLayer(entityText.tail, viewL, viewR, viewT, viewB)
+    const textEntities: EntityId[] = entityText ? entityText.fallback : []
+    if (!entityText && !this._textWarned && world.query('Transform', 'Text').length > 0) {
+      this._textWarned = true
+      console.warn('[Cubeforge] Text entities need createText() (or the <Text> component) to be drawn.')
+    }
+    const textScale = this._textRasterScale(zoom * (W / Wl))
 
     for (const id of textEntities) {
       const transform = world.getComponent<TransformComponent>(id, TID_Transform)!
       const text = world.getComponent<TextComponent>(id, TID_Text)!
       if (!text.visible) continue
 
-      const entry = this.getOrCreateTextTexture(text)
+      const entry = this.getOrCreateTextTexture(entityText!, text, textScale)
       if (!entry) continue
 
       // Flush any pending sprite batch first, then draw the text quad
@@ -2920,16 +2938,17 @@ export class RenderSystem implements System {
       batchBlendMode = 'normal'
       batchShapeRef = undefined
 
-      // Write text as a single textured instance
+      // One textured instance anchored at the text origin; colour is baked into the
+      // texture, opacity is the vertex alpha so it never splits the cache.
       this.writeInstance(
         0,
         transform.x + text.offsetX,
         transform.y + text.offsetY,
-        entry.w,
-        entry.h,
+        entry.w / textScale,
+        entry.h / textScale,
         transform.rotation,
-        0,
-        0, // anchor top-left
+        entry.ax / entry.w,
+        entry.ay / entry.h,
         0,
         0,
         false, // flipX
@@ -2937,7 +2956,7 @@ export class RenderSystem implements System {
         1,
         1,
         1,
-        1, // white tint — color baked into texture
+        text.opacity ?? 1,
         0,
         0,
         1,
