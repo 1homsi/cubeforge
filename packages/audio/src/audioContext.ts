@@ -1,29 +1,152 @@
-// ─── Shared AudioContext ────────────────────────────────────────────────────
+// ─── Shared audio state ─────────────────────────────────────────────────────
+//
+// All mutable audio state (the AudioContext, the gain graph, volume + mute
+// preferences, the current music track) lives on ONE object stored on
+// `globalThis`, not in module variables. That makes it:
+//   - independent of <Game>: mounting/unmounting a Game never touches it,
+//   - HMR-safe: a re-evaluated module finds the live context instead of
+//     leaking a second one,
+//   - shared by duplicate copies of the package in one page.
+// The only things that tear it down are `getAudioManager().dispose()` or the
+// browser closing the context.
 
-let _audioCtx: AudioContext | null = null
+/** @internal Currently playing (or fading) music track. */
+export interface MusicTrack {
+  src: string
+  source: AudioBufferSourceNode
+  gain: GainNode
+  unregister: () => void
+  /** Identity of the hook/manager call that started the track. */
+  owner: object | null
+  /** Pending teardown timer while the track fades out. */
+  timer: ReturnType<typeof setTimeout> | null
+}
+
+/** @internal */
+export interface AudioState {
+  ctx: AudioContext | null
+  unwatch: (() => void) | null
+  groupGainNodes: Map<string, GainNode>
+  groupVolumes: Map<string, number>
+  groupMuted: Map<string, boolean>
+  groupSources: Map<string, Set<() => void>>
+  effects: Map<string, { entry: AudioNode; exit: AudioNode }>
+  music: MusicTrack | null
+  /** Tracks that are fading out and will be torn down by a timer. */
+  fading: Set<MusicTrack>
+}
+
+const STATE_KEY = Symbol.for('cubeforge.audio.state')
+
+/** @internal */
+export function getAudioState(): AudioState {
+  const g = globalThis as unknown as Record<symbol, AudioState | undefined>
+  let s = g[STATE_KEY]
+  if (!s) {
+    s = {
+      ctx: null,
+      unwatch: null,
+      groupGainNodes: new Map(),
+      groupVolumes: new Map(),
+      groupMuted: new Map(),
+      groupSources: new Map(),
+      effects: new Map(),
+      music: null,
+      fading: new Set(),
+    }
+    g[STATE_KEY] = s
+  }
+  return s
+}
+
+const S = getAudioState
 
 const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchend'] as const
 
-// Autoplay policy: a context created before a user gesture starts suspended.
-function resumeOnGesture(ctx: AudioContext): () => void {
-  if (ctx.state !== 'suspended' || typeof window === 'undefined') return () => {}
-  const off = () => {
+/**
+ * Autoplay policy: a context created before a user gesture starts suspended,
+ * and browsers (iOS Safari: "interrupted") can suspend it again later. While
+ * the context is not running, the first gesture resumes it. Returns a cleanup
+ * that removes every listener this installed.
+ */
+function watchContext(ctx: AudioContext): () => void {
+  let armed = false
+  const needsUnlock = () => ctx.state !== 'running' && ctx.state !== 'closed'
+  const arm = () => {
+    if (armed || typeof window === 'undefined') return
+    armed = true
+    for (const e of UNLOCK_EVENTS) window.addEventListener(e, unlock, true)
+  }
+  const disarm = () => {
+    if (!armed) return
+    armed = false
     for (const e of UNLOCK_EVENTS) window.removeEventListener(e, unlock, true)
   }
   const unlock = () => {
-    if (ctx.state !== 'suspended') return off()
-    Promise.resolve(ctx.resume()).then(off, () => {})
+    if (!needsUnlock()) return disarm()
+    Promise.resolve(ctx.resume()).then(disarm, () => {})
   }
-  for (const e of UNLOCK_EVENTS) window.addEventListener(e, unlock, true)
-  return off
+  const onState = () => (needsUnlock() ? arm() : disarm())
+  ctx.addEventListener?.('statechange', onState)
+  onState()
+  return () => {
+    disarm()
+    ctx.removeEventListener?.('statechange', onState)
+  }
 }
 
+/** Drop every node/listener tied to the current context (volume + mute prefs are kept). */
+function resetGraph(s: AudioState): void {
+  s.unwatch?.()
+  s.unwatch = null
+  s.groupGainNodes.clear()
+  s.groupSources.clear()
+  s.effects.clear()
+  for (const t of s.fading) if (t.timer) clearTimeout(t.timer)
+  s.fading.clear()
+  s.music = null
+  s.ctx = null
+}
+
+/**
+ * The one shared AudioContext. Created lazily on first use (once per page),
+ * resumed on the first user gesture, recreated only if the browser closed it.
+ */
 export function getAudioCtx(): AudioContext {
-  if (!_audioCtx) {
-    _audioCtx = new AudioContext()
-    resumeOnGesture(_audioCtx)
+  const s = S()
+  if (s.ctx && s.ctx.state === 'closed') resetGraph(s)
+  if (!s.ctx) {
+    s.ctx = new AudioContext()
+    s.unwatch = watchContext(s.ctx)
   }
-  return _audioCtx
+  return s.ctx
+}
+
+/**
+ * Close the shared context and drop the audio graph. Volume and mute settings
+ * survive. Only `getAudioManager().dispose()` calls this — never <Game>.
+ * @internal
+ */
+export function disposeAudioContext(): void {
+  const s = S()
+  for (const set of s.groupSources.values()) for (const stop of [...set]) stop()
+  for (const t of [...s.fading]) {
+    if (t.timer) clearTimeout(t.timer)
+    try {
+      t.source.stop()
+    } catch {
+      /* already stopped */
+    }
+    t.gain.disconnect()
+    t.unregister()
+  }
+  const ctx = s.ctx
+  resetGraph(s)
+  try {
+    void ctx?.close()
+  } catch {
+    /* already closed */
+  }
 }
 
 // ─── Volume groups ──────────────────────────────────────────────────────────
@@ -35,39 +158,30 @@ export function getAudioCtx(): AudioContext {
  */
 export type AudioGroup = string
 
-const groupGainNodes = new Map<AudioGroup | 'master', GainNode>()
-
-/** Per-group volume memory — what volume was set before muting. */
-const groupVolumes = new Map<AudioGroup | 'master', number>()
-
-/** Per-group mute state. */
-const groupMuted = new Map<AudioGroup | 'master', boolean>()
-
-/** Global registry of stop functions per group, so stopGroup() can halt sources. */
-const groupSources = new Map<AudioGroup | 'master', Set<() => void>>()
-
 /**
  * Register a stop function for a source playing in a group.
  * Returns an unregister function to call when the source ends naturally.
  * @internal
  */
 export function registerGroupSource(group: AudioGroup | 'master', stopFn: () => void): () => void {
-  let set = groupSources.get(group)
+  const sources = S().groupSources
+  let set = sources.get(group)
   if (!set) {
     set = new Set()
-    groupSources.set(group, set)
+    sources.set(group, set)
   }
   set.add(stopFn)
   return () => set!.delete(stopFn)
 }
 
 export function getGroupGainNode(group: AudioGroup | 'master'): GainNode {
-  const existing = groupGainNodes.get(group)
+  const ctx = getAudioCtx()
+  const s = S()
+  const existing = s.groupGainNodes.get(group)
   if (existing) return existing
 
-  const ctx = getAudioCtx()
   const gain = ctx.createGain()
-  gain.gain.value = groupVolumes.get(group) ?? 1
+  gain.gain.value = s.groupMuted.get(group) ? 0 : (s.groupVolumes.get(group) ?? 1)
 
   if (group === 'master') {
     gain.connect(ctx.destination)
@@ -75,7 +189,7 @@ export function getGroupGainNode(group: AudioGroup | 'master'): GainNode {
     gain.connect(getGroupGainNode('master'))
   }
 
-  groupGainNodes.set(group, gain)
+  s.groupGainNodes.set(group, gain)
   return gain
 }
 
@@ -88,9 +202,9 @@ export function getGroupGainNode(group: AudioGroup | 'master'): GainNode {
  */
 export function setGroupVolume(group: AudioGroup, volume: number): void {
   const clamped = Math.max(0, Math.min(1, volume))
-  groupVolumes.set(group, clamped)
-  if (groupMuted.get(group)) return // don't change the gain node while muted
-  const node = groupGainNodes.get(group)
+  S().groupVolumes.set(group, clamped)
+  if (S().groupMuted.get(group)) return // don't change the gain node while muted
+  const node = S().groupGainNodes.get(group)
   if (node) node.gain.value = clamped
   else getGroupGainNode(group).gain.value = clamped
 }
@@ -104,14 +218,14 @@ export function setGroupVolume(group: AudioGroup, volume: number): void {
  */
 export function setMasterVolume(volume: number): void {
   const clamped = Math.max(0, Math.min(1, volume))
-  groupVolumes.set('master', clamped)
-  if (groupMuted.get('master')) return
+  S().groupVolumes.set('master', clamped)
+  if (S().groupMuted.get('master')) return
   getGroupGainNode('master').gain.value = clamped
 }
 
 /** Read the current volume for a group or master (ignores mute state). */
 export function getGroupVolume(group: AudioGroup | 'master'): number {
-  return groupVolumes.get(group) ?? 1
+  return S().groupVolumes.get(group) ?? 1
 }
 
 /** Read the current master volume. */
@@ -128,9 +242,14 @@ export function getMasterVolume(): number {
  * setGroupMute('music', false) // restore to previous volume
  */
 export function setGroupMute(group: AudioGroup, muted: boolean): void {
-  groupMuted.set(group, muted)
+  S().groupMuted.set(group, muted)
   const node = getGroupGainNode(group)
-  node.gain.value = muted ? 0 : (groupVolumes.get(group) ?? 1)
+  node.gain.value = muted ? 0 : (S().groupVolumes.get(group) ?? 1)
+}
+
+/** Whether a group (or `'master'`) is currently muted. */
+export function isGroupMuted(group: AudioGroup | 'master'): boolean {
+  return S().groupMuted.get(group) === true
 }
 
 /**
@@ -138,7 +257,7 @@ export function setGroupMute(group: AudioGroup, muted: boolean): void {
  * New sounds played in the group afterward will play normally.
  */
 export function stopGroup(group: AudioGroup): void {
-  const sources = groupSources.get(group)
+  const sources = S().groupSources.get(group)
   if (sources) {
     for (const stop of [...sources]) stop()
     sources.clear()
@@ -154,7 +273,7 @@ export function stopGroup(group: AudioGroup): void {
  */
 export function setGroupVolumeFaded(group: AudioGroup | 'master', volume: number, duration: number): void {
   const clamped = Math.max(0, Math.min(1, volume))
-  groupVolumes.set(group, clamped)
+  S().groupVolumes.set(group, clamped)
   const node = getGroupGainNode(group)
   const ctx = getAudioCtx()
   const now = ctx.currentTime
@@ -179,7 +298,7 @@ const AUDIO_STORAGE_KEY = 'cubeforge:audio'
 export function saveAudioSettings(): void {
   try {
     const data: Record<string, number> = {}
-    for (const [group, volume] of groupVolumes) {
+    for (const [group, volume] of S().groupVolumes) {
       data[group] = volume
     }
     localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(data))
@@ -222,7 +341,7 @@ export function duck(group: AudioGroup, amount: number, duration: number): void 
   const node = getGroupGainNode(group)
   const ctx = getAudioCtx()
   const now = ctx.currentTime
-  const prev = groupVolumes.get(group) ?? 1
+  const prev = S().groupVolumes.get(group) ?? 1
   node.gain.cancelScheduledValues(now)
   node.gain.setValueAtTime(node.gain.value, now)
   node.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, amount)), now + 0.05)

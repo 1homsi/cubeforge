@@ -35,7 +35,7 @@ npm install cubeforge react react-dom
 - **Physics** — two-pass AABB, kinematic bodies, one-way platforms, 60 Hz fixed timestep
 - **Renderer** — WebGL2 instanced renderer by default
 - **Input** — keyboard, mouse, gamepad, per-player input maps, input contexts, recording/playback
-- **Audio** — Web Audio API with volume groups, fade, crossfade, ducking (`useSound`)
+- **Audio** — Web Audio API with volume groups, fade, crossfade, ducking (`useSound`, `useMusic`, `getAudioManager()`)
 - **Gameplay hooks** — `usePlatformerController`, `useTopDownMovement`, `useHealth`, `useSave`, `useGameStateMachine`, `useLevelTransition`, `usePathfinding`, `useAISteering`, and more
 - **DevTools** — time-travel frame scrubber and entity inspector (`<Game devtools>`)
 - **Deterministic mode** — seeded RNG for reproducible simulations (`<Game deterministic seed={n}>`)
@@ -74,6 +74,55 @@ export default function MyGame() {
   )
 }
 ```
+
+## Audio lifecycle and app-level soundtracks
+
+All audio goes through one shared `AudioContext` and one mixer (`sfx` / `music` / any group → master). That
+state lives on the page, not in `<Game>`: mounting, unmounting or remounting a `<Game>` (new save, scene
+change, StrictMode, HMR) never closes the context, stops a soundtrack, or resets volume and mute.
+
+- The context is created lazily, once. If the browser starts it suspended, the first `pointerdown`, `keydown`
+  or `touchend` resumes it (and again after the browser suspends or interrupts it later).
+- Master volume, group volumes and mutes persist across `<Game>` remounts. `saveAudioSettings()` /
+  `loadAudioSettings()` persist them across page loads.
+- Hooks (`useSound`, `useMusic`) stop what *they* started when their component unmounts, so one inside
+  `<Game>` stops with the Game. Pass `persistent: true` to keep it playing.
+- Nothing in the engine closes the shared context. `getAudioManager().dispose()` does, and keeps your volumes.
+- `useMusic` only stops the track its own component started; an unrelated component unmounting no longer
+  stops the app's soundtrack.
+
+For a soundtrack that must outlive any `<Game>`, start it from outside React or from an app-level component:
+
+```tsx
+import { getAudioManager, useMusic } from 'cubeforge'
+
+// Option 1: no React at all (module scope, a store, an event handler)
+const audio = getAudioManager()
+audio.setVolume(0.6)
+void audio.playMusic('/music/theme.ogg', { volume: 0.5, fade: 2 }) // audible after the first gesture
+audio.setMuted(true) // survives every Game remount; setMuted(false) restores the volume
+
+// Option 2: a component that lives above <Game> in the tree
+function Soundtrack() {
+  const music = useMusic('/music/theme.ogg', { volume: 0.5 })
+  useEffect(() => music.play(2), [])
+  return null
+}
+
+export default function App() {
+  const [run, setRun] = useState(1)
+  return (
+    <>
+      <Soundtrack />
+      <Game key={run}>{/* remounting this keeps the music playing */}</Game>
+    </>
+  )
+}
+```
+
+`getAudioManager()` also has `playSound(src, { group })`, `setGroupVolume` / `setGroupMuted`, `playMusic`
+(crossfades; one track at a time), `stopMusic(fade)`, `stopAll()`, `resume()` and `context`. Audio lives in
+`@cubeforge/audio` and is not part of the `cubeforge/render` entry, so apps that do not use it do not pay for it.
 
 ## Large tile worlds: `<TileLayer>`
 

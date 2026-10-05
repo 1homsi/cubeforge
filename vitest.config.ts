@@ -21,6 +21,9 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     globals: false,
+    // Audio state lives on globalThis (so it survives HMR and <Game> remounts);
+    // isolate it between tests.
+    setupFiles: ['./vitest.setup.ts'],
     include: [
       'packages/*/src/**/__tests__/**/*.test.{ts,tsx}',
       'packages/create-cubeforge-game/templates/__tests__/**/*.test.{ts,tsx}',

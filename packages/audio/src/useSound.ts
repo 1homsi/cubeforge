@@ -11,6 +11,7 @@ export {
   getGroupVolume,
   getMasterVolume,
   setGroupMute,
+  isGroupMuted,
   stopGroup,
   duck,
   setGroupVolumeFaded,
@@ -31,6 +32,8 @@ export function _getBufferRefCount(): Map<string, number> {
   return bufferRefCount
 }
 
+const bufferLoads = new Map<string, Promise<AudioBuffer>>()
+
 async function loadBuffer(src: string): Promise<AudioBuffer> {
   // Increment ref count
   bufferRefCount.set(src, (bufferRefCount.get(src) ?? 0) + 1)
@@ -38,11 +41,23 @@ async function loadBuffer(src: string): Promise<AudioBuffer> {
   const cached = bufferCache.get(src)
   if (cached) return cached
 
-  const res = await fetch(src)
-  const data = await res.arrayBuffer()
-  const buf = await getAudioCtx().decodeAudioData(data)
-  bufferCache.set(src, buf)
-  return buf
+  // Share one request between concurrent callers (StrictMode double effects).
+  let load = bufferLoads.get(src)
+  if (!load) {
+    load = (async () => {
+      const res = await fetch(src)
+      const data = await res.arrayBuffer()
+      const buf = await getAudioCtx().decodeAudioData(data)
+      // Only cache while someone still holds a reference; otherwise a hook
+      // that unmounted mid-load would leave an entry nothing can release.
+      if (bufferRefCount.has(src)) bufferCache.set(src, buf)
+      return buf
+    })()
+    bufferLoads.set(src, load)
+    const done = () => bufferLoads.delete(src)
+    load.then(done, done)
+  }
+  return load
 }
 
 function releaseBuffer(src: string): void {
@@ -137,6 +152,14 @@ export interface SoundOptions {
    * Called when a sound instance ends naturally (not when stopped manually).
    */
   onEnded?: () => void
+  /**
+   * Keep playing when the component using this hook unmounts (the sound is
+   * stopped only by `stop()`, `stopGroup()` or by ending). Use it for an
+   * app-level soundtrack started from a component that may remount. The
+   * `onEnded` callback is not invoked after unmount.
+   * @default false
+   */
+  persistent?: boolean
 }
 
 /**
@@ -161,14 +184,18 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
   const groupRef = useRef(opts.group)
   const rateRef = useRef(opts.playbackRate ?? 1)
   const onEndedRef = useRef(opts.onEnded)
+  const persistentRef = useRef(opts.persistent ?? false)
+  const unmountedRef = useRef(false)
   const acquiredSrcRef = useRef<string | null>(null)
   const maxInstances = Math.max(1, opts.maxInstances ?? 4)
 
   // Keep onEnded ref current without re-running the effect
   onEndedRef.current = opts.onEnded
+  persistentRef.current = opts.persistent ?? false
 
   useEffect(() => {
     let cancelled = false
+    unmountedRef.current = false
     loadBuffer(src)
       .then((buf) => {
         if (!cancelled) {
@@ -180,6 +207,15 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
 
     return () => {
       cancelled = true
+      if (persistentRef.current && acquiredSrcRef.current === src) {
+        // Leave the instances playing; they clean themselves up when they end.
+        unmountedRef.current = true
+        activeInstances.current = []
+        bufferRef.current = null
+        acquiredSrcRef.current = null
+        releaseBuffer(src)
+        return
+      }
       for (const entry of activeInstances.current) {
         entry.source.onended = null
         try {
@@ -246,7 +282,7 @@ export function useSound(src: string, opts: SoundOptions = {}): SoundControls {
     entry.source.onended = () => {
       removeInstance(entry)
       entry.gain.disconnect()
-      onEndedRef.current?.()
+      if (!unmountedRef.current) onEndedRef.current?.()
     }
 
     return entry

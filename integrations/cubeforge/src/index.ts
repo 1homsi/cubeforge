@@ -291,6 +291,7 @@ export {
   getMasterVolume,
   getGroupVolume,
   setGroupMute,
+  isGroupMuted,
   stopGroup,
   duck,
   setGroupVolumeFaded,
@@ -298,6 +299,8 @@ export {
 export { useSpatialSound } from '@cubeforge/audio'
 export type { SpatialSoundControls, SpatialSoundOptions } from '@cubeforge/audio'
 export { setListenerPosition, getListenerPosition } from '@cubeforge/audio'
+export { getAudioManager } from '@cubeforge/audio'
+export type { AudioManager, ManagedSound, ManagerMusicOptions, ManagerSoundOptions } from '@cubeforge/audio'
 export { useMusic } from '@cubeforge/audio'
 export type { MusicControls, MusicOptions } from '@cubeforge/audio'
 export { useStreamedMusic } from '@cubeforge/audio'
