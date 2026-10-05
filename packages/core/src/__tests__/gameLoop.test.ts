@@ -305,6 +305,38 @@ describe('GameLoop', () => {
       expect(rafCallback).toBeNull()
     })
 
+    it('a markDirty() issued before start() is not lost: the first frame still renders it', () => {
+      const onDemandTicks: number[] = []
+      const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), { mode: 'onDemand', fixedDt: 1 / 60 })
+      ondemand.markDirty()
+      _now = 0
+      ondemand.start()
+      fireFrame(16)
+      expect(onDemandTicks).toHaveLength(1)
+      ondemand.stop()
+    })
+
+    it('every write is rendered: a markDirty() coalesced into a pending wake is drawn by that wake, and one after it wakes again', () => {
+      // The frame reads the data when it runs, so a write made before the pending frame is
+      // covered by it; a write after the frame has run (flag reset) schedules a new one.
+      const seen: number[] = []
+      let data = 0
+      const ondemand = new GameLoop(() => seen.push(data), { mode: 'onDemand', fixedDt: 1 / 60 })
+      _now = 0
+      ondemand.start()
+      fireFrame(16)
+      data = 1
+      ondemand.markDirty()
+      data = 2
+      ondemand.markDirty() // coalesced into the pending wake
+      fireFrame(32)
+      data = 3
+      ondemand.markDirty() // after the frame ran: wakes again
+      fireFrame(48)
+      expect(seen).toEqual([0, 2, 3])
+      ondemand.stop()
+    })
+
     it('pause() cancels pending dirty frames in onDemand mode', () => {
       const onDemandTicks: number[] = []
       const ondemand = new GameLoop((dt) => onDemandTicks.push(dt), {

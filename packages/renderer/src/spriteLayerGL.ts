@@ -192,8 +192,9 @@ export class SpriteLayerRenderer {
     const atlases = layer.atlases
     const na = Math.min(atlases.length, MAX_LAYER_ATLASES)
     for (let a = 0; a < MAX_LAYER_ATLASES; a++) {
-      const r = a < na ? resolve(a) : null
+      // Select the unit first: resolve() may create or re-upload a texture, which binds it.
       gl.activeTexture(gl.TEXTURE0 + a)
+      const r = a < na ? resolve(a) : null
       gl.bindTexture(gl.TEXTURE_2D, r ? r.tex : white)
       if (r) applySampling()
       const at = a < na ? atlases[a] : undefined

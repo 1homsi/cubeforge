@@ -18,6 +18,7 @@ function setup() {
   })
   const draws: number[] = []
   const uploads: Float32Array[] = []
+  const tex: string[] = []
   const gl = new Proxy({} as Record<string, unknown>, {
     get(_t, p: string) {
       if (/^[A-Z_0-9]+$/.test(p)) return p
@@ -27,13 +28,14 @@ function setup() {
       if (p === 'bufferSubData')
         return (_t: unknown, _o: unknown, data: Float32Array, src: number, len: number) =>
           uploads.push(data.slice(src, src + len))
+      if (p === 'texImage2D' || p === 'texSubImage2D') return () => tex.push(p)
       if (p === 'getShaderParameter' || p === 'getProgramParameter') return () => true
       return () => true
     },
   })
   const canvas = { width: 200, height: 100, clientWidth: 200, clientHeight: 100, getContext: () => gl }
   const rs = new RenderSystem(canvas as unknown as HTMLCanvasElement, new Map())
-  return { rs, world: new ECSWorld(), draws, uploads }
+  return { rs, world: new ECSWorld(), draws, uploads, tex }
 }
 
 describe('SpriteLayer', () => {
@@ -98,5 +100,42 @@ describe('SpriteLayer', () => {
     expect(layer.pick(0, 30)).toBe(101)
     layer.sortKey[1] = 29
     expect(layer.pick(0, 30)).toBe(100)
+  })
+
+  it('calls onChange for every mutation path, including atlas setters and touch()', () => {
+    const layer = new SpriteLayer()
+    const onChange = vi.fn()
+    layer.onChange = onChange
+    layer.add(0, 0, 4, 4)
+    layer.set(0, 1, 1)
+    layer.resize(3)
+    layer.removeAt(0)
+    layer.touch()
+    layer.clear()
+    layer.dynamicSrc = 'x'
+    layer.image = undefined
+    layer.markAtlasDirty()
+    expect(onChange).toHaveBeenCalledTimes(9)
+    layer.onChange = null
+    expect(() => layer.touch()).not.toThrow()
+  })
+
+  it('re-uploads an image atlas after markAtlasDirty, once, and not before', () => {
+    const { rs, world, tex } = setup()
+    const img = { width: 16, height: 16, naturalWidth: 16, naturalHeight: 16 } as unknown as HTMLCanvasElement
+    const layer = new SpriteLayer({ image: img, frameWidth: 16, frameHeight: 16 })
+    layer.add(0, 0, 8, 8)
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    const sub = () => tex.filter((t) => t === 'texSubImage2D').length
+    expect(tex.filter((t) => t === 'texImage2D').length).toBeGreaterThan(0)
+    expect(sub()).toBe(0)
+    rs.update(world, 1 / 60)
+    expect(sub()).toBe(0)
+    layer.markAtlasDirty()
+    rs.update(world, 1 / 60)
+    expect(sub()).toBe(1)
+    rs.update(world, 1 / 60)
+    expect(sub()).toBe(1)
   })
 })

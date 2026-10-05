@@ -17,6 +17,11 @@ export interface LayerAtlas {
   frameWidth?: number
   frameHeight?: number
   frameColumns?: number
+  /**
+   * Bumped by {@link SpriteLayer.markAtlasDirty}: when it changes, an `image` that is a canvas
+   * (or any mutable source) is uploaded to the GPU again. Ignored for `src` and `dynamicSrc`.
+   */
+  imageVersion?: number
 }
 
 export interface SpriteLayerOptions extends LayerAtlas {
@@ -73,6 +78,12 @@ export class SpriteLayer {
   anchorY: number
   visible: boolean
 
+  /**
+   * Called after any mutation through the layer's methods and `touch()`. The React hook uses it
+   * to wake an `onDemand` loop. Direct typed-array writes are not seen: call `touch()` after them.
+   */
+  onChange: (() => void) | null = null
+
   private _order = new Int32Array(0)
   private _orderCount = -1
   private _structure = 0
@@ -98,36 +109,42 @@ export class SpriteLayer {
   }
   set src(v: string | undefined) {
     this.atlas0().src = v
+    this.touch()
   }
   get image(): SpriteLayerImage | undefined {
     return this.atlases[0]?.image
   }
   set image(v: SpriteLayerImage | undefined) {
     this.atlas0().image = v
+    this.touch()
   }
   get dynamicSrc(): string | undefined {
     return this.atlases[0]?.dynamicSrc
   }
   set dynamicSrc(v: string | undefined) {
     this.atlas0().dynamicSrc = v
+    this.touch()
   }
   get frameWidth(): number {
     return this.atlases[0]?.frameWidth ?? 0
   }
   set frameWidth(v: number) {
     this.atlas0().frameWidth = v
+    this.touch()
   }
   get frameHeight(): number {
     return this.atlases[0]?.frameHeight ?? 0
   }
   set frameHeight(v: number) {
     this.atlas0().frameHeight = v
+    this.touch()
   }
   get frameColumns(): number | undefined {
     return this.atlases[0]?.frameColumns
   }
   set frameColumns(v: number | undefined) {
     this.atlas0().frameColumns = v
+    this.touch()
   }
 
   private atlas0(): LayerAtlas {
@@ -169,7 +186,7 @@ export class SpriteLayer {
     for (let i = this.count; i < n; i++) this.reset(i, i)
     if (n !== this.count) this._structure++
     this.count = n
-    this.version++
+    this.changed()
   }
 
   private reset(i: number, id: number): void {
@@ -193,7 +210,7 @@ export class SpriteLayer {
     this.h[i] = h
     this.frame[i] = frame
     this._structure++
-    this.version++
+    this.changed()
     return i
   }
 
@@ -201,7 +218,7 @@ export class SpriteLayer {
     this.x[i] = x
     this.y[i] = y
     if (frame !== undefined) this.frame[i] = frame
-    this.version++
+    this.changed()
   }
 
   /** Swap-remove: the last sprite moves into slot `i`. */
@@ -221,18 +238,34 @@ export class SpriteLayer {
       this.ids[i] = this.ids[last]
     }
     this._structure++
-    this.version++
+    this.changed()
   }
 
   clear(): void {
     this.count = 0
     this._structure++
-    this.version++
+    this.changed()
   }
 
   /** Call after writing the arrays directly so idle-frame skipping redraws. */
   touch(): void {
+    this.changed()
+  }
+
+  /**
+   * Re-upload atlas `i`'s `image` on the next frame. Call it after repainting a canvas that is
+   * used as `image`; sources that never change need no call.
+   */
+  markAtlasDirty(i = 0): void {
+    const a = this.atlases[i]
+    if (!a) return
+    a.imageVersion = (a.imageVersion ?? 0) + 1
+    this.changed()
+  }
+
+  private changed(): void {
     this.version++
+    this.onChange?.()
   }
 
   /**

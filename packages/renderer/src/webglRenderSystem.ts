@@ -994,7 +994,7 @@ export class RenderSystem implements System {
   private _textWarned = false
   private readonly _sortTextLayers: TextLayer[] = []
   private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
-  private _layerImageTextures = new WeakMap<object, WebGLTexture>()
+  private _layerImageTextures = new WeakMap<object, { tex: WebGLTexture; ver: number; w: number; h: number }>()
   private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
   private readonly _layerCam: LayerCamera = {
     x: 0,
@@ -2229,20 +2229,32 @@ export class RenderSystem implements System {
       const iw = (img as HTMLImageElement).naturalWidth ?? img.width
       const ih = (img as HTMLImageElement).naturalHeight ?? img.height
       if (!iw || !ih) return null
+      const { gl } = this
+      const ver = atlas.imageVersion ?? 0
       let t = this._layerImageTextures.get(img)
       if (!t) {
-        const { gl } = this
-        t = gl.createTexture()!
-        gl.bindTexture(gl.TEXTURE_2D, t)
+        const tex = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, tex)
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
-        this._statTex(t, iw, ih)
+        this._statTex(tex, iw, ih)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+        t = { tex, ver, w: iw, h: ih }
         this._layerImageTextures.set(img, t)
+      } else if (t.ver !== ver || t.w !== iw || t.h !== ih) {
+        // The source changed (markAtlasDirty) or was resized: upload it again.
+        gl.bindTexture(gl.TEXTURE_2D, t.tex)
+        if (t.w !== iw || t.h !== ih) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
+        else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, img)
+        this.stats.textureUploads++
+        this.stats.textureUploadBytes += iw * ih * 4
+        t.ver = ver
+        t.w = iw
+        t.h = ih
       }
-      out.tex = t
+      out.tex = t.tex
       out.width = iw
       out.height = ih
       return out
