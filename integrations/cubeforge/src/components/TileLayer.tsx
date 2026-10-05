@@ -46,14 +46,20 @@ export interface TileLayerProps {
   layer: TileLayerData
   x?: number
   y?: number
-  /** Draw order among tile layers. All tile layers draw beneath sprites. */
+  /** Draw order among tile layers; with `renderLayer`, the shared sprite z-order. */
   zIndex?: number
+  /**
+   * Take part in the shared draw order with sprites and sprite layers: the render
+   * layer name (same names as `<Sprite layer>`), sorted by (layer order, zIndex).
+   * Omit to draw beneath all sprites (the default).
+   */
+  renderLayer?: string
   opacity?: number
   visible?: boolean
 }
 
 /** Mounts a {@link TileLayerData} into the world. Renders one quad per visible page, never one entity per tile. */
-export function TileLayer({ layer, x, y, zIndex, opacity, visible }: TileLayerProps): null {
+export function TileLayer({ layer, x, y, zIndex, renderLayer, opacity, visible }: TileLayerProps): null {
   const engine = useContext(EngineContext)!
 
   useEffect(() => {
@@ -90,10 +96,11 @@ export function TileLayer({ layer, x, y, zIndex, opacity, visible }: TileLayerPr
     if (x !== undefined) layer.x = x
     if (y !== undefined) layer.y = y
     if (zIndex !== undefined) layer.zIndex = zIndex
+    if (renderLayer !== undefined) layer.renderLayer = renderLayer
     if (opacity !== undefined) layer.opacity = opacity
     if (visible !== undefined) layer.visible = visible
     engine.loop.markDirty()
-  }, [engine, layer, x, y, zIndex, opacity, visible])
+  }, [engine, layer, x, y, zIndex, renderLayer, opacity, visible])
 
   return null
 }

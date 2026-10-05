@@ -2,6 +2,8 @@ import { ECSWorld } from '../../packages/core/src/index.ts'
 import { RenderSystem } from '../../packages/renderer/src/webglRenderSystem.ts'
 import { createCamera2D } from '../../packages/renderer/src/components/camera2d.ts'
 import { TileLayerData, createTileLayerComponent } from '../../packages/renderer/src/tileLayer.ts'
+import { createSprite } from '../../packages/renderer/src/components/sprite.ts'
+import { createTransform } from '../../packages/core/src/index.ts'
 import { SpriteLayer } from '../../packages/renderer/src/spriteLayer.ts'
 
 const out: Record<string, unknown> = {}
@@ -86,6 +88,34 @@ try {
   rs.update(world, 1 / 60)
   out.farZoomCenter = px(128, 128)
   out.glError2 = gl.getError()
+
+  // tile layer in the shared z-order: above a sprite (z 0), beneath another (z 20)
+  world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 1
+  tiles.jitter = 0
+  const addBox = (x: number, z: number, color: string) => {
+    const e = world.createEntity()
+    world.addComponent(e, createTransform(x, 100))
+    world.addComponent(e, createSprite({ width: 40, height: 40, color, zIndex: z }))
+  }
+  addBox(100, 0, '#ff0000') // x 80..120
+  addBox(140, 20, '#ffff00') // x 120..160
+  const decor = new TileLayerData({
+    width: 2,
+    height: 2,
+    tileset: { image: solid(['#00ff00']), tileWidth: 16, tileHeight: 16, columns: 1 },
+    renderLayer: 'default',
+    zIndex: 10,
+    x: 100,
+    y: 90, // covers x 100..132, y 90..122
+  })
+  decor.fill(1)
+  world.addComponent(world.createEntity(), createTileLayerComponent(decor))
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.spriteBelowDecor = px(85, 95)
+  out.decorAboveLowSprite = px(105, 95)
+  out.highSpriteAboveDecor = px(125, 95)
+  out.glError3 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }

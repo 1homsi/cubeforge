@@ -148,8 +148,18 @@ setters that wake an on-demand loop (they call `layer.onChange`). `<TileLayer>` 
 Below about 2 device pixels per tile (e.g. zoom 0.05 with 16 px tiles) each tile is drawn with its
 atlas tile's average colour, so far zoom doesn't shimmer.
 
-Tile layers draw after parallax backgrounds and before all sprites, ordered by `zIndex` among
-themselves. Sampling uses `texelFetch` on exact atlas texels, so there is no bleeding or seams at
+By default tile layers draw after parallax backgrounds and before all sprites, ordered by `zIndex`
+among themselves. Give a layer a `renderLayer` to opt in to the shared draw order instead: it is then
+sorted with sprites and `SpriteLayer`s by (render layer order, `zIndex`), so decor or heat overlays can
+sit above a world sprite or between two sprite layers:
+
+```tsx
+<TileLayer layer={ground} />                                    // beneath everything (unchanged)
+<TileLayer layer={heat} renderLayer="default" zIndex={5} />      // above sprites with zIndex < 5
+```
+
+`renderLayer` names are the ones `<Sprite layer>` and `useSpriteLayer({ layer })` use; at equal order
+and `zIndex` a tile layer draws before sprites. Sampling uses `texelFetch` on exact atlas texels, so there is no bleeding or seams at
 fractional zoom. GPU textures are freed the frame after the layer unmounts and rebuilt after a GL
 context restore. Without WebGL, `TileLayerCanvasRenderer` draws the same layer onto any 2D context
 with cached chunk canvases.
