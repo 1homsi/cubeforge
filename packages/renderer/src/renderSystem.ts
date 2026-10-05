@@ -10,7 +10,7 @@
 import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
 import type { TransformComponent } from '@cubeforge/core'
 import type { SpriteComponent } from './components/sprite'
-import type { Camera2DComponent } from './components/camera2d'
+import { clampCameraToBounds, type Camera2DComponent } from './components/camera2d'
 import type { AnimationStateComponent, AnimationClipDefinition } from './components/animationState'
 import type { AnimatorComponent, AnimatorCondition } from './components/animator'
 import type { SquashStretchComponent } from './components/squashStretch'
@@ -174,12 +174,7 @@ export class RenderSystem implements System {
       }
 
       // Camera bounds clamping
-      if (cam.bounds) {
-        const halfW = canvas.width / (2 * cam.zoom)
-        const halfH = canvas.height / (2 * cam.zoom)
-        cam.x = Math.max(cam.bounds.x + halfW, Math.min(cam.bounds.x + cam.bounds.width - halfW, cam.x))
-        cam.y = Math.max(cam.bounds.y + halfH, Math.min(cam.bounds.y + cam.bounds.height - halfH, cam.y))
-      }
+      if (cam.bounds) clampCameraToBounds(cam, canvas.width / (2 * cam.zoom), canvas.height / (2 * cam.zoom))
 
       // Camera shake
       if (cam.shakeTimer > 0) {
@@ -697,7 +692,7 @@ export class RenderSystem implements System {
       ctx.rotate(transform.rotation)
       if (text.opacity != null) ctx.globalAlpha = text.opacity
 
-      ctx.font = `${text.fontSize}px ${text.fontFamily}`
+      ctx.font = `${text.fontStyle === 'italic' ? 'italic ' : ''}${text.fontWeight ?? 'normal'} ${text.fontSize}px ${text.fontFamily}`
       ctx.textAlign = text.align
       ctx.textBaseline = text.baseline
 

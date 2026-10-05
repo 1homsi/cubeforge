@@ -195,7 +195,17 @@ setters that wake an on-demand loop (they call `layer.onChange`). `<TileLayer>` 
 `createTileLayerComponent(layer, () => engine.loop.markDirty())`.
 
 Below about 2 device pixels per tile (e.g. zoom 0.05 with 16 px tiles) each tile is drawn with its
-atlas tile's average colour, so far zoom doesn't shimmer.
+atlas tile's average colour, so far zoom doesn't shimmer. The threshold is `farZoomPx` (default 2, `0`
+turns the average off).
+
+Between 1:1 and that point, point-sampling shimmers when panning. `minFilter: 'mipmap'` filters the
+minified atlas instead: a per-tile mip pyramid (built once per atlas image on the first zoomed-out draw,
+about +33% atlas memory) blended trilinearly in the shader. Tiles never bleed into each other, and
+magnified or 1:1 drawing stays exact texels:
+
+```ts
+useTileLayer({ ..., minFilter: 'mipmap', farZoomPx: 1 }) // 'nearest' (default) keeps exact point sampling
+```
 
 By default tile layers draw after parallax backgrounds and before all sprites, ordered by `zIndex`
 among themselves. Give a layer a `renderLayer` to opt in to the shared draw order instead: it is then
@@ -309,6 +319,17 @@ complex scripts (Arabic, Devanagari) belong in `<Text>`. Pass the same `atlas: n
 several layers to share glyphs, or tune `pageSize` / `maxPages` / `resolution` (raster pixels per
 nominal font pixel, default 2). When all pages fill, the atlas clears itself and re-rasterises what is
 visible.
+
+### `<Text>` on WebGL
+
+`<Text>` now batches through the same glyph atlas: 1,000 labels are one draw call (0.3 ms CPU headless)
+instead of one texture and draw each. On the WebGL path it honours `align`, `baseline`, `wordWrap` /
+`maxWidth` / `lineHeight` (newlines too), `strokeColor` / `strokeWidth`, `shadowColor` / `shadowOffsetX` /
+`shadowOffsetY` / `shadowBlur` and `opacity`, and takes `fontWeight` and `fontStyle="italic"`. Set
+`layer="name"` to sort a text with sprites by `layer` + `zIndex` (unset keeps the old behaviour: above all
+sprites, ordered by `zIndex`). Right-to-left / complex scripts and a `maxWidth` squeeze without `wordWrap`
+use a per-entity canvas texture instead (cache keyed on every style input, 4,096 entries, re-rasterised
+at 1x/2x/4x as you zoom).
 
 ## Overlays and camera
 

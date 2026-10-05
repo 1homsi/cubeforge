@@ -24,6 +24,8 @@ export interface TextLayerOptions extends GlyphStyleOptions {
   visible?: boolean
   /** Layer-wide opacity multiplier. Default 1. */
   opacity?: number
+  /** Draw runs in ascending `sortKey[i]` order (e.g. y for depth) instead of insertion order. */
+  sortByKey?: boolean
   /** Share glyphs with other layers by passing the same atlas. Default: the process-wide atlas. */
   atlas?: GlyphAtlas
 }
@@ -109,6 +111,8 @@ export class TextLayer {
   /** Index into `styles`. */
   style!: Uint16Array
   alpha!: Float32Array
+  /** Draw order key when `sortByKey` is set (lower draws first). */
+  sortKey!: Float32Array
   ids!: Int32Array
   /** The text of each run. Change with `setText()` (or write and call `touch()`). */
   texts: string[] = []
@@ -117,22 +121,28 @@ export class TextLayer {
   zIndex: number
   visible: boolean
   opacity: number
+  sortByKey: boolean
   readonly atlas: GlyphAtlas
   /** Style options; index 0 is the layer's own. */
   readonly styles: GlyphStyleOptions[]
   private readonly _layouts: (RunLayout | undefined)[] = []
   private readonly _atlasStyles: (AtlasStyle | undefined)[] = []
   private _atlasGen = -1
+  private _order = new Int32Array(0)
+  private _orderCount = -1
+  private _structure = 0
+  private _orderStructure = -1
 
   constructor(options: TextLayerOptions = {}) {
     registerTextLayerRenderer((gl) => new TextLayerRenderer(gl))
-    const { capacity, layer, zIndex, visible, opacity, atlas, ...style } = options
+    const { capacity, layer, zIndex, visible, opacity, atlas, sortByKey, ...style } = options
     this.atlas = atlas ?? GlyphAtlas.shared
     this.styles = [style]
     this.layer = layer ?? 'default'
     this.zIndex = zIndex ?? 0
     this.visible = visible ?? true
     this.opacity = opacity ?? 1
+    this.sortByKey = sortByKey ?? false
     this.grow(Math.max(16, capacity ?? 64))
   }
 
@@ -158,6 +168,7 @@ export class TextLayer {
     this.flags = copy(this.flags, Uint8Array)
     this.style = copy(this.style, Uint16Array)
     this.alpha = copy(this.alpha, Float32Array)
+    this.sortKey = copy(this.sortKey, Float32Array)
     this.ids = copy(this.ids, Int32Array)
     this.capacity = capacity
   }
@@ -198,7 +209,9 @@ export class TextLayer {
     this.flags[i] = o.wordWrap ? TEXT_WORD_WRAP : 0
     this.style[i] = styleId
     this.alpha[i] = o.alpha ?? 1
+    this.sortKey[i] = 0
     this.ids[i] = o.id ?? i
+    this._structure++
     this.version++
     return i
   }
@@ -233,6 +246,7 @@ export class TextLayer {
         this.flags,
         this.style,
         this.alpha,
+        this.sortKey,
         this.ids,
       ] as { [k: number]: number }[])
         a[i] = a[last]
@@ -241,6 +255,7 @@ export class TextLayer {
     }
     this.texts.length = last
     this._layouts.length = last
+    this._structure++
     this.version++
   }
 
@@ -248,12 +263,46 @@ export class TextLayer {
     this.count = 0
     this.texts.length = 0
     this._layouts.length = 0
+    this._structure++
     this.version++
   }
 
   /** Call after writing the arrays directly so idle-frame skipping redraws. */
   touch(): void {
     this.version++
+  }
+
+  /**
+   * Draw order (indices into the arrays): ascending `sortKey` when `sortByKey`
+   * is set. Keys that drift a little between frames cost a near-linear
+   * insertion sort.
+   */
+  drawOrder(): Int32Array {
+    const n = this.count
+    if (this._order.length < n) this._order = new Int32Array(Math.max(n, this._order.length * 2))
+    const order = this._order
+    if (this._orderCount !== n || this._orderStructure !== this._structure || !this.sortByKey) {
+      for (let i = 0; i < n; i++) order[i] = i
+      this._orderCount = n
+      this._orderStructure = this._structure
+      if (this.sortByKey) {
+        const K = this.sortKey
+        order.subarray(0, n).sort((a, b) => K[a] - K[b] || a - b)
+      }
+      return order
+    }
+    const K = this.sortKey
+    for (let i = 1; i < n; i++) {
+      const v = order[i]
+      const k = K[v]
+      let j = i - 1
+      while (j >= 0 && (K[order[j]] > k || (K[order[j]] === k && order[j] > v))) {
+        order[j + 1] = order[j]
+        j--
+      }
+      order[j + 1] = v
+    }
+    return order
   }
 
   /** The last computed layout of run `i` without refreshing it. */
@@ -299,7 +348,9 @@ export class TextLayer {
 
   /** Index of the topmost run whose block contains the world point (rotation ignored), or -1. */
   pickIndex(wx: number, wy: number): number {
-    for (let i = this.count - 1; i >= 0; i--) {
+    const order = this.sortByKey ? this.drawOrder() : null
+    for (let k = this.count - 1; k >= 0; k--) {
+      const i = order ? order[k] : k
       if (this.flags[i] & TEXT_HIDDEN) continue
       const { width, height } = this.measure(i)
       const left = this.x[i] - this.anchorX[i] * width

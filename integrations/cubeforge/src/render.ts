@@ -49,6 +49,13 @@ export {
   tileHash,
 } from '@cubeforge/renderer'
 export type { TextLayerOptions, TextRunOptions, GlyphStyleOptions } from '@cubeforge/renderer'
-export type { SpriteLayerOptions, LayerAtlas, TileLayerOptions, Tileset, TileAnimation } from '@cubeforge/renderer'
+export type {
+  SpriteLayerOptions,
+  LayerAtlas,
+  TileLayerOptions,
+  TileMinFilter,
+  Tileset,
+  TileAnimation,
+} from '@cubeforge/renderer'
 export { StatsOverlay } from './components/StatsOverlay'
 export { Script } from './components/Script'

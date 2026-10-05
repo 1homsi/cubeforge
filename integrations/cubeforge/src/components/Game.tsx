@@ -11,7 +11,7 @@ import {
   type Plugin,
   type System,
 } from '@cubeforge/core'
-import { InputManager } from '@cubeforge/input'
+import { InputManager, type TouchPreventDefault } from '@cubeforge/input'
 import { RenderSystem, createPostProcessStack, type Sampling } from '@cubeforge/renderer'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
@@ -99,6 +99,19 @@ export interface GameProps {
    * unmount and remount the Game (e.g. via a `key` change).
    */
   mode?: GameLoopMode
+  /**
+   * Which touch events the engine cancels with `preventDefault()` (default `true`: start, move
+   * and end). `true` also suppresses the mouse events and `click` a tap would produce, so use
+   * `'move'` (blocks scrolling only) or `false` when the game listens for `click` or pointer
+   * events on the canvas. Can change at any time.
+   */
+  touchPreventDefault?: TouchPreventDefault
+  /**
+   * CSS `touch-action` of the canvas (default: not set). Use `'none'` together with
+   * `touchPreventDefault={false}` to stop page scrolling and pinch zoom without cancelling taps.
+   * An explicit `style.touchAction` wins.
+   */
+  touchAction?: CSSProperties['touchAction']
   style?: CSSProperties
   className?: string
   children?: React.ReactNode
@@ -120,12 +133,16 @@ export function Game({
   onReady,
   plugins,
   mode = 'realtime',
+  touchPreventDefault = true,
+  touchAction,
   style,
   className,
   children,
   features = {},
 }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const touchPreventDefaultRef = useRef(touchPreventDefault)
+  touchPreventDefaultRef.current = touchPreventDefault
   const debugCanvasRef = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [engine, setEngine] = useState<EngineState | null>(null)
@@ -185,6 +202,7 @@ export function Game({
     }
     if (debugSystem) ecs.addSystem(timedSystem('DebugSystem', debugSystem, systemTimings))
 
+    input.touch.preventDefault = touchPreventDefaultRef.current
     input.attach(canvas)
     canvas.setAttribute('tabindex', '0')
 
@@ -415,10 +433,16 @@ export function Game({
     engine.physics?.setGravity(gravity)
   }, [gravity, engine])
 
+  // Sync touch default-action handling
+  useEffect(() => {
+    if (engine) engine.input.touch.preventDefault = touchPreventDefault
+  }, [touchPreventDefault, engine])
+
   const canvasStyle: CSSProperties = {
     display: 'block',
     outline: 'none',
     imageRendering: scale === 'pixel' ? 'pixelated' : undefined,
+    ...(touchAction !== undefined ? { touchAction } : {}),
     ...style,
   }
 

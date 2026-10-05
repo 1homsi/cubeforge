@@ -3,6 +3,7 @@ import type { TileLayerRenderStats } from './tileLayerGL'
 import type { SpriteLayerRenderer } from './spriteLayerGL'
 import type { TileLayerData } from './tileLayer'
 import type { TextLayerRenderer } from './textLayerGL'
+import type { EntityTextBatcher } from './textEntities'
 
 export interface TileRenderer {
   readonly stats: TileLayerRenderStats
@@ -51,4 +52,12 @@ export function registerTextLayerRenderer(f: Factory<TextLayerRenderer>): void {
 }
 export function textLayerRendererFactory(): Factory<TextLayerRenderer> | null {
   return textFactory
+}
+
+let textEntityFactory: (() => EntityTextBatcher) | null = null
+export function registerTextEntityRenderer(f: () => EntityTextBatcher): void {
+  textEntityFactory ??= f
+}
+export function textEntityBatcherFactory(): (() => EntityTextBatcher) | null {
+  return textEntityFactory
 }

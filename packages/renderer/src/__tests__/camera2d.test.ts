@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createCamera2D } from '../components/camera2d'
+import { createCamera2D, clampCameraToBounds } from '../components/camera2d'
 
 describe('createCamera2D', () => {
   describe('default values', () => {
@@ -116,5 +116,29 @@ describe('createCamera2D', () => {
       cam.zoom = 3
       expect(cam.zoom).toBe(3)
     })
+  })
+})
+
+describe('clampCameraToBounds', () => {
+  it('clamps to the bounds minus half the view', () => {
+    const cam = createCamera2D({ x: -50, y: 9000, bounds: { x: 0, y: 0, width: 2000, height: 1000 } })
+    clampCameraToBounds(cam, 400, 250)
+    expect([cam.x, cam.y]).toEqual([400, 750])
+  })
+
+  it('centres on an axis where the bounds are smaller than the view', () => {
+    const cam = createCamera2D({ x: 0, y: 0, bounds: { x: 0, y: 0, width: 100, height: 100 } })
+    clampCameraToBounds(cam, 400, 250)
+    expect([cam.x, cam.y]).toEqual([50, 50])
+    // mixed: wide world, short bounds on y
+    const mixed = createCamera2D({ x: 10, y: 10, bounds: { x: 0, y: 0, width: 5000, height: 100 } })
+    clampCameraToBounds(mixed, 400, 250)
+    expect([mixed.x, mixed.y]).toEqual([400, 50])
+  })
+
+  it('is a no-op without bounds', () => {
+    const cam = createCamera2D({ x: 7, y: 8 })
+    clampCameraToBounds(cam, 400, 250)
+    expect([cam.x, cam.y]).toEqual([7, 8])
   })
 })

@@ -55,6 +55,7 @@ export type {
   Tileset,
   TilesetImage,
   TileAnimation,
+  TileMinFilter,
   TileLayerOptions,
   TileLayerComponent,
 } from './tileLayer'
