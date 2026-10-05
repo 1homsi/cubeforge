@@ -34,6 +34,7 @@ import {
 } from './textureFilter'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
 import type { TileLayerRenderStats } from './tileLayerGL'
+import type { TileLayerData } from './tileLayer'
 
 // ── Component shapes (duck-typed — no hard dependency on renderer/physics) ───
 
@@ -283,6 +284,7 @@ interface TrailComponent {
 const FLOATS_PER_INSTANCE = 19
 /** Maximum sprites batched in a single draw call. */
 const MAX_INSTANCES = 16384
+const NO_TILE_LAYERS: readonly TileLayerData[] = []
 /** Maximum sprite texture cache entries before evicting least-recently-used. */
 const MAX_SPRITE_TEXTURES = 1024
 /** Maximum text texture cache entries before evicting oldest. */
@@ -949,7 +951,8 @@ export class RenderSystem implements System {
   private readonly _sortTexRanks: number[] = []
   /** texture key → small integer rank, so the frame sort compares numbers not strings */
   private readonly _texRankCache = new Map<string, number>()
-  private _texNextRank = 0
+  // Rank 0 is reserved for tile layers so they draw before sprites at equal (layer, z).
+  private _texNextRank = 1
   private _texRankEpoch = 0
   private readonly _spriteLayers: SpriteLayer[] = []
   private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
@@ -2043,7 +2046,7 @@ export class RenderSystem implements System {
     if (rank === undefined) {
       if (this._texRankCache.size > 4096) {
         this._texRankCache.clear()
-        this._texNextRank = 0
+        this._texNextRank = 1
         this._texRankEpoch++
       }
       rank = this._texNextRank++
@@ -2072,6 +2075,14 @@ export class RenderSystem implements System {
     this.stats.drawCalls += r.drawCalls
     this.stats.batches += r.drawCalls
     this.stats.instances += r.instances
+    this.gl.useProgram(this.program)
+  }
+
+  private drawSortedTileLayer(layer: TileLayerData): void {
+    const t = this._tileLayers!
+    const before = t.stats.drawCalls
+    t.drawSorted(layer)
+    this.stats.drawCalls += t.stats.drawCalls - before
     this.gl.useProgram(this.program)
   }
 
@@ -2637,7 +2648,9 @@ export class RenderSystem implements System {
     const sortZs = this._sortZs
     const sortTexRanks = this._sortTexRanks
     const layers = this._spriteLayers
-    const m = n + layers.length
+    const tileSorted = this._tileLayers?.sorted ?? NO_TILE_LAYERS
+    const nSprites = n + layers.length
+    const m = nSprites + tileSorted.length
     for (let r = 0; r < n; r++) {
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
@@ -2658,6 +2671,12 @@ export class RenderSystem implements System {
       sortZs[r] = layer.zIndex
       sortTexRanks[r] = this.textureRank('__layer__')
     }
+    for (let j = 0; j < tileSorted.length; j++) {
+      const r = nSprites + j
+      sortLayers[r] = this.layers.getOrder(tileSorted[j].renderLayer!)
+      sortZs[r] = tileSorted[j].zIndex
+      sortTexRanks[r] = 0
+    }
     const sortIndices = this.sortVisible(m)
 
     const hasSquash = world.query('SquashStretch').length > 0
@@ -2675,7 +2694,8 @@ export class RenderSystem implements System {
         batchCount = 0
         batchKey = ''
         ensuredKey = null
-        this.drawSpriteLayer(layers[k - n], viewL, viewR, viewT, viewB)
+        if (k < nSprites) this.drawSpriteLayer(layers[k - n], viewL, viewR, viewT, viewB)
+        else this.drawSortedTileLayer(tileSorted[k - nSprites])
         continue
       }
       const sprite = visSprites[k]

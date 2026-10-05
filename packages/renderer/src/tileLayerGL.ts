@@ -176,6 +176,9 @@ export class TileLayerRenderer {
   private maxTex = 2048
   private readonly states = new Map<TileLayerData, LayerGL>()
   private readonly layers: TileLayerData[] = []
+  /** Layers with a `renderLayer`: drawn by the RenderSystem interleaved with sprites (see {@link drawSorted}). */
+  readonly sorted: TileLayerData[] = []
+  private cam = { x: 0, y: 0, zoom: 1, w: 1, h: 1, sx: 0, sy: 0, dpr: 1 }
   private readonly range = new Int32Array(4)
   private time = 0
   private frame = 0
@@ -211,6 +214,10 @@ export class TileLayerRenderer {
       }
       layers[j] = l
     }
+
+    const sorted = this.sorted
+    sorted.length = 0
+    for (let i = 0; i < layers.length; i++) if (layers[i].renderLayer !== undefined) sorted.push(layers[i])
 
     let changed = layers.length !== this.lastLayerCount
     this.lastLayerCount = layers.length
@@ -250,10 +257,32 @@ export class TileLayerRenderer {
     dpr = 1,
   ): void {
     this.stats.drawCalls = 0
+    const c = this.cam
+    c.x = camX
+    c.y = camY
+    c.zoom = zoom
+    c.w = canvasW
+    c.h = canvasH
+    c.sx = shakeX
+    c.sy = shakeY
+    c.dpr = dpr
+    this.drawLayers(false)
+  }
+
+  /**
+   * Draw one layer from {@link sorted} with the camera of the last `render()`.
+   * The caller restores its own GL program afterwards.
+   */
+  drawSorted(layer: TileLayerData): void {
+    this.drawLayers(true, layer)
+  }
+
+  private drawLayers(sortedOnly: boolean, only?: TileLayerData): void {
     const layers = this.layers
     if (layers.length === 0 || !this.program || !this.u) return
     const { gl } = this
     const u = this.u
+    const { x: camX, y: camY, zoom, w: canvasW, h: canvasH, sx: shakeX, sy: shakeY, dpr } = this.cam
     gl.useProgram(this.program)
     gl.bindVertexArray(this.vao)
     gl.uniform2f(u.camPos, camX, camY)
@@ -268,6 +297,7 @@ export class TileLayerRenderer {
 
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i]
+      if (only ? layer !== only : (layer.renderLayer !== undefined) !== sortedOnly) continue
       const s = this.states.get(layer)!
       s.drawnRevision = layer.revision
       if (!layer.visible || layer.opacity <= 0 || !isTilesetReady(layer.tileset)) continue

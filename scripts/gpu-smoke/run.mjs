@@ -42,20 +42,28 @@ try {
     path.join(dir, 'index.html'),
     '<!doctype html><html><body><script src="smoke.js"></script></body></html>',
   )
-  const dom = execFileSync(
-    chrome,
-    [
-      '--headless=new',
-      '--no-sandbox',
-      '--disable-gpu-sandbox',
-      '--use-angle=swiftshader',
-      '--enable-unsafe-swiftshader',
-      '--allow-file-access-from-files',
-      '--dump-dom',
-      `file://${path.join(dir, 'index.html')}`,
-    ],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 },
-  )
+  // Chrome sometimes exits non-zero after --dump-dom succeeded; the dumped DOM is what counts.
+  const run = () =>
+    execFileSync(
+      chrome,
+      [
+        '--headless=new',
+        '--no-sandbox',
+        '--disable-gpu-sandbox',
+        '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader',
+        '--allow-file-access-from-files',
+        '--dump-dom',
+        `file://${path.join(dir, 'index.html')}`,
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 },
+    )
+  let dom
+  try {
+    dom = run()
+  } catch (e) {
+    dom = e && typeof e.stdout === 'string' ? e.stdout : ''
+  }
   const m = /data-out="([^"]*)"/.exec(dom)
   if (!m) throw new Error('gpu-smoke: page produced no output')
   const out = JSON.parse(m[1].replace(/&quot;/g, '"'))
@@ -69,6 +77,10 @@ try {
     retintedAfterSetTiles: '0,0,255,255',
     glError: 0,
     glError2: 0,
+    spriteBelowDecor: '255,0,0,255',
+    decorAboveLowSprite: '0,255,0,255',
+    highSpriteAboveDecor: '255,255,0,255',
+    glError3: 0,
   }
   const failures = Object.entries(expect).filter(([k, v]) => out[k] !== v)
   if (out.error || failures.length) {

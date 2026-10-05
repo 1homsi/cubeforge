@@ -43,7 +43,21 @@ export interface TileLayerOptions {
   /** World position of the layer's top-left corner. Default 0, 0. */
   x?: number
   y?: number
+  /**
+   * Draw order. Without `renderLayer` this only orders tile layers among
+   * themselves (all of them draw beneath every sprite). With `renderLayer` it is
+   * the same `zIndex` as `Sprite.zIndex` / `SpriteLayer.zIndex`.
+   */
   zIndex?: number
+  /**
+   * Opt in to the shared draw order: name of a render layer (the same names
+   * `Sprite.layer` and `SpriteLayer.layer` use, e.g. 'default', 'background').
+   * The tile layer is then sorted together with sprites and sprite layers by
+   * (render layer order, zIndex), so it can sit above a sprite or between two
+   * sprite layers. At equal order and zIndex a tile layer draws before sprites.
+   * Omit it to keep the legacy behaviour: drawn beneath all sprites.
+   */
+  renderLayer?: string
   opacity?: number
   /** Chunk edge in tiles for dirty tracking and the Canvas2D cache. Default 32. */
   chunkSize?: number
@@ -93,6 +107,7 @@ export class TileLayerData {
   private _zIndex: number
   private _opacity: number
   private _visible = true
+  private _renderLayer: string | undefined
 
   /** Bumped by any change that affects the rendered image. */
   revision = 0
@@ -150,6 +165,7 @@ export class TileLayerData {
     this._y = opts.y ?? 0
     this._zIndex = opts.zIndex ?? 0
     this._opacity = opts.opacity ?? 1
+    this._renderLayer = opts.renderLayer
     const chunks = this.chunksX * this.chunksY
     this.chunkVersion = new Uint32Array(chunks)
     this.dirtyList = new Int32Array(chunks)
@@ -269,6 +285,16 @@ export class TileLayerData {
     if (v === this._zIndex) return
     this._zIndex = v
     this.revision++
+  }
+  /** Render layer name when the tile layer takes part in the shared sprite sort; undefined = beneath all sprites. */
+  get renderLayer(): string | undefined {
+    return this._renderLayer
+  }
+  set renderLayer(v: string | undefined) {
+    if (v === this._renderLayer) return
+    this._renderLayer = v
+    this.revision++
+    this.onChange?.()
   }
   get opacity(): number {
     return this._opacity

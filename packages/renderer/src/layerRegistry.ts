@@ -1,9 +1,12 @@
 import type { ECSWorld } from '@cubeforge/core'
 import type { TileLayerRenderStats } from './tileLayerGL'
 import type { SpriteLayerRenderer } from './spriteLayerGL'
+import type { TileLayerData } from './tileLayer'
 
 export interface TileRenderer {
   readonly stats: TileLayerRenderStats
+  /** Layers with a `renderLayer`, drawn interleaved with sprites through {@link drawSorted}. */
+  readonly sorted: readonly TileLayerData[]
   prepare(world: ECSWorld, dt: number): boolean
   render(
     camX: number,
@@ -15,6 +18,8 @@ export interface TileRenderer {
     shakeY: number,
     dpr?: number,
   ): void
+  /** Draw one of {@link sorted} using the camera of the last `render()`. */
+  drawSorted(layer: TileLayerData): void
   contextRestored(): void
   dispose(): void
 }
