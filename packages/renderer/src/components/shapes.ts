@@ -1,4 +1,10 @@
 import type { Component } from '@cubeforge/core'
+import { registerShapeRenderer } from '../layerRegistry'
+import { ShapeRenderer } from '../shapeGL'
+
+// WebGL drawing of the shape components is registered by their creators, so games that never
+// create a shape (or gradient) don't bundle it.
+const register = (): void => registerShapeRenderer((gl) => new ShapeRenderer(gl))
 
 export interface CircleShapeComponent extends Component {
   readonly type: 'CircleShape'
@@ -41,6 +47,7 @@ export interface PolygonShapeComponent extends Component {
 }
 
 export function createCircleShape(opts?: Partial<Omit<CircleShapeComponent, 'type'>>): CircleShapeComponent {
+  register()
   return {
     type: 'CircleShape',
     radius: 16,
@@ -53,6 +60,7 @@ export function createCircleShape(opts?: Partial<Omit<CircleShapeComponent, 'typ
 }
 
 export function createLineShape(opts?: Partial<Omit<LineShapeComponent, 'type'>>): LineShapeComponent {
+  register()
   return {
     type: 'LineShape',
     endX: 0,
@@ -68,6 +76,7 @@ export function createLineShape(opts?: Partial<Omit<LineShapeComponent, 'type'>>
 }
 
 export function createPolygonShape(opts?: Partial<Omit<PolygonShapeComponent, 'type'>>): PolygonShapeComponent {
+  register()
   return {
     type: 'PolygonShape',
     points: [],

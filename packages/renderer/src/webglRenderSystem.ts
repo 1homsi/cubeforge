@@ -29,12 +29,16 @@ import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynam
 import {
   spriteLayerRendererFactory,
   textEntityBatcherFactory,
+  shapeRendererFactory,
   textLayerRendererFactory,
   tileRendererFactory,
   type TileRenderer,
 } from './layerRegistry'
 import type { TextLayer } from './textLayer'
 import type { TextLayerRenderer } from './textLayerGL'
+import type { ShapeRenderer } from './shapeGL'
+import type { CircleShapeComponent, LineShapeComponent, PolygonShapeComponent } from './components/shapes'
+import type { GradientComponent } from './components/gradient'
 import type { EntityTextBatcher } from './textEntities'
 import {
   type Sampling,
@@ -688,6 +692,11 @@ export function computeWebGLSceneHash({
     mix(entry.version)
   }
 
+  // Vector shapes and gradients are not hashed: never skip a frame that contains them.
+  for (const kind of ['CircleShape', 'LineShape', 'PolygonShape', 'Gradient']) {
+    if (world.query('Transform', kind).length > 0) return -1
+  }
+
   for (const id of world.query('Transform', 'Sprite')) {
     const s = world.getComponent<SpriteComponent>(id, 'Sprite')!
     if (s.customDraw) return -1
@@ -992,6 +1001,15 @@ export class RenderSystem implements System {
   private _textLayerRenderer: TextLayerRenderer | null = null
   private _textLayerVersion = 0
   private _entityText: EntityTextBatcher | null = null
+  private _shapes: ShapeRenderer | null = null
+  private readonly _vecComps: (
+    | CircleShapeComponent
+    | LineShapeComponent
+    | PolygonShapeComponent
+    | GradientComponent
+  )[] = []
+  private readonly _vecIds: EntityId[] = []
+  private _gradientTex = new Map<GradientComponent, { key: string; tex: WebGLTexture }>()
   private _textWarned = false
   private readonly _sortTextLayers: TextLayer[] = []
   private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
@@ -1531,6 +1549,8 @@ export class RenderSystem implements System {
     this._ppFBOW = this._ppFBOH = 0
     this._stackTex = null
     this._stackTexW = this._stackTexH = 0
+    this._gradientTex.clear()
+    this._shapes?.contextRestored()
     this._idleFBO = null
     this._idleTex = null
     this._idleFBOW = this._idleFBOH = 0
@@ -1582,6 +1602,9 @@ export class RenderSystem implements System {
     this._tileLayers?.dispose()
     this._spriteLayerRenderer?.dispose()
     this._textLayerRenderer?.dispose()
+    this._shapes?.dispose()
+    for (const e of this._gradientTex.values()) gl.deleteTexture(e.tex)
+    this._gradientTex.clear()
     this.textures.clear()
     this.shapeTextures.clear()
     this.parallaxTextures.clear()
@@ -2192,6 +2215,86 @@ export class RenderSystem implements System {
       this._texRankCache.set(key, rank)
     }
     return rank
+  }
+
+  /** One Circle / Line / Polygon (queued for the shape batch) or Gradient (drawn now) in sort order. */
+  private drawVectorItem(
+    shapes: ShapeRenderer,
+    comp: CircleShapeComponent | LineShapeComponent | PolygonShapeComponent | GradientComponent,
+    world: ECSWorld,
+    id: EntityId,
+    camX: number,
+    camY: number,
+    zoom: number,
+    Wl: number,
+    Hl: number,
+  ): void {
+    const t = world.getComponent<TransformComponent>(id, 'Transform')!
+    switch (comp.type) {
+      case 'CircleShape':
+        shapes.circle(t.x, t.y, comp)
+        return
+      case 'LineShape':
+        shapes.line(t.x, t.y, t.rotation, comp)
+        return
+      case 'PolygonShape':
+        shapes.polygon(t.x, t.y, t.rotation, comp)
+        return
+    }
+    // Gradient: baked once into a small texture, drawn as one quad.
+    const g = comp as GradientComponent
+    const reach = Math.hypot(g.width, g.height)
+    if (
+      t.x + reach < camX - Wl / (2 * zoom) ||
+      t.x - reach > camX + Wl / (2 * zoom) ||
+      t.y + reach < camY - Hl / (2 * zoom) ||
+      t.y - reach > camY + Hl / (2 * zoom)
+    )
+      return
+    shapes.flush()
+    const key = shapes.gradientKey(g)
+    let entry = this._gradientTex.get(g)
+    if (!entry || entry.key !== key) {
+      const canvas = shapes.bakeGradient(g)
+      if (!canvas) return
+      const { gl } = this
+      let tex = entry?.tex
+      if (!tex) {
+        tex = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, tex)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+        this._statTex(tex, canvas.width, canvas.height)
+      } else gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas)
+      this._gradientTex.set(g, (entry = { key, tex }))
+    }
+    this.gl.useProgram(this.program)
+    this.writeInstance(
+      0,
+      t.x,
+      t.y,
+      g.width,
+      g.height,
+      t.rotation,
+      g.anchorX,
+      g.anchorY,
+      0,
+      0,
+      false,
+      false,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      1,
+      1,
+    )
+    this.flushWithTex(1, entry.tex, true)
   }
 
   private drawSpriteLayer(layer: SpriteLayer, viewL: number, viewR: number, viewT: number, viewB: number): void {
@@ -2861,7 +2964,35 @@ export class RenderSystem implements System {
     textLayers.length = 0
     for (const l of this._textLayers) textLayers.push(l)
     if (entityText) for (const l of entityText.sortedLayers) textLayers.push(l)
-    const m = nt + textLayers.length
+    const ntt = nt + textLayers.length
+    // Vector shapes (Circle, Line, Polygon, Gradient) join the sort as one item each.
+    const vecComps = this._vecComps
+    const vecIds = this._vecIds
+    vecComps.length = 0
+    vecIds.length = 0
+    for (const kind of ['CircleShape', 'LineShape', 'PolygonShape', 'Gradient']) {
+      for (const id of world.query('Transform', kind)) {
+        const c = world.getComponent<CircleShapeComponent>(id, kind)!
+        if (!c.visible) continue
+        if (kind === 'Gradient' && (c as unknown as GradientComponent).stops.length === 0) continue
+        vecComps.push(c)
+        vecIds.push(id)
+      }
+    }
+    const nVec = vecComps.length
+    let shapes: ShapeRenderer | null = null
+    if (nVec > 0) {
+      shapes = this._shapes ??= shapeRendererFactory()?.(gl) ?? null
+      if (shapes) {
+        const lc = this._layerCam
+        lc.viewL = viewL
+        lc.viewR = viewR
+        lc.viewT = viewT
+        lc.viewB = viewB
+        shapes.begin(lc, zoom * (W / Wl))
+      }
+    }
+    const m = ntt + (shapes ? nVec : 0)
     for (let r = 0; r < n; r++) {
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
@@ -2895,6 +3026,16 @@ export class RenderSystem implements System {
       sortZs[r] = layer.zIndex
       sortTexRanks[r] = this.textureRank('__textlayer__')
     }
+    if (shapes) {
+      const vecRank = this.textureRank('__vector__')
+      const defaultOrder = this.layers.getOrder('default')
+      for (let j = 0; j < nVec; j++) {
+        const r = ntt + j
+        sortLayers[r] = defaultOrder
+        sortZs[r] = vecComps[j].zIndex
+        sortTexRanks[r] = vecRank
+      }
+    }
     const sortIndices = this.sortVisible(m)
 
     const hasSquash = world.query('SquashStretch').length > 0
@@ -2912,10 +3053,19 @@ export class RenderSystem implements System {
         batchCount = 0
         batchKey = ''
         ensuredKey = null
+        if (k >= ntt) {
+          this.drawVectorItem(shapes!, vecComps[k - ntt], world, vecIds[k - ntt], camX, camY, zoom, Wl, Hl)
+          continue
+        }
+        if (shapes !== null && shapes.pending) shapes.flush()
         if (k < nSprites) this.drawSpriteLayer(layers[k - n], viewL, viewR, viewT, viewB)
         else if (k < nt) this.drawSortedTileLayer(tileSorted[k - nSprites])
         else this.drawTextLayer(textLayers[k - nt], viewL, viewR, viewT, viewB)
         continue
+      }
+      if (shapes !== null && shapes.pending) {
+        shapes.flush()
+        gl.useProgram(this.program)
       }
       const sprite = visSprites[k]
       this.stats.spritesConsidered++
@@ -3003,6 +3153,13 @@ export class RenderSystem implements System {
     }
     this.flush(batchCount, batchKey, batchSampling, batchBlendMode, batchShapeRef)
     batchCount = 0
+    if (shapes !== null) {
+      shapes.flush()
+      gl.useProgram(this.program)
+      this.stats.drawCalls += shapes.drawCalls
+      this.stats.batches += shapes.drawCalls
+      this.stats.instances += shapes.instances
+    }
 
     if (this._screenTint.a > 0) this.drawScreenTint(camX, camY, zoom, Wl, Hl)
 

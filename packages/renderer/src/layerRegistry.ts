@@ -4,6 +4,7 @@ import type { SpriteLayerRenderer } from './spriteLayerGL'
 import type { TileLayerData } from './tileLayer'
 import type { TextLayerRenderer } from './textLayerGL'
 import type { EntityTextBatcher } from './textEntities'
+import type { ShapeRenderer } from './shapeGL'
 
 export interface TileRenderer {
   readonly stats: TileLayerRenderStats
@@ -60,4 +61,12 @@ export function registerTextEntityRenderer(f: () => EntityTextBatcher): void {
 }
 export function textEntityBatcherFactory(): (() => EntityTextBatcher) | null {
   return textEntityFactory
+}
+
+let shapeFactory: Factory<ShapeRenderer> | null = null
+export function registerShapeRenderer(f: Factory<ShapeRenderer>): void {
+  shapeFactory ??= f
+}
+export function shapeRendererFactory(): Factory<ShapeRenderer> | null {
+  return shapeFactory
 }
