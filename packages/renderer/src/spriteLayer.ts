@@ -1,7 +1,25 @@
 import type { Sampling } from './textureFilter'
 import { registerSpriteLayerRenderer } from './layerRegistry'
 import { SpriteLayerRenderer } from './spriteLayerGL'
-import { SPRITE_HIDDEN } from './spriteLayerFlags'
+import { SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
+import { frameRect, opaqueBounds, readAtlasMask, type AtlasMask, type FrameHit, type PickSource } from './spritePick'
+
+export type { FrameHit, PickSource } from './spritePick'
+
+/**
+ * What `pick()` returns for "nothing here". `-1` is also a valid caller id (ids are Int32),
+ * so prefer `pickId()` / `pickKey()` / `pickIndex()` (-1 is never an index), which cannot be confused with an id.
+ */
+export const NO_SPRITE = -1
+
+export interface PickOptions {
+  /**
+   * Only count texels whose alpha is above this (0-255) as hits. Reads the atlas
+   * pixels once (cached; call `invalidateHitMasks()` after repainting a dynamic canvas).
+   * Default: the layer's `pickAlpha` (0 = off).
+   */
+  alpha?: number
+}
 
 export {
   ATLASES_PER_DRAW,
@@ -20,6 +38,8 @@ export interface AtlasFrame {
   y: number
   w: number
   h: number
+  /** Hit region for picking in frame pixels (e.g. a building's footprint), or `'opaque'`. Default: the whole frame. */
+  hit?: FrameHit
 }
 
 /** One texture of a sprite layer, sliced into a uniform grid or an explicit frame table. */
@@ -37,6 +57,12 @@ export interface LayerAtlas {
    * (or any mutable source) is uploaded to the GPU again. Ignored for `src` and `dynamicSrc`.
    */
   imageVersion?: number
+  /**
+   * Hit region for picking, in frame pixels, applied to every grid cell (frame
+   * tables use per-frame `hit`): a rect, or `'opaque'` for the bounds of each frame's
+   * non-transparent pixels. Default: the whole frame.
+   */
+  hit?: FrameHit
   /** Grid only: pixels between cells. Default 0. */
   frameSpacing?: number
   /** Grid only: pixels around the atlas edge before the first cell. Default 0. */
@@ -78,6 +104,8 @@ export interface SpriteLayerOptions extends LayerAtlas {
   anchorX?: number
   anchorY?: number
   visible?: boolean
+  /** Default alpha threshold (0-255) for picking; 0 (default) hits the whole hit rect. */
+  pickAlpha?: number
 }
 
 /**
@@ -122,6 +150,22 @@ export class SpriteLayer {
   anchorX: number
   anchorY: number
   visible: boolean
+  /** Default alpha threshold (0-255) for picking; 0 = off. */
+  pickAlpha: number
+  /**
+   * Per-sprite hit rect override, 4 floats per sprite (x0, y0, x1, y1) as fractions of the
+   * sprite's quad; NaN in x0 = none. Null until {@link enableHitRects}.
+   */
+  hit: Float32Array | null = null
+  /**
+   * Where picking reads atlas pixels from (set by the RenderSystem: loaded `src` images and
+   * dynamic canvases); atlases with an `image` need no resolver.
+   */
+  pixelSource: ((atlas: LayerAtlas) => PickSource | undefined) | null = null
+
+  private _masks = new Map<LayerAtlas, AtlasMask | null>()
+  private _keyIds = new Map<string, number>()
+  private _keys: string[] = []
 
   /**
    * Called after any mutation through the layer's methods and `touch()`. The React hook uses it
@@ -137,10 +181,21 @@ export class SpriteLayer {
 
   constructor(options: SpriteLayerOptions = {}) {
     registerSpriteLayerRenderer((gl) => new SpriteLayerRenderer(gl))
-    const { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns, frameSpacing, frameMargin, frames, inset } =
-      options
+    const {
+      src,
+      image,
+      dynamicSrc,
+      frameWidth,
+      frameHeight,
+      frameColumns,
+      frameSpacing,
+      frameMargin,
+      frames,
+      inset,
+      hit,
+    } = options
     this.atlases = options.atlases ?? [
-      { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns, frameSpacing, frameMargin, frames, inset },
+      { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns, frameSpacing, frameMargin, frames, inset, hit },
     ]
     this.sortByKey = options.sortByKey ?? false
     this.layer = options.layer ?? 'default'
@@ -149,6 +204,7 @@ export class SpriteLayer {
     this.anchorX = options.anchorX ?? 0.5
     this.anchorY = options.anchorY ?? 0.5
     this.visible = options.visible ?? true
+    this.pickAlpha = options.pickAlpha ?? 0
     this.grow(Math.max(16, options.capacity ?? 256))
   }
 
@@ -221,6 +277,11 @@ export class SpriteLayer {
     this.flags = copy(this.flags, Uint8Array)
     this.sortKey = copy(this.sortKey, Float64Array)
     if (this.sortKey2) this.sortKey2 = copy(this.sortKey2, Float64Array)
+    if (this.hit) {
+      const next = new Float32Array(capacity * 4).fill(NaN)
+      next.set(this.hit.subarray(0, this.count * 4))
+      this.hit = next
+    }
     this.ids = copy(this.ids, Int32Array)
     this.capacity = capacity
   }
@@ -246,14 +307,16 @@ export class SpriteLayer {
     this.flags[i] = 0
     this.sortKey[i] = 0
     if (this.sortKey2) this.sortKey2[i] = 0
+    if (this.hit) this.hit[i * 4] = NaN
     this.ids[i] = id
   }
 
-  add(x: number, y: number, w: number, h: number, frame = 0, id?: number): number {
+  /** `id` is returned by `pick()`; a string is interned to a number (see {@link intern}). Default: the slot index at insertion. */
+  add(x: number, y: number, w: number, h: number, frame = 0, id?: number | string): number {
     const i = this.count
     this.reserve(i + 1)
     this.count = i + 1
-    this.reset(i, id ?? i)
+    this.reset(i, typeof id === 'string' ? this.intern(id) : (id ?? i))
     this.x[i] = x
     this.y[i] = y
     this.w[i] = w
@@ -285,6 +348,7 @@ export class SpriteLayer {
       this.flags[i] = this.flags[last]
       this.sortKey[i] = this.sortKey[last]
       if (this.sortKey2) this.sortKey2[i] = this.sortKey2[last]
+      if (this.hit) this.hit.copyWithin(i * 4, last * 4, last * 4 + 4)
       this.ids[i] = this.ids[last]
     }
     this.changed()
@@ -416,26 +480,289 @@ export class SpriteLayer {
     })
   }
 
-  /** Topmost sprite index containing the world point (rotation ignored), or -1. */
-  pickIndex(wx: number, wy: number): number {
-    const ax = this.anchorX
-    const ay = this.anchorY
+  // ── Picking ────────────────────────────────────────────────────────────────
+
+  /** Allocate the per-sprite hit rect override (all unset). */
+  enableHitRects(): Float32Array {
+    if (!this.hit) this.hit = new Float32Array(this.capacity * 4).fill(NaN)
+    return this.hit
+  }
+
+  /** Set sprite `i`'s hit rect as fractions of its quad (0..1 each); `setHitRect(i)` clears it. */
+  setHitRect(i: number, x0?: number, y0?: number, x1?: number, y1?: number): void {
+    const h = this.enableHitRects()
+    if (x0 === undefined) h[i * 4] = NaN
+    else {
+      h[i * 4] = x0
+      h[i * 4 + 1] = y0!
+      h[i * 4 + 2] = x1!
+      h[i * 4 + 3] = y1!
+    }
+  }
+
+  /** Forget cached atlas alpha masks and opaque bounds (call after repainting a dynamic canvas atlas). */
+  invalidateHitMasks(): void {
+    this._masks.clear()
+  }
+
+  /** Stable int32 id for a string key (for `add(..., 'person:42')`); `keyOf` maps it back. Ids start at 2^30. */
+  intern(key: string): number {
+    let id = this._keyIds.get(key)
+    if (id === undefined) {
+      id = 0x40000000 + this._keys.length
+      this._keyIds.set(key, id)
+      this._keys.push(key)
+    }
+    return id
+  }
+
+  /** The string behind an interned id, or undefined. */
+  keyOf(id: number): string | undefined {
+    return id >= 0x40000000 ? this._keys[id - 0x40000000] : undefined
+  }
+
+  private _hx0 = 0
+  private _hy0 = 0
+  private _hx1 = 0
+  private _hy1 = 0
+  private readonly _fr = { x: 0, y: 0, w: 0, h: 0 }
+  private readonly _frac = new Float32Array(4)
+
+  private maskOf(atlas: LayerAtlas): AtlasMask | null {
+    const src = (atlas.image as PickSource | undefined) ?? this.pixelSource?.(atlas)
+    if (!src) return null
+    let m = this._masks.get(atlas)
+    if (m === undefined || (m !== null && m.source !== src)) {
+      m = readAtlasMask(src)
+      // not loaded / unreadable yet: retry next time instead of caching the miss
+      if (m) this._masks.set(atlas, m)
+    }
+    return m ?? null
+  }
+
+  /** Hit region of sprite `i` as fractions of its quad, into `_frac`; false = nothing is hittable. */
+  private hitFractions(i: number): boolean {
+    const f = this._frac
+    f[0] = 0
+    f[1] = 0
+    f[2] = 1
+    f[3] = 1
+    const per = this.hit
+    if (per && per[i * 4] === per[i * 4]) {
+      f[0] = per[i * 4]
+      f[1] = per[i * 4 + 1]
+      f[2] = per[i * 4 + 2]
+      f[3] = per[i * 4 + 3]
+      return true
+    }
+    const a = this.atlas[i]
+    const atlas = this.atlases[a]
+    if (!atlas || (this.flags[i] & SPRITE_UNTEXTURED) !== 0) return true
+    const frame = this.frame[i]
+    const table = atlas.frames
+    const spec = table !== undefined ? table[frame]?.hit : atlas.hit
+    if (spec === undefined) return true
+    const fr = this._fr
+    if (spec === 'opaque') {
+      const m = this.maskOf(atlas)
+      if (!m || !frameRect(atlas, frame, m.w, m.h, fr)) return true
+      let b = m.bounds.get(frame)
+      if (b === undefined) {
+        b = opaqueBounds(m, fr, 0)
+        m.bounds.set(frame, b)
+      }
+      if (b === null) return false
+      f.set(b)
+      return true
+    }
+    let fw: number
+    let fh: number
+    if (table !== undefined) {
+      const t = table[frame]
+      if (!t) return true
+      fw = t.w
+      fh = t.h
+    } else {
+      fw = atlas.frameWidth ?? 0
+      fh = atlas.frameHeight ?? 0
+      if (!(fw > 0 && fh > 0)) {
+        const m = this.maskOf(atlas)
+        if (!m) return true
+        fw = m.w
+        fh = m.h
+      }
+    }
+    f[0] = spec.x / fw
+    f[1] = spec.y / fh
+    f[2] = (spec.x + spec.w) / fw
+    f[3] = (spec.y + spec.h) / fh
+    return true
+  }
+
+  /** World hit rect of sprite `i` into _hx0.._hy1 (rotation ignored); false if not hittable. */
+  private hitRect(i: number): boolean {
+    let w = this.w[i]
+    let h = this.h[i]
+    const fl = this.flags[i]
+    let left = this.x[i] - this.anchorX * w
+    let top = this.y[i] - this.anchorY * h
+    if (fl & SPRITE_FLIP_X) left = this.x[i] - (1 - this.anchorX) * w
+    if (fl & SPRITE_FLIP_Y) top = this.y[i] - (1 - this.anchorY) * h
+    if (w < 0) {
+      left += w
+      w = -w
+    }
+    if (h < 0) {
+      top += h
+      h = -h
+    }
+    if (!this.hitFractions(i)) return false
+    const f = this._frac
+    let u0 = f[0],
+      u1 = f[2],
+      v0 = f[1],
+      v1 = f[3]
+    if (fl & SPRITE_FLIP_X) {
+      const t = u0
+      u0 = 1 - u1
+      u1 = 1 - t
+    }
+    if (fl & SPRITE_FLIP_Y) {
+      const t = v0
+      v0 = 1 - v1
+      v1 = 1 - t
+    }
+    this._hx0 = left + u0 * w
+    this._hx1 = left + u1 * w
+    this._hy0 = top + v0 * h
+    this._hy1 = top + v1 * h
+    return true
+  }
+
+  /** Whether the texel under the world point is above the alpha threshold (true when it cannot be read). */
+  private alphaHit(i: number, wx: number, wy: number, threshold: number): boolean {
+    const atlas = this.atlases[this.atlas[i]]
+    if (!atlas || (this.flags[i] & SPRITE_UNTEXTURED) !== 0) return true
+    const m = this.maskOf(atlas)
+    if (!m) return true
+    const fr = this._fr
+    if (!frameRect(atlas, this.frame[i], m.w, m.h, fr)) return false
+    const fl = this.flags[i]
+    let w = this.w[i]
+    let h = this.h[i]
+    let left = this.x[i] - this.anchorX * w
+    let top = this.y[i] - this.anchorY * h
+    if (fl & SPRITE_FLIP_X) left = this.x[i] - (1 - this.anchorX) * w
+    if (fl & SPRITE_FLIP_Y) top = this.y[i] - (1 - this.anchorY) * h
+    if (w < 0) {
+      left += w
+      w = -w
+    }
+    if (h < 0) {
+      top += h
+      h = -h
+    }
+    let u = (wx - left) / w
+    let v = (wy - top) / h
+    if (fl & SPRITE_FLIP_X) u = 1 - u
+    if (fl & SPRITE_FLIP_Y) v = 1 - v
+    const tx = Math.min(m.w - 1, Math.max(0, Math.floor(fr.x + u * fr.w)))
+    const ty = Math.min(m.h - 1, Math.max(0, Math.floor(fr.y + v * fr.h)))
+    return m.alpha[ty * m.w + tx] > threshold
+  }
+
+  private visit(): { order: Int32Array | null; n: number } {
     const order = this.sortByKey ? this.drawOrder() : null
-    for (let k = (order ? this.orderCount : this.count) - 1; k >= 0; k--) {
+    return { order, n: order ? this.orderCount : this.count }
+  }
+
+  /**
+   * Topmost sprite index at the world point (rotation ignored), or -1 (never a valid index).
+   * The point must be inside the sprite's hit rect (per-sprite `hit`, the frame's / atlas's `hit`,
+   * or the whole quad) and, with `alpha` / `pickAlpha`, on a texel above that alpha.
+   */
+  pickIndex(wx: number, wy: number, opts?: PickOptions): number {
+    const { order, n } = this.visit()
+    const alpha = opts?.alpha ?? this.pickAlpha
+    for (let k = n - 1; k >= 0; k--) {
       const i = order ? order[k] : k
       if (this.flags[i] & SPRITE_HIDDEN) continue
-      const w = this.w[i]
-      const h = this.h[i]
-      const left = this.x[i] - ax * w
-      const top = this.y[i] - ay * h
-      if (wx >= left && wx < left + w && wy >= top && wy < top + h) return i
+      if (!this.hitRect(i)) continue
+      if (wx < this._hx0 || wx >= this._hx1 || wy < this._hy0 || wy >= this._hy1) continue
+      if (alpha > 0 && !this.alphaHit(i, wx, wy, alpha)) continue
+      return i
     }
     return -1
   }
 
-  /** Id of the topmost sprite at the world point, or -1. */
-  pick(wx: number, wy: number): number {
-    const i = this.pickIndex(wx, wy)
-    return i < 0 ? -1 : this.ids[i]
+  /** Every sprite index at the point, topmost first (appended to `out`). */
+  pickAllIndices(wx: number, wy: number, out: number[] = [], opts?: PickOptions): number[] {
+    const { order, n } = this.visit()
+    const alpha = opts?.alpha ?? this.pickAlpha
+    for (let k = n - 1; k >= 0; k--) {
+      const i = order ? order[k] : k
+      if (this.flags[i] & SPRITE_HIDDEN) continue
+      if (!this.hitRect(i)) continue
+      if (wx < this._hx0 || wx >= this._hx1 || wy < this._hy0 || wy >= this._hy1) continue
+      if (alpha > 0 && !this.alphaHit(i, wx, wy, alpha)) continue
+      out.push(i)
+    }
+    return out
+  }
+
+  /**
+   * Index of the sprite whose hit rect is nearest to the point within `radius` world units
+   * (distance 0 when the point is inside; ties go to the topmost), or -1. Ignores `alpha`.
+   */
+  pickNearestIndex(wx: number, wy: number, radius: number): number {
+    const { order, n } = this.visit()
+    let best = -1
+    let bestD = radius * radius
+    for (let k = n - 1; k >= 0; k--) {
+      const i = order ? order[k] : k
+      if (this.flags[i] & SPRITE_HIDDEN) continue
+      if (!this.hitRect(i)) continue
+      const dx = wx < this._hx0 ? this._hx0 - wx : wx > this._hx1 ? wx - this._hx1 : 0
+      const dy = wy < this._hy0 ? this._hy0 - wy : wy > this._hy1 ? wy - this._hy1 : 0
+      const d = dx * dx + dy * dy
+      if (d < bestD || (best < 0 && d <= bestD)) {
+        best = i
+        bestD = d
+        if (d === 0) break // topmost sprite containing the point
+      }
+    }
+    return best
+  }
+
+  /**
+   * Id of the topmost sprite at the world point, or -1. Compatibility: -1 is also a valid
+   * Int32 id and {@link NO_SPRITE}; use {@link pickId} or {@link pickIndex} to tell a miss apart.
+   */
+  pick(wx: number, wy: number, opts?: PickOptions): number {
+    const i = this.pickIndex(wx, wy, opts)
+    return i < 0 ? NO_SPRITE : this.ids[i]
+  }
+
+  /** Id of the topmost sprite at the point, or `undefined` when nothing is there. */
+  pickId(wx: number, wy: number, opts?: PickOptions): number | undefined {
+    const i = this.pickIndex(wx, wy, opts)
+    return i < 0 ? undefined : this.ids[i]
+  }
+
+  /** The string key (see {@link intern}) of the topmost sprite at the point, or undefined. */
+  pickKey(wx: number, wy: number, opts?: PickOptions): string | undefined {
+    const id = this.pickId(wx, wy, opts)
+    return id === undefined ? undefined : this.keyOf(id)
+  }
+
+  /** Id of the sprite nearest to the point within `radius` (see {@link pickNearestIndex}), or undefined. */
+  pickNearest(wx: number, wy: number, radius: number): number | undefined {
+    const i = this.pickNearestIndex(wx, wy, radius)
+    return i < 0 ? undefined : this.ids[i]
+  }
+
+  /** Ids of every sprite at the point, topmost first. */
+  pickAll(wx: number, wy: number, opts?: PickOptions): number[] {
+    return this.pickAllIndices(wx, wy, [], opts).map((i) => this.ids[i])
   }
 }

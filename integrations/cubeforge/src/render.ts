@@ -45,6 +45,7 @@ export {
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
+  NO_SPRITE,
   TileLayerData,
   tileHash,
 } from '@cubeforge/renderer'
@@ -53,6 +54,8 @@ export type {
   SpriteLayerOptions,
   LayerAtlas,
   AtlasFrame,
+  PickOptions,
+  FrameHit,
   TileLayerOptions,
   TileMinFilter,
   Tileset,
