@@ -1,5 +1,7 @@
 /**
- * Post-processing effect pass system for the Canvas2D renderer.
+ * Post-processing effect pass system. On WebGL the effects run on a 2D copy of the finished
+ * frame that is drawn back to the screen (a per-frame canvas copy and upload: prefer the
+ * GPU options of `useWebGLPostProcess` for effects it covers).
  *
  * Effects are simple functions that receive the canvas 2D context after the
  * scene has been rendered and can draw overlays or manipulate pixel data.
@@ -12,12 +14,18 @@ export interface PostProcessStack {
   remove(effect: PostProcessEffect): void
   apply(ctx: CanvasRenderingContext2D, width: number, height: number, dt: number): void
   clear(): void
+  /** Number of registered effects. */
+  readonly size?: number
 }
 
 export function createPostProcessStack(): PostProcessStack {
   const effects: PostProcessEffect[] = []
 
   return {
+    get size(): number {
+      return effects.length
+    },
+
     add(effect: PostProcessEffect): void {
       if (!effects.includes(effect)) {
         effects.push(effect)

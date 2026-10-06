@@ -6,8 +6,8 @@ import { useGame } from './useGame'
  * Configures native WebGL2 post-processing effects on the render system.
  * Effects run entirely on the GPU via a scene FBO + shader pipeline.
  *
- * Unlike `usePostProcess` (Canvas2D, deprecated for game use), these effects
- * work with the WebGL renderer and have no per-pixel CPU cost.
+ * Unlike `usePostProcess` (arbitrary Canvas2D drawing, which costs a frame copy per frame),
+ * these effects run as shaders and have no per-pixel CPU cost.
  *
  * @param opts - Post-process configuration. Wrap in `useMemo` for stability.
  *
