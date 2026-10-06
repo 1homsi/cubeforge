@@ -1,3 +1,4 @@
+import { setBlendFunc } from './blendModes'
 import type { ECSWorld } from '@cubeforge/core'
 import { buildTileMips } from './tileMips'
 import { isTilesetReady, visibleTileRange, type TileLayerData, type TileLayerComponent } from './tileLayer'
@@ -37,6 +38,8 @@ uniform usampler2D u_index;
 uniform usampler2D u_lut;
 uniform usampler2D u_var;
 uniform sampler2D u_tint;
+uniform sampler2D u_bias;
+uniform int u_hasBias;
 uniform sampler2D u_avg;
 uniform sampler2D u_mip;
 uniform float u_lod;
@@ -49,6 +52,7 @@ uniform ivec2 u_pageCell;
 uniform ivec4 u_ts;
 uniform int u_margin;
 uniform float u_opacity;
+uniform vec4 u_layerTint;
 uniform float u_jitter;
 uniform int u_hasTint;
 uniform int u_useAvg;
@@ -111,7 +115,8 @@ void main() {
   }
   if (u_hasTint == 1) c *= texelFetch(u_tint, cell, 0);
   if (u_jitter > 0.0) c.rgb *= 1.0 + (float(h >> 8 & 255u) / 255.0 - 0.5) * u_jitter;
-  fragColor = vec4(c.rgb, c.a * u_opacity);
+  if (u_hasBias == 1) c.rgb += texelFetch(u_bias, cell, 0).rgb * c.a;
+  fragColor = vec4(c.rgb * u_layerTint.rgb, c.a * u_opacity * u_layerTint.a);
 }
 `
 
@@ -121,6 +126,7 @@ const MAX_LUT_W = 2048
 interface Page {
   tex: WebGLTexture
   tint: WebGLTexture | null
+  bias: WebGLTexture | null
   x0: number
   y0: number
   w: number
@@ -145,6 +151,7 @@ interface LayerGL {
   mipLevels: number
   mipImage: unknown
   tintVersion: number
+  biasVersion: number
   varTex: WebGLTexture | null
   varW: number
   varVersion: number
@@ -167,11 +174,13 @@ interface Uniforms {
   ts: WebGLUniformLocation | null
   margin: WebGLUniformLocation | null
   opacity: WebGLUniformLocation | null
+  layerTint: WebGLUniformLocation | null
   varSize: WebGLUniformLocation | null
   varW: WebGLUniformLocation | null
   pageCell: WebGLUniformLocation | null
   jitter: WebGLUniformLocation | null
   hasTint: WebGLUniformLocation | null
+  hasBias: WebGLUniformLocation | null
   useAvg: WebGLUniformLocation | null
   lod: WebGLUniformLocation | null
 }
@@ -341,6 +350,15 @@ export class TileLayerRenderer {
       gl.uniform4i(u.ts, ts.tileWidth, ts.tileHeight, ts.columns, ts.spacing ?? 0)
       gl.uniform1i(u.margin, ts.margin ?? 0)
       gl.uniform1f(u.opacity, layer.opacity)
+      const tc = layer.tintColor
+      gl.uniform4f(
+        u.layerTint,
+        (tc >>> 24) / 255,
+        ((tc >>> 16) & 255) / 255,
+        ((tc >>> 8) & 255) / 255,
+        (tc & 255) / 255,
+      )
+      if (layer.blend !== 'normal') setBlendFunc(gl, layer.blend)
       gl.uniform1ui(u.lutSize, s.lutTex ? layer.lutSize : 0)
       gl.uniform1i(u.lutW, s.lutW || 1)
       gl.uniform1ui(u.varSize, s.varTex ? layer.variantSize : 0)
@@ -364,6 +382,8 @@ export class TileLayerRenderer {
       gl.uniform1f(u.lod, lod)
       const tinted = layer.tints !== null
       gl.uniform1i(u.hasTint, tinted ? 1 : 0)
+      const biased = layer.biases !== null
+      gl.uniform1i(u.hasBias, biased ? 1 : 0)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, s.atlasTex)
       gl.activeTexture(gl.TEXTURE2)
@@ -384,6 +404,8 @@ export class TileLayerRenderer {
         if (x1 <= x0 || y1 <= y0) continue
         gl.activeTexture(gl.TEXTURE4)
         gl.bindTexture(gl.TEXTURE_2D, tinted && pg.tint ? pg.tint : this.dummyRGBA)
+        gl.activeTexture(gl.TEXTURE7)
+        gl.bindTexture(gl.TEXTURE_2D, biased && pg.bias ? pg.bias : this.dummyRGBA)
         gl.uniform2i(u.pageCell, pg.x0, pg.y0)
         gl.activeTexture(gl.TEXTURE1)
         gl.bindTexture(gl.TEXTURE_2D, pg.tex)
@@ -393,6 +415,7 @@ export class TileLayerRenderer {
         gl.drawArrays(gl.TRIANGLES, 0, 6)
         this.stats.drawCalls++
       }
+      if (layer.blend !== 'normal') setBlendFunc(gl, 'normal')
     }
     gl.activeTexture(gl.TEXTURE0)
     gl.bindVertexArray(null)
@@ -453,11 +476,13 @@ export class TileLayerRenderer {
       ts: loc('u_ts'),
       margin: loc('u_margin'),
       opacity: loc('u_opacity'),
+      layerTint: loc('u_layerTint'),
       varSize: loc('u_varSize'),
       varW: loc('u_varW'),
       pageCell: loc('u_pageCell'),
       jitter: loc('u_jitter'),
       hasTint: loc('u_hasTint'),
+      hasBias: loc('u_hasBias'),
       useAvg: loc('u_useAvg'),
       lod: loc('u_lod'),
     }
@@ -467,6 +492,7 @@ export class TileLayerRenderer {
     gl.uniform1i(loc('u_lut'), 2)
     gl.uniform1i(loc('u_var'), 3)
     gl.uniform1i(loc('u_tint'), 4)
+    gl.uniform1i(loc('u_bias'), 7)
     gl.uniform1i(loc('u_avg'), 5)
     gl.uniform1i(loc('u_mip'), 6)
 
@@ -512,7 +538,7 @@ export class TileLayerRenderer {
         const y0 = py * pageTiles
         const w = Math.min(pageTiles, layer.width - x0)
         const h = Math.min(pageTiles, layer.height - y0)
-        pages.push({ tex: this.createIntTexture(w, h, wide), tint: null, x0, y0, w, h })
+        pages.push({ tex: this.createIntTexture(w, h, wide), tint: null, bias: null, x0, y0, w, h })
       }
     }
     s = {
@@ -533,6 +559,7 @@ export class TileLayerRenderer {
       mipLevels: 0,
       mipImage: null,
       tintVersion: -1,
+      biasVersion: -1,
       varTex: null,
       varW: 0,
       varVersion: -1,
@@ -550,6 +577,11 @@ export class TileLayerRenderer {
       this.uploadTintsFull(layer, s)
       tintsFresh = true
     }
+    let biasFresh = false
+    if (layer.biases && s.biasVersion !== layer.biasVersion) {
+      this.uploadBiasFull(layer, s)
+      biasFresh = true
+    }
     const needFull = s.fullVersion !== layer.fullVersion
     if (needFull || layer.dirtyCount > 0) {
       const fmt = gl.RED_INTEGER
@@ -564,6 +596,7 @@ export class TileLayerRenderer {
           // setTiles/fill drop the pending dirty list, so a setTint made in the same frame would
           // otherwise never reach the GPU: re-upload the page's tints with the full replace.
           if (layer.tints && pg.tint && !tintsFresh) this.tintUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h)
+          if (layer.biases && pg.bias && !biasFresh) this.biasUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h)
         }
         s.fullVersion = layer.fullVersion
       } else {
@@ -577,6 +610,7 @@ export class TileLayerRenderer {
           const h = rect[o + 3] - y0 + 1
           this.subUpload(layer, pg, x0, y0, w, h, fmt, type)
           if (layer.tints && pg.tint) this.tintUpload(layer, pg, x0, y0, w, h)
+          if (layer.biases && pg.bias) this.biasUpload(layer, pg, x0, y0, w, h)
         }
       }
       layer.clearDirty()
@@ -619,6 +653,38 @@ export class TileLayerRenderer {
     gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x)
     gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y)
     gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, layer.tints!, 0)
+    gl.activeTexture(gl.TEXTURE1)
+  }
+
+  private uploadBiasFull(layer: TileLayerData, s: LayerGL): void {
+    const { gl } = this
+    s.biasVersion = layer.biasVersion
+    gl.activeTexture(gl.TEXTURE7)
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, layer.width)
+    for (const pg of s.pages) {
+      if (!pg.bias) {
+        pg.bias = gl.createTexture()!
+        gl.bindTexture(gl.TEXTURE_2D, pg.bias)
+        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, pg.w, pg.h)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+      }
+      this.biasUpload(layer, pg, pg.x0, pg.y0, pg.w, pg.h)
+    }
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0)
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0)
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0)
+    gl.activeTexture(gl.TEXTURE0)
+  }
+
+  // Expects UNPACK_ROW_LENGTH = layer.width.
+  private biasUpload(layer: TileLayerData, pg: Page, x: number, y: number, w: number, h: number): void {
+    const { gl } = this
+    gl.activeTexture(gl.TEXTURE7)
+    gl.bindTexture(gl.TEXTURE_2D, pg.bias)
+    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x)
+    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x - pg.x0, y - pg.y0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, layer.biases!, 0)
     gl.activeTexture(gl.TEXTURE1)
   }
 
@@ -803,6 +869,7 @@ export class TileLayerRenderer {
     for (const pg of s.pages) {
       gl.deleteTexture(pg.tex)
       if (pg.tint) gl.deleteTexture(pg.tint)
+      if (pg.bias) gl.deleteTexture(pg.bias)
     }
     if (s.lutTex) gl.deleteTexture(s.lutTex)
     if (s.atlasTex) gl.deleteTexture(s.atlasTex)

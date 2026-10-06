@@ -172,6 +172,8 @@ useTileLayer({
   tinted: true,                      // RGBA per tile, multiplied with the tile colour
 })
 water.setTints(colourFromDepthAndBiome) // width * height * 4 bytes
+heat.setBias(x, y, 0x300800)             // ADDED to the tile colour (brighten); tint can only darken
+heat.setBiases(bytes)                    // width * height * 4 bytes (rgb used); `biased: true` allocates up front
 ground.visualTile(x, y)                 // the id actually drawn (variant + animation)
 ```
 
@@ -286,7 +288,31 @@ then `sortKey2[i]`), then on slot order. Hidden sprites (`SPRITE_HIDDEN`) take n
 The order is updated incrementally from the previous frame whatever changed in between (keys
 drifting, `clear()` + `add()` rebuilds in a similar order, swap-removes, show/hide): near-linear when
 mostly kept, with an automatic fallback to a full sort when it is not. About 0.13 ms CPU per frame for
-3,000 moving, re-sorted sprites. `pick` walks the draw order from the top and ignores rotation.
+3,000 moving, re-sorted sprites.
+
+Picking (`pick` walks the draw order from the top, rotation is ignored, flips are honoured):
+
+```ts
+// hit region: a building's footprint instead of its whole padded cell
+useSpriteLayer({ atlases: [{ src: '/b.png', frames: [{ x: 0, y: 0, w: 96, h: 96, hit: { x: 0, y: 60, w: 96, h: 36 } }] }] })
+// or 'opaque' (bounds of the non-transparent pixels) on a frame or on a whole grid atlas: { hit: 'opaque' }
+layer.setHitRect(i, 0, 0.5, 1, 1)         // per-sprite override, fractions of the quad
+
+layer.pickId(x, y)                         // id | undefined (-1 is also a valid Int32 id; pick() keeps returning -1)
+layer.pickIndex(x, y)                      // slot | -1
+layer.pickIndex(x, y, { alpha: 20 })       // also require a texel with alpha > 20 (pickAlpha sets a default)
+layer.pickAll(x, y)                        // ids, topmost first
+layer.pickNearest(x, y, radius)            // id of the nearest hit rect within radius (inside wins), or undefined
+layer.add(x, y, w, h, frame, 'person:42')  // string ids are interned to int32; layer.pickKey(x, y) maps back
+```
+
+Pivots (what sits at the sprite's x, y and what it rotates around), most specific first:
+`layer.setAnchor(i, ax, ay)` / `layer.enableAnchors()` (per sprite, fractions of the quad), a frame's
+`pivot: { x, y }` in frame pixels (frame tables), an atlas-wide `pivot` for a grid, then the layer's
+`anchorX`/`anchorY`. Draw and pick use the same resolution.
+
+Alpha and opaque-bounds picking read the atlas pixels once (cached); call `layer.invalidateHitMasks()`
+after repainting a dynamic-canvas atlas.
 
 ## Dynamic canvases at runtime (texture atlases that grow)
 
@@ -402,6 +428,43 @@ colour per sprite, 23 ms for 10,000. The backends differ by sub-pixel rounding a
 positions. `<Text>` always uses the browser's own text engine here, so right-to-left and complex
 scripts work without the per-entity fallback WebGL needs.
 
+## Tint and blend: stacked, z-limited and per layer
+
+```tsx
+// Dim only what is drawn up to zIndex 50 (ground, buildings, people); labels/UI above stay bright.
+const night = useScreenTint({ name: 'night', zIndex: 50 })
+night.set(0.25, 0.3, 0.6, strength) // strength 0..1, modes: 'multiply' | 'normal' | 'additive' | 'screen'
+const fog = useScreenTint({ name: 'fog' }) // a second, independent tint (whole world, after all sprites)
+fog.set(0.8, 0.85, 0.9, 0.2, 'normal')
+
+// Per layer: multiply colour (0xRRGGBBAA), opacity and blend on SpriteLayer, TileLayer and TextLayer.
+const glow = useSpriteLayer({ src: '/glow.png', blend: 'additive', opacity: 0.8, zIndex: 40 })
+glow.tintColor = 0xffd080ff
+<TileLayer layer={heat} renderLayer="default" zIndex={3} blend="multiply" tintColor={0xff8080ff} opacity={0.6} />
+```
+
+A tint with `zIndex` (and optionally `layer`) joins the sprite sort and only covers items sorted before
+it; at equal layer and zIndex it draws after them. Without them it behaves as before (after all sprites,
+before text). `useScreenTint()` with no options is the unchanged single slot. Blend modes: `normal`,
+`multiply` (darkens), `additive` (glow), `screen` (soft lighten); the engine restores `normal` after each
+layer, so the cost is one `blendFunc` pair per non-normal layer.
+
+## GPU wind: trees sway without CPU writes
+
+```tsx
+const trees = useSpriteLayer({
+  src: '/trees.png', frameWidth: 32, frameHeight: 48,
+  wind: { amplitude: 0.05, speed: 0.4, frequency: 0.01 }, // fraction of sprite height, Hz, radians per world px
+})
+trees.flags[i] |= SPRITE_SWAY        // opt a sprite in
+trees.ensureSwayScale()[i] = 0.3     // optional per-sprite multiplier (stiff oak 0.3, tall grass 1.5)
+trees.wind = null                    // calm
+```
+
+The vertex shader moves the top of each flagged quad sideways from a time uniform (the base stays put),
+so a forest costs no per-frame CPU rewrite. The sway is time driven: a layer with a `wind` makes the idle
+frame skip render every frame, and `useSpriteLayer` keeps an `onDemand` loop ticking while a wind is set.
+
 ## Overlays and camera
 
 - `useScreenTint().set(r, g, b, strength, mode)`: full-view tint drawn after sprites and layers and
@@ -418,6 +481,75 @@ scripts work without the per-entity fallback WebGL needs.
   bounds of `followEntity`. Priority: `followPoint` > `followSprite` > `followEntity`.
 - `useCamera().zoomAt(screenX, screenY, zoom)` and `useCoordinates()` work in canvas CSS pixels at
   any devicePixelRatio.
+
+## Testing your game headlessly: `cubeforge/test`
+
+`cubeforge/test` mounts a real `<Game>` without a GPU. WebGL2 is a recording stand-in, so tests
+can count draw calls and read back what was drawn. Frames run only when you call `frame()`, on a
+virtual clock, so a test is deterministic. It needs a DOM (vitest `environment: 'happy-dom'` or
+`'jsdom'`) and React 18.3+. Import it from test files only; it is a separate entry and never part
+of the `cubeforge` bundle.
+
+```tsx
+// @vitest-environment happy-dom
+import { afterEach, expect, it } from 'vitest'
+import { World, Entity, Transform, Sprite, Camera2D } from 'cubeforge'
+import { mountGame, cleanup } from 'cubeforge/test'
+
+afterEach(cleanup) // unmounts every game and removes the global patches
+
+it('draws every person in one call', async () => {
+  const game = await mountGame(
+    <World>
+      <Camera2D x={0} y={0} />
+      <Entity id="a">
+        <Transform x={10} y={20} />
+        <Sprite width={8} height={8} color="#ff0000" />
+      </Entity>
+    </World>,
+    { width: 320, height: 200 },
+  )
+  game.frame(3) // three frames of 1/60 s through the real loop (scripts, physics, render)
+  expect(game.drawCalls).toBe(1)
+  expect(game.frameInstances()[0]).toMatchObject({ x: 10, y: 20, r: 1 })
+  expect(game.engine.ecs.entityCount).toBe(1)
+})
+```
+
+`mountGame(children, { width, height, game })` returns:
+
+| Member                 | What it is                                                                         |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `engine`, `canvas`     | the `EngineState` `<Game>` created and its canvas                                  |
+| `frame(count, dt)`     | run frames synchronously (default one frame of 1/60 s), inside `act()`             |
+| `drawCalls`, `instances` | draw calls and instances drawn by the last frame                                 |
+| `draws`, `frameInstances()` | the raw draws, and decoded position/size/color/uv of each instance            |
+| `renderStats`          | the renderer's counters for the last frame (batches, culled sprites, ...)          |
+| `liveTextures`         | WebGL textures created and not deleted                                             |
+| `gl`                   | the `RecordingGL` itself (`totalDraws`, `textures`, `contextLost = true` to simulate loss) |
+| `rerender(children)`, `unmount()` | change the scene, tear down                                             |
+
+`game` takes extra `<Game>` props (`mode`, `deterministic`, `plugins`, ...); `asyncAssets` is on so
+the loop starts at once. All games mounted at the same time share one virtual clock.
+
+To test a hook or component without mounting a game, `createTestEngine()` returns a real,
+unstarted `EngineState` (ECS world, events, assets, input, recording canvas; pass overrides for
+any field) to provide through `EngineContext`:
+
+```tsx
+import { EngineContext } from 'cubeforge' // also exported from cubeforge/render and cubeforge/test
+const engine = createTestEngine()
+render(
+  <EngineContext.Provider value={engine}>
+    <MyHudThing />
+  </EngineContext.Provider>,
+)
+```
+
+The entry also re-exports the lower-level `RecordingGL`, `createRecordingCanvas`,
+`decodeInstances` and `installHeadlessCanvasDOM` for driving `RenderSystem` directly (as the
+benchmarks do). `installHeadlessCanvasDOM({ force: true })` replaces a stub `getContext`, e.g. in
+jsdom.
 
 ## Bundle size
 

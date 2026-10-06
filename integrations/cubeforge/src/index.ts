@@ -125,11 +125,21 @@ export { useTextLayer } from './hooks/useTextLayer'
 export { useScreenTint } from './hooks/useScreenTint'
 export { useCameraPanZoom } from './hooks/useCameraPanZoom'
 export type { CameraPanZoomOptions } from './hooks/useCameraPanZoom'
-export type { ScreenTintControls, ScreenTintMode } from './hooks/useScreenTint'
+export type { ScreenTintControls, ScreenTintMode, ScreenTintOptions } from './hooks/useScreenTint'
+export type { LayerBlendMode } from '@cubeforge/renderer'
 export { TextLayer, GlyphAtlas, TEXT_HIDDEN, TEXT_WORD_WRAP } from '@cubeforge/renderer'
 export type { TextLayerOptions, TextRunOptions, GlyphStyleOptions } from '@cubeforge/renderer'
-export { SpriteLayer, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from '@cubeforge/renderer'
-export type { SpriteLayerOptions, LayerAtlas, AtlasFrame } from '@cubeforge/renderer'
+export {
+  SpriteLayer,
+  SPRITE_FLIP_X,
+  SPRITE_FLIP_Y,
+  SPRITE_HIDDEN,
+  SPRITE_UNTEXTURED,
+  NO_SPRITE,
+  SPRITE_SWAY,
+} from '@cubeforge/renderer'
+export type { SpriteLayerWind } from '@cubeforge/renderer'
+export type { SpriteLayerOptions, LayerAtlas, AtlasFrame, PickOptions, FrameHit } from '@cubeforge/renderer'
 export { useIdleFrameSkip } from './hooks/useIdleFrameSkip'
 export { useAudioListener } from './hooks/useAudioListener'
 export { useTouch } from './hooks/useTouch'
@@ -345,6 +355,7 @@ export type { PostProcessEffect, PostProcessStack } from '@cubeforge/renderer'
 export type { PostProcessOptions } from '@cubeforge/renderer'
 
 // Types and utilities from engine packages
+export { EngineContext, EntityContext } from './context'
 export type { EngineState } from './context'
 export type { GameControls, RendererBackend } from './components/Game'
 export type { EntityId, ECSWorld, ScriptUpdateFn, Plugin, WorldSnapshot, GameLoopMode } from '@cubeforge/core'

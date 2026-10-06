@@ -23,7 +23,7 @@ import {
 import { parseCSSColor } from './colorParser'
 import { createPostProcessStack, type PostProcessStack } from './postProcess'
 import { clampCameraToBounds } from './components/camera2d'
-import type { SpriteLayer, LayerAtlas } from './spriteLayer'
+import type { SpriteLayer, LayerAtlas, PickSource } from './spriteLayer'
 import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLayerGL'
 import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
 import {
@@ -268,6 +268,17 @@ interface ParallaxLayerComponent {
   offsetY: number
   imageWidth: number
   imageHeight: number
+}
+
+interface TintSlot {
+  name: string
+  r: number
+  g: number
+  b: number
+  a: number
+  mode: 'multiply' | 'normal' | 'additive' | 'screen'
+  layer?: string
+  zIndex?: number
 }
 
 interface TextComponent {
@@ -1000,6 +1011,8 @@ export class RenderSystem implements System {
   private readonly _textLayers: TextLayer[] = []
   private _textLayerRenderer: TextLayerRenderer | null = null
   private _textLayerVersion = 0
+  /** Seconds of simulated time rendered so far (drives GPU sway). */
+  private _time = 0
   private _entityText: EntityTextBatcher | null = null
   private _shapes: ShapeRenderer | null = null
   private readonly _vecComps: (
@@ -1012,8 +1025,12 @@ export class RenderSystem implements System {
   private _gradientTex = new Map<GradientComponent, { key: string; tex: WebGLTexture }>()
   private _textWarned = false
   private readonly _sortTextLayers: TextLayer[] = []
-  private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
   private _texSampling = new WeakMap<WebGLTexture, { min: string; mag: string; mips: boolean }>()
+  private readonly _tints = new Map<string, TintSlot>()
+  /** Active (strength > 0) tints drawn after all sprites, before text. */
+  private readonly _flatTints: TintSlot[] = []
+  /** Active tints that take part in the sprite sort via `layer` / `zIndex`. */
+  private readonly _sortedTints: TintSlot[] = []
   private _layerImageTextures = new WeakMap<object, { tex: WebGLTexture; ver: number; w: number; h: number }>()
   private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
   private readonly _layerCam: LayerCamera = {
@@ -1175,24 +1192,83 @@ export class RenderSystem implements System {
     g: number,
     b: number,
     a: number,
-    mode: 'multiply' | 'normal' | 'additive' = 'multiply',
+    mode: 'multiply' | 'normal' | 'additive' | 'screen' = 'multiply',
   ): void {
-    const t = this._screenTint
-    if (t.r === r && t.g === g && t.b === b && t.a === a && t.mode === mode) return
-    t.r = r
-    t.g = g
-    t.b = b
-    t.a = a
-    t.mode = mode
-    this._overlayRevision++
+    this.setTint('screen', r, g, b, a, { mode })
   }
 
   clearScreenTint(): void {
     this.setScreenTint(1, 1, 1, 0)
   }
 
+  /**
+   * A named tint over the view. Several can be active at once (e.g. 'night'
+   * and 'weather'). With `layer` and/or `zIndex` the tint takes part in the
+   * sprite sort and only covers what is drawn before that point (sprites and
+   * layers with a lower or equal order, tile layers beneath all sprites), so
+   * UI, text and effects drawn later stay bright. Without them it covers the
+   * whole world after all sprites, before text. `a` is the strength (0 = off).
+   */
+  setTint(
+    name: string,
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    opts: { mode?: 'multiply' | 'normal' | 'additive' | 'screen'; layer?: string; zIndex?: number } = {},
+  ): void {
+    const mode = opts.mode ?? 'multiply'
+    let t = this._tints.get(name)
+    if (
+      t &&
+      t.r === r &&
+      t.g === g &&
+      t.b === b &&
+      t.a === a &&
+      t.mode === mode &&
+      t.layer === opts.layer &&
+      t.zIndex === opts.zIndex
+    )
+      return
+    if (!t) {
+      t = { name, r, g, b, a, mode, layer: opts.layer, zIndex: opts.zIndex }
+      this._tints.set(name, t)
+    } else {
+      t.r = r
+      t.g = g
+      t.b = b
+      t.a = a
+      t.mode = mode
+      t.layer = opts.layer
+      t.zIndex = opts.zIndex
+    }
+    this._flatTints.length = 0
+    this._sortedTints.length = 0
+    for (const x of this._tints.values()) {
+      if (x.a <= 0) continue
+      if (x.layer !== undefined || x.zIndex !== undefined) this._sortedTints.push(x)
+      else this._flatTints.push(x)
+    }
+    this._overlayRevision++
+  }
+
+  /** Remove a named tint. */
+  clearTint(name: string): void {
+    const t = this._tints.get(name)
+    if (!t) return
+    this.setTint(name, 1, 1, 1, 0)
+    this._tints.delete(name)
+  }
+
   addSpriteLayer(layer: SpriteLayer): void {
     if (!this._spriteLayers.includes(layer)) this._spriteLayers.push(layer)
+    // Alpha-tested / opaque-bounds picking reads the atlas pixels the renderer already holds.
+    layer.pixelSource ??= (atlas) =>
+      (atlas.dynamicSrc !== undefined
+        ? this._dynamicCanvases.get(atlas.dynamicSrc)?.canvas
+        : atlas.src !== undefined
+          ? this.imageCache.get(atlas.src)
+          : undefined) as PickSource | undefined
     this._overlayRevision++
   }
 
@@ -2357,9 +2433,9 @@ export class RenderSystem implements System {
     this.gl.useProgram(this.program)
   }
 
-  private drawScreenTint(camX: number, camY: number, zoom: number, w: number, h: number): void {
+  private drawTint(t: TintSlot, camX: number, camY: number, zoom: number, w: number, h: number): void {
     const { gl } = this
-    const t = this._screenTint
+    gl.useProgram(this.program) // a vector-shape or layer draw may have left another program bound
     let r = t.r,
       g = t.g,
       b = t.b,
@@ -2371,6 +2447,13 @@ export class RenderSystem implements System {
       b = 1 - a + a * b
       a = 1
       gl.blendFunc(gl.DST_COLOR, gl.ZERO)
+    } else if (t.mode === 'screen') {
+      // src + dst * (1 - src) with the strength folded into the colour.
+      r *= a
+      g *= a
+      b *= a
+      a = 1
+      this.applyBlendMode('screen')
     } else this.applyBlendMode(t.mode)
     // Oversized so shake never exposes an edge.
     this.writeInstance(
@@ -2564,6 +2647,7 @@ export class RenderSystem implements System {
     }
     resetRenderFrameStats(this.stats)
     this._frame++
+    this._time += dt
     // Intern component types once per frame — numeric IDs skip the string
     // hash on every per-entity getComponent below.
     const TID_Transform = world.typeId('Transform')
@@ -2817,7 +2901,8 @@ export class RenderSystem implements System {
     // blit the cached scene FBO to screen and skip all GPU draw calls.
     if (this._spriteLayers.length > 0) {
       let v = 0
-      for (const layer of this._spriteLayers) v += layer.version + (layer.visible ? 1 : 0) + layer.atlases.length
+      for (const layer of this._spriteLayers)
+        v += layer.version + (layer.visible ? 1 : 0) + layer.atlases.length + (layer.wind ? this._frame : 0)
       if (v !== this._spriteLayerVersion) {
         this._spriteLayerVersion = v
         this._overlayRevision++
@@ -2929,6 +3014,7 @@ export class RenderSystem implements System {
       lc.height = Hl
       lc.shakeX = shakeX
       lc.shakeY = shakeY
+      lc.time = this._time
     }
     gl.activeTexture(gl.TEXTURE0)
 
@@ -2965,6 +3051,8 @@ export class RenderSystem implements System {
     for (const l of this._textLayers) textLayers.push(l)
     if (entityText) for (const l of entityText.sortedLayers) textLayers.push(l)
     const ntt = nt + textLayers.length
+    const sortedTints = this._sortedTints
+    const nts = ntt + sortedTints.length // sorted tints sit between text layers and vector shapes
     // Vector shapes (Circle, Line, Polygon, Gradient) join the sort as one item each.
     const vecComps = this._vecComps
     const vecIds = this._vecIds
@@ -2992,7 +3080,7 @@ export class RenderSystem implements System {
         shapes.begin(lc, zoom * (W / Wl))
       }
     }
-    const m = ntt + (shapes ? nVec : 0)
+    const m = nts + (shapes ? nVec : 0)
     for (let r = 0; r < n; r++) {
       const id = renderableIds[r]
       const sprite = world.getComponent<SpriteComponent>(id, TID_Sprite)!
@@ -3026,11 +3114,18 @@ export class RenderSystem implements System {
       sortZs[r] = layer.zIndex
       sortTexRanks[r] = this.textureRank('__textlayer__')
     }
+    // A tint sorts after everything at equal (layer, zIndex): rank above every texture rank this frame.
+    for (let j = 0; j < sortedTints.length; j++) {
+      const r = ntt + j
+      sortLayers[r] = this.layers.getOrder(sortedTints[j].layer ?? 'default')
+      sortZs[r] = sortedTints[j].zIndex ?? 0
+      sortTexRanks[r] = this._texNextRank
+    }
     if (shapes) {
       const vecRank = this.textureRank('__vector__')
       const defaultOrder = this.layers.getOrder('default')
       for (let j = 0; j < nVec; j++) {
-        const r = ntt + j
+        const r = nts + j
         sortLayers[r] = defaultOrder
         sortZs[r] = vecComps[j].zIndex
         sortTexRanks[r] = vecRank
@@ -3053,14 +3148,15 @@ export class RenderSystem implements System {
         batchCount = 0
         batchKey = ''
         ensuredKey = null
-        if (k >= ntt) {
-          this.drawVectorItem(shapes!, vecComps[k - ntt], world, vecIds[k - ntt], camX, camY, zoom, Wl, Hl)
+        if (k >= nts) {
+          this.drawVectorItem(shapes!, vecComps[k - nts], world, vecIds[k - nts], camX, camY, zoom, Wl, Hl)
           continue
         }
         if (shapes !== null && shapes.pending) shapes.flush()
         if (k < nSprites) this.drawSpriteLayer(layers[k - n], viewL, viewR, viewT, viewB)
         else if (k < nt) this.drawSortedTileLayer(tileSorted[k - nSprites])
-        else this.drawTextLayer(textLayers[k - nt], viewL, viewR, viewT, viewB)
+        else if (k < ntt) this.drawTextLayer(textLayers[k - nt], viewL, viewR, viewT, viewB)
+        else this.drawTint(sortedTints[k - ntt], camX, camY, zoom, Wl, Hl)
         continue
       }
       if (shapes !== null && shapes.pending) {
@@ -3161,7 +3257,7 @@ export class RenderSystem implements System {
       this.stats.instances += shapes.instances
     }
 
-    if (this._screenTint.a > 0) this.drawScreenTint(camX, camY, zoom, Wl, Hl)
+    for (let ti = 0; ti < this._flatTints.length; ti++) this.drawTint(this._flatTints[ti], camX, camY, zoom, Wl, Hl)
 
     // ── Text rendering pass ───────────────────────────────────────────────────
     // Plain text was batched into glyph-atlas runs (one draw per page). Text the

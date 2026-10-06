@@ -26,7 +26,8 @@
       "@cubeforge/renderer": ["packages/renderer/src/index.ts"],
       "cubeforge": ["integrations/cubeforge/src/index.ts"],
       "cubeforge/advanced": ["integrations/cubeforge/src/advanced.ts"],
-      "cubeforge/render": ["integrations/cubeforge/src/render.ts"]
+      "cubeforge/render": ["integrations/cubeforge/src/render.ts"],
+      "cubeforge/test": ["integrations/cubeforge/src/test.ts"]
     }
   }
 }

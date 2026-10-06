@@ -4,9 +4,11 @@ import {
   SPRITE_FLIP_X,
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
+  SPRITE_SWAY,
   SPRITE_UNTEXTURED,
 } from './spriteLayerFlags'
 import type { SpriteLayer, AtlasFrame } from './spriteLayer'
+import { setBlendFunc, unpackRGBA } from './blendModes'
 
 const FLOATS = 20
 const MAX_BATCH = 16384
@@ -22,6 +24,9 @@ layout(location = 6) in vec2  i_flip;
 layout(location = 7) in vec4  i_color;
 layout(location = 8) in vec4  i_uvRect;
 layout(location = 9) in float i_atlas;
+layout(location = 10) in vec2 i_sway;
+uniform float u_time;
+uniform vec2 u_wind;
 uniform vec2 u_camPos;
 uniform float u_zoom;
 uniform vec2 u_canvasSize;
@@ -36,6 +41,12 @@ void main() {
   float c = cos(i_rot);
   float s = sin(i_rot);
   vec2 world = i_pos + vec2(c * local.x - s * local.y, s * local.x + c * local.y);
+  if (i_sway.x != 0.0) {
+    // 1 at the top of the quad, 0 at the base; squared so the trunk stays stiff.
+    float top = 0.5 - a_quadPos.y;
+    world.x += i_sway.x * abs(i_size.y) * top * top
+      * sin(6.2831853 * u_wind.x * u_time + u_wind.y * i_pos.x + i_sway.y);
+  }
   gl_Position = vec4(
     2.0 * u_zoom / u_canvasSize.x * (world.x - u_camPos.x) + 2.0 * u_shake.x / u_canvasSize.x,
     -2.0 * u_zoom / u_canvasSize.y * (world.y - u_camPos.y) - 2.0 * u_shake.y / u_canvasSize.y,
@@ -52,6 +63,7 @@ in vec2 v_uv;
 in vec4 v_color;
 flat in int v_atlas;
 uniform sampler2D u_tex[${ATLASES_PER_DRAW}];
+uniform vec4 u_layerTint;
 out vec4 fragColor;
 void main() {
   vec4 t = vec4(1.0);
@@ -59,7 +71,7 @@ void main() {
 ${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture(u_tex[${i}], v_uv); break;`).join('\n')}
     default: break;
   }
-  fragColor = t * v_color;
+  fragColor = t * v_color * u_layerTint;
 }
 `
 
@@ -82,6 +94,8 @@ export interface LayerCamera {
   viewR: number
   viewT: number
   viewB: number
+  /** Seconds since the render system started: drives GPU sway. */
+  time?: number
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -101,6 +115,10 @@ export class SpriteLayerRenderer {
   private uZoom: WebGLUniformLocation | null = null
   private uSize: WebGLUniformLocation | null = null
   private uShake: WebGLUniformLocation | null = null
+  private uTime: WebGLUniformLocation | null = null
+  private uWind: WebGLUniformLocation | null = null
+  private uTint: WebGLUniformLocation | null = null
+  private readonly tintScratch = new Float32Array(4)
   private readonly data = new Float32Array(MAX_BATCH * FLOATS)
   // Per-atlas state for the layer being drawn (rebuilt every draw).
   private readonly texs: (WebGLTexture | null)[] = new Array(MAX_LAYER_ATLASES).fill(null)
@@ -133,6 +151,9 @@ export class SpriteLayerRenderer {
     this.uZoom = gl.getUniformLocation(p, 'u_zoom')
     this.uSize = gl.getUniformLocation(p, 'u_canvasSize')
     this.uShake = gl.getUniformLocation(p, 'u_shake')
+    this.uTime = gl.getUniformLocation(p, 'u_time')
+    this.uWind = gl.getUniformLocation(p, 'u_wind')
+    this.uTint = gl.getUniformLocation(p, 'u_layerTint')
     gl.useProgram(p)
     for (let i = 0; i < ATLASES_PER_DRAW; i++) gl.uniform1i(gl.getUniformLocation(p, `u_tex[${i}]`), i)
 
@@ -169,6 +190,7 @@ export class SpriteLayerRenderer {
     attr(7, 4)
     attr(8, 4)
     attr(9, 1)
+    attr(10, 2)
     gl.bindVertexArray(null)
   }
 
@@ -206,6 +228,15 @@ export class SpriteLayerRenderer {
     gl.uniform1f(this.uZoom, cam.zoom)
     gl.uniform2f(this.uSize, cam.width, cam.height)
     gl.uniform2f(this.uShake, cam.shakeX, cam.shakeY)
+    const wind = layer.wind
+    const swayAmp = wind ? (wind.amplitude ?? 0.04) : 0
+    gl.uniform1f(this.uTime, cam.time ?? 0)
+    gl.uniform2f(this.uWind, wind?.speed ?? 0.5, wind?.frequency ?? 0.01)
+    const swayScale = layer.swayScale
+    const tc = this.tintScratch
+    unpackRGBA(layer.tintColor, tc)
+    gl.uniform4f(this.uTint, tc[0], tc[1], tc[2], tc[3] * layer.opacity)
+    if (layer.blend !== 'normal') setBlendFunc(gl, layer.blend)
 
     const atlases = layer.atlases
     const na = Math.min(atlases.length, MAX_LAYER_ATLASES)
@@ -258,6 +289,8 @@ export class SpriteLayerRenderer {
     const order = layer.sortByKey ? layer.drawOrder() : null
     const total = order ? layer.orderCount : count
     const { viewL, viewR, viewT, viewB } = cam
+    const usePivots = layer.hasPivots()
+    const perSprite = usePivots || layer.anchor !== null
     const ax = layer.anchorX
     const ay = layer.anchorY
     const X = layer.x,
@@ -327,8 +360,14 @@ export class SpriteLayerRenderer {
       d[b + 2] = w
       d[b + 3] = h
       d[b + 4] = R[i]
-      d[b + 5] = ax
-      d[b + 6] = ay
+      if (perSprite) {
+        layer.resolveAnchor(i, usePivots)
+        d[b + 5] = layer._ax
+        d[b + 6] = layer._ay
+      } else {
+        d[b + 5] = ax
+        d[b + 6] = ay
+      }
       d[b + 7] = flags & SPRITE_FLIP_X
       d[b + 8] = (flags & SPRITE_FLIP_Y) >> 1
       d[b + 9] = (c >>> 24) / 255
@@ -341,7 +380,7 @@ export class SpriteLayerRenderer {
       d[b + 16] = vh
       if (untextured) a = -1
       d[b + 17] = a < 0 ? -1 : a & 7
-      d[b + 18] = 0
+      d[b + 18] = swayAmp !== 0 && flags & SPRITE_SWAY ? swayAmp * (swayScale ? swayScale[i] : 1) : 0
       d[b + 19] = 0
       if (++batch === MAX_BATCH) {
         this.flush(batch)
@@ -349,6 +388,7 @@ export class SpriteLayerRenderer {
       }
     }
     this.flush(batch)
+    if (layer.blend !== 'normal') setBlendFunc(gl, 'normal')
     gl.bindVertexArray(null)
     gl.activeTexture(gl.TEXTURE0)
   }

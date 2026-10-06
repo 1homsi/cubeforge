@@ -267,6 +267,46 @@ try {
   out.groupSwitchRedOnTop = px(192, 52)
   out.frameTableMagenta = px(230, 50)
   out.glError4 = gl.getError()
+
+  // additive tile bias: grey 0x80 + bias 0x40 = 0xC0, tint still multiplies first
+  world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 1
+  const grey = new TileLayerData({
+    width: 2,
+    height: 1,
+    tileset: { image: solid(['#808080']), tileWidth: 16, tileHeight: 16, columns: 1 },
+    tinted: true,
+    biased: true,
+    zIndex: 90,
+    x: 20,
+    y: 220,
+  })
+  grey.fill(1)
+  grey.setBias(0, 0, 0x404040)
+  grey.setTint(1, 0, 0x808080ff) // 0x80 * 0.5 = 0x40
+  grey.setBias(1, 0, 0x404040) // + 0x40 = 0x80
+  world.addComponent(world.createEntity(), createTileLayerComponent(grey))
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.biasBrightens = px(28, 228)
+  out.biasAfterTint = px(44, 228)
+  out.glError6 = gl.getError()
+
+  // per-sprite anchor and frame pivot move the quad around its (x, y)
+  const pv = new SpriteLayer({
+    atlases: [{ image: solid(['#ff00ff']), frames: [{ x: 0, y: 0, w: 16, h: 16, pivot: { x: 16, y: 16 } }] }],
+    zIndex: 60,
+  })
+  pv.add(100, 232, 16, 16, 0) // frame pivot bottom-right: quad x 84..100, y 216..232
+  const pa = pv.add(160, 232, 16, 16, 0)
+  pv.setAnchor(pa, 0, 0) // top-left anchor: quad x 160..176, y 232..248
+  rs.addSpriteLayer(pv)
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.pivotQuadLeftOfX = px(92, 224)
+  out.pivotNotRightOfX = px(108, 240)
+  out.anchorQuadRightOfX = px(168, 240)
+  out.anchorNotLeftOfX = px(152, 224)
+  out.glError7 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }
