@@ -8,8 +8,10 @@ import type { PostProcessStack, DynamicCanvasOptions, ManagedDynamicCanvas } fro
 export interface EngineState {
   ecs: ECSWorld
   input: InputManager
-  /** The active WebGL2 render system. */
+  /** The active render system (WebGL2, or Canvas2D when the fallback is in use). */
   activeRenderSystem?: System
+  /** Which backend `activeRenderSystem` is: 'webgl', or 'canvas2d' when WebGL2 is unavailable or forced off. */
+  renderBackend?: 'webgl' | 'canvas2d'
   /** Attached on the first frame after a physics component is created; undefined before. */
   physics?: PhysicsSystem
   /** Current gravity, applied when physics attaches. */

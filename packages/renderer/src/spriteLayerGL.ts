@@ -6,12 +6,13 @@ import {
   SPRITE_HIDDEN,
   SPRITE_SWAY,
   SPRITE_UNTEXTURED,
+  SPRITE_ADDITIVE,
 } from './spriteLayerFlags'
 import type { SpriteLayer, AtlasFrame } from './spriteLayer'
 import { setBlendFunc, unpackRGBA } from './blendModes'
 import type { LayerStats } from '@cubeforge/core'
 
-const FLOATS = 20
+const FLOATS = 21
 const MAX_BATCH = 16384
 
 const VERT = `#version 300 es
@@ -28,6 +29,7 @@ layout(location = 9) in float i_atlas;
 layout(location = 10) in vec2 i_sway;
 uniform float u_time;
 uniform vec2 u_wind;
+layout(location = 11) in float i_add;
 uniform vec2 u_camPos;
 uniform float u_zoom;
 uniform vec2 u_canvasSize;
@@ -35,6 +37,7 @@ uniform vec2 u_shake;
 out vec2 v_uv;
 out vec4 v_color;
 flat out int v_atlas;
+flat out vec3 v_add;
 void main() {
   vec2 local = (a_quadPos - (i_anchor - 0.5)) * i_size;
   if (i_flip.x > 0.5) local.x = -local.x;
@@ -55,6 +58,8 @@ void main() {
   v_uv = i_uvRect.xy + a_uv * i_uvRect.zw;
   v_color = i_color;
   v_atlas = i_atlas < -0.5 ? -1 : int(i_atlas + 0.5);
+  float ap = i_add + 0.5;
+  v_add = vec3(floor(ap / 65536.0), mod(floor(ap / 256.0), 256.0), mod(floor(ap), 256.0)) / 255.0;
 }
 `
 
@@ -63,6 +68,7 @@ precision highp float;
 in vec2 v_uv;
 in vec4 v_color;
 flat in int v_atlas;
+flat in vec3 v_add;
 uniform sampler2D u_tex[${ATLASES_PER_DRAW}];
 uniform vec4 u_layerTint;
 out vec4 fragColor;
@@ -73,6 +79,7 @@ ${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture
     default: break;
   }
   fragColor = t * v_color * u_layerTint;
+  fragColor.rgb += v_add * fragColor.a;
 }
 `
 
@@ -195,6 +202,7 @@ export class SpriteLayerRenderer {
     attr(8, 4)
     attr(9, 1)
     attr(10, 2)
+    attr(11, 1) // slot 20: additive colour 0xRRGGBB
     gl.bindVertexArray(null)
   }
 
@@ -323,9 +331,11 @@ export class SpriteLayerRenderer {
       F = layer.frame,
       A = layer.atlas,
       C = layer.color,
-      FL = layer.flags
+      FL = layer.flags,
+      CA = layer.colorAdd
     const d = this.data
     let batch = 0
+    let curAdd = false
     let group = -1
     for (let k = 0; k < total; k++) {
       const i = order ? order[k] : k
@@ -375,6 +385,16 @@ export class SpriteLayerRenderer {
           group = g
         }
       }
+      // Per-sprite additive: one blend change per run (sprites keep their place in the draw order).
+      const add = (flags & SPRITE_ADDITIVE) !== 0
+      if (add !== curAdd) {
+        if (batch > 0) {
+          this.flush(batch)
+          batch = 0
+        }
+        setBlendFunc(gl, add ? 'additive' : layer.blend)
+        curAdd = add
+      }
       const c = C[i]
       const b = batch * FLOATS
       d[b] = x
@@ -404,13 +424,14 @@ export class SpriteLayerRenderer {
       d[b + 17] = a < 0 ? -1 : a & 7
       d[b + 18] = swayAmp !== 0 && flags & SPRITE_SWAY ? swayAmp * (swayScale ? swayScale[i] : 1) : 0
       d[b + 19] = 0
+      d[b + 20] = CA ? CA[i] : 0
       if (++batch === MAX_BATCH) {
         this.flush(batch)
         batch = 0
       }
     }
     this.flush(batch)
-    if (layer.blend !== 'normal') setBlendFunc(gl, 'normal')
+    if (curAdd || layer.blend !== 'normal') setBlendFunc(gl, 'normal')
     gl.bindVertexArray(null)
     gl.activeTexture(gl.TEXTURE0)
   }

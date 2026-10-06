@@ -110,7 +110,7 @@ Most browser game engines are imperative — you create objects, call methods, a
 - **Debug-ready** — `<Game debug>` shows collider wireframes, FPS, entity counts
 - **Time-travel DevTools** — `<Game devtools>` adds a frame scrubber and entity inspector
 - **Deterministic** — `<Game deterministic seed={n}>` for reproducible physics and replays
-- **WebGL2 renderer** — instanced GPU rendering out of the box
+- **WebGL2 renderer** — instanced GPU rendering out of the box, with an automatic Canvas2D fallback
 - **Multiplayer** — `@cubeforge/net` provides Room, syncEntity, and ClientPrediction rollback
 
 ---

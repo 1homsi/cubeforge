@@ -32,13 +32,15 @@ if (!chrome) {
 const dir = mkdtempSync(path.join(tmpdir(), 'cubeforge-gpu-'))
 
 /** Bundle `entry`, run it in headless Chrome and return the JSON it leaves in `data-out`. */
-async function runPage(entry) {
-  const name = path.basename(entry, '.ts')
+async function runPage(entry, { extraArgs = [], hash = '' } = {}) {
+  const name = path.parse(entry).name
   await build({
     entryPoints: [path.join(here, entry)],
     bundle: true,
     format: 'iife',
     outfile: path.join(dir, `${name}.js`),
+    jsx: 'automatic',
+    define: { 'process.env.NODE_ENV': '"production"' },
     logLevel: 'error',
   })
   writeFileSync(
@@ -56,9 +58,11 @@ async function runPage(entry) {
         '--use-angle=swiftshader',
         '--enable-unsafe-swiftshader',
         '--allow-file-access-from-files',
+        // Lets the page's async work (blob encoding, GPU timer readback) finish before the DOM is dumped.
         '--virtual-time-budget=10000',
+        ...extraArgs,
         '--dump-dom',
-        `file://${path.join(dir, `${name}.html`)}`,
+        `file://${path.join(dir, `${name}.html`)}${hash}`,
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 },
     )
@@ -79,6 +83,24 @@ function check(label, out, expect) {
     console.error(`gpu-smoke (${label}) failed:`, JSON.stringify(out, null, 2))
     process.exit(1)
   }
+}
+
+const CANVAS2D_EXPECT = {
+  backend: 'canvas2d',
+  fallbackWarnings: 0,
+  webgl: 'none',
+  tintedTile: '0,255,0,255',
+  blueTile: '0,0,255,255',
+  whiteTile: '255,255,255,255',
+  overlapTopIsYellow: '255,255,0,255',
+  magentaOnly: '255,0,255,255',
+  redTintedLayerSprite: '255,0,0,255',
+  circleCenter: '255,0,0,255',
+  circleCornerIsTile: '255,255,255,255',
+  rectSprite: '255,128,0,255',
+  textLayerGlyphs: 'ok',
+  nightTile: '128,128,255,255',
+  afterClear: '255,255,255,255',
 }
 
 try {
@@ -111,6 +133,9 @@ try {
       anchorQuadRightOfX: '255,0,255,255',
       anchorNotLeftOfX: '255,255,255,255',
       glError7: 0,
+      colorAddRed: '192,128,128,255',
+      additiveOnWhite: '255,255,255,255',
+      glError8: 0,
       circleCenter: '0,255,0,255',
       circleOutside: 'ok',
       circleAntialiased: 'ok',
@@ -161,20 +186,21 @@ try {
     )
   }
   {
-    const out = await runPage('stats.ts')
-    check('stats', out, {
-      layerKinds: 'tile,sprite',
-      layerDrawCalls: '1,1',
-      tileTexturesCounted: true,
-      noGpuByDefault: true,
-      gpuMsOk: true,
-      gpuFlagMatches: true,
-      gpuOff: true,
-      glError: 0,
+    // No WebGL here: the page mounts <Game renderer="canvas2d"> and reads the 2D canvas back.
+    // Virtual time lets its timers (engine start-up) run before the DOM is dumped.
+    const out = await runPage('canvas2d.tsx', { extraArgs: ['--virtual-time-budget=8000'] })
+    check('canvas2d', out, CANVAS2D_EXPECT)
+    console.log('gpu-smoke: Canvas2D renderer draws tile layer, sprite layer, shapes and screen tint correctly')
+  }
+  {
+    // WebGL switched off in the browser: renderer="auto" must fall back to Canvas2D, warn once,
+    // and draw the same pixels.
+    const out = await runPage('canvas2d.tsx', {
+      hash: '#auto',
+      extraArgs: ['--virtual-time-budget=8000', '--disable-3d-apis', '--disable-gpu', '--disable-software-rasterizer'],
     })
-    console.log(
-      `gpu-smoke: stats layers, tile textures and GPU timer (supported: ${out.gpuTimerSupported}) are consistent`,
-    )
+    check('canvas2d auto fallback', out, { ...CANVAS2D_EXPECT, fallbackWarnings: 1 })
+    console.log('gpu-smoke: renderer="auto" falls back to Canvas2D when WebGL is disabled and draws the same pixels')
   }
   {
     const out = await runPage('tint.ts')
@@ -209,6 +235,22 @@ try {
       glError: 0,
     })
     console.log('gpu-smoke: GPU vertex sway bends flagged sprites from a time uniform (base fixed)')
+  }
+  {
+    const out = await runPage('stats.ts')
+    check('stats', out, {
+      layerKinds: 'tile,sprite',
+      layerDrawCalls: '1,1',
+      tileTexturesCounted: true,
+      noGpuByDefault: true,
+      gpuMsOk: true,
+      gpuFlagMatches: true,
+      gpuOff: true,
+      glError: 0,
+    })
+    console.log(
+      `gpu-smoke: stats layers, tile textures and GPU timer (supported: ${out.gpuTimerSupported}) are consistent`,
+    )
   }
 } finally {
   rmSync(dir, { recursive: true, force: true })

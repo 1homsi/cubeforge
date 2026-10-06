@@ -1,7 +1,7 @@
 // `cubeforge/render`: renderer, camera, sprite and core hooks for data-driven
 // games, without physics, audio, net, editor, devtools or gameplay modules.
 export { Game } from './components/Game'
-export type { GameControls } from './components/Game'
+export type { GameControls, RendererBackend } from './components/Game'
 export { World } from './components/World'
 export { Entity } from './components/Entity'
 export { Transform } from './components/Transform'
@@ -47,6 +47,7 @@ export {
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
+  SPRITE_ADDITIVE,
   NO_SPRITE,
   SPRITE_SWAY,
   TileLayerData,

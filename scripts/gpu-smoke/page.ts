@@ -307,6 +307,25 @@ try {
   out.anchorQuadRightOfX = px(168, 240)
   out.anchorNotLeftOfX = px(152, 224)
   out.glError7 = gl.getError()
+
+  // additive colour and per-sprite additive blending (mid grey sprite over the white tiles)
+  const ad = new SpriteLayer({ atlases: [{}], zIndex: 70 })
+  const a0 = ad.add(40, 40, 16, 16)
+  ad.flags[a0] |= 1 << 3 // SPRITE_UNTEXTURED
+  ad.color[a0] = 0x808080ff
+  ad.enableColorAdd()[a0] = 0x400000 // 0x80 + 0x40 red, then drawn normally
+  const a1 = ad.add(80, 40, 16, 16)
+  ad.flags[a1] |= (1 << 3) | 32 // untextured + additive: black-ish sprite adds onto white (stays white)
+  ad.color[a1] = 0x303030ff
+  const a2 = ad.add(120, 40, 16, 16) // additive over the blue tile (1,0): grey 0x30 added to 0,0,255
+  ad.flags[a2] |= (1 << 3) | 32
+  ad.color[a2] = 0x303030ff
+  rs.addSpriteLayer(ad)
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.colorAddRed = px(40, 40)
+  out.additiveOnWhite = px(80, 40)
+  out.glError8 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }

@@ -55,7 +55,7 @@ describe('per-layer stats and TileLayer textures', () => {
       zIndex: 2,
       instances: 3,
       drawCalls: 1,
-      uploadBytes: 3 * 80,
+      uploadBytes: 3 * 84, // 21 floats per instance
     })
     expect(u.name).toBe('fx')
     expect(rs.stats.layers).toHaveLength(3)
@@ -64,7 +64,7 @@ describe('per-layer stats and TileLayer textures', () => {
     rs.update(world, 1 / 60)
     expect(rs.stats.layers[0]).toBe(t)
     expect(rs.stats.layers[0].uploadBytes).toBe(0)
-    expect(rs.stats.layers[1].uploadBytes).toBe(3 * 80)
+    expect(rs.stats.layers[1].uploadBytes).toBe(3 * 84)
   })
 
   it('names unnamed tile layers by draw order', () => {
