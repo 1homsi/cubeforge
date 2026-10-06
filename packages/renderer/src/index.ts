@@ -41,7 +41,15 @@ export {
   ATLASES_PER_DRAW,
   NO_SPRITE,
 } from './spriteLayer'
-export type { SpriteLayerOptions, LayerAtlas, AtlasFrame, SpriteLayerImage, PickOptions, FrameHit, PickSource } from './spriteLayer'
+export type {
+  SpriteLayerOptions,
+  LayerAtlas,
+  AtlasFrame,
+  SpriteLayerImage,
+  PickOptions,
+  FrameHit,
+  PickSource,
+} from './spriteLayer'
 export {
   TileLayerData,
   createTileLayerComponent,
