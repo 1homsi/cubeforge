@@ -3,15 +3,30 @@ import { registerSpriteLayerRenderer } from './layerRegistry'
 import { SpriteLayerRenderer } from './spriteLayerGL'
 import { SPRITE_HIDDEN } from './spriteLayerFlags'
 
-export { MAX_LAYER_ATLASES, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
+export {
+  ATLASES_PER_DRAW,
+  MAX_LAYER_ATLASES,
+  SPRITE_FLIP_X,
+  SPRITE_FLIP_Y,
+  SPRITE_HIDDEN,
+  SPRITE_UNTEXTURED,
+} from './spriteLayerFlags'
 
 export type SpriteLayerImage = HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas
 
-/** One texture of a sprite layer, sliced into a grid of frames. */
+/** One frame of an atlas frame table, in texture pixels (origin top-left). */
+export interface AtlasFrame {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** One texture of a sprite layer, sliced into a uniform grid or an explicit frame table. */
 export interface LayerAtlas {
   src?: string
   image?: SpriteLayerImage
-  /** A dynamic canvas id from useDynamicCanvas. */
+  /** A dynamic canvas id from useDynamicCanvas or `engine.createDynamicCanvas`. */
   dynamicSrc?: string
   /** Grid cell size in texture pixels; `frame` indexes cells row-major. Omit for one whole-texture frame. */
   frameWidth?: number
@@ -22,14 +37,36 @@ export interface LayerAtlas {
    * (or any mutable source) is uploaded to the GPU again. Ignored for `src` and `dynamicSrc`.
    */
   imageVersion?: number
+  /** Grid only: pixels between cells. Default 0. */
+  frameSpacing?: number
+  /** Grid only: pixels around the atlas edge before the first cell. Default 0. */
+  frameMargin?: number
+  /**
+   * Explicit frame rects in texture pixels, indexed by the sprite's `frame`
+   * (irregular atlases, no repacking). When set it replaces the grid. Sprites whose
+   * `frame` is out of range are not drawn. Replace the array (or call
+   * `layer.touch()`) after editing it.
+   */
+  frames?: AtlasFrame[]
+  /**
+   * Shrink every frame's UV rect by this many texture pixels on each side
+   * (grid and frame table) so linear filtering and mipmaps do not bleed in
+   * neighbouring cells. Default 0.
+   */
+  inset?: number
+  /** Texture filtering for this atlas; falls back to the layer's `sampling`, then the engine default. */
+  sampling?: Sampling
 }
 
 export interface SpriteLayerOptions extends LayerAtlas {
   /** Initial capacity; grows automatically. */
   capacity?: number
   /**
-   * Several textures drawn in one batch (up to 8); each sprite picks one with
-   * `atlas[i]`. When omitted, `src`/`image`/`dynamicSrc` + frame size form atlas 0.
+   * Several textures (up to {@link MAX_LAYER_ATLASES}); each sprite picks one with
+   * `atlas[i]`. Atlases are bound in groups of {@link ATLASES_PER_DRAW}: sprites whose
+   * atlases share a group (`atlas >> 3`) draw in one call, a change of group in draw
+   * order starts a new one. When omitted, `src`/`image`/`dynamicSrc` + frame
+   * size form atlas 0.
    */
   atlases?: LayerAtlas[]
   /** Draw (and pick) in ascending `sortKey[i]` order, e.g. y for depth. Default: insertion order. */
@@ -91,8 +128,11 @@ export class SpriteLayer {
 
   constructor(options: SpriteLayerOptions = {}) {
     registerSpriteLayerRenderer((gl) => new SpriteLayerRenderer(gl))
-    const { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns } = options
-    this.atlases = options.atlases ?? [{ src, image, dynamicSrc, frameWidth, frameHeight, frameColumns }]
+    const { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns, frameSpacing, frameMargin, frames, inset } =
+      options
+    this.atlases = options.atlases ?? [
+      { src, image, dynamicSrc, frameWidth, frameHeight, frameColumns, frameSpacing, frameMargin, frames, inset },
+    ]
     this.sortByKey = options.sortByKey ?? false
     this.layer = options.layer ?? 'default'
     this.zIndex = options.zIndex ?? 0

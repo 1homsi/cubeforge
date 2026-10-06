@@ -327,6 +327,55 @@ function depthLayer(n: number): ScenarioDef {
   }
 }
 
+/** Frame table + 12 atlases (two bind groups): atlas picked by y band so groups stay contiguous in depth order. */
+function atlasLayer(n: number): ScenarioDef {
+  return {
+    name: `spritelayer-atlases-${n}`,
+    description: `${n} sprites, 12 atlases (2 bind groups) with frame tables, y-sorted every frame`,
+    setup(ctx) {
+      const r = rng(1)
+      const frames = Array.from({ length: 16 }, (_, i) => ({
+        x: (i % 4) * 64,
+        y: Math.floor(i / 4) * 64,
+        w: 60,
+        h: 60,
+      }))
+      const atlas = { image: ctx.atlas, frames, inset: 0.5 }
+      const layer = new SpriteLayer({
+        atlases: Array.from({ length: 12 }, () => ({ ...atlas })),
+        sortByKey: true,
+        capacity: n,
+      })
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        const X = layer.x
+        const Y = layer.y
+        const K = layer.sortKey
+        for (let i = 0; i < n; i++) {
+          const x = X[i] + vx[i]
+          const y = Y[i] + vy[i]
+          if (x < 0 || x > W) vx[i] = -vx[i]
+          if (y < 0 || y > H) vy[i] = -vy[i]
+          X[i] = x
+          Y[i] = y
+          K[i] = y
+        }
+        layer.touch()
+      })
+      for (let i = 0; i < n; i++) {
+        const k = layer.add(r() * W, r() * H, FRAME, FRAME, (r() * 16) | 0)
+        layer.atlas[k] = Math.min(11, Math.floor((layer.y[k] / H) * 12))
+        layer.sortKey[k] = layer.y[k]
+        vx[i] = (r() - 0.5) * 0.2 // slow drift keeps atlas bands stable
+        vy[i] = 0
+      }
+      sc.renderer.addSpriteLayer(layer)
+      return sc
+    },
+  }
+}
+
 /** Human Box shape: a floating name above every person, a few renamed each frame. */
 function textLayer(n: number): ScenarioDef {
   return {
@@ -467,6 +516,7 @@ export const SCENARIOS: ScenarioDef[] = [
   spriteLayer(3000),
   spriteLayer(10000),
   depthLayer(3000),
+  atlasLayer(3000),
   textLayer(1000),
   textEntities(1000),
   churn(3000, 200),

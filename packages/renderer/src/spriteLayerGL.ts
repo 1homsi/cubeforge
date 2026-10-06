@@ -1,5 +1,12 @@
-import { MAX_LAYER_ATLASES, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
-import type { SpriteLayer } from './spriteLayer'
+import {
+  ATLASES_PER_DRAW,
+  MAX_LAYER_ATLASES,
+  SPRITE_FLIP_X,
+  SPRITE_FLIP_Y,
+  SPRITE_HIDDEN,
+  SPRITE_UNTEXTURED,
+} from './spriteLayerFlags'
+import type { SpriteLayer, AtlasFrame } from './spriteLayer'
 
 const FLOATS = 20
 const MAX_BATCH = 16384
@@ -44,12 +51,12 @@ precision highp float;
 in vec2 v_uv;
 in vec4 v_color;
 flat in int v_atlas;
-uniform sampler2D u_tex[${MAX_LAYER_ATLASES}];
+uniform sampler2D u_tex[${ATLASES_PER_DRAW}];
 out vec4 fragColor;
 void main() {
   vec4 t = vec4(1.0);
   switch (v_atlas) {
-${Array.from({ length: MAX_LAYER_ATLASES }, (_, i) => `    case ${i}: t = texture(u_tex[${i}], v_uv); break;`).join('\n')}
+${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture(u_tex[${i}], v_uv); break;`).join('\n')}
     default: break;
   }
   fragColor = t * v_color;
@@ -85,7 +92,7 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
   return sh
 }
 
-/** Draws SpriteLayers with up to 8 atlases per draw call. */
+/** Draws SpriteLayers; atlases are bound in groups of 8 (one draw call per run of sprites in a group). */
 export class SpriteLayerRenderer {
   private program: WebGLProgram | null = null
   private vao: WebGLVertexArrayObject | null = null
@@ -95,8 +102,18 @@ export class SpriteLayerRenderer {
   private uSize: WebGLUniformLocation | null = null
   private uShake: WebGLUniformLocation | null = null
   private readonly data = new Float32Array(MAX_BATCH * FLOATS)
+  // Per-atlas state for the layer being drawn (rebuilt every draw).
+  private readonly texs: (WebGLTexture | null)[] = new Array(MAX_LAYER_ATLASES).fill(null)
+  private readonly invW = new Float32Array(MAX_LAYER_ATLASES)
+  private readonly invH = new Float32Array(MAX_LAYER_ATLASES)
   private readonly uw = new Float32Array(MAX_LAYER_ATLASES)
   private readonly vh = new Float32Array(MAX_LAYER_ATLASES)
+  private readonly stepU = new Float32Array(MAX_LAYER_ATLASES)
+  private readonly stepV = new Float32Array(MAX_LAYER_ATLASES)
+  private readonly originU = new Float32Array(MAX_LAYER_ATLASES)
+  private readonly originV = new Float32Array(MAX_LAYER_ATLASES)
+  private readonly insetU = new Float32Array(MAX_LAYER_ATLASES)
+  private readonly insetV = new Float32Array(MAX_LAYER_ATLASES)
   private readonly cols = new Int32Array(MAX_LAYER_ATLASES)
   private readonly ready = new Uint8Array(MAX_LAYER_ATLASES)
   drawCalls = 0
@@ -117,7 +134,7 @@ export class SpriteLayerRenderer {
     this.uSize = gl.getUniformLocation(p, 'u_canvasSize')
     this.uShake = gl.getUniformLocation(p, 'u_shake')
     gl.useProgram(p)
-    for (let i = 0; i < MAX_LAYER_ATLASES; i++) gl.uniform1i(gl.getUniformLocation(p, `u_tex[${i}]`), i)
+    for (let i = 0; i < ATLASES_PER_DRAW; i++) gl.uniform1i(gl.getUniformLocation(p, `u_tex[${i}]`), i)
 
     this.vao = gl.createVertexArray()!
     gl.bindVertexArray(this.vao)
@@ -170,14 +187,15 @@ export class SpriteLayerRenderer {
 
   /**
    * `resolve(i)` returns atlas i's texture or null while loading; `white` is
-   * bound to unused units. Sprites whose atlas isn't ready are skipped.
+   * bound to unused units; `applySampling(i)` sets the filter of the texture
+   * currently bound for atlas i. Sprites whose atlas isn't ready are skipped.
    */
   draw(
     layer: SpriteLayer,
     cam: LayerCamera,
     resolve: (i: number) => ResolvedAtlas | null,
     white: WebGLTexture,
-    applySampling: (tex: WebGLTexture) => void,
+    applySampling: (atlasIndex: number, tex: WebGLTexture) => void,
   ): void {
     const count = layer.count
     if (!layer.visible || count === 0) return
@@ -191,29 +209,48 @@ export class SpriteLayerRenderer {
 
     const atlases = layer.atlases
     const na = Math.min(atlases.length, MAX_LAYER_ATLASES)
-    for (let a = 0; a < MAX_LAYER_ATLASES; a++) {
-      // Select the unit first: resolve() may create or re-upload a texture, which binds it.
-      gl.activeTexture(gl.TEXTURE0 + a)
-      const r = a < na ? resolve(a) : null
-      gl.bindTexture(gl.TEXTURE_2D, r ? r.tex : white)
-      if (r) applySampling(r.tex)
-      const at = a < na ? atlases[a] : undefined
+    const frameTables: (AtlasFrame[] | undefined)[] = this.frameTables
+    for (let a = 0; a < na; a++) {
+      const r = resolve(a)
+      const at = atlases[a]
+      this.texs[a] = r ? r.tex : null
       // 2 = atlas without a source: its sprites draw as solid rects.
-      this.ready[a] =
-        at && at.src === undefined && at.image === undefined && at.dynamicSrc === undefined ? 2 : r ? 1 : 0
-      if (r && at) {
-        const fw = at.frameWidth ?? 0
-        const fh = at.frameHeight ?? 0
-        if (fw > 0 && fh > 0) {
-          this.cols[a] = at.frameColumns ?? Math.max(1, Math.floor(r.width / fw))
-          this.uw[a] = fw / r.width
-          this.vh[a] = fh / r.height
-        } else {
-          this.cols[a] = 1
-          this.uw[a] = 1
-          this.vh[a] = 1
-        }
+      this.ready[a] = at.src === undefined && at.image === undefined && at.dynamicSrc === undefined ? 2 : r ? 1 : 0
+      frameTables[a] = at.frames
+      if (!r) continue
+      const W = r.width
+      const H = r.height
+      this.invW[a] = 1 / W
+      this.invH[a] = 1 / H
+      const inset = at.inset ?? 0
+      this.insetU[a] = inset / W
+      this.insetV[a] = inset / H
+      const fw = at.frameWidth ?? 0
+      const fh = at.frameHeight ?? 0
+      if (fw > 0 && fh > 0) {
+        const sp = at.frameSpacing ?? 0
+        const mg = at.frameMargin ?? 0
+        this.cols[a] = at.frameColumns ?? Math.max(1, Math.floor((W - 2 * mg + sp) / (fw + sp)))
+        this.uw[a] = fw / W
+        this.vh[a] = fh / H
+        this.stepU[a] = (fw + sp) / W
+        this.stepV[a] = (fh + sp) / H
+        this.originU[a] = mg / W
+        this.originV[a] = mg / H
+      } else {
+        this.cols[a] = 1
+        this.uw[a] = 1
+        this.vh[a] = 1
+        this.stepU[a] = 0
+        this.stepV[a] = 0
+        this.originU[a] = 0
+        this.originV[a] = 0
       }
+    }
+    // Every unit holds a valid texture before the first draw (solid sprites bind none).
+    for (let u = 0; u < ATLASES_PER_DRAW; u++) {
+      gl.activeTexture(gl.TEXTURE0 + u)
+      gl.bindTexture(gl.TEXTURE_2D, white)
     }
     gl.bindVertexArray(this.vao)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
@@ -233,6 +270,7 @@ export class SpriteLayerRenderer {
       FL = layer.flags
     const d = this.data
     let batch = 0
+    let group = -1
     for (let k = 0; k < count; k++) {
       const i = order ? order[k] : k
       const flags = FL[i]
@@ -245,7 +283,42 @@ export class SpriteLayerRenderer {
       if (x + rad < viewL || x - rad > viewR || y + rad < viewT || y - rad > viewB) continue
       let a = A[i]
       const untextured = (flags & SPRITE_UNTEXTURED) !== 0 || a >= na || this.ready[a] === 2
-      if (!untextured && this.ready[a] === 0) continue
+      let u0 = 0,
+        v0 = 0,
+        uw = 1,
+        vh = 1
+      if (!untextured) {
+        if (this.ready[a] === 0) continue
+        const f = F[i]
+        const table = frameTables[a]
+        if (table !== undefined) {
+          const fr = table[f]
+          if (fr === undefined) continue
+          const iu = this.insetU[a]
+          const iv = this.insetV[a]
+          u0 = fr.x * this.invW[a] + iu
+          v0 = fr.y * this.invH[a] + iv
+          uw = fr.w * this.invW[a] - 2 * iu
+          vh = fr.h * this.invH[a] - 2 * iv
+        } else {
+          const cols = this.cols[a]
+          const iu = this.insetU[a]
+          const iv = this.insetV[a]
+          u0 = this.originU[a] + (f % cols) * this.stepU[a] + iu
+          v0 = this.originV[a] + Math.floor(f / cols) * this.stepV[a] + iv
+          uw = this.uw[a] - 2 * iu
+          vh = this.vh[a] - 2 * iv
+        }
+        const g = a >> 3
+        if (g !== group) {
+          if (batch > 0) {
+            this.flush(batch)
+            batch = 0
+          }
+          this.bindGroup(g, na, white, applySampling)
+          group = g
+        }
+      }
       const c = C[i]
       const b = batch * FLOATS
       d[b] = x
@@ -261,21 +334,12 @@ export class SpriteLayerRenderer {
       d[b + 10] = ((c >>> 16) & 255) / 255
       d[b + 11] = ((c >>> 8) & 255) / 255
       d[b + 12] = (c & 255) / 255
-      if (untextured) {
-        a = -1
-        d[b + 13] = 0
-        d[b + 14] = 0
-        d[b + 15] = 1
-        d[b + 16] = 1
-      } else {
-        const f = F[i]
-        const cols = this.cols[a]
-        d[b + 13] = (f % cols) * this.uw[a]
-        d[b + 14] = Math.floor(f / cols) * this.vh[a]
-        d[b + 15] = this.uw[a]
-        d[b + 16] = this.vh[a]
-      }
-      d[b + 17] = a
+      d[b + 13] = u0
+      d[b + 14] = v0
+      d[b + 15] = uw
+      d[b + 16] = vh
+      if (untextured) a = -1
+      d[b + 17] = a < 0 ? -1 : a & 7
       d[b + 18] = 0
       d[b + 19] = 0
       if (++batch === MAX_BATCH) {
@@ -286,6 +350,25 @@ export class SpriteLayerRenderer {
     this.flush(batch)
     gl.bindVertexArray(null)
     gl.activeTexture(gl.TEXTURE0)
+  }
+
+  private readonly frameTables: (AtlasFrame[] | undefined)[] = new Array(MAX_LAYER_ATLASES)
+
+  /** Bind atlases [8g, 8g + 8) to the texture units and set their filters. */
+  private bindGroup(
+    g: number,
+    na: number,
+    white: WebGLTexture,
+    applySampling: (atlasIndex: number, tex: WebGLTexture) => void,
+  ): void {
+    const { gl } = this
+    for (let u = 0; u < ATLASES_PER_DRAW; u++) {
+      const idx = g * ATLASES_PER_DRAW + u
+      const real = idx < na && this.ready[idx] === 1
+      gl.activeTexture(gl.TEXTURE0 + u)
+      gl.bindTexture(gl.TEXTURE_2D, real ? this.texs[idx]! : white)
+      if (real) applySampling(idx, this.texs[idx]!)
+    }
   }
 
   private flush(n: number): void {
