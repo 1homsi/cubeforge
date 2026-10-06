@@ -1387,7 +1387,7 @@ export class RenderSystem implements System {
   private _applyPostProcess(
     W: number,
     H: number,
-    sceneTex: WebGLTexture = sceneTex,
+    sceneTex: WebGLTexture = this._ppSceneTex!,
     opts: PostProcessOptions = this._ppOptions,
   ): void {
     const { gl } = this
