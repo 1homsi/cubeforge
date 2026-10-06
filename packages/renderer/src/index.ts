@@ -105,3 +105,4 @@ export type {
   AtlasStyle,
   AtlasPage,
 } from './textLayer'
+export type { LayerBlendMode } from './blendModes'

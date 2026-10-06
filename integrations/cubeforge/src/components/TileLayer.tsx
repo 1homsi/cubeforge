@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef } from 'react'
 import {
+  type LayerBlendMode,
   TileLayerData,
   createTileLayerComponent,
   type TileAnimation,
@@ -57,11 +58,25 @@ export interface TileLayerProps {
    */
   renderLayer?: string
   opacity?: number
+  /** Whole-layer colour multiplier, 0xRRGGBBAA. */
+  tintColor?: number
+  /** Blend onto what is below: 'normal' | 'multiply' | 'additive' | 'screen'. */
+  blend?: LayerBlendMode
   visible?: boolean
 }
 
 /** Mounts a {@link TileLayerData} into the world. Renders one quad per visible page, never one entity per tile. */
-export function TileLayer({ layer, x, y, zIndex, renderLayer, opacity, visible }: TileLayerProps): null {
+export function TileLayer({
+  layer,
+  x,
+  y,
+  zIndex,
+  renderLayer,
+  opacity,
+  tintColor,
+  blend,
+  visible,
+}: TileLayerProps): null {
   const engine = useContext(EngineContext)!
 
   useEffect(() => {
@@ -100,9 +115,11 @@ export function TileLayer({ layer, x, y, zIndex, renderLayer, opacity, visible }
     if (zIndex !== undefined) layer.zIndex = zIndex
     if (renderLayer !== undefined) layer.renderLayer = renderLayer
     if (opacity !== undefined) layer.opacity = opacity
+    if (tintColor !== undefined) layer.tintColor = tintColor
+    if (blend !== undefined) layer.blend = blend
     if (visible !== undefined) layer.visible = visible
     engine.loop.markDirty()
-  }, [engine, layer, x, y, zIndex, renderLayer, opacity, visible])
+  }, [engine, layer, x, y, zIndex, renderLayer, opacity, tintColor, blend, visible])
 
   return null
 }

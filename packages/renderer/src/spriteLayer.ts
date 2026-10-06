@@ -1,4 +1,5 @@
 import type { Sampling } from './textureFilter'
+import type { LayerBlendMode } from './blendModes'
 import { registerSpriteLayerRenderer } from './layerRegistry'
 import { SpriteLayerRenderer } from './spriteLayerGL'
 import { SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
@@ -114,6 +115,12 @@ export interface SpriteLayerOptions extends LayerAtlas {
   visible?: boolean
   /** Default alpha threshold (0-255) for picking; 0 (default) hits the whole hit rect. */
   pickAlpha?: number
+  /** Whole-layer opacity multiplier 0..1. Default 1. */
+  opacity?: number
+  /** Whole-layer colour multiplier, 0xRRGGBBAA (alpha multiplies opacity). Default 0xffffffff. */
+  tintColor?: number
+  /** How the layer blends onto what is below it. Default 'normal'. */
+  blend?: LayerBlendMode
 }
 
 /**
@@ -186,6 +193,9 @@ export class SpriteLayer {
    */
   onChange: (() => void) | null = null
 
+  private _opacity: number
+  private _tintColor: number
+  private _blend: LayerBlendMode
   private _order = new Int32Array(0)
   private _inOrder = new Uint8Array(0)
   private _orderCount = 0
@@ -218,7 +228,36 @@ export class SpriteLayer {
     this.anchorY = options.anchorY ?? 0.5
     this.visible = options.visible ?? true
     this.pickAlpha = options.pickAlpha ?? 0
+    this._opacity = options.opacity ?? 1
+    this._tintColor = (options.tintColor ?? 0xffffffff) >>> 0
+    this._blend = options.blend ?? 'normal'
     this.grow(Math.max(16, options.capacity ?? 256))
+  }
+
+  get opacity(): number {
+    return this._opacity
+  }
+  set opacity(v: number) {
+    if (v === this._opacity) return
+    this._opacity = v
+    this.changed()
+  }
+  get tintColor(): number {
+    return this._tintColor
+  }
+  set tintColor(v: number) {
+    v >>>= 0
+    if (v === this._tintColor) return
+    this._tintColor = v
+    this.changed()
+  }
+  get blend(): LayerBlendMode {
+    return this._blend
+  }
+  set blend(v: LayerBlendMode) {
+    if (v === this._blend) return
+    this._blend = v
+    this.changed()
   }
 
   /** Atlas 0's url (single-atlas shorthand). */
