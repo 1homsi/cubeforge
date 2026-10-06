@@ -994,6 +994,7 @@ export class RenderSystem implements System {
   private _textWarned = false
   private readonly _sortTextLayers: TextLayer[] = []
   private readonly _screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
+  private _texSampling = new WeakMap<WebGLTexture, { min: string; mag: string; mips: boolean }>()
   private _layerImageTextures = new WeakMap<object, { tex: WebGLTexture; ver: number; w: number; h: number }>()
   private readonly _resolvedAtlas: ResolvedAtlas = { tex: null as unknown as WebGLTexture, width: 0, height: 0 }
   private readonly _layerCam: LayerCamera = {
@@ -1253,6 +1254,7 @@ export class RenderSystem implements System {
     const c = entry.canvas
     gl.bindTexture(gl.TEXTURE_2D, entry.tex)
     entry.dirty = false
+    this.markTextureStale(entry.tex)
     this.stats.textureUploads++
     if (c.width !== entry.texW || c.height !== entry.texH) {
       this.stats.textureUploadBytes += c.width * c.height * 4
@@ -1847,12 +1849,30 @@ export class RenderSystem implements System {
   // ── Texture sampling helper ────────────────────────────────────────────────
 
   /** Apply min/mag filter params to the currently bound texture. */
-  private applySampling(spriteSampling?: Sampling): void {
+  private applySampling(tex: WebGLTexture, spriteSampling?: Sampling): void {
     const { gl } = this
     const { min, mag } = resolveSampling(spriteSampling, this._defaultSampling)
-    if (needsMipmap(min)) gl.generateMipmap(gl.TEXTURE_2D)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, toGLMinFilter(gl, min))
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, toGLMagFilter(gl, mag))
+    let st = this._texSampling.get(tex)
+    if (!st) this._texSampling.set(tex, (st = { min: '', mag: '', mips: false }))
+    // Mip chains are built once per texture content; parameters are set only when they change.
+    if (needsMipmap(min) && !st.mips) {
+      gl.generateMipmap(gl.TEXTURE_2D)
+      st.mips = true
+    }
+    if (st.min !== min) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, toGLMinFilter(gl, min))
+      st.min = min
+    }
+    if (st.mag !== mag) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, toGLMagFilter(gl, mag))
+      st.mag = mag
+    }
+  }
+
+  /** The pixels of `tex` changed: its mip chain (if any) is stale. */
+  private markTextureStale(tex: WebGLTexture): void {
+    const st = this._texSampling.get(tex)
+    if (st) st.mips = false
   }
 
   // ── Blend mode helper ────────────────────────────────────────────────────
@@ -1950,7 +1970,7 @@ export class RenderSystem implements System {
       tex = this.loadTexture(textureKey)
     }
     gl.bindTexture(gl.TEXTURE_2D, tex)
-    this.applySampling(sampling)
+    this.applySampling(tex, sampling)
     // Shape textures need useTexture=1 so the alpha mask is applied via texture * color
     gl.uniform1i(this.uUseTexture, isColor ? 0 : 1)
     gl.bindVertexArray(this.quadVAO)
@@ -2127,7 +2147,7 @@ export class RenderSystem implements System {
       cam,
       (i) => this.resolveLayerAtlas(layer.atlases[i]),
       this.whiteTexture,
-      () => this.applySampling(layer.sampling),
+      (tex) => this.applySampling(tex, layer.sampling),
     )
     this.stats.drawCalls += r.drawCalls
     this.stats.batches += r.drawCalls
@@ -2246,6 +2266,7 @@ export class RenderSystem implements System {
       } else if (t.ver !== ver || t.w !== iw || t.h !== ih) {
         // The source changed (markAtlasDirty) or was resized: upload it again.
         gl.bindTexture(gl.TEXTURE_2D, t.tex)
+        this.markTextureStale(t.tex)
         if (t.w !== iw || t.h !== ih) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
         else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, img)
         this.stats.textureUploads++
