@@ -422,6 +422,75 @@ layer, so the cost is one `blendFunc` pair per non-normal layer.
 - `useCamera().zoomAt(screenX, screenY, zoom)` and `useCoordinates()` work in canvas CSS pixels at
   any devicePixelRatio.
 
+## Testing your game headlessly: `cubeforge/test`
+
+`cubeforge/test` mounts a real `<Game>` without a GPU. WebGL2 is a recording stand-in, so tests
+can count draw calls and read back what was drawn. Frames run only when you call `frame()`, on a
+virtual clock, so a test is deterministic. It needs a DOM (vitest `environment: 'happy-dom'` or
+`'jsdom'`) and React 18.3+. Import it from test files only; it is a separate entry and never part
+of the `cubeforge` bundle.
+
+```tsx
+// @vitest-environment happy-dom
+import { afterEach, expect, it } from 'vitest'
+import { World, Entity, Transform, Sprite, Camera2D } from 'cubeforge'
+import { mountGame, cleanup } from 'cubeforge/test'
+
+afterEach(cleanup) // unmounts every game and removes the global patches
+
+it('draws every person in one call', async () => {
+  const game = await mountGame(
+    <World>
+      <Camera2D x={0} y={0} />
+      <Entity id="a">
+        <Transform x={10} y={20} />
+        <Sprite width={8} height={8} color="#ff0000" />
+      </Entity>
+    </World>,
+    { width: 320, height: 200 },
+  )
+  game.frame(3) // three frames of 1/60 s through the real loop (scripts, physics, render)
+  expect(game.drawCalls).toBe(1)
+  expect(game.frameInstances()[0]).toMatchObject({ x: 10, y: 20, r: 1 })
+  expect(game.engine.ecs.entityCount).toBe(1)
+})
+```
+
+`mountGame(children, { width, height, game })` returns:
+
+| Member                 | What it is                                                                         |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `engine`, `canvas`     | the `EngineState` `<Game>` created and its canvas                                  |
+| `frame(count, dt)`     | run frames synchronously (default one frame of 1/60 s), inside `act()`             |
+| `drawCalls`, `instances` | draw calls and instances drawn by the last frame                                 |
+| `draws`, `frameInstances()` | the raw draws, and decoded position/size/color/uv of each instance            |
+| `renderStats`          | the renderer's counters for the last frame (batches, culled sprites, ...)          |
+| `liveTextures`         | WebGL textures created and not deleted                                             |
+| `gl`                   | the `RecordingGL` itself (`totalDraws`, `textures`, `contextLost = true` to simulate loss) |
+| `rerender(children)`, `unmount()` | change the scene, tear down                                             |
+
+`game` takes extra `<Game>` props (`mode`, `deterministic`, `plugins`, ...); `asyncAssets` is on so
+the loop starts at once. All games mounted at the same time share one virtual clock.
+
+To test a hook or component without mounting a game, `createTestEngine()` returns a real,
+unstarted `EngineState` (ECS world, events, assets, input, recording canvas; pass overrides for
+any field) to provide through `EngineContext`:
+
+```tsx
+import { EngineContext } from 'cubeforge' // also exported from cubeforge/render and cubeforge/test
+const engine = createTestEngine()
+render(
+  <EngineContext.Provider value={engine}>
+    <MyHudThing />
+  </EngineContext.Provider>,
+)
+```
+
+The entry also re-exports the lower-level `RecordingGL`, `createRecordingCanvas`,
+`decodeInstances` and `installHeadlessCanvasDOM` for driving `RenderSystem` directly (as the
+benchmarks do). `installHeadlessCanvasDOM({ force: true })` replaces a stub `getContext`, e.g. in
+jsdom.
+
 ## Bundle size
 
 The package ships one ESM file per module and declares `"sideEffects": false`,
