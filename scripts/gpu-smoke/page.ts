@@ -5,6 +5,12 @@ import { TileLayerData, createTileLayerComponent } from '../../packages/renderer
 import { createSprite } from '../../packages/renderer/src/components/sprite.ts'
 import { createTransform } from '../../packages/core/src/index.ts'
 import { SpriteLayer } from '../../packages/renderer/src/spriteLayer.ts'
+import {
+  createCircleShape,
+  createLineShape,
+  createPolygonShape,
+} from '../../packages/renderer/src/components/shapes.ts'
+import { createGradient } from '../../packages/renderer/src/components/gradient.ts'
 
 const out: Record<string, unknown> = {}
 try {
@@ -155,6 +161,60 @@ try {
   out.mipCheckerGrey = px(129, 129)
   out.mipCheckerGreyB = px(125, 133)
   out.glError5 = gl.getError()
+
+  // vector shapes: antialiased circle / line, triangulated polygon, baked gradient
+  world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 1
+  const addShape = (x: number, y: number, ...comps: object[]) => {
+    const e = world.createEntity()
+    world.addComponent(e, createTransform(x, y))
+    for (const c of comps) world.addComponent(e, c as never)
+  }
+  addShape(60, 200, createCircleShape({ radius: 20, color: '#00ff00', zIndex: 50 }))
+  addShape(
+    100,
+    230,
+    createLineShape({ endX: 100, endY: 0, color: '#ff00ff', lineWidth: 4, zIndex: 50, lineCap: 'butt' }),
+  )
+  addShape(
+    0,
+    0,
+    createPolygonShape({
+      points: [
+        { x: 200, y: 150 },
+        { x: 240, y: 150 },
+        { x: 220, y: 190 },
+      ],
+      color: '#00ffff',
+      zIndex: 50,
+    }),
+  )
+  addShape(
+    30,
+    80,
+    createGradient({
+      stops: [
+        { offset: 0, color: '#000000' },
+        { offset: 1, color: '#ffffff' },
+      ],
+      width: 40,
+      height: 40,
+      zIndex: 60,
+    }),
+  )
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.circleCenter = px(60, 200)
+  out.circleOutside = px(60 + 24, 200) === '0,255,0,255' ? 'bad' : 'ok'
+  // pixel (74, 213) straddles the rim: a partial coverage blend, not 0 or 255
+  const rim = Number(px(74, 213).split(',')[0])
+  out.circleAntialiased = rim > 10 && rim < 245 ? 'ok' : `bad:${rim}`
+  out.lineMiddle = px(150, 230)
+  out.lineOutside = px(150, 238) === '255,0,255,255' ? 'bad' : 'ok'
+  out.polygonInside = px(220, 160)
+  out.polygonOutside = px(205, 186) === '0,255,255,255' ? 'bad' : 'ok'
+  out.gradientLeft = Number(px(12, 80).split(',')[0]) < 60 ? 'dark' : 'bad'
+  out.gradientRight = Number(px(48, 80).split(',')[0]) > 200 ? 'light' : 'bad'
+  out.glErrorShapes = gl.getError()
 
   // usePostProcess effect stack: a 2D effect paints the top-left corner; the rest of the frame stays
   rs.postProcessStack.add((ctx) => {

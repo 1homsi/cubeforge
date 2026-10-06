@@ -1,4 +1,6 @@
 import type { Component } from '@cubeforge/core'
+import { registerShapeRenderer } from '../layerRegistry'
+import { ShapeRenderer } from '../shapeGL'
 
 export type GradientType = 'linear' | 'radial'
 
@@ -26,6 +28,7 @@ export interface GradientComponent extends Component {
 }
 
 export function createGradient(opts?: Partial<Omit<GradientComponent, 'type'>>): GradientComponent {
+  registerShapeRenderer((gl) => new ShapeRenderer(gl))
   return {
     type: 'Gradient',
     gradientType: 'linear',
