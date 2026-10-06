@@ -101,8 +101,16 @@ export class SpriteLayer {
   color!: Uint32Array
   /** Bit flags: SPRITE_FLIP_X | SPRITE_FLIP_Y | SPRITE_HIDDEN | SPRITE_UNTEXTURED. */
   flags!: Uint8Array
-  /** Draw order key when `sortByKey` is set (lower draws first). */
-  sortKey!: Float32Array
+  /**
+   * Draw order key when `sortByKey` is set (lower draws first). Float64: depths
+   * 0.0001 apart stay distinct at y = 4000 (a float32 key collapses them).
+   */
+  sortKey!: Float64Array
+  /**
+   * Optional secondary key (allocate with {@link enableSortKey2}): sprites with an
+   * equal `sortKey` draw in ascending `sortKey2`, then in slot order.
+   */
+  sortKey2: Float64Array | null = null
   /** Caller ids returned by pick(); defaults to the index at insertion. */
   ids!: Int32Array
 
@@ -122,9 +130,10 @@ export class SpriteLayer {
   onChange: (() => void) | null = null
 
   private _order = new Int32Array(0)
-  private _orderCount = -1
-  private _structure = 0
-  private _orderStructure = -1
+  private _inOrder = new Uint8Array(0)
+  private _orderCount = 0
+  /** Sprites in the last {@link drawOrder} (visible ones only when `sortByKey`). */
+  orderCount = 0
 
   constructor(options: SpriteLayerOptions = {}) {
     registerSpriteLayerRenderer((gl) => new SpriteLayerRenderer(gl))
@@ -193,7 +202,7 @@ export class SpriteLayer {
   }
 
   private grow(capacity: number): void {
-    const copy = <T extends Float32Array | Uint32Array | Uint8Array | Int32Array>(
+    const copy = <T extends Float32Array | Float64Array | Uint32Array | Uint8Array | Int32Array>(
       old: T | undefined,
       make: new (n: number) => T,
     ): T => {
@@ -210,7 +219,8 @@ export class SpriteLayer {
     this.atlas = copy(this.atlas, Uint8Array)
     this.color = copy(this.color, Uint32Array)
     this.flags = copy(this.flags, Uint8Array)
-    this.sortKey = copy(this.sortKey, Float32Array)
+    this.sortKey = copy(this.sortKey, Float64Array)
+    if (this.sortKey2) this.sortKey2 = copy(this.sortKey2, Float64Array)
     this.ids = copy(this.ids, Int32Array)
     this.capacity = capacity
   }
@@ -224,7 +234,6 @@ export class SpriteLayer {
   resize(n: number): void {
     this.reserve(n)
     for (let i = this.count; i < n; i++) this.reset(i, i)
-    if (n !== this.count) this._structure++
     this.count = n
     this.changed()
   }
@@ -236,6 +245,7 @@ export class SpriteLayer {
     this.color[i] = 0xffffffff
     this.flags[i] = 0
     this.sortKey[i] = 0
+    if (this.sortKey2) this.sortKey2[i] = 0
     this.ids[i] = id
   }
 
@@ -249,7 +259,6 @@ export class SpriteLayer {
     this.w[i] = w
     this.h[i] = h
     this.frame[i] = frame
-    this._structure++
     this.changed()
     return i
   }
@@ -275,15 +284,14 @@ export class SpriteLayer {
       this.color[i] = this.color[last]
       this.flags[i] = this.flags[last]
       this.sortKey[i] = this.sortKey[last]
+      if (this.sortKey2) this.sortKey2[i] = this.sortKey2[last]
       this.ids[i] = this.ids[last]
     }
-    this._structure++
     this.changed()
   }
 
   clear(): void {
     this.count = 0
-    this._structure++
     this.changed()
   }
 
@@ -308,37 +316,104 @@ export class SpriteLayer {
     this.onChange?.()
   }
 
+  /** Allocate the secondary sort key (zeros). Ties on `sortKey` break on it, then on slot order. */
+  enableSortKey2(): Float64Array {
+    if (!this.sortKey2) this.sortKey2 = new Float64Array(this.capacity)
+    return this.sortKey2
+  }
+
   /**
-   * Draw order (indices into the arrays), ascending `sortKey` when `sortByKey`
-   * is set. Updated incrementally: keys that drift a little between frames
-   * cost a near-linear insertion sort.
+   * Draw order (indices into the arrays): ascending `sortKey`, then `sortKey2`,
+   * then slot, over the first {@link orderCount} entries. With `sortByKey` hidden
+   * sprites are left out; without it this is slot order. Updated incrementally from
+   * the previous order whatever changed in between (keys drifting, `clear()` + `add()`
+   * rebuilds, swap-removes, flag toggles): near-linear when the order is mostly kept,
+   * with a fallback to a full sort when it is not.
    */
   drawOrder(): Int32Array {
     const n = this.count
-    if (this._order.length < n) this._order = new Int32Array(Math.max(n, this._order.length * 2))
+    if (this._order.length < n) {
+      const cap = Math.max(n, this._order.length * 2)
+      const next = new Int32Array(cap)
+      next.set(this._order.subarray(0, this._orderCount))
+      this._order = next
+      const inOrder = new Uint8Array(cap)
+      inOrder.set(this._inOrder)
+      this._inOrder = inOrder
+    }
     const order = this._order
-    if (this._orderCount !== n || this._orderStructure !== this._structure || !this.sortByKey) {
+    if (!this.sortByKey) {
       for (let i = 0; i < n; i++) order[i] = i
-      this._orderCount = n
-      this._orderStructure = this._structure
-      if (this.sortByKey) {
-        const K = this.sortKey
-        order.subarray(0, n).sort((a, b) => K[a] - K[b] || a - b)
+      this.orderCount = n
+      if (this._orderCount !== 0) {
+        this._inOrder.fill(0)
+        this._orderCount = 0
       }
       return order
     }
+    const inOrder = this._inOrder
+    const flags = this.flags
+    // Keep the previous order minus sprites that are gone or hidden now ...
+    let m = 0
+    for (let k = 0; k < this._orderCount; k++) {
+      const i = order[k]
+      if (i < n && (flags[i] & SPRITE_HIDDEN) === 0) order[m++] = i
+      else inOrder[i] = 0
+    }
+    // ... then append visible sprites that were not in it (new slots, shown again).
+    for (let i = 0; i < n; i++) {
+      if (inOrder[i] === 0 && (flags[i] & SPRITE_HIDDEN) === 0) {
+        order[m++] = i
+        inOrder[i] = 1
+      }
+    }
+    this._orderCount = m
+    this.orderCount = m
     const K = this.sortKey
-    for (let i = 1; i < n; i++) {
+    const K2 = this.sortKey2
+    // Insertion sort is O(m) for an almost-sorted order; bail out to a full sort if it is not.
+    let budget = 8 * m + 256
+    for (let i = 1; i < m; i++) {
       const v = order[i]
       const k = K[v]
       let j = i - 1
-      while (j >= 0 && (K[order[j]] > k || (K[order[j]] === k && order[j] > v))) {
-        order[j + 1] = order[j]
+      while (j >= 0) {
+        const a = order[j]
+        const ka = K[a]
+        if (ka < k || (ka === k && !this.after(a, v, K2))) break
+        order[j + 1] = a
         j--
+        if (--budget < 0) {
+          order[j + 1] = v
+          this.fullSort(order, m, K, K2)
+          return order
+        }
       }
       order[j + 1] = v
     }
     return order
+  }
+
+  /** Whether slot `a` sorts after slot `v` when their primary keys are equal. */
+  private after(a: number, v: number, K2: Float64Array | null): boolean {
+    if (K2 !== null) {
+      const x = K2[a]
+      const y = K2[v]
+      if (x !== y) return x > y
+    }
+    return a > v
+  }
+
+  private fullSort(order: Int32Array, m: number, K: Float64Array, K2: Float64Array | null): void {
+    order.subarray(0, m).sort((a, b) => {
+      const d = K[a] - K[b]
+      if (d !== 0 && d === d) return d
+      if (K2 !== null) {
+        const e = K2[a] - K2[b]
+        if (e !== 0 && e === e) return e
+      }
+      return a - b
+    })
   }
 
   /** Topmost sprite index containing the world point (rotation ignored), or -1. */
@@ -346,7 +421,7 @@ export class SpriteLayer {
     const ax = this.anchorX
     const ay = this.anchorY
     const order = this.sortByKey ? this.drawOrder() : null
-    for (let k = this.count - 1; k >= 0; k--) {
+    for (let k = (order ? this.orderCount : this.count) - 1; k >= 0; k--) {
       const i = order ? order[k] : k
       if (this.flags[i] & SPRITE_HIDDEN) continue
       const w = this.w[i]

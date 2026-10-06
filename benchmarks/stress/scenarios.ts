@@ -9,6 +9,7 @@ import type { EngineStats, EntityId, TransformComponent } from '@cubeforge/core'
 import {
   RenderSystem,
   SpriteLayer,
+  SPRITE_HIDDEN,
   TextLayer,
   TileLayerData,
   createSprite,
@@ -376,6 +377,45 @@ function atlasLayer(n: number): ScenarioDef {
   }
 }
 
+/** Human Box rebuild shape: clear() + add() every frame, y-sorted, a tenth of the sprites hidden. */
+function rebuildLayer(n: number): ScenarioDef {
+  return {
+    name: `spritelayer-rebuild-${n}`,
+    description: `${n} sprites rebuilt with clear()+add() every frame, y-sorted, 10% hidden`,
+    setup(ctx) {
+      const r = rng(1)
+      const atlas = { image: ctx.atlas, frameWidth: FRAME, frameHeight: FRAME, frameColumns: ATLAS / FRAME }
+      const layer = new SpriteLayer({ atlases: [atlas], sortByKey: true, capacity: n })
+      const px = new Float32Array(n)
+      const py = new Float32Array(n)
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      for (let i = 0; i < n; i++) {
+        px[i] = r() * W
+        py[i] = r() * H
+        vx[i] = (r() - 0.5) * 4
+        vy[i] = (r() - 0.5) * 4
+      }
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        layer.clear()
+        for (let i = 0; i < n; i++) {
+          const x = px[i] + vx[i]
+          const y = py[i] + vy[i]
+          if (x < 0 || x > W) vx[i] = -vx[i]
+          if (y < 0 || y > H) vy[i] = -vy[i]
+          px[i] = x
+          py[i] = y
+          const k = layer.add(x, y, FRAME, FRAME, i & 255)
+          layer.sortKey[k] = y
+          if (i % 10 === 0) layer.flags[k] = SPRITE_HIDDEN
+        }
+      })
+      sc.renderer.addSpriteLayer(layer)
+      return sc
+    },
+  }
+}
+
 /** Human Box shape: a floating name above every person, a few renamed each frame. */
 function textLayer(n: number): ScenarioDef {
   return {
@@ -517,6 +557,7 @@ export const SCENARIOS: ScenarioDef[] = [
   spriteLayer(10000),
   depthLayer(3000),
   atlasLayer(3000),
+  rebuildLayer(3000),
   textLayer(1000),
   textEntities(1000),
   churn(3000, 200),

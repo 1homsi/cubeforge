@@ -256,6 +256,7 @@ export class SpriteLayerRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
 
     const order = layer.sortByKey ? layer.drawOrder() : null
+    const total = order ? layer.orderCount : count
     const { viewL, viewR, viewT, viewB } = cam
     const ax = layer.anchorX
     const ay = layer.anchorY
@@ -271,7 +272,7 @@ export class SpriteLayerRenderer {
     const d = this.data
     let batch = 0
     let group = -1
-    for (let k = 0; k < count; k++) {
+    for (let k = 0; k < total; k++) {
       const i = order ? order[k] : k
       const flags = FL[i]
       if (flags & SPRITE_HIDDEN) continue
