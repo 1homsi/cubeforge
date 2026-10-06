@@ -392,7 +392,8 @@ Same scene, same hooks (`useSpriteLayer`, `useScreenTint`, `useDynamicCanvas`, `
 | Particles, trails, squash/stretch, animator and clip playback | yes |
 | `useDynamicCanvas`, `engine.createDynamicCanvas` (create, resize, dispose by id) | yes, drawn live (`markDirty` is a no-op) |
 | Sprite `customDraw` | yes |
-| Post-process (`useWebGLPostProcess`: bloom, vignette, CA, scanlines), idle frame skip | **no**, WebGL only (enabling an effect logs one warning) |
+| `usePostProcess` effect stack (2D effects run on the finished frame) | yes |
+| `useWebGLPostProcess` (bloom, vignette, CA, scanlines), idle frame skip | **no**, WebGL only (enabling an effect logs one warning) |
 | Context loss handling | n/a |
 
 Canvas2D is a fallback, not a performance peer. A moving, y-sorted `SpriteLayer` measured in headless
