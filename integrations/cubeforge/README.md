@@ -284,7 +284,26 @@ then `sortKey2[i]`), then on slot order. Hidden sprites (`SPRITE_HIDDEN`) take n
 The order is updated incrementally from the previous frame whatever changed in between (keys
 drifting, `clear()` + `add()` rebuilds in a similar order, swap-removes, show/hide): near-linear when
 mostly kept, with an automatic fallback to a full sort when it is not. About 0.13 ms CPU per frame for
-3,000 moving, re-sorted sprites. `pick` walks the draw order from the top and ignores rotation.
+3,000 moving, re-sorted sprites.
+
+Picking (`pick` walks the draw order from the top, rotation is ignored, flips are honoured):
+
+```ts
+// hit region: a building's footprint instead of its whole padded cell
+useSpriteLayer({ atlases: [{ src: '/b.png', frames: [{ x: 0, y: 0, w: 96, h: 96, hit: { x: 0, y: 60, w: 96, h: 36 } }] }] })
+// or 'opaque' (bounds of the non-transparent pixels) on a frame or on a whole grid atlas: { hit: 'opaque' }
+layer.setHitRect(i, 0, 0.5, 1, 1)         // per-sprite override, fractions of the quad
+
+layer.pickId(x, y)                         // id | undefined (-1 is also a valid Int32 id; pick() keeps returning -1)
+layer.pickIndex(x, y)                      // slot | -1
+layer.pickIndex(x, y, { alpha: 20 })       // also require a texel with alpha > 20 (pickAlpha sets a default)
+layer.pickAll(x, y)                        // ids, topmost first
+layer.pickNearest(x, y, radius)            // id of the nearest hit rect within radius (inside wins), or undefined
+layer.add(x, y, w, h, frame, 'person:42')  // string ids are interned to int32; layer.pickKey(x, y) maps back
+```
+
+Alpha and opaque-bounds picking read the atlas pixels once (cached); call `layer.invalidateHitMasks()`
+after repainting a dynamic-canvas atlas.
 
 ## Dynamic canvases at runtime (texture atlases that grow)
 
