@@ -405,6 +405,22 @@ before text). `useScreenTint()` with no options is the unchanged single slot. Bl
 `multiply` (darkens), `additive` (glow), `screen` (soft lighten); the engine restores `normal` after each
 layer, so the cost is one `blendFunc` pair per non-normal layer.
 
+## GPU wind: trees sway without CPU writes
+
+```tsx
+const trees = useSpriteLayer({
+  src: '/trees.png', frameWidth: 32, frameHeight: 48,
+  wind: { amplitude: 0.05, speed: 0.4, frequency: 0.01 }, // fraction of sprite height, Hz, radians per world px
+})
+trees.flags[i] |= SPRITE_SWAY        // opt a sprite in
+trees.ensureSwayScale()[i] = 0.3     // optional per-sprite multiplier (stiff oak 0.3, tall grass 1.5)
+trees.wind = null                    // calm
+```
+
+The vertex shader moves the top of each flagged quad sideways from a time uniform (the base stays put),
+so a forest costs no per-frame CPU rewrite. The sway is time driven: a layer with a `wind` makes the idle
+frame skip render every frame, and `useSpriteLayer` keeps an `onDemand` loop ticking while a wind is set.
+
 ## Overlays and camera
 
 - `useScreenTint().set(r, g, b, strength, mode)`: full-view tint drawn after sprites and layers and

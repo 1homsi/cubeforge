@@ -48,12 +48,14 @@ export {
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
   NO_SPRITE,
+  SPRITE_SWAY,
   TileLayerData,
   tileHash,
 } from '@cubeforge/renderer'
 export type { TextLayerOptions, TextRunOptions, GlyphStyleOptions } from '@cubeforge/renderer'
 export type {
   SpriteLayerOptions,
+  SpriteLayerWind,
   LayerAtlas,
   AtlasFrame,
   PickOptions,

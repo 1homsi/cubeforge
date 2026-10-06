@@ -1011,6 +1011,8 @@ export class RenderSystem implements System {
   private readonly _textLayers: TextLayer[] = []
   private _textLayerRenderer: TextLayerRenderer | null = null
   private _textLayerVersion = 0
+  /** Seconds of simulated time rendered so far (drives GPU sway). */
+  private _time = 0
   private _entityText: EntityTextBatcher | null = null
   private _shapes: ShapeRenderer | null = null
   private readonly _vecComps: (
@@ -2645,6 +2647,7 @@ export class RenderSystem implements System {
     }
     resetRenderFrameStats(this.stats)
     this._frame++
+    this._time += dt
     // Intern component types once per frame — numeric IDs skip the string
     // hash on every per-entity getComponent below.
     const TID_Transform = world.typeId('Transform')
@@ -2898,7 +2901,8 @@ export class RenderSystem implements System {
     // blit the cached scene FBO to screen and skip all GPU draw calls.
     if (this._spriteLayers.length > 0) {
       let v = 0
-      for (const layer of this._spriteLayers) v += layer.version + (layer.visible ? 1 : 0) + layer.atlases.length
+      for (const layer of this._spriteLayers)
+        v += layer.version + (layer.visible ? 1 : 0) + layer.atlases.length + (layer.wind ? this._frame : 0)
       if (v !== this._spriteLayerVersion) {
         this._spriteLayerVersion = v
         this._overlayRevision++
@@ -3010,6 +3014,7 @@ export class RenderSystem implements System {
       lc.height = Hl
       lc.shakeX = shakeX
       lc.shakeY = shakeY
+      lc.time = this._time
     }
     gl.activeTexture(gl.TEXTURE0)
 
