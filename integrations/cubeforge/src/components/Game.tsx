@@ -17,6 +17,7 @@ import {
   createPostProcessStack,
   type DynamicCanvasOptions,
   type ManagedDynamicCanvas,
+  type PostProcessStack,
   type Sampling,
 } from '@cubeforge/renderer'
 import type { RenderStats } from '@cubeforge/core'
@@ -55,6 +56,7 @@ type GameRenderSystem = System & {
   readonly stats: RenderStats
   setDefaultSampling(sampling: Sampling): void
   createDynamicCanvas(options: DynamicCanvasOptions): ManagedDynamicCanvas
+  readonly postProcessStack?: PostProcessStack
   dispose(): void
 }
 type Canvas2DFactory = (

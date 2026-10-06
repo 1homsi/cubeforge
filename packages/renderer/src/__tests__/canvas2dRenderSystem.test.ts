@@ -719,3 +719,20 @@ describe('Canvas2DRenderSystem: dynamic canvases and camera follow', () => {
     expect([c.x, c.y]).toEqual([50, 25])
   })
 })
+
+describe('Canvas2DRenderSystem: post-process stack', () => {
+  it('runs effects on the finished frame (usePostProcess works without WebGL)', () => {
+    const { rs, world } = setup()
+    addSprite(world, 20, 20, { width: 10, height: 10, color: '#ff0000' })
+    const seen: Array<[number, number]> = []
+    rs.postProcessStack.add((_ctx, w, h) => void seen.push([w, h]))
+    rs.update(world, 1 / 60)
+    expect(seen).toEqual([[200, 100]])
+  })
+
+  it('skips the stack when it is empty', () => {
+    const { rs, world } = setup()
+    expect(() => rs.update(world, 1 / 60)).not.toThrow()
+    expect(rs.postProcessStack.size).toBe(0)
+  })
+})

@@ -21,6 +21,7 @@ import type { SpriteLayer, LayerAtlas } from './spriteLayer'
 import type { TextLayer } from './textLayer'
 import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
 import { parseCSSColor } from './colorParser'
+import { createPostProcessStack, type PostProcessStack } from './postProcess'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
 import type { Sampling } from './textureFilter'
 import { StyledTileLayerCanvasRenderer } from './tileLayerCanvasStyled'
@@ -105,6 +106,8 @@ export class Canvas2DRenderSystem implements System {
   readonly layers: RenderLayerManager = createRenderLayerManager()
   /** Live counters, mutated in place each frame. */
   readonly stats: RenderStats = createCanvas2DStats()
+  /** Effects run on the finished frame (`usePostProcess`). */
+  readonly postProcessStack: PostProcessStack = createPostProcessStack()
 
   private readonly ctx: CanvasRenderingContext2D
   private readonly tints = new TintCache()
@@ -329,6 +332,7 @@ export class Canvas2DRenderSystem implements System {
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     this.setAlpha(1)
     this.setOp('source-over')
+    if (this.postProcessStack.size) this.postProcessStack.apply(ctx, W, H, dt)
   }
 
   // ── State helpers ────────────────────────────────────────────────────────
