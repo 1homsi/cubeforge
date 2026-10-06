@@ -258,6 +258,8 @@ export class SpriteLayerRenderer {
     const order = layer.sortByKey ? layer.drawOrder() : null
     const total = order ? layer.orderCount : count
     const { viewL, viewR, viewT, viewB } = cam
+    const usePivots = layer.hasPivots()
+    const perSprite = usePivots || layer.anchor !== null
     const ax = layer.anchorX
     const ay = layer.anchorY
     const X = layer.x,
@@ -327,8 +329,14 @@ export class SpriteLayerRenderer {
       d[b + 2] = w
       d[b + 3] = h
       d[b + 4] = R[i]
-      d[b + 5] = ax
-      d[b + 6] = ay
+      if (perSprite) {
+        layer.resolveAnchor(i, usePivots)
+        d[b + 5] = layer._ax
+        d[b + 6] = layer._ay
+      } else {
+        d[b + 5] = ax
+        d[b + 6] = ay
+      }
       d[b + 7] = flags & SPRITE_FLIP_X
       d[b + 8] = (flags & SPRITE_FLIP_Y) >> 1
       d[b + 9] = (c >>> 24) / 255

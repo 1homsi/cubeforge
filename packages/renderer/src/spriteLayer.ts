@@ -40,6 +40,8 @@ export interface AtlasFrame {
   h: number
   /** Hit region for picking in frame pixels (e.g. a building's footprint), or `'opaque'`. Default: the whole frame. */
   hit?: FrameHit
+  /** Pivot in frame pixels from the frame's top-left (e.g. a building's base centre). Default: the layer anchor. */
+  pivot?: { x: number; y: number }
 }
 
 /** One texture of a sprite layer, sliced into a uniform grid or an explicit frame table. */
@@ -63,6 +65,12 @@ export interface LayerAtlas {
    * non-transparent pixels. Default: the whole frame.
    */
   hit?: FrameHit
+  /**
+   * Pivot (the point that sits at the sprite's x, y and that it rotates around), in frame
+   * pixels from the frame's top-left, applied to every grid cell (needs `frameWidth`/`frameHeight`).
+   * Frame tables use per-frame `pivot`. Default: the layer's `anchorX`/`anchorY`.
+   */
+  pivot?: { x: number; y: number }
   /** Grid only: pixels between cells. Default 0. */
   frameSpacing?: number
   /** Grid only: pixels around the atlas edge before the first cell. Default 0. */
@@ -152,6 +160,11 @@ export class SpriteLayer {
   visible: boolean
   /** Default alpha threshold (0-255) for picking; 0 = off. */
   pickAlpha: number
+  /**
+   * Per-sprite anchor override, 2 floats per sprite (anchorX, anchorY as fractions of the quad);
+   * NaN in the first = use the frame / atlas pivot or the layer anchor. Null until {@link enableAnchors}.
+   */
+  anchor: Float32Array | null = null
   /**
    * Per-sprite hit rect override, 4 floats per sprite (x0, y0, x1, y1) as fractions of the
    * sprite's quad; NaN in x0 = none. Null until {@link enableHitRects}.
@@ -277,6 +290,11 @@ export class SpriteLayer {
     this.flags = copy(this.flags, Uint8Array)
     this.sortKey = copy(this.sortKey, Float64Array)
     if (this.sortKey2) this.sortKey2 = copy(this.sortKey2, Float64Array)
+    if (this.anchor) {
+      const next = new Float32Array(capacity * 2).fill(NaN)
+      next.set(this.anchor.subarray(0, this.count * 2))
+      this.anchor = next
+    }
     if (this.hit) {
       const next = new Float32Array(capacity * 4).fill(NaN)
       next.set(this.hit.subarray(0, this.count * 4))
@@ -308,6 +326,7 @@ export class SpriteLayer {
     this.sortKey[i] = 0
     if (this.sortKey2) this.sortKey2[i] = 0
     if (this.hit) this.hit[i * 4] = NaN
+    if (this.anchor) this.anchor[i * 2] = NaN
     this.ids[i] = id
   }
 
@@ -349,6 +368,7 @@ export class SpriteLayer {
       this.sortKey[i] = this.sortKey[last]
       if (this.sortKey2) this.sortKey2[i] = this.sortKey2[last]
       if (this.hit) this.hit.copyWithin(i * 4, last * 4, last * 4 + 4)
+      if (this.anchor) this.anchor.copyWithin(i * 2, last * 2, last * 2 + 2)
       this.ids[i] = this.ids[last]
     }
     this.changed()
@@ -480,6 +500,65 @@ export class SpriteLayer {
     })
   }
 
+  // ── Anchors / pivots ───────────────────────────────────────────────────────
+
+  /** Allocate the per-sprite anchor override (all unset). */
+  enableAnchors(): Float32Array {
+    if (!this.anchor) this.anchor = new Float32Array(this.capacity * 2).fill(NaN)
+    return this.anchor
+  }
+
+  /** Set sprite `i`'s anchor (fractions of its quad); `setAnchor(i)` clears it. */
+  setAnchor(i: number, ax?: number, ay?: number): void {
+    const a = this.enableAnchors()
+    if (ax === undefined) a[i * 2] = NaN
+    else {
+      a[i * 2] = ax
+      a[i * 2 + 1] = ay ?? ax
+    }
+    this.changed()
+  }
+
+  /** Whether any atlas defines a pivot (grid-wide or in its frame table). */
+  hasPivots(): boolean {
+    for (const at of this.atlases) {
+      if (at.pivot) return true
+      if (at.frames) for (const f of at.frames) if (f.pivot) return true
+    }
+    return false
+  }
+
+  /** Resolved anchor of sprite `i` (per-sprite, then frame / atlas pivot, then the layer anchor), into `_ax`/`_ay`. */
+  resolveAnchor(i: number, usePivots: boolean): void {
+    this._ax = this.anchorX
+    this._ay = this.anchorY
+    const per = this.anchor
+    if (per && per[i * 2] === per[i * 2]) {
+      this._ax = per[i * 2]
+      this._ay = per[i * 2 + 1]
+      return
+    }
+    if (!usePivots) return
+    const atlas = this.atlases[this.atlas[i]]
+    if (!atlas || (this.flags[i] & SPRITE_UNTEXTURED) !== 0) return
+    const table = atlas.frames
+    if (table !== undefined) {
+      const f = table[this.frame[i]]
+      const p = f?.pivot ?? atlas.pivot
+      if (f && p && f.w > 0 && f.h > 0) {
+        this._ax = p.x / f.w
+        this._ay = p.y / f.h
+      }
+    } else if (atlas.pivot && (atlas.frameWidth ?? 0) > 0 && (atlas.frameHeight ?? 0) > 0) {
+      this._ax = atlas.pivot.x / atlas.frameWidth!
+      this._ay = atlas.pivot.y / atlas.frameHeight!
+    }
+  }
+
+  /** Output of {@link resolveAnchor}. */
+  _ax = 0.5
+  _ay = 0.5
+
   // ── Picking ────────────────────────────────────────────────────────────────
 
   /** Allocate the per-sprite hit rect override (all unset). */
@@ -604,10 +683,11 @@ export class SpriteLayer {
     let w = this.w[i]
     let h = this.h[i]
     const fl = this.flags[i]
-    let left = this.x[i] - this.anchorX * w
-    let top = this.y[i] - this.anchorY * h
-    if (fl & SPRITE_FLIP_X) left = this.x[i] - (1 - this.anchorX) * w
-    if (fl & SPRITE_FLIP_Y) top = this.y[i] - (1 - this.anchorY) * h
+    this.resolveAnchor(i, this._pivots)
+    let left = this.x[i] - this._ax * w
+    let top = this.y[i] - this._ay * h
+    if (fl & SPRITE_FLIP_X) left = this.x[i] - (1 - this._ax) * w
+    if (fl & SPRITE_FLIP_Y) top = this.y[i] - (1 - this._ay) * h
     if (w < 0) {
       left += w
       w = -w
@@ -650,10 +730,11 @@ export class SpriteLayer {
     const fl = this.flags[i]
     let w = this.w[i]
     let h = this.h[i]
-    let left = this.x[i] - this.anchorX * w
-    let top = this.y[i] - this.anchorY * h
-    if (fl & SPRITE_FLIP_X) left = this.x[i] - (1 - this.anchorX) * w
-    if (fl & SPRITE_FLIP_Y) top = this.y[i] - (1 - this.anchorY) * h
+    this.resolveAnchor(i, this._pivots)
+    let left = this.x[i] - this._ax * w
+    let top = this.y[i] - this._ay * h
+    if (fl & SPRITE_FLIP_X) left = this.x[i] - (1 - this._ax) * w
+    if (fl & SPRITE_FLIP_Y) top = this.y[i] - (1 - this._ay) * h
     if (w < 0) {
       left += w
       w = -w
@@ -671,7 +752,10 @@ export class SpriteLayer {
     return m.alpha[ty * m.w + tx] > threshold
   }
 
+  private _pivots = false
+
   private visit(): { order: Int32Array | null; n: number } {
+    this._pivots = this.hasPivots()
     const order = this.sortByKey ? this.drawOrder() : null
     return { order, n: order ? this.orderCount : this.count }
   }

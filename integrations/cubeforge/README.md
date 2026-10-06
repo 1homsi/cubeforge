@@ -304,6 +304,11 @@ layer.pickNearest(x, y, radius)            // id of the nearest hit rect within 
 layer.add(x, y, w, h, frame, 'person:42')  // string ids are interned to int32; layer.pickKey(x, y) maps back
 ```
 
+Pivots (what sits at the sprite's x, y and what it rotates around), most specific first:
+`layer.setAnchor(i, ax, ay)` / `layer.enableAnchors()` (per sprite, fractions of the quad), a frame's
+`pivot: { x, y }` in frame pixels (frame tables), an atlas-wide `pivot` for a grid, then the layer's
+`anchorX`/`anchorY`. Draw and pick use the same resolution.
+
 Alpha and opaque-bounds picking read the atlas pixels once (cached); call `layer.invalidateHitMasks()`
 after repainting a dynamic-canvas atlas.
 
