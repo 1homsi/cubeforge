@@ -3304,6 +3304,8 @@ export class RenderSystem implements System {
     }
 
     // ── Trail update + render pass ────────────────────────────────────────────
+    // All trails share one colour-only batch (same texture and blend), flushed once.
+    let tCount = 0
     for (const id of world.query('Transform', 'Trail')) {
       const t = world.getComponent<TransformComponent>(id, TID_Transform)!
       const trail = world.getComponent<TrailComponent>(id, TID_Trail)!
@@ -3316,7 +3318,6 @@ export class RenderSystem implements System {
       if (trail.points.length < 1) continue
 
       const baseColor = parseCSSColor(trail.color)
-      let tCount = 0
 
       for (let i = 0; i < trail.points.length; i++) {
         if (tCount >= MAX_INSTANCES) {
@@ -3378,8 +3379,8 @@ export class RenderSystem implements System {
         )
         tCount++
       }
-      if (tCount > 0) this.flush(tCount, '__color__')
     }
+    if (tCount > 0) this.flush(tCount, '__color__')
 
     // ── Debug: nav grid overlay ──────────────────────────────────────────────
     if (this.debugNavGrid) {
