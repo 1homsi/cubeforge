@@ -9,7 +9,6 @@
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
 import type { System, ECSWorld, EntityId, NavGrid, RenderStats, TransformComponent } from '@cubeforge/core'
-import { createRenderStats, resetRenderFrameStats } from '@cubeforge/core'
 import type { PostProcessOptions } from './webglRenderSystem'
 import type { SpriteComponent, BlendMode } from './components/sprite'
 import type { SquashStretchComponent } from './components/squashStretch'
@@ -23,7 +22,7 @@ import type { TextLayer } from './textLayer'
 import { createDynamicCanvasHandle, type DynamicCanvasOptions, type ManagedDynamicCanvas } from './dynamicCanvas'
 import { parseCSSColor } from './colorParser'
 import { createRenderLayerManager, type RenderLayerManager } from './renderLayers'
-import { type Sampling, resolveSampling, DEFAULT_SAMPLING } from './textureFilter'
+import type { Sampling } from './textureFilter'
 import { StyledTileLayerCanvasRenderer } from './tileLayerCanvasStyled'
 import { SpriteLayerCanvasRenderer, type LayerSource, type WorldBase } from './spriteLayerCanvas2D'
 import { TextLayerCanvasRenderer } from './textLayerCanvas2D'
@@ -35,6 +34,32 @@ const COMPOSITE: Record<string, GlobalCompositeOperation> = {
   additive: 'lighter',
   multiply: 'multiply',
   screen: 'screen',
+}
+
+/** Zeroed counters. Written out here so this lazy chunk shares no module with the main bundle. */
+export function createCanvas2DStats(): RenderStats {
+  return {
+    drawCalls: 0,
+    instances: 0,
+    batches: 0,
+    spritesConsidered: 0,
+    spritesCulled: 0,
+    textureUploads: 0,
+    textureUploadBytes: 0,
+    textureCount: 0,
+    textureBytes: 0,
+    textCacheHits: 0,
+    textCacheMisses: 0,
+    textureCacheHits: 0,
+    textureCacheMisses: 0,
+    frames: 0,
+  }
+}
+
+/** Whether a sampling mode magnifies with bilinear filtering (nearest otherwise). */
+function smoothFor(sprite: Sampling | undefined, fallback: Sampling): boolean {
+  const s = sprite ?? fallback
+  return typeof s === 'string' ? s.startsWith('linear') : s.mag === 'linear'
 }
 
 const SOFT_SIZE = 64
@@ -79,7 +104,7 @@ export class Canvas2DRenderSystem implements System {
   defaultBackground = '#1a1a2e'
   readonly layers: RenderLayerManager = createRenderLayerManager()
   /** Live counters, mutated in place each frame. */
-  readonly stats: RenderStats = createRenderStats()
+  readonly stats: RenderStats = createCanvas2DStats()
 
   private readonly ctx: CanvasRenderingContext2D
   private readonly tints = new TintCache()
@@ -95,7 +120,7 @@ export class Canvas2DRenderSystem implements System {
   private readonly tileSorted: TileLayerData[] = []
   private readonly tileView = { L: 0, T: 0, R: 0, B: 0 }
   private readonly screenTint = { r: 1, g: 1, b: 1, a: 0, mode: 'multiply' as 'multiply' | 'normal' | 'additive' }
-  private defaultSampling: Sampling = DEFAULT_SAMPLING
+  private defaultSampling: Sampling = 'nearest'
   private readonly cam: CameraFrame = { x: 0, y: 0, zoom: 1, background: '', shakeX: 0, shakeY: 0 }
   private readonly base: WorldBase = { s: 1, tx: 0, ty: 0 }
   private softParticle: HTMLCanvasElement | OffscreenCanvas | null = null
@@ -247,7 +272,8 @@ export class Canvas2DRenderSystem implements System {
 
   update(world: ECSWorld, dt: number): void {
     const { ctx, canvas, stats } = this
-    resetRenderFrameStats(stats)
+    stats.drawCalls = stats.instances = stats.batches = 0
+    stats.spritesConsidered = stats.spritesCulled = stats.textureUploads = stats.textureUploadBytes = 0
     stats.frames++
     this.frame++
     this.time += dt
@@ -498,7 +524,7 @@ export class Canvas2DRenderSystem implements System {
       }
       if (k >= n) {
         const layer = layers[k - n]
-        this.setSmooth(resolveSampling(layer.sampling, this.defaultSampling).mag === 'linear')
+        this.setSmooth(smoothFor(layer.sampling, this.defaultSampling))
         this.setAlpha(1)
         this.setOp('source-over')
         this.spriteLayerRenderer.draw(ctx, layer, base, { viewL, viewR, viewT, viewB }, (atlas) =>
@@ -587,7 +613,7 @@ export class Canvas2DRenderSystem implements System {
     const src = this.spriteSource(sprite)
     if (src) {
       this.setAlpha(opacity)
-      this.setSmooth(resolveSampling(sprite.sampling, this.defaultSampling).mag === 'linear')
+      this.setSmooth(smoothFor(sprite.sampling, this.defaultSampling))
       let sx = 0
       let sy = 0
       let sw = src.width

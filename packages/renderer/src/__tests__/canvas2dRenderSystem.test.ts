@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ECSWorld, createTransform } from '@cubeforge/core'
-import { Canvas2DRenderSystem } from '../canvas2dRenderSystem'
+import { createRenderStats } from '@cubeforge/core'
+import { Canvas2DRenderSystem, createCanvas2DStats } from '../canvas2dRenderSystem'
 import { createSprite } from '../components/sprite'
 import { createText } from '../components/text'
 import { createCamera2D } from '../components/camera2d'
@@ -39,6 +40,10 @@ function addSprite(world: ECSWorld, x: number, y: number, opts: Parameters<typeo
 const draws = (ops: Op[], name: string) => ops.filter((o) => o.name === name)
 
 describe('Canvas2DRenderSystem: construction', () => {
+  it('keeps its stats object in step with the core RenderStats shape', () => {
+    expect(createCanvas2DStats()).toEqual(createRenderStats())
+  })
+
   it('requests an opaque 2D context and throws when there is none', () => {
     const getContext = vi.fn(() => null)
     const canvas = { width: 1, height: 1, getContext } as unknown as HTMLCanvasElement
@@ -258,6 +263,17 @@ describe('Canvas2DRenderSystem: SpriteLayer', () => {
     expect(d[0].args[0]).toBe(a0)
     expect(offscreen).toHaveLength(1)
     expect(d[1].args[0]).toBe(offscreen[0])
+  })
+
+  it('draws sprites that point past the 8 atlas slots as solid rects', () => {
+    const atlases = Array.from({ length: 9 }, () => ({ image: fakeImage(8, 8) }))
+    const { rs, world, ops, layer } = layerWorld({ atlases })
+    layer.add(100, 50, 6, 6)
+    layer.atlas[0] = 8
+    layer.color[0] = 0x336699ff
+    rs.update(world, 1 / 60)
+    expect(draws(ops, 'drawImage')).toHaveLength(0)
+    expect(draws(ops, 'fillRect').some((o) => o.fill === 'rgb(51,102,153)')).toBe(true)
   })
 
   it('interleaves with regular sprites by layer order and zIndex', () => {

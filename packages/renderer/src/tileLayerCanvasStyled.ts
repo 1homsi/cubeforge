@@ -1,7 +1,59 @@
-import { isTilesetReady, tileHash, tileSourceX, tileSourceY, visibleChunkRange, type TileLayerData } from './tileLayer'
+import type { TileLayerData, Tileset } from './tileLayer'
 
 // A full copy of TileLayerCanvasRenderer plus tints, variants and jitter. It is not a subclass on
 // purpose: sharing the base class would pull it into the main bundle, and this file loads lazily.
+
+// Copies of the helpers in tileLayer.ts (tests keep the output identical). Importing that module
+// would make it part of a chunk shared with the main bundle, which then carries it for every game,
+// including ones without tile layers.
+function tileHash(x: number, y: number): number {
+  let h = (Math.imul(x >>> 0, 1664525) + Math.imul(y >>> 0, 1013904223)) >>> 0
+  h = (h ^ (h >>> 16)) >>> 0
+  h = Math.imul(h, 2246822519) >>> 0
+  h = (h ^ (h >>> 13)) >>> 0
+  return h
+}
+
+function tileSourceX(ts: Tileset, t: number): number {
+  return (ts.margin ?? 0) + (t % ts.columns) * (ts.tileWidth + (ts.spacing ?? 0))
+}
+
+function tileSourceY(ts: Tileset, t: number): number {
+  return (ts.margin ?? 0) + Math.floor(t / ts.columns) * (ts.tileHeight + (ts.spacing ?? 0))
+}
+
+function isTilesetReady(ts: Tileset): boolean {
+  const img = ts.image
+  if (!img) return false
+  if (typeof HTMLImageElement !== 'undefined' && img instanceof HTMLImageElement) {
+    return img.complete && img.naturalWidth > 0
+  }
+  return img.width > 0
+}
+
+/** Chunks of `layer` overlapping the world rect, as [x0, y0, x1, y1) in chunk coords; false if none. */
+function visibleChunkRange(
+  layer: TileLayerData,
+  viewL: number,
+  viewT: number,
+  viewR: number,
+  viewB: number,
+  out: Int32Array,
+): boolean {
+  const tw = layer.tileWorldWidth
+  const th = layer.tileWorldHeight
+  const x0 = Math.max(0, Math.floor((viewL - layer.x) / tw))
+  const y0 = Math.max(0, Math.floor((viewT - layer.y) / th))
+  const x1 = Math.min(layer.width, Math.ceil((viewR - layer.x) / tw))
+  const y1 = Math.min(layer.height, Math.ceil((viewB - layer.y) / th))
+  if (!(x1 > x0 && y1 > y0)) return false
+  const cs = layer.chunkSize
+  out[0] = Math.floor(x0 / cs)
+  out[1] = Math.floor(y0 / cs)
+  out[2] = Math.ceil(x1 / cs)
+  out[3] = Math.ceil(y1 / cs)
+  return true
+}
 
 type ChunkCanvas = HTMLCanvasElement | OffscreenCanvas
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D

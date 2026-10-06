@@ -1,6 +1,13 @@
-import { MAX_LAYER_ATLASES, SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
 import type { LayerAtlas, SpriteLayer } from './spriteLayer'
 import type { TintCache } from './canvas2dTint'
+
+// Copies of the flag values in spriteLayerFlags.ts (a test keeps them equal). Importing them would
+// make this lazily loaded chunk share that module with the main bundle, and sharing costs bytes there.
+const MAX_LAYER_ATLASES = 8
+const SPRITE_FLIP_X = 1
+const SPRITE_FLIP_Y = 2
+const SPRITE_HIDDEN = 4
+const SPRITE_UNTEXTURED = 8
 
 /** A loaded atlas texture, or null while it is still loading. */
 export interface LayerSource {

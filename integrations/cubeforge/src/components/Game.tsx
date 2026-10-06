@@ -57,12 +57,14 @@ type GameRenderSystem = System & {
   createDynamicCanvas(options: DynamicCanvasOptions): ManagedDynamicCanvas
   dispose(): void
 }
-type Canvas2DCtor = new (canvas: HTMLCanvasElement, entityIds: Map<string, number>) => GameRenderSystem
+type Canvas2DFactory = (
+  canvas: HTMLCanvasElement,
+  entityIds: Map<string, number>,
+  fellBack: boolean,
+) => GameRenderSystem
 
 /** Rendering backend: WebGL2, Canvas2D, or WebGL2 with an automatic Canvas2D fallback. */
 export type RendererBackend = 'auto' | 'webgl' | 'canvas2d'
-
-let warnedFallback = false
 
 export interface GameControls {
   pause(): void
@@ -181,7 +183,7 @@ export function Game({
   const [assetsReady, setAssetsReady] = useState(asyncAssets)
   const [webglError, setWebglError] = useState<string | null>(null)
   // Set once the lazy Canvas2D renderer has loaded; re-runs the engine effect with it.
-  const [canvas2d, setCanvas2d] = useState<Canvas2DCtor | null>(null)
+  const [canvas2d, setCanvas2d] = useState<Canvas2DFactory | null>(null)
   // Bumped to remount the canvas when a failed WebGL attempt left it unusable for 2D.
   const [canvasGen, setCanvasGen] = useState(0)
   const devtoolsHandle = useRef<DevToolsHandle>({ buffer: [] })
@@ -204,38 +206,25 @@ export function Game({
           return
         }
         wantCanvas2d = true
-        if (!warnedFallback) {
-          warnedFallback = true
-          console.warn(
-            '[Cubeforge] WebGL2 is unavailable; using the Canvas2D renderer (no post-process effects, lower performance).',
-          )
-        }
       }
     }
     if (wantCanvas2d) {
       if (!canvas2d) {
         let cancelled = false
         import('./canvas2dBackend').then(
-          (m) => {
-            if (!cancelled) setCanvas2d(() => m.Canvas2DRenderSystem as Canvas2DCtor)
-          },
-          () => {
-            if (!cancelled) setWebglError('The Canvas2D renderer failed to load.')
-          },
+          (m) => cancelled || setCanvas2d(() => m.createCanvas2D),
+          () => cancelled || setWebglError('Canvas2D renderer failed to load.'),
         )
         return () => {
           cancelled = true
         }
       }
       try {
-        renderSystem = new canvas2d(canvas, entityIds)
+        renderSystem = canvas2d(canvas, entityIds, renderer === 'auto')
       } catch {
-        if (renderer === 'auto' && canvasGen === 0) {
-          // A failed WebGL attempt can leave the canvas locked to its GL mode: use a fresh one.
-          setCanvasGen(1)
-        } else {
-          setWebglError('Neither WebGL2 nor Canvas 2D is available in this browser.')
-        }
+        // A failed WebGL attempt can leave the canvas locked to its GL mode: retry on a fresh one.
+        if (renderer === 'auto' && !canvasGen) setCanvasGen(1)
+        else setWebglError('Neither WebGL2 nor Canvas 2D is available.')
         return
       }
     }

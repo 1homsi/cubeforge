@@ -1,7 +1,12 @@
-import { LAYOUT_GLYPH_FLOATS, TEXT_HIDDEN, type TextLayer } from './textLayer'
+import type { TextLayer } from './textLayer'
 import type { GlyphAtlas } from './glyphAtlas'
 import type { TintCache } from './canvas2dTint'
 import type { LayerView, WorldBase } from './spriteLayerCanvas2D'
+
+// Copies of the values in textLayer.ts (a test keeps them equal): importing them would put that
+// module in a chunk shared with the main bundle.
+const TEXT_HIDDEN = 1
+const LAYOUT_GLYPH_FLOATS = 9
 
 /**
  * Canvas2D drawer for {@link TextLayer}: the same layout, culling and colour/alpha
