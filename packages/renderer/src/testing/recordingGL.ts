@@ -26,6 +26,8 @@ export interface RecordedDraw {
   texture: RecordedTexture | null
   /** Copy of instance floats (count * 19) when `captureInstances` is on. */
   instances: Float32Array | null
+  /** `[src, dst]` factors of the blend function active for this draw. */
+  blend: [number, number]
 }
 
 export interface RecordedInstance {
@@ -130,6 +132,7 @@ export class RecordingGL {
   readonly ONE_MINUS_SRC_COLOR = 0x0301
   readonly DST_COLOR = 0x0306
   readonly ONE = 1
+  readonly ZERO = 0
   readonly COLOR_BUFFER_BIT = 0x4000
   readonly FRAMEBUFFER = 0x8d40
   readonly READ_FRAMEBUFFER = 0x8ca8
@@ -149,6 +152,7 @@ export class RecordingGL {
   captureInstances: boolean
 
   private boundTexture: RecordedTexture | null = null
+  private blendFactors: [number, number] = [0x0302, 0x0303]
   private lastInstanceSrc: ArrayBufferView | null = null
 
   constructor(
@@ -194,6 +198,10 @@ export class RecordingGL {
     if (this.boundTexture) this.boundTexture.uploads++
   }
 
+  blendFunc(src: number, dst: number): void {
+    this.blendFactors = [src, dst]
+  }
+
   bufferSubData(_target: number, _dst: number, src: ArrayBufferView): void {
     this.lastInstanceSrc = src
   }
@@ -203,12 +211,18 @@ export class RecordingGL {
     if (this.captureInstances && this.lastInstanceSrc instanceof Float32Array) {
       instances = this.lastInstanceSrc.slice(0, instanceCount * INSTANCE_FLOATS)
     }
-    this.draws.push({ kind: 'instanced', count: instanceCount, texture: this.boundTexture, instances })
+    this.draws.push({
+      kind: 'instanced',
+      count: instanceCount,
+      texture: this.boundTexture,
+      instances,
+      blend: this.blendFactors,
+    })
     this.totalDraws++
     this.totalInstances += instanceCount
   }
   drawArrays(_mode: number, _first: number, count: number): void {
-    this.draws.push({ kind: 'arrays', count, texture: this.boundTexture, instances: null })
+    this.draws.push({ kind: 'arrays', count, texture: this.boundTexture, instances: null, blend: this.blendFactors })
     this.totalDraws++
   }
 
@@ -261,7 +275,6 @@ for (const name of [
   'bindBuffer',
   'bindFramebuffer',
   'bindVertexArray',
-  'blendFunc',
   'blitFramebuffer',
   'bufferData',
   'clearColor',

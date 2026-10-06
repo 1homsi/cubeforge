@@ -154,6 +154,29 @@ try {
       'gpu-smoke: glyph-atlas text layer renders correctly (tint, alpha, z-order, one draw) and Text components keep their full style',
     )
   }
+  {
+    const out = await runPage('tint.ts')
+    const ok = (...keys) => Object.fromEntries(keys.map((k) => [k, 'ok']))
+    check('tint', out, {
+      ...ok(
+        'layerTint',
+        'layerOpacity',
+        'additive',
+        'multiply',
+        'screen',
+        'sortedTintDimsGround',
+        'sortedTintSparesTop',
+        'stackedTints',
+        'stackedTintsBackground',
+        'tileAdditive',
+        'tileOutside',
+      ),
+      glError: 0,
+      glError2: 0,
+      glError3: 0,
+    })
+    console.log('gpu-smoke: per-layer tint/opacity/blend, stacked and z-limited screen tints render correctly')
+  }
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

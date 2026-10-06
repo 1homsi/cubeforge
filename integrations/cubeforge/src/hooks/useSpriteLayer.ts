@@ -45,6 +45,9 @@ export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
     layer.anchorX = options.anchorX ?? 0.5
     layer.anchorY = options.anchorY ?? 0.5
     layer.visible = options.visible ?? true
+    layer.opacity = options.opacity ?? 1
+    layer.tintColor = options.tintColor ?? 0xffffffff
+    layer.blend = options.blend ?? 'normal'
     layer.touch()
   }, [
     layer,
@@ -62,6 +65,9 @@ export function useSpriteLayer(options: SpriteLayerOptions = {}): SpriteLayer {
     options.anchorX,
     options.anchorY,
     options.visible,
+    options.opacity,
+    options.tintColor,
+    options.blend,
   ])
 
   useLayoutEffect(() => {

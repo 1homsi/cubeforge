@@ -7,6 +7,7 @@ import {
   SPRITE_UNTEXTURED,
 } from './spriteLayerFlags'
 import type { SpriteLayer, AtlasFrame } from './spriteLayer'
+import { setBlendFunc, unpackRGBA } from './blendModes'
 
 const FLOATS = 20
 const MAX_BATCH = 16384
@@ -52,6 +53,7 @@ in vec2 v_uv;
 in vec4 v_color;
 flat in int v_atlas;
 uniform sampler2D u_tex[${ATLASES_PER_DRAW}];
+uniform vec4 u_layerTint;
 out vec4 fragColor;
 void main() {
   vec4 t = vec4(1.0);
@@ -59,7 +61,7 @@ void main() {
 ${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture(u_tex[${i}], v_uv); break;`).join('\n')}
     default: break;
   }
-  fragColor = t * v_color;
+  fragColor = t * v_color * u_layerTint;
 }
 `
 
@@ -101,6 +103,8 @@ export class SpriteLayerRenderer {
   private uZoom: WebGLUniformLocation | null = null
   private uSize: WebGLUniformLocation | null = null
   private uShake: WebGLUniformLocation | null = null
+  private uTint: WebGLUniformLocation | null = null
+  private readonly tintScratch = new Float32Array(4)
   private readonly data = new Float32Array(MAX_BATCH * FLOATS)
   // Per-atlas state for the layer being drawn (rebuilt every draw).
   private readonly texs: (WebGLTexture | null)[] = new Array(MAX_LAYER_ATLASES).fill(null)
@@ -133,6 +137,7 @@ export class SpriteLayerRenderer {
     this.uZoom = gl.getUniformLocation(p, 'u_zoom')
     this.uSize = gl.getUniformLocation(p, 'u_canvasSize')
     this.uShake = gl.getUniformLocation(p, 'u_shake')
+    this.uTint = gl.getUniformLocation(p, 'u_layerTint')
     gl.useProgram(p)
     for (let i = 0; i < ATLASES_PER_DRAW; i++) gl.uniform1i(gl.getUniformLocation(p, `u_tex[${i}]`), i)
 
@@ -206,6 +211,10 @@ export class SpriteLayerRenderer {
     gl.uniform1f(this.uZoom, cam.zoom)
     gl.uniform2f(this.uSize, cam.width, cam.height)
     gl.uniform2f(this.uShake, cam.shakeX, cam.shakeY)
+    const tc = this.tintScratch
+    unpackRGBA(layer.tintColor, tc)
+    gl.uniform4f(this.uTint, tc[0], tc[1], tc[2], tc[3] * layer.opacity)
+    if (layer.blend !== 'normal') setBlendFunc(gl, layer.blend)
 
     const atlases = layer.atlases
     const na = Math.min(atlases.length, MAX_LAYER_ATLASES)
@@ -349,6 +358,7 @@ export class SpriteLayerRenderer {
       }
     }
     this.flush(batch)
+    if (layer.blend !== 'normal') setBlendFunc(gl, 'normal')
     gl.bindVertexArray(null)
     gl.activeTexture(gl.TEXTURE0)
   }
