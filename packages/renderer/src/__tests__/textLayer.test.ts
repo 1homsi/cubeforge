@@ -114,6 +114,10 @@ describe('TextLayer rendering', () => {
     expect(draws).toHaveLength(1)
     expect(draws[0].count).toBe(2000)
     expect(rs.getStats().drawCalls).toBe(1)
+    const row = rs.stats.layers.find((l) => l.kind === 'text')!
+    expect(row.drawCalls).toBe(1)
+    expect(row.instances).toBe(2000)
+    expect(row.uploadBytes).toBeGreaterThan(0)
   })
 
   it('culls runs outside the view and skips hidden runs', () => {

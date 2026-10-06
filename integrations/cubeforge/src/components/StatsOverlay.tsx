@@ -60,7 +60,7 @@ export function StatsOverlay({ interval = 500, corner = 'top-left', style }: Sta
   // One line per drawn layer: instances (sprite quads / tile cells), draw calls, upload bytes.
   for (const l of s.layers) {
     rows.push([
-      `${l.kind === 'tile' ? 'T' : 'S'} ${l.name}`,
+      `${l.kind === 'tile' ? 'T' : l.kind === 'text' ? 'X' : 'S'} ${l.name}`,
       `z${l.zIndex} ${kb(l.instances)} i ${l.drawCalls} d ${kb(l.uploadBytes)}B`,
     ])
   }

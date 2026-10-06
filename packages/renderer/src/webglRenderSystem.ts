@@ -9,7 +9,7 @@
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
 import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
-import type { TransformComponent } from '@cubeforge/core'
+import type { TransformComponent, LayerStats } from '@cubeforge/core'
 import { createRenderStats, resetRenderFrameStats, type RenderStats } from '@cubeforge/core'
 import {
   VERT_SRC,
@@ -947,6 +947,11 @@ export class RenderSystem implements System {
 
   /** Live counters, mutated in place each frame. See {@link RenderStats}. */
   readonly stats: RenderStats = createRenderStats()
+
+  /** Same object as {@link stats} (kept for existing callers). */
+  getStats(): RenderStats {
+    return this.stats
+  }
   private readonly _texBytes = new Map<WebGLTexture, number>()
   private _gpu: GpuTiming | null = null
   private _gpuWanted = false
@@ -1010,6 +1015,7 @@ export class RenderSystem implements System {
   private readonly _spriteLayers: SpriteLayer[] = []
   private readonly _textLayers: TextLayer[] = []
   private _textLayerRenderer: TextLayerRenderer | null = null
+  private readonly _textRows: LayerStats[] = []
   private _textLayerVersion = 0
   private _entityText: EntityTextBatcher | null = null
   private _shapes: ShapeRenderer | null = null
@@ -2373,10 +2379,28 @@ export class RenderSystem implements System {
     const r = this._textLayerRenderer
     r.drawCalls = 0
     r.instances = 0
+    r.uploadBytes = 0
     r.draw(layer, cam)
     this.stats.drawCalls += r.drawCalls
     this.stats.batches += r.drawCalls
     this.stats.instances += r.instances
+    if (r.drawCalls > 0) {
+      const out = this.stats.layers
+      const e = (this._textRows[out.length] ??= {
+        kind: 'text',
+        name: '',
+        zIndex: 0,
+        instances: 0,
+        drawCalls: 0,
+        uploadBytes: 0,
+      })
+      e.name = layer.layer
+      e.zIndex = layer.zIndex
+      e.instances = r.instances
+      e.drawCalls = r.drawCalls
+      e.uploadBytes = r.uploadBytes
+      out.push(e)
+    }
     this.gl.useProgram(this.program)
   }
 

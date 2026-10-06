@@ -1,6 +1,6 @@
-/** One drawn SpriteLayer or TileLayer, for the per-layer breakdown in {@link RenderStats.layers}. */
+/** One drawn SpriteLayer, TextLayer or TileLayer, for the per-layer breakdown in {@link RenderStats.layers}. */
 export interface LayerStats {
-  kind: 'sprite' | 'tile'
+  kind: 'sprite' | 'tile' | 'text'
   /** `SpriteLayer`/`TileLayerData` `name` option (sprite layers default to their render layer, tile layers to `tiles<N>`). */
   name: string
   zIndex: number
