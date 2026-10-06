@@ -33,7 +33,7 @@ npm install cubeforge react react-dom
 
 - **ECS** — archetype-based entity-component-system with query caching
 - **Physics** — two-pass AABB, kinematic bodies, one-way platforms, 60 Hz fixed timestep
-- **Renderer** — WebGL2 instanced renderer by default
+- **Renderer** — WebGL2 instanced renderer, with an automatic Canvas2D fallback (`<Game renderer>`)
 - **Input** — keyboard, mouse, gamepad, per-player input maps, input contexts, recording/playback
 - **Audio** — Web Audio API with volume groups, fade, crossfade, ducking (`useSound`, `useMusic`, `getAudioManager()`)
 - **Gameplay hooks** — `usePlatformerController`, `useTopDownMovement`, `useHealth`, `useSave`, `useGameStateMachine`, `useLevelTransition`, `usePathfinding`, `useAISteering`, and more
@@ -222,8 +222,10 @@ sit above a world sprite or between two sprite layers:
 `renderLayer` names are the ones `<Sprite layer>` and `useSpriteLayer({ layer })` use; at equal order
 and `zIndex` a tile layer draws before sprites. Sampling uses `texelFetch` on exact atlas texels, so there is no bleeding or seams at
 fractional zoom. GPU textures are freed the frame after the layer unmounts and rebuilt after a GL
-context restore. Without WebGL, `TileLayerCanvasRenderer` draws the same layer onto any 2D context
-with cached chunk canvases.
+context restore. Without WebGL, `<Game>` falls back to the Canvas2D renderer (see
+[Rendering backends](#rendering-backends)). `TileLayerCanvasRenderer` is the plain-tiles building
+block of that path and also works on its own: it draws a layer onto any 2D context with cached chunk
+canvases.
 
 ## Thousands of sprites: `useSpriteLayer`
 
@@ -389,6 +391,48 @@ instead of one texture and draw each. On the WebGL path it honours `align`, `bas
 sprites, ordered by `zIndex`). Right-to-left / complex scripts and a `maxWidth` squeeze without `wordWrap`
 use a per-entity canvas texture instead (cache keyed on every style input, 4,096 entries, re-rasterised
 at 1x/2x/4x as you zoom).
+
+## Rendering backends
+
+`<Game renderer>` picks how the world is drawn:
+
+```tsx
+<Game />                      // 'auto' (default): WebGL2, else Canvas2D with one console warning
+<Game renderer="webgl" />     // WebGL2 only: shows an error panel if it is unavailable
+<Game renderer="canvas2d" />  // Canvas2D only: no WebGL context is ever created
+```
+
+Apps need no separate fallback: with the default `'auto'`, a browser, VM or headless environment
+without WebGL2 renders through the Canvas2D system. When WebGL2 works nothing changes. The Canvas2D
+renderer is loaded with a dynamic `import()`, so it adds nothing to the initial bundle (the
+`cubeforge/render` budget still holds). The prop is read once at mount. `useGame().renderBackend` is
+`'webgl'` or `'canvas2d'`, and `Canvas2DRenderSystem` is exported from `cubeforge/advanced`.
+
+Same scene, same hooks (`useSpriteLayer`, `useScreenTint`, `useDynamicCanvas`, `<TileLayer>`):
+
+| Feature | Canvas2D |
+| --- | --- |
+| Sprites: colour, image, frames, flip, rotation, anchor, offset, opacity, blend modes, sampling, tint, `tileX`/`tileY`, shapes | yes. `tint` multiplies the texture, as on WebGL. A shape's stroke uses `strokeColor` (WebGL draws it in the fill colour) |
+| Render layers, `zIndex` order, frustum culling | yes (ties draw in entity order, not grouped by texture) |
+| `SpriteLayer`: atlases, frames, rotation, flip/hidden/untextured flags, `sortByKey`, per-sprite RGBA colour | yes. Coloured textured sprites draw through a cached tinted copy (up to ~16 MB, then least recently used goes) |
+| `TileLayer`: chunks, animation, opacity, variants, per-tile tints, jitter, `renderLayer` sorting with sprites | yes. Jitter brightening is approximate for semi-transparent tile edges; no far-zoom average colour (it smooths below ~0.5 px per texel instead) |
+| `TextLayer` / `useTextLayer`: glyph atlas, align, wrap, anchor, rotation, colour, alpha, z-order with sprites | yes, glyph cells drawn from the shared atlas pages (coloured runs go through the tinted-copy cache) |
+| Camera2D: follow (entity, point, SpriteLayer sprite), dead zone, smoothing, bounds, shake, zoom, `pixelSnap`, HiDPI | yes |
+| `useScreenTint`: multiply / normal / additive | yes |
+| Parallax layers | yes, honouring `repeatX`/`repeatY` |
+| `<Text>`: align, baseline, word wrap, line height, stroke, shadow, opacity, weight, italic, `layer` sorting with sprites | yes, all honoured |
+| Particles, trails, squash/stretch, animator and clip playback | yes |
+| `useDynamicCanvas`, `engine.createDynamicCanvas` (create, resize, dispose by id) | yes, drawn live (`markDirty` is a no-op) |
+| Sprite `customDraw` | yes |
+| `usePostProcess` effect stack (2D effects run on the finished frame) | yes |
+| `useWebGLPostProcess` (bloom, vignette, CA, scanlines), idle frame skip | **no**, WebGL only (enabling an effect logs one warning) |
+| Context loss handling | n/a |
+
+Canvas2D is a fallback, not a performance peer. A moving, y-sorted `SpriteLayer` measured in headless
+Chrome (software canvas, 1280x720): about 8 ms per frame for 3,000 sprites, 11 ms with a different
+colour per sprite, 23 ms for 10,000. The backends differ by sub-pixel rounding at fractional
+positions. `<Text>` always uses the browser's own text engine here, so right-to-left and complex
+scripts work without the per-entity fallback WebGL needs.
 
 ## Tint and blend: stacked, z-limited and per layer
 
