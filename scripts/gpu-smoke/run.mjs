@@ -58,10 +58,6 @@ async function runPage(entry, { extraArgs = [], hash = '' } = {}) {
         '--use-angle=swiftshader',
         '--enable-unsafe-swiftshader',
         '--allow-file-access-from-files',
-        // Lets the page's async work (blob encoding) finish before the DOM is dumped.
-        '--virtual-time-budget=10000',
-  }
-  {
         ...extraArgs,
         '--dump-dom',
         `file://${path.join(dir, `${name}.html`)}${hash}`,
@@ -188,27 +184,6 @@ try {
     )
   }
   {
-    const out = await runPage('capture.ts')
-    check('capture', out, {
-      captureSize: '256x256',
-      captureNotBlack: true,
-      captureEqualsScreen: true,
-      captureTile: '255,255,255,255',
-      blobType: 'image/png',
-      blobEqualsScreen: true,
-      bitmapEqualsScreen: true,
-      smallSize: '64x64',
-      smallTile: '255,255,255,255',
-      bigSize: '512x512',
-      bigEdge: '0,0,255,255|255,255,255,255',
-      scaledEdgeIsBlurred: true,
-      canvasRestored: '256x256',
-      stillRenders: true,
-      glErrorCapture: 0,
-    })
-    console.log('gpu-smoke: captureFrame matches the on-screen frame in every result type, at any size')
-  }
-  {
     // No WebGL here: the page mounts <Game renderer="canvas2d"> and reads the 2D canvas back.
     // Virtual time lets its timers (engine start-up) run before the DOM is dumped.
     const out = await runPage('canvas2d.tsx', { extraArgs: ['--virtual-time-budget=8000'] })
@@ -258,6 +233,27 @@ try {
       glError: 0,
     })
     console.log('gpu-smoke: GPU vertex sway bends flagged sprites from a time uniform (base fixed)')
+  }
+  {
+    const out = await runPage('capture.ts')
+    check('capture', out, {
+      captureSize: '256x256',
+      captureNotBlack: true,
+      captureEqualsScreen: true,
+      captureTile: '255,255,255,255',
+      blobType: 'image/png',
+      blobEqualsScreen: true,
+      bitmapEqualsScreen: true,
+      smallSize: '64x64',
+      smallTile: '255,255,255,255',
+      bigSize: '512x512',
+      bigEdge: '0,0,255,255|255,255,255,255',
+      scaledEdgeIsBlurred: true,
+      canvasRestored: '256x256',
+      stillRenders: true,
+      glErrorCapture: 0,
+    })
+    console.log('gpu-smoke: captureFrame matches the on-screen frame in every result type, at any size')
   }
 } finally {
   rmSync(dir, { recursive: true, force: true })
