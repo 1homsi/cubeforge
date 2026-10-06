@@ -56,6 +56,8 @@ type GameRenderSystem = System & {
   readonly stats: RenderStats
   setDefaultSampling(sampling: Sampling): void
   createDynamicCanvas(options: DynamicCanvasOptions): ManagedDynamicCanvas
+  /** Turn the GPU timer on or off; resolves to whether it is running (Canvas2D never is). */
+  setGpuTiming(enabled: boolean): Promise<boolean>
   readonly postProcessStack?: PostProcessStack
   dispose(): void
 }
@@ -119,6 +121,12 @@ export interface GameProps {
    * Use `TextureFilter.NEAREST` for pixel art or `TextureFilter.LINEAR` for smooth scaling.
    */
   sampling?: Sampling
+  /**
+   * Measure GPU frame time (`stats.gpuMs`) from mount, without a stats hook. Off by
+   * default. Captured at mount. Needs EXT_disjoint_timer_query_webgl2; `gpuMs` stays
+   * null where it is unavailable.
+   */
+  gpuTiming?: boolean
   /** Custom plugins to register after core systems. Each plugin's systems run after Render. */
   plugins?: Plugin[]
   /**
@@ -165,6 +173,7 @@ export function Game({
   seed = 0,
   asyncAssets = false,
   sampling,
+  gpuTiming = false,
   renderer = 'auto',
   onReady,
   plugins,
@@ -278,6 +287,7 @@ export function Game({
     }
 
     const stats = createEngineStats(renderSystem.stats)
+    let gpuUsers = 0
     let lastFrameStart = 0
     const loop = new GameLoop(
       (dt) => {
@@ -293,6 +303,8 @@ export function Game({
         stats.systemsMs = stats.updateMs - stats.renderMs
         stats.entityCount = ecs.entityCount
         stats.frame++
+        stats.gpuMs = stats.render.gpuMs
+        stats.gpuMsAvg = stats.render.gpuMsAvg
         input.flush()
         if (devtools) {
           const handle = devtoolsHandle.current
@@ -357,7 +369,17 @@ export function Game({
             loop.markDirty()
           },
         }),
+      requestGpuTiming: () => {
+        if (gpuUsers++ === 0) void renderSystem.setGpuTiming(true)
+        let released = false
+        return () => {
+          if (released) return
+          released = true
+          if (--gpuUsers === 0) void renderSystem.setGpuTiming(false)
+        }
+      },
     }
+    if (gpuTiming) state.requestGpuTiming!()
     setEngine(state)
 
     // Register plugin systems and call their onInit hooks

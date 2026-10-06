@@ -488,6 +488,35 @@ frame skip render every frame, and `useSpriteLayer` keeps an `onDemand` loop tic
 - `useCamera().zoomAt(screenX, screenY, zoom)` and `useCoordinates()` work in canvas CSS pixels at
   any devicePixelRatio.
 
+## Stats and profiling
+
+`<StatsOverlay />` (inside `<Game>`) shows frame timings, draw calls, textures, tile layer uploads,
+GPU time and a row per drawn layer. The same numbers are available in code:
+
+```ts
+const engine = useGame()
+const s = engine.getStats() // live object, mutated in place; copyEngineStats(s) to keep a sample
+
+s.gpuMs, s.gpuMsAvg       // GPU frame time in ms (EXT_disjoint_timer_query_webgl2), null if unsupported/off
+s.render.gpuTimerSupported // null = not requested, false = unsupported, true = measuring
+s.layers                  // [{ kind: 'tile' | 'sprite', name, zIndex, instances, drawCalls, uploadBytes }]
+s.tileLayerStats          // indexUploads, uploadedTexels, lutUploads, drawCalls, textureCount, textureBytes, ...
+s.render.textureCount     // live textures, TileLayer atlas / index / tint / LUT textures included
+s.render.textureUploads   // per frame, TileLayer uploads included (also textureUploadBytes)
+```
+
+- GPU timing is off by default and costs nothing while off. It turns on while `<StatsOverlay>` or
+  `useEngineStats()` is mounted, with `<Game gpuTiming />`, or through
+  `engine.requestGpuTiming()` (returns a release function; reference counted). Results are read a
+  few frames late through a ring of timer queries, never block, and are dropped after a GPU disjoint
+  event or context loss. The timer code is a lazy chunk loaded only when requested.
+- `layers` lists tile layers first, then sprite layers in draw order. For sprite layers `instances`
+  is the quad count and `uploadBytes` the instance data sent; for tile layers `instances` is the
+  number of visible tile cells shaded and `uploadBytes` the index, tint, LUT and atlas texture
+  uploads. Label layers with the `name` option of `useTileLayer` / `useSpriteLayer` (default: the
+  sprite layer's render layer, or `tiles0`, `tiles1`, ... in draw order).
+- `engine.stats` and `engine.getStats()` are always present.
+
 ## Testing your game headlessly: `cubeforge/test`
 
 `cubeforge/test` mounts a real `<Game>` without a GPU. WebGL2 is a recording stand-in, so tests

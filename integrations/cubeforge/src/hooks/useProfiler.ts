@@ -84,16 +84,22 @@ export function useProfiler(): ProfilerData {
  * Samples the engine's live {@link EngineStats} every `intervalMs` (default 500)
  * and returns a copy. Collection is always on and allocation-free; this hook only
  * allocates when it publishes a sample. Returns null until the engine is ready.
+ * While mounted it also enables GPU timing (`gpuMs`, null where unsupported).
  */
 export function useEngineStats(intervalMs = 500): EngineStats | null {
   const engine = useContext(EngineContext)
   const [sample, setSample] = useState<EngineStats | null>(null)
 
   useEffect(() => {
-    const live = engine?.getStats?.()
-    if (!live) return
+    if (!engine) return
+    const live = engine.getStats()
+    // GPU timing costs a query per frame, so it only runs while a stats consumer is mounted.
+    const release = engine.requestGpuTiming?.()
     const id = setInterval(() => setSample(copyEngineStats(live)), intervalMs)
-    return () => clearInterval(id)
+    return () => {
+      clearInterval(id)
+      release?.()
+    }
   }, [engine, intervalMs])
 
   return sample

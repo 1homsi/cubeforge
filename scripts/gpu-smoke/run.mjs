@@ -58,6 +58,8 @@ async function runPage(entry, { extraArgs = [], hash = '' } = {}) {
         '--use-angle=swiftshader',
         '--enable-unsafe-swiftshader',
         '--allow-file-access-from-files',
+        // Lets the page's async work (blob encoding, GPU timer readback) finish before the DOM is dumped.
+        '--virtual-time-budget=10000',
         ...extraArgs,
         '--dump-dom',
         `file://${path.join(dir, `${name}.html`)}${hash}`,
@@ -233,6 +235,22 @@ try {
       glError: 0,
     })
     console.log('gpu-smoke: GPU vertex sway bends flagged sprites from a time uniform (base fixed)')
+  }
+  {
+    const out = await runPage('stats.ts')
+    check('stats', out, {
+      layerKinds: 'tile,sprite',
+      layerDrawCalls: '1,1',
+      tileTexturesCounted: true,
+      noGpuByDefault: true,
+      gpuMsOk: true,
+      gpuFlagMatches: true,
+      gpuOff: true,
+      glError: 0,
+    })
+    console.log(
+      `gpu-smoke: stats layers, tile textures and GPU timer (supported: ${out.gpuTimerSupported}) are consistent`,
+    )
   }
 } finally {
   rmSync(dir, { recursive: true, force: true })

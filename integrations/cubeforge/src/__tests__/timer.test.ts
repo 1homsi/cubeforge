@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
 import { render, act } from '@testing-library/react'
-import { ECSWorld, EventBus, AssetManager } from '@cubeforge/core'
+import { ECSWorld, EventBus, AssetManager, createEngineStats } from '@cubeforge/core'
 import { EngineContext } from '../context'
 import type { EngineState } from '../context'
 import { useTimer } from '../hooks/useTimer'
@@ -13,6 +13,7 @@ import type { TimerControls } from '../hooks/useTimer'
 function makeEngine(): EngineState {
   const ecs = new ECSWorld()
   const events = new EventBus()
+  const stats = createEngineStats()
   return {
     ecs,
     events,
@@ -24,6 +25,8 @@ function makeEngine(): EngineState {
     entityIds: new Map(),
     systemTimings: new Map(),
     postProcessStack: { add: vi.fn(), remove: vi.fn(), apply: vi.fn(), clear: vi.fn() },
+    stats,
+    getStats: () => stats,
   }
 }
 
