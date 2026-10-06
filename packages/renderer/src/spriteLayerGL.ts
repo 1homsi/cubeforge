@@ -177,7 +177,7 @@ export class SpriteLayerRenderer {
     cam: LayerCamera,
     resolve: (i: number) => ResolvedAtlas | null,
     white: WebGLTexture,
-    applySampling: () => void,
+    applySampling: (tex: WebGLTexture) => void,
   ): void {
     const count = layer.count
     if (!layer.visible || count === 0) return
@@ -196,7 +196,7 @@ export class SpriteLayerRenderer {
       gl.activeTexture(gl.TEXTURE0 + a)
       const r = a < na ? resolve(a) : null
       gl.bindTexture(gl.TEXTURE_2D, r ? r.tex : white)
-      if (r) applySampling()
+      if (r) applySampling(r.tex)
       const at = a < na ? atlases[a] : undefined
       // 2 = atlas without a source: its sprites draw as solid rects.
       this.ready[a] =
