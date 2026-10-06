@@ -182,6 +182,17 @@ try {
     })
     console.log('gpu-smoke: per-layer tint/opacity/blend, stacked and z-limited screen tints render correctly')
   }
+  {
+    const out = await runPage('wind.ts')
+    check('wind', out, {
+      restTop: 'ok',
+      swayTopMoves: 'ok',
+      swayBaseStays: 'ok',
+      unflaggedStays: 'ok',
+      glError: 0,
+    })
+    console.log('gpu-smoke: GPU vertex sway bends flagged sprites from a time uniform (base fixed)')
+  }
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

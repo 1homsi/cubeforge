@@ -136,7 +136,9 @@ export {
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
   NO_SPRITE,
+  SPRITE_SWAY,
 } from '@cubeforge/renderer'
+export type { SpriteLayerWind } from '@cubeforge/renderer'
 export type { SpriteLayerOptions, LayerAtlas, AtlasFrame, PickOptions, FrameHit } from '@cubeforge/renderer'
 export { useIdleFrameSkip } from './hooks/useIdleFrameSkip'
 export { useAudioListener } from './hooks/useAudioListener'

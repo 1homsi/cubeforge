@@ -37,6 +37,7 @@ export {
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
+  SPRITE_SWAY,
   MAX_LAYER_ATLASES,
   ATLASES_PER_DRAW,
   NO_SPRITE,
@@ -50,6 +51,7 @@ export type {
   FrameHit,
   PickSource,
 } from './spriteLayer'
+export type { SpriteLayerWind } from './spriteLayer'
 export {
   TileLayerData,
   createTileLayerComponent,
