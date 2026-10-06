@@ -182,6 +182,40 @@ try {
     })
     console.log('gpu-smoke: captureFrame matches the on-screen frame in every result type, at any size')
   }
+  {
+    const out = await runPage('tint.ts')
+    const ok = (...keys) => Object.fromEntries(keys.map((k) => [k, 'ok']))
+    check('tint', out, {
+      ...ok(
+        'layerTint',
+        'layerOpacity',
+        'additive',
+        'multiply',
+        'screen',
+        'sortedTintDimsGround',
+        'sortedTintSparesTop',
+        'stackedTints',
+        'stackedTintsBackground',
+        'tileAdditive',
+        'tileOutside',
+      ),
+      glError: 0,
+      glError2: 0,
+      glError3: 0,
+    })
+    console.log('gpu-smoke: per-layer tint/opacity/blend, stacked and z-limited screen tints render correctly')
+  }
+  {
+    const out = await runPage('wind.ts')
+    check('wind', out, {
+      restTop: 'ok',
+      swayTopMoves: 'ok',
+      swayBaseStays: 'ok',
+      unflaggedStays: 'ok',
+      glError: 0,
+    })
+    console.log('gpu-smoke: GPU vertex sway bends flagged sprites from a time uniform (base fixed)')
+  }
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

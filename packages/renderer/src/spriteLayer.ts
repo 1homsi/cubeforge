@@ -1,4 +1,5 @@
 import type { Sampling } from './textureFilter'
+import type { LayerBlendMode } from './blendModes'
 import { registerSpriteLayerRenderer } from './layerRegistry'
 import { SpriteLayerRenderer } from './spriteLayerGL'
 import { SPRITE_FLIP_X, SPRITE_FLIP_Y, SPRITE_HIDDEN, SPRITE_UNTEXTURED } from './spriteLayerFlags'
@@ -28,6 +29,7 @@ export {
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
+  SPRITE_SWAY,
 } from './spriteLayerFlags'
 
 export type SpriteLayerImage = HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas
@@ -92,6 +94,20 @@ export interface LayerAtlas {
   sampling?: Sampling
 }
 
+/**
+ * Vertex sway for sprites with SPRITE_SWAY (trees, grass, banners), evaluated
+ * on the GPU from a time uniform: no per-frame CPU rewrite of the sprites.
+ * The top of each quad moves horizontally, the base stays put.
+ */
+export interface SpriteLayerWind {
+  /** Peak sideways offset of the top, as a fraction of the sprite height. Default 0.04. */
+  amplitude?: number
+  /** Sway cycles per second. Default 0.5. */
+  speed?: number
+  /** Phase change per world pixel along x, so neighbours do not sway in lockstep (radians). Default 0.01. */
+  frequency?: number
+}
+
 export interface SpriteLayerOptions extends LayerAtlas {
   /** Initial capacity; grows automatically. */
   capacity?: number
@@ -114,6 +130,14 @@ export interface SpriteLayerOptions extends LayerAtlas {
   visible?: boolean
   /** Default alpha threshold (0-255) for picking; 0 (default) hits the whole hit rect. */
   pickAlpha?: number
+  /** GPU sway for sprites with SPRITE_SWAY. */
+  wind?: SpriteLayerWind | null
+  /** Whole-layer opacity multiplier 0..1. Default 1. */
+  opacity?: number
+  /** Whole-layer colour multiplier, 0xRRGGBBAA (alpha multiplies opacity). Default 0xffffffff. */
+  tintColor?: number
+  /** How the layer blends onto what is below it. Default 'normal'. */
+  blend?: LayerBlendMode
 }
 
 /**
@@ -135,7 +159,7 @@ export class SpriteLayer {
   atlas!: Uint8Array
   /** 0xRRGGBBAA tint multiplied with the texture (or the fill color without one). */
   color!: Uint32Array
-  /** Bit flags: SPRITE_FLIP_X | SPRITE_FLIP_Y | SPRITE_HIDDEN | SPRITE_UNTEXTURED. */
+  /** Bit flags: SPRITE_FLIP_X | SPRITE_FLIP_Y | SPRITE_HIDDEN | SPRITE_UNTEXTURED | SPRITE_SWAY. */
   flags!: Uint8Array
   /**
    * Draw order key when `sortByKey` is set (lower draws first). Float64: depths
@@ -186,6 +210,15 @@ export class SpriteLayer {
    */
   onChange: (() => void) | null = null
 
+  private _opacity: number
+  private _wind: SpriteLayerWind | null
+  /**
+   * Optional per-sprite sway multiplier (default 1) for sprites with SPRITE_SWAY,
+   * e.g. a stiff oak 0.3 and tall grass 1.5. Allocated by `ensureSwayScale()`.
+   */
+  swayScale: Float32Array | null = null
+  private _tintColor: number
+  private _blend: LayerBlendMode
   private _order = new Int32Array(0)
   private _inOrder = new Uint8Array(0)
   private _orderCount = 0
@@ -218,7 +251,56 @@ export class SpriteLayer {
     this.anchorY = options.anchorY ?? 0.5
     this.visible = options.visible ?? true
     this.pickAlpha = options.pickAlpha ?? 0
+    this._opacity = options.opacity ?? 1
+    this._wind = options.wind ?? null
+    this._tintColor = (options.tintColor ?? 0xffffffff) >>> 0
+    this._blend = options.blend ?? 'normal'
     this.grow(Math.max(16, options.capacity ?? 256))
+  }
+
+  /** Wind for SPRITE_SWAY sprites; `null` turns the sway off. Time-driven: the loop must keep rendering. */
+  get wind(): SpriteLayerWind | null {
+    return this._wind
+  }
+  set wind(v: SpriteLayerWind | null) {
+    this._wind = v
+    this.changed()
+  }
+
+  /** Allocate (filled with 1) and return the per-sprite sway multiplier array. */
+  ensureSwayScale(): Float32Array {
+    if (!this.swayScale || this.swayScale.length < this.capacity) {
+      const next = new Float32Array(this.capacity).fill(1)
+      if (this.swayScale) next.set(this.swayScale.subarray(0, this.count))
+      this.swayScale = next
+    }
+    return this.swayScale
+  }
+
+  get opacity(): number {
+    return this._opacity
+  }
+  set opacity(v: number) {
+    if (v === this._opacity) return
+    this._opacity = v
+    this.changed()
+  }
+  get tintColor(): number {
+    return this._tintColor
+  }
+  set tintColor(v: number) {
+    v >>>= 0
+    if (v === this._tintColor) return
+    this._tintColor = v
+    this.changed()
+  }
+  get blend(): LayerBlendMode {
+    return this._blend
+  }
+  set blend(v: LayerBlendMode) {
+    if (v === this._blend) return
+    this._blend = v
+    this.changed()
   }
 
   /** Atlas 0's url (single-atlas shorthand). */
@@ -301,6 +383,11 @@ export class SpriteLayer {
       this.hit = next
     }
     this.ids = copy(this.ids, Int32Array)
+    if (this.swayScale) {
+      const next = new Float32Array(capacity).fill(1)
+      next.set(this.swayScale.subarray(0, this.count))
+      this.swayScale = next
+    }
     this.capacity = capacity
   }
 
@@ -328,6 +415,7 @@ export class SpriteLayer {
     if (this.hit) this.hit[i * 4] = NaN
     if (this.anchor) this.anchor[i * 2] = NaN
     this.ids[i] = id
+    if (this.swayScale) this.swayScale[i] = 1
   }
 
   /** `id` is returned by `pick()`; a string is interned to a number (see {@link intern}). Default: the slot index at insertion. */
@@ -370,6 +458,7 @@ export class SpriteLayer {
       if (this.hit) this.hit.copyWithin(i * 4, last * 4, last * 4 + 4)
       if (this.anchor) this.anchor.copyWithin(i * 2, last * 2, last * 2 + 2)
       this.ids[i] = this.ids[last]
+      if (this.swayScale) this.swayScale[i] = this.swayScale[last]
     }
     this.changed()
   }

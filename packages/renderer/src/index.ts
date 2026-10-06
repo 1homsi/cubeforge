@@ -37,6 +37,7 @@ export {
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
+  SPRITE_SWAY,
   MAX_LAYER_ATLASES,
   ATLASES_PER_DRAW,
   NO_SPRITE,
@@ -50,6 +51,7 @@ export type {
   FrameHit,
   PickSource,
 } from './spriteLayer'
+export type { SpriteLayerWind } from './spriteLayer'
 export {
   TileLayerData,
   createTileLayerComponent,
@@ -92,6 +94,7 @@ export type {
   RecordedTexture,
   RecordingCanvas,
   RecordingGLOptions,
+  HeadlessCanvasOptions,
 } from './testing/recordingGL'
 export { TextLayer, GlyphAtlas, layoutText, TEXT_HIDDEN, TEXT_WORD_WRAP } from './textLayer'
 export type {
@@ -105,3 +108,4 @@ export type {
   AtlasStyle,
   AtlasPage,
 } from './textLayer'
+export type { LayerBlendMode } from './blendModes'

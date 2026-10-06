@@ -11,7 +11,7 @@ const repoRoot = path.resolve(pkgDir, '../..')
 const outDir = path.join(pkgDir, 'dist')
 const tsconfig = path.join(pkgDir, 'tsconfig.json')
 
-const entries = ['index', 'advanced', 'render']
+const entries = ['index', 'advanced', 'render', 'test']
 const external = ['react', 'react-dom', 'react/jsx-runtime']
 
 const roots = [

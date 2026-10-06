@@ -23,6 +23,7 @@ export type { DynamicCanvasHandle } from './hooks/useDynamicCanvas'
 export type { DynamicCanvasOptions, ManagedDynamicCanvas, ResizeDynamicCanvasOptions } from '@cubeforge/renderer'
 export { useGestures } from './hooks/useGestures'
 export type { SwipeEvent, PinchEvent, GestureHandlers, GestureOptions } from './hooks/useGestures'
+export { EngineContext, EntityContext } from './context'
 export type { EngineState } from './context'
 export type { EntityId, ECSWorld, TransformComponent } from '@cubeforge/core'
 export type { SpriteComponent } from '@cubeforge/renderer'
@@ -32,7 +33,8 @@ export { useTextLayer } from './hooks/useTextLayer'
 export { useScreenTint } from './hooks/useScreenTint'
 export { useCameraPanZoom } from './hooks/useCameraPanZoom'
 export type { CameraPanZoomOptions } from './hooks/useCameraPanZoom'
-export type { ScreenTintControls, ScreenTintMode } from './hooks/useScreenTint'
+export type { ScreenTintControls, ScreenTintMode, ScreenTintOptions } from './hooks/useScreenTint'
+export type { LayerBlendMode } from '@cubeforge/renderer'
 export { useCoordinates } from './hooks/useCoordinates'
 export { useCaptureFrame } from './hooks/useCaptureFrame'
 export type { CaptureFrame, CaptureFrameOptions, CaptureType } from '@cubeforge/context'
@@ -48,12 +50,14 @@ export {
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
   NO_SPRITE,
+  SPRITE_SWAY,
   TileLayerData,
   tileHash,
 } from '@cubeforge/renderer'
 export type { TextLayerOptions, TextRunOptions, GlyphStyleOptions } from '@cubeforge/renderer'
 export type {
   SpriteLayerOptions,
+  SpriteLayerWind,
   LayerAtlas,
   AtlasFrame,
   PickOptions,
