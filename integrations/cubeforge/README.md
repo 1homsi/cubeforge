@@ -379,6 +379,27 @@ sprites, ordered by `zIndex`). Right-to-left / complex scripts and a `maxWidth` 
 use a per-entity canvas texture instead (cache keyed on every style input, 4,096 entries, re-rasterised
 at 1x/2x/4x as you zoom).
 
+## Tint and blend: stacked, z-limited and per layer
+
+```tsx
+// Dim only what is drawn up to zIndex 50 (ground, buildings, people); labels/UI above stay bright.
+const night = useScreenTint({ name: 'night', zIndex: 50 })
+night.set(0.25, 0.3, 0.6, strength) // strength 0..1, modes: 'multiply' | 'normal' | 'additive' | 'screen'
+const fog = useScreenTint({ name: 'fog' }) // a second, independent tint (whole world, after all sprites)
+fog.set(0.8, 0.85, 0.9, 0.2, 'normal')
+
+// Per layer: multiply colour (0xRRGGBBAA), opacity and blend on SpriteLayer, TileLayer and TextLayer.
+const glow = useSpriteLayer({ src: '/glow.png', blend: 'additive', opacity: 0.8, zIndex: 40 })
+glow.tintColor = 0xffd080ff
+<TileLayer layer={heat} renderLayer="default" zIndex={3} blend="multiply" tintColor={0xff8080ff} opacity={0.6} />
+```
+
+A tint with `zIndex` (and optionally `layer`) joins the sprite sort and only covers items sorted before
+it; at equal layer and zIndex it draws after them. Without them it behaves as before (after all sprites,
+before text). `useScreenTint()` with no options is the unchanged single slot. Blend modes: `normal`,
+`multiply` (darkens), `additive` (glow), `screen` (soft lighten); the engine restores `normal` after each
+layer, so the cost is one `blendFunc` pair per non-normal layer.
+
 ## Overlays and camera
 
 - `useScreenTint().set(r, g, b, strength, mode)`: full-view tint drawn after sprites and layers and

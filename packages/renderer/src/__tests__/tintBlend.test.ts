@@ -126,6 +126,16 @@ describe('per-layer blend, tint and opacity', () => {
     expect(l.tintColor).toBe(0xff0000ff)
   })
 
+  it('SpriteLayer setters wake an onDemand loop through onChange', () => {
+    const l = layer(0, 1)
+    let n = 0
+    l.onChange = () => n++
+    l.opacity = 0.3
+    l.blend = 'additive'
+    l.tintColor = 0x00ff00ff
+    expect(n).toBe(3)
+  })
+
   it('TileLayer blend applies to its draw and wakes via onChange', () => {
     const { gl, rs, world } = setup()
     const tiles = new TileLayerData({
