@@ -102,6 +102,10 @@ try {
       mipCheckerGrey: '128,128,128,255',
       mipCheckerGreyB: '128,128,128,255',
       glError5: 0,
+      stackTopLeft: '255,0,255,255',
+      stackBottomLeftUntouched: 'ok',
+      stackKeepsScene: 'ok',
+      glError6: 0,
     }
     check('layers', out, expect)
     console.log('gpu-smoke: tile layer (tint, variants, avg colour) and multi-atlas sprite layer render correctly')

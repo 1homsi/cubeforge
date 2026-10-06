@@ -155,6 +155,17 @@ try {
   out.mipCheckerGrey = px(129, 129)
   out.mipCheckerGreyB = px(125, 133)
   out.glError5 = gl.getError()
+
+  // usePostProcess effect stack: a 2D effect paints the top-left corner; the rest of the frame stays
+  rs.postProcessStack.add((ctx) => {
+    ctx.fillStyle = '#ff00ff'
+    ctx.fillRect(0, 0, 32, 32)
+  })
+  rs.update(world, 1 / 60)
+  out.stackTopLeft = px(10, 10)
+  out.stackBottomLeftUntouched = px(10, 245) === '255,0,255,255' ? 'flipped' : 'ok'
+  out.stackKeepsScene = px(128, 128) === '255,0,255,255' ? 'overwritten' : 'ok'
+  out.glError6 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }

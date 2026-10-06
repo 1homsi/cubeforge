@@ -4,7 +4,10 @@ import { useGame } from './useGame'
 
 /**
  * Registers a post-processing effect for the lifetime of the component.
- * The effect runs in screen space after all scene rendering is complete.
+ * The effect runs in screen space after all scene rendering is complete. On WebGL the finished
+ * frame is copied to a 2D canvas, the effects draw on it, and the result is drawn back: that
+ * costs a canvas copy and upload per frame while any effect is registered, so prefer
+ * `useWebGLPostProcess` (GPU shaders) for the effects it covers.
  *
  * @example
  * ```tsx

@@ -264,7 +264,8 @@ export function Game({
       window.addEventListener('resize', dirtyHandler)
     }
 
-    const postProcessStack = createPostProcessStack()
+    // The render system owns the stack so effects run on its (WebGL) frame.
+    const postProcessStack = renderSystem.postProcessStack ?? createPostProcessStack()
 
     const state: EngineState = {
       ecs,

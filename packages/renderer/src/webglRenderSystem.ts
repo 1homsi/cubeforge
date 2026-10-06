@@ -21,6 +21,7 @@ import {
   COMPOSITE_FRAG_SRC,
 } from './shaders'
 import { parseCSSColor } from './colorParser'
+import { createPostProcessStack, type PostProcessStack } from './postProcess'
 import { clampCameraToBounds } from './components/camera2d'
 import type { SpriteLayer, LayerAtlas } from './spriteLayer'
 import type { SpriteLayerRenderer, LayerCamera, ResolvedAtlas } from './spriteLayerGL'
@@ -1057,6 +1058,17 @@ export class RenderSystem implements System {
   private _ppCmpCanvasSize: WebGLUniformLocation | null = null
 
   // FBOs + textures (recreated on canvas resize)
+  /**
+   * Canvas2D-style effects (`usePostProcess`). After the frame (and any GPU post-process) is
+   * drawn, the screen is copied to a 2D canvas, the effects run on it, and the result is drawn
+   * back. Costs a canvas copy and a texture upload per frame while non-empty.
+   */
+  readonly postProcessStack: PostProcessStack = createPostProcessStack()
+  private _stackCanvas: HTMLCanvasElement | null = null
+  private _stackCtx: CanvasRenderingContext2D | null = null
+  private _stackTex: WebGLTexture | null = null
+  private _stackTexW = 0
+  private _stackTexH = 0
   private _ppSceneFBO: WebGLFramebuffer | null = null
   private _ppSceneTex: WebGLTexture | null = null
   private _ppBloomExtractFBO: WebGLFramebuffer | null = null
@@ -1372,9 +1384,13 @@ export class RenderSystem implements System {
   }
 
   /** Run post-process passes (extract → blur → composite) and blit to screen. */
-  private _applyPostProcess(W: number, H: number): void {
+  private _applyPostProcess(
+    W: number,
+    H: number,
+    sceneTex: WebGLTexture = sceneTex,
+    opts: PostProcessOptions = this._ppOptions,
+  ): void {
     const { gl } = this
-    const opts = this._ppOptions
     const texelW = 1 / W
     const texelH = 1 / H
 
@@ -1390,7 +1406,7 @@ export class RenderSystem implements System {
       gl.bindFramebuffer(gl.FRAMEBUFFER, this._ppBloomExtractFBO)
       gl.useProgram(this._ppBloomExtractProg!)
       gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, this._ppSceneTex!)
+      gl.bindTexture(gl.TEXTURE_2D, sceneTex)
       gl.uniform1i(this._ppBeScene!, 0)
       gl.uniform1f(this._ppBeThreshold!, threshold)
       gl.drawArrays(gl.TRIANGLES, 0, 6)
@@ -1419,7 +1435,7 @@ export class RenderSystem implements System {
     gl.useProgram(this._ppCompositeProg!)
 
     gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, this._ppSceneTex!)
+    gl.bindTexture(gl.TEXTURE_2D, sceneTex)
     gl.uniform1i(this._ppCmpScene!, 0)
 
     gl.activeTexture(gl.TEXTURE1)
@@ -1442,6 +1458,48 @@ export class RenderSystem implements System {
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     gl.activeTexture(gl.TEXTURE0)
+  }
+
+  /** Run `postProcessStack` on a 2D copy of the finished frame and draw the result back. */
+  private _applyEffectStack(W: number, H: number, dt: number): void {
+    const { gl } = this
+    if (!this._stackCanvas) {
+      this._stackCanvas = document.createElement('canvas')
+      this._stackCtx = this._stackCanvas.getContext('2d', { willReadFrequently: true })
+    }
+    const c = this._stackCanvas
+    const ctx = this._stackCtx
+    if (!ctx) return
+    if (c.width !== W || c.height !== H) {
+      c.width = W
+      c.height = H
+    }
+    ctx.clearRect(0, 0, W, H)
+    ctx.drawImage(this.canvas, 0, 0)
+    this.postProcessStack.apply(ctx, W, H, dt)
+    this._ensurePPPrograms()
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.activeTexture(gl.TEXTURE0)
+    if (!this._stackTex) {
+      this._stackTex = gl.createTexture()!
+      gl.bindTexture(gl.TEXTURE_2D, this._stackTex)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    }
+    gl.bindTexture(gl.TEXTURE_2D, this._stackTex)
+    // The composite pass samples framebuffer-oriented textures; a canvas is top-down.
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+    if (this._stackTexW !== W || this._stackTexH !== H) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c)
+      this._stackTexW = W
+      this._stackTexH = H
+    } else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, c)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
+    this.stats.textureUploads++
+    this.stats.textureUploadBytes += W * H * 4
+    this._applyPostProcess(W, H, this._stackTex, {})
   }
 
   constructor(
@@ -1471,6 +1529,8 @@ export class RenderSystem implements System {
     this._layerImageTextures = new WeakMap()
     this._ppBloomExtractProg = null
     this._ppFBOW = this._ppFBOH = 0
+    this._stackTex = null
+    this._stackTexW = this._stackTexH = 0
     this._idleFBO = null
     this._idleTex = null
     this._idleFBOW = this._idleFBOH = 0
@@ -1517,6 +1577,8 @@ export class RenderSystem implements System {
     gl.deleteBuffer(this.instanceBuffer)
     if (this._idleFBO) gl.deleteFramebuffer(this._idleFBO)
     if (this._idleTex) gl.deleteTexture(this._idleTex)
+    if (this._stackTex) gl.deleteTexture(this._stackTex)
+    this._stackTex = null
     this._tileLayers?.dispose()
     this._spriteLayerRenderer?.dispose()
     this._textLayerRenderer?.dispose()
@@ -2666,7 +2728,8 @@ export class RenderSystem implements System {
         this._overlayRevision++
       }
     }
-    if (this._idleSkip) {
+    // Effects may animate, so a non-empty stack never takes the idle shortcut.
+    if (this._idleSkip && !this.postProcessStack.size) {
       this._ensureIdleFBO(W, H)
       const hash = this._computeSceneHash(world, camX, camY, zoom, shakeX, shakeY, background)
       if (hash !== -1 && hash === this._prevSceneHash) {
@@ -3469,6 +3532,9 @@ export class RenderSystem implements System {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       this._applyPostProcess(W, H)
     }
+
+    // ── Canvas2D-style effect stack (usePostProcess) ──────────────────────────
+    if (this.postProcessStack.size) this._applyEffectStack(W, H, dt)
 
     // ── Idle frame skip: copy final composited frame to idle cache FBO ────────
     // Stored post-PP so idle frames can blit the correct final image.
