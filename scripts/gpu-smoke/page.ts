@@ -267,6 +267,29 @@ try {
   out.groupSwitchRedOnTop = px(192, 52)
   out.frameTableMagenta = px(230, 50)
   out.glError4 = gl.getError()
+
+  // additive tile bias: grey 0x80 + bias 0x40 = 0xC0, tint still multiplies first
+  world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 1
+  const grey = new TileLayerData({
+    width: 2,
+    height: 1,
+    tileset: { image: solid(['#808080']), tileWidth: 16, tileHeight: 16, columns: 1 },
+    tinted: true,
+    biased: true,
+    zIndex: 90,
+    x: 20,
+    y: 220,
+  })
+  grey.fill(1)
+  grey.setBias(0, 0, 0x404040)
+  grey.setTint(1, 0, 0x808080ff) // 0x80 * 0.5 = 0x40
+  grey.setBias(1, 0, 0x404040) // + 0x40 = 0x80
+  world.addComponent(world.createEntity(), createTileLayerComponent(grey))
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60)
+  out.biasBrightens = px(28, 228)
+  out.biasAfterTint = px(44, 228)
+  out.glError6 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }

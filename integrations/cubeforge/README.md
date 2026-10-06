@@ -172,6 +172,8 @@ useTileLayer({
   tinted: true,                      // RGBA per tile, multiplied with the tile colour
 })
 water.setTints(colourFromDepthAndBiome) // width * height * 4 bytes
+heat.setBias(x, y, 0x300800)             // ADDED to the tile colour (brighten); tint can only darken
+heat.setBiases(bytes)                    // width * height * 4 bytes (rgb used); `biased: true` allocates up front
 ground.visualTile(x, y)                 // the id actually drawn (variant + animation)
 ```
 

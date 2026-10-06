@@ -93,6 +93,8 @@ export interface TileLayerOptions {
   farZoomPx?: number
   /** Allocate the per-tile RGBA tint layer up front (otherwise on first setTint). */
   tinted?: boolean
+  /** Allocate the per-tile additive bias layer up front (otherwise on first setBias). */
+  biased?: boolean
 }
 
 export type TileMinFilter = 'nearest' | 'mipmap'
@@ -169,6 +171,14 @@ export class TileLayerData {
   tints: Uint8Array | null = null
   /** Bumped when the tint layer is (re)allocated or fully replaced. */
   tintVersion = 0
+  /**
+   * RGBA bytes per tile, ADDED to the tile colour after tint and jitter (rgb only, scaled by the
+   * tile's alpha so empty texels stay empty): the way to brighten, since a tint can only darken.
+   * Null until enabled.
+   */
+  biases: Uint8Array | null = null
+  /** Bumped when the bias layer is (re)allocated or fully replaced. */
+  biasVersion = 0
   private _jitter = 0
   private _minFilter: TileMinFilter = 'nearest'
   private _farZoomPx = 2
@@ -217,6 +227,7 @@ export class TileLayerData {
     this._minFilter = opts.minFilter ?? 'nearest'
     this._farZoomPx = opts.farZoomPx ?? 2
     if (opts.tinted) this.enableTints()
+    if (opts.biased) this.enableBias()
   }
 
   get minFilter(): TileMinFilter {
@@ -256,6 +267,41 @@ export class TileLayerData {
       this.revision++
     }
     return this.tints
+  }
+
+  /** Allocate the additive bias layer (all zero = no change). */
+  enableBias(): Uint8Array {
+    if (!this.biases) {
+      this.biases = new Uint8Array(this.width * this.height * 4)
+      this.biasVersion++
+      this.revision++
+    }
+    return this.biases
+  }
+
+  /**
+   * Add 0xRRGGBB (0 = nothing, 0xffffff = full white) to one tile's colour. Marks only its
+   * chunk dirty. Combine with `setTint` to darken and brighten the same tile.
+   */
+  setBias(x: number, y: number, rgb: number): void {
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return
+    const b = this.biases ?? this.enableBias()
+    const o = (y * this.width + x) * 4
+    b[o] = (rgb >>> 16) & 255
+    b[o + 1] = (rgb >>> 8) & 255
+    b[o + 2] = rgb & 255
+    b[o + 3] = 255
+    this.markDirty(x, y)
+  }
+
+  /** Replace all biases: RGBA bytes (rgb used), length width * height * 4. Re-uploads once. */
+  setBiases(rgba: ArrayLike<number>): void {
+    const b = this.biases ?? this.enableBias()
+    if (rgba.length !== b.length) throw new Error(`[TileLayer] expected ${b.length} bias bytes, got ${rgba.length}`)
+    b.set(rgba)
+    this.biasVersion++
+    this.revision++
+    this.onChange?.()
   }
 
   /** Tint one tile with 0xRRGGBBAA. Marks only its chunk dirty. */
