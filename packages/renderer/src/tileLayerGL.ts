@@ -1,3 +1,4 @@
+import { setBlendFunc } from './blendModes'
 import {
   createTileLayerRenderStats,
   type ECSWorld,
@@ -57,6 +58,7 @@ uniform ivec2 u_pageCell;
 uniform ivec4 u_ts;
 uniform int u_margin;
 uniform float u_opacity;
+uniform vec4 u_layerTint;
 uniform float u_jitter;
 uniform int u_hasTint;
 uniform int u_useAvg;
@@ -120,7 +122,7 @@ void main() {
   if (u_hasTint == 1) c *= texelFetch(u_tint, cell, 0);
   if (u_jitter > 0.0) c.rgb *= 1.0 + (float(h >> 8 & 255u) / 255.0 - 0.5) * u_jitter;
   if (u_hasBias == 1) c.rgb += texelFetch(u_bias, cell, 0).rgb * c.a;
-  fragColor = vec4(c.rgb, c.a * u_opacity);
+  fragColor = vec4(c.rgb * u_layerTint.rgb, c.a * u_opacity * u_layerTint.a);
 }
 `
 
@@ -178,6 +180,7 @@ interface Uniforms {
   ts: WebGLUniformLocation | null
   margin: WebGLUniformLocation | null
   opacity: WebGLUniformLocation | null
+  layerTint: WebGLUniformLocation | null
   varSize: WebGLUniformLocation | null
   varW: WebGLUniformLocation | null
   pageCell: WebGLUniformLocation | null
@@ -419,6 +422,15 @@ export class TileLayerRenderer {
       gl.uniform4i(u.ts, ts.tileWidth, ts.tileHeight, ts.columns, ts.spacing ?? 0)
       gl.uniform1i(u.margin, ts.margin ?? 0)
       gl.uniform1f(u.opacity, layer.opacity)
+      const tc = layer.tintColor
+      gl.uniform4f(
+        u.layerTint,
+        (tc >>> 24) / 255,
+        ((tc >>> 16) & 255) / 255,
+        ((tc >>> 8) & 255) / 255,
+        (tc & 255) / 255,
+      )
+      if (layer.blend !== 'normal') setBlendFunc(gl, layer.blend)
       gl.uniform1ui(u.lutSize, s.lutTex ? layer.lutSize : 0)
       gl.uniform1i(u.lutW, s.lutW || 1)
       gl.uniform1ui(u.varSize, s.varTex ? layer.variantSize : 0)
@@ -477,6 +489,7 @@ export class TileLayerRenderer {
         this.cur.drawCalls++
         this.cur.instances += (x1 - x0) * (y1 - y0)
       }
+      if (layer.blend !== 'normal') setBlendFunc(gl, 'normal')
     }
     gl.activeTexture(gl.TEXTURE0)
     gl.bindVertexArray(null)
@@ -540,6 +553,7 @@ export class TileLayerRenderer {
       ts: loc('u_ts'),
       margin: loc('u_margin'),
       opacity: loc('u_opacity'),
+      layerTint: loc('u_layerTint'),
       varSize: loc('u_varSize'),
       varW: loc('u_varW'),
       pageCell: loc('u_pageCell'),

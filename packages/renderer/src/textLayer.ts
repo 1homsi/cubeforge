@@ -2,6 +2,7 @@ import { registerTextLayerRenderer } from './layerRegistry'
 import { TextLayerRenderer } from './textLayerGL'
 import { GlyphAtlas, type AtlasStyle, type GlyphStyleOptions } from './glyphAtlas'
 import { parseCSSColor } from './colorParser'
+import type { LayerBlendMode } from './blendModes'
 
 export { GlyphAtlas } from './glyphAtlas'
 export type { GlyphAtlasOptions, GlyphStyleOptions, Glyph, AtlasStyle, AtlasPage } from './glyphAtlas'
@@ -26,6 +27,10 @@ export interface TextLayerOptions extends GlyphStyleOptions {
   opacity?: number
   /** Draw runs in ascending `sortKey[i]` order (e.g. y for depth) instead of insertion order. */
   sortByKey?: boolean
+  /** Whole-layer colour multiplier, 0xRRGGBBAA. Default 0xffffffff. */
+  tintColor?: number
+  /** How the layer blends onto what is below it. Default 'normal'. */
+  blend?: LayerBlendMode
   /** Share glyphs with other layers by passing the same atlas. Default: the process-wide atlas. */
   atlas?: GlyphAtlas
 }
@@ -122,6 +127,8 @@ export class TextLayer {
   visible: boolean
   opacity: number
   sortByKey: boolean
+  private _tintColor: number
+  private _blend: LayerBlendMode
   readonly atlas: GlyphAtlas
   /** Style options; index 0 is the layer's own. */
   readonly styles: GlyphStyleOptions[]
@@ -135,7 +142,7 @@ export class TextLayer {
 
   constructor(options: TextLayerOptions = {}) {
     registerTextLayerRenderer((gl) => new TextLayerRenderer(gl))
-    const { capacity, layer, zIndex, visible, opacity, atlas, sortByKey, ...style } = options
+    const { capacity, layer, zIndex, visible, opacity, atlas, sortByKey, tintColor, blend, ...style } = options
     this.atlas = atlas ?? GlyphAtlas.shared
     this.styles = [style]
     this.layer = layer ?? 'default'
@@ -143,7 +150,27 @@ export class TextLayer {
     this.visible = visible ?? true
     this.opacity = opacity ?? 1
     this.sortByKey = sortByKey ?? false
+    this._tintColor = (tintColor ?? 0xffffffff) >>> 0
+    this._blend = blend ?? 'normal'
     this.grow(Math.max(16, capacity ?? 64))
+  }
+
+  get tintColor(): number {
+    return this._tintColor
+  }
+  set tintColor(v: number) {
+    v >>>= 0
+    if (v === this._tintColor) return
+    this._tintColor = v
+    this.version++
+  }
+  get blend(): LayerBlendMode {
+    return this._blend
+  }
+  set blend(v: LayerBlendMode) {
+    if (v === this._blend) return
+    this._blend = v
+    this.version++
   }
 
   private grow(capacity: number): void {

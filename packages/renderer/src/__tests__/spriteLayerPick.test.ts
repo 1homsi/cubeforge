@@ -140,4 +140,22 @@ describe('SpriteLayer picking', () => {
     expect(l.pickIndex(3900 + 8, 8)).toBe(-1)
     expect(l.pickIndex(100 + 8, 8)).toBe(1) // others keep the full quad
   })
+
+  it('picks around the sprite pivot and per-sprite anchors survive growth and swap-remove', () => {
+    const l = new SpriteLayer({
+      image: { width: 32, height: 32 } as unknown as HTMLCanvasElement,
+      frames: [{ x: 0, y: 0, w: 32, h: 32, pivot: { x: 16, y: 32 } }],
+      capacity: 2,
+    })
+    l.add(100, 100, 32, 32, 0, 1) // bottom-centre pivot: quad x 84..116, y 68..100
+    expect(l.pickIndex(100, 90)).toBe(0)
+    expect(l.pickIndex(100, 110)).toBe(-1)
+    for (let i = 0; i < 40; i++) l.add(1000 + i * 100, 0, 10, 10, 0, 10 + i)
+    l.setAnchor(40, 0, 0) // top-left anchor for the last sprite (slot 40, x 4900)
+    l.removeAt(1) // slot 40 moves into slot 1
+    expect(l.ids[1]).toBe(49)
+    expect(l.pickIndex(4905, 5)).toBe(1)
+    expect(l.pickIndex(4895, -5)).toBe(-1)
+    expect(l.pickIndex(100, 90)).toBe(0)
+  })
 })

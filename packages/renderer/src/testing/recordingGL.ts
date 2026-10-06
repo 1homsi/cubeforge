@@ -26,6 +26,8 @@ export interface RecordedDraw {
   texture: RecordedTexture | null
   /** Copy of instance floats (count * 19) when `captureInstances` is on. */
   instances: Float32Array | null
+  /** `[src, dst]` factors of the blend function active for this draw. */
+  blend: [number, number]
 }
 
 export interface RecordedInstance {
@@ -145,6 +147,7 @@ export class RecordingGL {
   readonly ONE_MINUS_SRC_COLOR = 0x0301
   readonly DST_COLOR = 0x0306
   readonly ONE = 1
+  readonly ZERO = 0
   readonly COLOR_BUFFER_BIT = 0x4000
   readonly FRAMEBUFFER = 0x8d40
   readonly READ_FRAMEBUFFER = 0x8ca8
@@ -180,6 +183,7 @@ export class RecordingGL {
   private activeQuery: RecordedQuery | null = null
 
   private boundTexture: RecordedTexture | null = null
+  private blendFactors: [number, number] = [0x0302, 0x0303]
   private lastInstanceSrc: ArrayBufferView | null = null
 
   constructor(
@@ -269,6 +273,10 @@ export class RecordingGL {
     if (this.boundTexture) this.boundTexture.uploads++
   }
 
+  blendFunc(src: number, dst: number): void {
+    this.blendFactors = [src, dst]
+  }
+
   bufferSubData(_target: number, _dst: number, src: ArrayBufferView): void {
     this.lastInstanceSrc = src
   }
@@ -278,12 +286,18 @@ export class RecordingGL {
     if (this.captureInstances && this.lastInstanceSrc instanceof Float32Array) {
       instances = this.lastInstanceSrc.slice(0, instanceCount * INSTANCE_FLOATS)
     }
-    this.draws.push({ kind: 'instanced', count: instanceCount, texture: this.boundTexture, instances })
+    this.draws.push({
+      kind: 'instanced',
+      count: instanceCount,
+      texture: this.boundTexture,
+      instances,
+      blend: this.blendFactors,
+    })
     this.totalDraws++
     this.totalInstances += instanceCount
   }
   drawArrays(_mode: number, _first: number, count: number): void {
-    this.draws.push({ kind: 'arrays', count, texture: this.boundTexture, instances: null })
+    this.draws.push({ kind: 'arrays', count, texture: this.boundTexture, instances: null, blend: this.blendFactors })
     this.totalDraws++
   }
 
@@ -342,7 +356,6 @@ for (const name of [
   'bindBuffer',
   'bindFramebuffer',
   'bindVertexArray',
-  'blendFunc',
   'blitFramebuffer',
   'bufferData',
   'clearColor',
@@ -424,13 +437,28 @@ export function createRecordingCanvas(width = 800, height = 600, opts: Recording
   return canvas as unknown as RecordingCanvas
 }
 
+export interface HeadlessCanvasOptions {
+  /**
+   * Replace an existing `HTMLCanvasElement.getContext` (jsdom's stub) so every
+   * canvas, including the one `<Game>` renders, gets a {@link RecordingGL}.
+   * Without it an existing `getContext` is left alone.
+   */
+  force?: boolean
+  /** Options for the {@link RecordingGL} each canvas receives. */
+  recording?: RecordingGLOptions
+  /** Called once per canvas when its WebGL2 context is first requested. */
+  onContext?: (canvas: HTMLCanvasElement, gl: RecordingGL) => void
+}
+
 /**
  * Makes the renderer's offscreen canvases (text, shapes, particles) work without
  * a real canvas implementation. In plain Node it installs a minimal `document`;
  * under happy-dom/jsdom it gives `HTMLCanvasElement` a no-op `getContext` when
- * the environment has none. Returns a function that undoes the change.
+ * the environment has none (or always, with `force`). A canvas keeps one
+ * RecordingGL across `getContext('webgl2')` calls, like a real one. Returns a
+ * function that undoes the change.
  */
-export function installHeadlessCanvasDOM(): () => void {
+export function installHeadlessCanvasDOM(options: HeadlessCanvasOptions = {}): () => void {
   const g = globalThis as unknown as {
     document?: unknown
     HTMLCanvasElement?: { prototype: { getContext?: unknown } }
@@ -447,18 +475,28 @@ export function installHeadlessCanvasDOM(): () => void {
     }
   }
   const proto = g.HTMLCanvasElement?.prototype
-  if (!proto || typeof proto.getContext === 'function') return noop
+  if (!proto || (typeof proto.getContext === 'function' && !options.force)) return noop
+  const previous = Object.getOwnPropertyDescriptor(proto, 'getContext')
   const ctxs = new WeakMap<object, unknown>()
-  proto.getContext = function (this: { width: number; height: number }, kind: string) {
+  const gls = new WeakMap<object, RecordingGL>()
+  proto.getContext = function (this: HTMLCanvasElement, kind: string) {
     if (kind === '2d') {
       let c = ctxs.get(this)
       if (!c) ctxs.set(this, (c = createNoop2D(this)))
       return c
     }
-    if (kind === 'webgl2') return new RecordingGL(this)
+    if (kind === 'webgl2') {
+      let gl = gls.get(this)
+      if (!gl) {
+        gls.set(this, (gl = new RecordingGL(this, options.recording)))
+        options.onContext?.(this, gl)
+      }
+      return gl
+    }
     return null
   }
   return () => {
-    delete proto.getContext
+    if (previous) Object.defineProperty(proto, 'getContext', previous)
+    else delete proto.getContext
   }
 }

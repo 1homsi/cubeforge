@@ -22,6 +22,11 @@
       "types": "./dist/render.d.ts",
       "import": "./dist/render.js",
       "default": "./dist/render.js"
+    },
+    "./test": {
+      "types": "./dist/test.d.ts",
+      "import": "./dist/test.js",
+      "default": "./dist/test.js"
     }
   },
   "scripts": {

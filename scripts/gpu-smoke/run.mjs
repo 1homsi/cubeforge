@@ -106,6 +106,11 @@ try {
       biasBrightens: '192,192,192,255',
       biasAfterTint: '128,128,128,255',
       glError6: 0,
+      pivotQuadLeftOfX: '255,0,255,255',
+      pivotNotRightOfX: '255,255,255,255',
+      anchorQuadRightOfX: '255,0,255,255',
+      anchorNotLeftOfX: '255,255,255,255',
+      glError7: 0,
       circleCenter: '0,255,0,255',
       circleOutside: 'ok',
       circleAntialiased: 'ok',
@@ -170,6 +175,40 @@ try {
     console.log(
       `gpu-smoke: stats layers, tile textures and GPU timer (supported: ${out.gpuTimerSupported}) are consistent`,
     )
+  }
+  {
+    const out = await runPage('tint.ts')
+    const ok = (...keys) => Object.fromEntries(keys.map((k) => [k, 'ok']))
+    check('tint', out, {
+      ...ok(
+        'layerTint',
+        'layerOpacity',
+        'additive',
+        'multiply',
+        'screen',
+        'sortedTintDimsGround',
+        'sortedTintSparesTop',
+        'stackedTints',
+        'stackedTintsBackground',
+        'tileAdditive',
+        'tileOutside',
+      ),
+      glError: 0,
+      glError2: 0,
+      glError3: 0,
+    })
+    console.log('gpu-smoke: per-layer tint/opacity/blend, stacked and z-limited screen tints render correctly')
+  }
+  {
+    const out = await runPage('wind.ts')
+    check('wind', out, {
+      restTop: 'ok',
+      swayTopMoves: 'ok',
+      swayBaseStays: 'ok',
+      unflaggedStays: 'ok',
+      glError: 0,
+    })
+    console.log('gpu-smoke: GPU vertex sway bends flagged sprites from a time uniform (base fixed)')
   }
 } finally {
   rmSync(dir, { recursive: true, force: true })

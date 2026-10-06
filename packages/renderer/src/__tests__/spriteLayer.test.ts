@@ -253,4 +253,41 @@ describe('SpriteLayer', () => {
     expect(mins).toContain('LINEAR')
     expect(mins).toContain('NEAREST')
   })
+
+  it('writes per-sprite anchors: per-sprite override, frame pivot, grid pivot, layer default', () => {
+    const { rs, world, uploads } = setup()
+    const layer = new SpriteLayer({
+      atlases: [
+        {
+          image: img(64, 32),
+          frames: [
+            { x: 0, y: 0, w: 32, h: 32, pivot: { x: 16, y: 32 } },
+            { x: 32, y: 0, w: 32, h: 32 },
+          ],
+        },
+        { image: img(32, 16), frameWidth: 16, frameHeight: 16, pivot: { x: 4, y: 8 } },
+      ],
+      anchorX: 0.25,
+      anchorY: 0.75,
+    })
+    layer.add(0, 0, 8, 8, 0) // frame pivot -> 0.5, 1
+    layer.add(10, 0, 8, 8, 1) // frame without pivot -> layer anchor
+    const g = layer.add(20, 0, 8, 8, 0)
+    layer.atlas[g] = 1 // grid pivot -> 0.25, 0.5
+    const o = layer.add(30, 0, 8, 8, 0) // per-sprite override wins over the frame pivot
+    layer.setAnchor(o, 0.1, 0.2)
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    const d = uploads[uploads.length - 1]
+    const anchors = [0, 1, 2, 3].map((k) => [d[k * 20 + 5], d[k * 20 + 6]].map((n) => +n.toFixed(4)))
+    expect(anchors).toEqual([
+      [0.5, 1],
+      [0.25, 0.75],
+      [0.25, 0.5],
+      [0.1, 0.2],
+    ])
+    layer.setAnchor(o) // cleared: back to the frame pivot
+    rs.update(world, 1 / 60)
+    expect([uploads[uploads.length - 1][3 * 20 + 5], uploads[uploads.length - 1][3 * 20 + 6]]).toEqual([0.5, 1])
+  })
 })

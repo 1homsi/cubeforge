@@ -1,6 +1,7 @@
 import type { GlyphAtlas, AtlasPage } from './glyphAtlas'
 import { LAYOUT_GLYPH_FLOATS, TEXT_HIDDEN, type TextLayer } from './textLayer'
 import type { LayerCamera } from './spriteLayerGL'
+import { setBlendFunc } from './blendModes'
 
 /** Floats per glyph instance: x, y, w, h, cos, sin, u0, v0, u1, v1, r, g, b, a. */
 const FLOATS = 14
@@ -210,7 +211,12 @@ export class TextLayerRenderer {
     gl.uniform2f(this.uShake, cam.shakeX, cam.shakeY)
     gl.bindVertexArray(this.vao)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+    setBlendFunc(gl, layer.blend, true)
+    const tint = layer.tintColor
+    const tr = (tint >>> 24) / 255
+    const tg = ((tint >>> 16) & 255) / 255
+    const tb = ((tint >>> 8) & 255) / 255
+    const ta = (tint & 255) / 255
     const d = this.data
     const order = layer.sortByKey ? layer.drawOrder() : null
     for (let p = 0; p < atlas.pages.length; p++) {
@@ -238,11 +244,11 @@ export class TextLayerRenderer {
         const rad = Math.abs(ox) + Math.abs(oy) + w + h
         if (px + rad < viewL || px - rad > viewR || py + rad < viewT || py - rad > viewB) continue
         const col = layer.color[i]
-        const a = ((col & 255) / 255) * layer.alpha[i] * layer.opacity
+        const a = ((col & 255) / 255) * layer.alpha[i] * layer.opacity * ta
         if (a <= 0) continue
-        const r = (col >>> 24) / 255
-        const g = ((col >>> 16) & 255) / 255
-        const bl = ((col >>> 8) & 255) / 255
+        const r = ((col >>> 24) / 255) * tr
+        const g = (((col >>> 16) & 255) / 255) * tg
+        const bl = (((col >>> 8) & 255) / 255) * tb
         const G = lay.glyphs
         for (let k = 0, o = 0; k < lay.n; k++, o += LAYOUT_GLYPH_FLOATS) {
           if (G[o + 8] !== p) continue

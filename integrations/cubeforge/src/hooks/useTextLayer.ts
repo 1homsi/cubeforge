@@ -29,8 +29,10 @@ export function useTextLayer(options: TextLayerOptions = {}): TextLayer {
     layer.zIndex = options.zIndex ?? 0
     layer.visible = options.visible ?? true
     layer.opacity = options.opacity ?? 1
+    layer.tintColor = options.tintColor ?? 0xffffffff
+    layer.blend = options.blend ?? 'normal'
     layer.touch()
-  }, [layer, options.layer, options.zIndex, options.visible, options.opacity])
+  }, [layer, options.layer, options.zIndex, options.visible, options.opacity, options.tintColor, options.blend])
 
   useLayoutEffect(() => {
     const rs = engine.activeRenderSystem as TextLayerRenderer

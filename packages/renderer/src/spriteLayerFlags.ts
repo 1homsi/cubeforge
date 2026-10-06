@@ -10,3 +10,5 @@ export const SPRITE_FLIP_Y = 2
 export const SPRITE_HIDDEN = 4
 /** Draw as a solid rect in `color`, ignoring the atlas. */
 export const SPRITE_UNTEXTURED = 8
+/** Bend with the layer's `wind` on the GPU (top of the quad sways, base stays put). */
+export const SPRITE_SWAY = 16
