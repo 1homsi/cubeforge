@@ -135,6 +135,7 @@ export {
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
+  SPRITE_ADDITIVE,
   NO_SPRITE,
   SPRITE_SWAY,
 } from '@cubeforge/renderer'
