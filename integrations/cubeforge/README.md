@@ -304,6 +304,12 @@ layer.pickNearest(x, y, radius)            // id of the nearest hit rect within 
 layer.add(x, y, w, h, frame, 'person:42')  // string ids are interned to int32; layer.pickKey(x, y) maps back
 ```
 
+Brighten and glow: `color` only multiplies, so it can only darken. `layer.enableColorAdd()[i] = 0xRRGGBB`
+(then `touch()`) ADDS a colour after the tint, scaled by the sprite's alpha (hit flash, heat). `flags[i] |= SPRITE_ADDITIVE`
+draws one sprite additively inside a normally blended layer (fire, lamps); it keeps its place in the
+depth order and costs one extra draw call per run of additive sprites, so group them by `sortKey` when
+you can. (A whole layer blends with `blend: 'additive'`.)
+
 Pivots (what sits at the sprite's x, y and what it rotates around), most specific first:
 `layer.setAnchor(i, ax, ay)` / `layer.enableAnchors()` (per sprite, fractions of the quad), a frame's
 `pivot: { x, y }` in frame pixels (frame tables), an atlas-wide `pivot` for a grid, then the layer's

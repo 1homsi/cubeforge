@@ -12,3 +12,5 @@ export const SPRITE_HIDDEN = 4
 export const SPRITE_UNTEXTURED = 8
 /** Bend with the layer's `wind` on the GPU (top of the quad sways, base stays put). */
 export const SPRITE_SWAY = 16
+/** Draw this sprite with additive blending (glow, fire, light) inside a layer that blends normally. */
+export const SPRITE_ADDITIVE = 32
