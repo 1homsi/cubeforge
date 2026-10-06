@@ -6,7 +6,7 @@
 // ║                                                                          ║
 // ║  The production renderer is WebGL2: packages/renderer/src/              ║
 // ║  webglRenderSystem.ts — exported as RenderSystem from @cubeforge/        ║
-// ║  renderer.                                                               ║
+// ║  renderer. Its Canvas2D fallback for <Game> is canvas2dRenderSystem.ts.  ║
 // ║                                                                          ║
 // ║  DO NOT add game features here. Any rendering code that end users can    ║
 // ║  see belongs in webglRenderSystem.ts and shaders.ts.                     ║

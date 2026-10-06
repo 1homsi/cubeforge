@@ -51,7 +51,7 @@ describe('SpriteLayer GPU sway', () => {
     rs.update(world, 0.25)
     const d = uploads[uploads.length - 1]
     expect(d[18]).toBeCloseTo(0.2) // 0.1 x per-sprite scale 2
-    expect(d[20 + 18]).toBe(0) // unflagged sprite does not sway
+    expect(d[21 + 18]).toBe(0) // unflagged sprite does not sway
     expect(uniforms.u_wind).toEqual([2, 0.5])
     expect(uniforms.u_time[0]).toBeCloseTo(0.25)
     rs.update(world, 0.25)

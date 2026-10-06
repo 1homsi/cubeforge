@@ -137,6 +137,7 @@ export {
   SPRITE_FLIP_Y,
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
+  SPRITE_ADDITIVE,
   NO_SPRITE,
   SPRITE_SWAY,
 } from '@cubeforge/renderer'
@@ -359,7 +360,7 @@ export type { PostProcessOptions } from '@cubeforge/renderer'
 // Types and utilities from engine packages
 export { EngineContext, EntityContext } from './context'
 export type { EngineState } from './context'
-export type { GameControls } from './components/Game'
+export type { GameControls, RendererBackend } from './components/Game'
 export type { EntityId, ECSWorld, ScriptUpdateFn, Plugin, WorldSnapshot, GameLoopMode } from '@cubeforge/core'
 export { definePlugin, findByTag, preloadManifest, hotReloadPlugin } from '@cubeforge/core'
 export type { HotReloadablePlugin } from '@cubeforge/core'

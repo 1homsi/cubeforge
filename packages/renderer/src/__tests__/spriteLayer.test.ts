@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ECSWorld } from '@cubeforge/core'
 import { RenderSystem } from '../webglRenderSystem'
-import { SpriteLayer, SPRITE_HIDDEN } from '../spriteLayer'
+import { SpriteLayer, SPRITE_HIDDEN, SPRITE_ADDITIVE } from '../spriteLayer'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -20,6 +20,7 @@ function setup() {
   const uploads: Float32Array[] = []
   const tex: string[] = []
   const params: [string, string, string][] = []
+  const blends: string[] = []
   const gl = new Proxy({} as Record<string, unknown>, {
     get(_t, p: string) {
       if (/^[A-Z_0-9]+$/.test(p)) return p
@@ -30,6 +31,7 @@ function setup() {
         return (_t: unknown, _o: unknown, data: Float32Array, src: number, len: number) =>
           uploads.push(data.slice(src, src + len))
       if (p === 'texImage2D' || p === 'texSubImage2D') return () => tex.push(p)
+      if (p === 'blendFunc') return (a: string, b: string) => blends.push(`${a}/${b}`)
       if (p === 'texParameteri')
         return (_t: unknown, pname: string, value: string) => params.push([_t as string, pname, value])
       if (p === 'getShaderParameter' || p === 'getProgramParameter') return () => true
@@ -38,7 +40,7 @@ function setup() {
   })
   const canvas = { width: 200, height: 100, clientWidth: 200, clientHeight: 100, getContext: () => gl }
   const rs = new RenderSystem(canvas as unknown as HTMLCanvasElement, new Map())
-  return { rs, world: new ECSWorld(), draws, uploads, tex, params }
+  return { rs, world: new ECSWorld(), draws, uploads, tex, params, blends }
 }
 
 describe('SpriteLayer', () => {
@@ -94,7 +96,7 @@ describe('SpriteLayer', () => {
     rs.update(world, 1 / 60)
     expect(draws).toEqual([3])
     const data = uploads[uploads.length - 1]
-    const drawn = [0, 1, 2].map((n) => ({ y: data[n * 20 + 1], atlas: data[n * 20 + 17] }))
+    const drawn = [0, 1, 2].map((n) => ({ y: data[n * 21 + 1], atlas: data[n * 21 + 17] }))
     expect(drawn.map((d) => d.y)).toEqual([10, 20, 30])
     expect(drawn.map((d) => d.atlas)).toEqual([1, 0, 0])
     // pick follows draw order: the y=30 sprite is drawn last, so it wins on overlap
@@ -148,7 +150,7 @@ describe('SpriteLayer', () => {
   const lastUVs = (uploads: Float32Array[], n: number) =>
     Array.from({ length: n }, (_, k) => {
       const d = uploads[uploads.length - 1]
-      return { uv: Array.from(d.subarray(k * 20 + 13, k * 20 + 17)), unit: d[k * 20 + 17] }
+      return { uv: Array.from(d.subarray(k * 21 + 13, k * 21 + 17)), unit: d[k * 21 + 17] }
     })
 
   it('uses an explicit frame table for UV rects and skips out-of-range frames', () => {
@@ -224,7 +226,7 @@ describe('SpriteLayer', () => {
     rs.update(world, 1 / 60)
     expect(draws).toEqual([2, 2, 1, 1])
     // local unit = atlas & 7 (the shader picks the texture by unit)
-    const units = uploads.flatMap((u) => Array.from({ length: u.length / 20 }, (_, k) => u[k * 20 + 17]))
+    const units = uploads.flatMap((u) => Array.from({ length: u.length / 21 }, (_, k) => u[k * 21 + 17]))
     expect(units).toEqual([0, 7, 0, 7, 3, 3])
     layer.sortByKey = false
     layer.sortKey.fill(0)
@@ -279,7 +281,7 @@ describe('SpriteLayer', () => {
     rs.addSpriteLayer(layer)
     rs.update(world, 1 / 60)
     const d = uploads[uploads.length - 1]
-    const anchors = [0, 1, 2, 3].map((k) => [d[k * 20 + 5], d[k * 20 + 6]].map((n) => +n.toFixed(4)))
+    const anchors = [0, 1, 2, 3].map((k) => [d[k * 21 + 5], d[k * 21 + 6]].map((n) => +n.toFixed(4)))
     expect(anchors).toEqual([
       [0.5, 1],
       [0.25, 0.75],
@@ -288,6 +290,50 @@ describe('SpriteLayer', () => {
     ])
     layer.setAnchor(o) // cleared: back to the frame pivot
     rs.update(world, 1 / 60)
-    expect([uploads[uploads.length - 1][3 * 20 + 5], uploads[uploads.length - 1][3 * 20 + 6]]).toEqual([0.5, 1])
+    expect([uploads[uploads.length - 1][3 * 21 + 5], uploads[uploads.length - 1][3 * 21 + 6]]).toEqual([0.5, 1])
+  })
+
+  it('splits draws at per-sprite additive runs and restores normal blending', () => {
+    const { rs, world, draws, blends } = setup()
+    const layer = new SpriteLayer({ sortByKey: true })
+    for (let i = 0; i < 5; i++) {
+      const k = layer.add(i * 10, 0, 8, 8)
+      layer.sortKey[k] = i
+      if (i === 1 || i === 2) layer.flags[k] |= SPRITE_ADDITIVE
+    }
+    rs.addSpriteLayer(layer)
+    blends.length = 0
+    rs.update(world, 1 / 60)
+    expect(draws).toEqual([1, 2, 2]) // normal | additive x2 | normal x2
+    const layerBlends = blends.filter((b) => b === 'SRC_ALPHA/ONE' || b === 'SRC_ALPHA/ONE_MINUS_SRC_ALPHA')
+    expect(layerBlends.slice(-2)).toEqual(['SRC_ALPHA/ONE', 'SRC_ALPHA/ONE_MINUS_SRC_ALPHA'])
+    // ending on an additive run still leaves normal blending behind
+    layer.sortKey[0] = 10
+    layer.flags[0] |= SPRITE_ADDITIVE
+    layer.touch()
+    blends.length = 0
+    rs.update(world, 1 / 60)
+    expect(blends.filter((b) => b.startsWith('SRC_ALPHA/')).at(-1)).toBe('SRC_ALPHA/ONE_MINUS_SRC_ALPHA')
+  })
+
+  it('writes colorAdd into instance slot 19 and keeps it through growth, swap-remove and reset', () => {
+    const { rs, world, uploads } = setup()
+    const layer = new SpriteLayer({ capacity: 2 })
+    layer.add(0, 0, 8, 8)
+    const ca = layer.enableColorAdd()
+    ca[0] = 0x102030
+    for (let i = 0; i < 20; i++) layer.add(10 + i * 3, 0, 8, 8)
+    expect(layer.colorAdd!.length).toBe(layer.capacity)
+    expect(layer.colorAdd![0]).toBe(0x102030)
+    expect(layer.colorAdd![5]).toBe(0)
+    layer.colorAdd![20] = 0xffffff
+    layer.removeAt(1) // slot 20 -> 1
+    expect(layer.colorAdd![1]).toBe(0xffffff)
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    const d = uploads[uploads.length - 1]
+    expect(d[20]).toBe(0x102030)
+    expect(d[21 + 20]).toBe(0xffffff)
+    expect(d[42 + 20]).toBe(0)
   })
 })

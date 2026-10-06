@@ -63,4 +63,5 @@ export type { BVH, Triangle2D } from '@cubeforge/physics'
 
 // Headless rendering for unit tests and benchmarks (no GPU).
 export { RecordingGL, createRecordingCanvas, decodeInstances, installHeadlessCanvasDOM } from '@cubeforge/renderer'
+export { Canvas2DRenderSystem } from '@cubeforge/renderer/canvas2d'
 export type { RecordedDraw, RecordedInstance, RecordedTexture, RecordingCanvas } from '@cubeforge/renderer'

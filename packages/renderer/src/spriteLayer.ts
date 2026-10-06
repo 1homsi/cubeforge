@@ -30,6 +30,7 @@ export {
   SPRITE_HIDDEN,
   SPRITE_UNTEXTURED,
   SPRITE_SWAY,
+  SPRITE_ADDITIVE,
 } from './spriteLayerFlags'
 
 export type SpriteLayerImage = HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas
@@ -189,6 +190,11 @@ export class SpriteLayer {
    * NaN in the first = use the frame / atlas pivot or the layer anchor. Null until {@link enableAnchors}.
    */
   anchor: Float32Array | null = null
+  /**
+   * Additive colour per sprite, 0xRRGGBB, ADDED to the sprite's colour after tint (scaled by its
+   * alpha): brighten, flash or glow, where `color` can only darken. Null until {@link enableColorAdd}.
+   */
+  colorAdd: Uint32Array | null = null
   /**
    * Per-sprite hit rect override, 4 floats per sprite (x0, y0, x1, y1) as fractions of the
    * sprite's quad; NaN in x0 = none. Null until {@link enableHitRects}.
@@ -372,6 +378,7 @@ export class SpriteLayer {
     this.flags = copy(this.flags, Uint8Array)
     this.sortKey = copy(this.sortKey, Float64Array)
     if (this.sortKey2) this.sortKey2 = copy(this.sortKey2, Float64Array)
+    if (this.colorAdd) this.colorAdd = copy(this.colorAdd, Uint32Array)
     if (this.anchor) {
       const next = new Float32Array(capacity * 2).fill(NaN)
       next.set(this.anchor.subarray(0, this.count * 2))
@@ -414,6 +421,7 @@ export class SpriteLayer {
     if (this.sortKey2) this.sortKey2[i] = 0
     if (this.hit) this.hit[i * 4] = NaN
     if (this.anchor) this.anchor[i * 2] = NaN
+    if (this.colorAdd) this.colorAdd[i] = 0
     this.ids[i] = id
     if (this.swayScale) this.swayScale[i] = 1
   }
@@ -457,6 +465,7 @@ export class SpriteLayer {
       if (this.sortKey2) this.sortKey2[i] = this.sortKey2[last]
       if (this.hit) this.hit.copyWithin(i * 4, last * 4, last * 4 + 4)
       if (this.anchor) this.anchor.copyWithin(i * 2, last * 2, last * 2 + 2)
+      if (this.colorAdd) this.colorAdd[i] = this.colorAdd[last]
       this.ids[i] = this.ids[last]
       if (this.swayScale) this.swayScale[i] = this.swayScale[last]
     }
@@ -587,6 +596,12 @@ export class SpriteLayer {
       }
       return a - b
     })
+  }
+
+  /** Allocate the additive colour array (zeros = no change). Write 0xRRGGBB, then `touch()`. */
+  enableColorAdd(): Uint32Array {
+    if (!this.colorAdd) this.colorAdd = new Uint32Array(this.capacity)
+    return this.colorAdd
   }
 
   // ── Anchors / pivots ───────────────────────────────────────────────────────
