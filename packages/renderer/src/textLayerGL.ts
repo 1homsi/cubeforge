@@ -191,6 +191,7 @@ export class TextLayerRenderer {
     if (!layer.visible || count === 0) return
     const { gl } = this
     const atlas: GlyphAtlas = layer.atlas
+    layer.updateDensity(cam.zoom * (cam.dpr ?? 1))
     // Lay every candidate run out first: rasterising can reset the atlas, which
     // invalidates earlier layouts, so retry once from a clean atlas.
     const { viewL, viewR, viewT, viewB } = cam
@@ -228,7 +229,8 @@ export class TextLayerRenderer {
         const flags = layer.flags[i]
         if (flags & TEXT_HIDDEN) continue
         const lay = layer.layoutIfCached(i)
-        if (!lay || lay.n === 0 || lay.gen !== atlas.generation) continue
+        if (!lay || lay.n === 0 || lay.gen !== atlas.generation || lay.ref !== layer.atlasStyle(layer.style[i]))
+          continue
         const size = layer.size[i]
         const sc = size / layer.atlasStyle(layer.style[i]).rasterSize
         const w = lay.width * sc
@@ -287,7 +289,9 @@ export class TextLayerRenderer {
 
   /** True when run `i` is certainly off screen, judged without laying it out. */
   private far(layer: TextLayer, i: number, l: number, r: number, t: number, b: number): boolean {
-    const cur = layer.layoutIfCached(i)
+    const style = layer.atlasStyle(layer.style[i])
+    const lc = layer.layoutIfCached(i)
+    const cur = lc && lc.ref === style ? lc : undefined
     const size = layer.size[i]
     let extent: number
     if (cur) extent = (cur.width + cur.height) * (size / layer.atlasStyle(layer.style[i]).rasterSize)

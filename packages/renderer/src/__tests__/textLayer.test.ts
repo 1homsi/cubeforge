@@ -163,3 +163,50 @@ describe('TextLayer rendering', () => {
     expect(rs.getStats().textureCount).toBeGreaterThan(0)
   })
 })
+
+describe('TextLayer zoom-aware raster density', () => {
+  it('steps up with zoom x dpr, with hysteresis, and only re-rasterises on a change', () => {
+    const { atlas: a, fake } = atlas() // resolution 2
+    const layer = new TextLayer({ atlas: a, fontSize: 10 })
+    const i = layer.add('A', 0, 0)
+    layer.updateDensity(1)
+    expect(layer.rasterScale).toBe(1)
+    const lay1 = layer.layout(i)
+    expect(layer.atlasStyle(0).rasterSize).toBe(20)
+    layer.updateDensity(2) // exactly the atlas resolution: still crisp
+    expect(layer.rasterScale).toBe(1)
+    layer.updateDensity(3)
+    expect(layer.rasterScale).toBe(2)
+    layer.updateDensity(8)
+    expect(layer.rasterScale).toBe(4)
+    expect(layer.atlasStyle(0).rasterSize).toBe(80)
+    const lay4 = layer.layout(i)
+    expect(lay4).not.toBe(lay1) // re-laid out in the new raster size
+    expect(layer.measure(i).width).toBeCloseTo(6) // world size is unchanged
+    layer.updateDensity(5) // hysteresis: stays at 4x until well below
+    expect(layer.rasterScale).toBe(4)
+    layer.updateDensity(1)
+    expect(layer.rasterScale).toBe(1)
+    // the 1x glyphs are still cached: going back costs no new rasterisation
+    const drawn = fake.drawn.length
+    layer.layout(i)
+    expect(fake.drawn.length).toBe(drawn)
+    // stable zoom does no work: same layout object, no new glyphs
+    const l = layer.layout(i)
+    layer.updateDensity(1)
+    expect(layer.layout(i)).toBe(l)
+  })
+
+  it('can be switched off, and the renderer feeds it the camera density', () => {
+    const { atlas: a } = atlas()
+    const off = new TextLayer({ atlas: a, zoomAware: false })
+    off.updateDensity(16)
+    expect(off.rasterScale).toBe(1)
+    const on = new TextLayer({ atlas: a, fontSize: 10 })
+    on.add('hi', 200, 150)
+    const { rs, world } = setup({ text: [on] })
+    world.getComponent<{ zoom: number }>(world.queryOne('Camera2D')!, 'Camera2D')!.zoom = 4
+    rs.update(world, 1 / 60)
+    expect(on.rasterScale).toBe(2) // zoom 4 x dpr 1 over resolution 2
+  })
+})

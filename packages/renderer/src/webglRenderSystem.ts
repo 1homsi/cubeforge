@@ -3107,6 +3107,7 @@ export class RenderSystem implements System {
       lc.shakeX = shakeX
       lc.shakeY = shakeY
       lc.time = this._time
+      lc.dpr = W / Wl
     }
     gl.activeTexture(gl.TEXTURE0)
 
