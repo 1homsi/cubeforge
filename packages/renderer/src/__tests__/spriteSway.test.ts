@@ -58,6 +58,24 @@ describe('SpriteLayer GPU sway', () => {
     expect(uniforms.u_time[0]).toBeCloseTo(0.5)
   })
 
+  it('passes snap step and fromY to the shader (snap defaults fromY to 0.5)', () => {
+    const { rs, world, uniforms } = setup()
+    const layer = new SpriteLayer({ wind: { snap: 2 } })
+    layer.flags[layer.add(0, 0, 8, 16)] |= SPRITE_SWAY
+    rs.addSpriteLayer(layer)
+    rs.update(world, 1 / 60)
+    expect(uniforms.u_windShape).toEqual([2, 0.5])
+    layer.wind = { snap: true, fromY: 0.3 }
+    rs.update(world, 1 / 60)
+    expect(uniforms.u_windShape).toEqual([1, 0.3])
+    layer.wind = { fromY: 0.25 }
+    rs.update(world, 1 / 60)
+    expect(uniforms.u_windShape).toEqual([0, 0.25])
+    layer.wind = {}
+    rs.update(world, 1 / 60)
+    expect(uniforms.u_windShape).toEqual([0, 0])
+  })
+
   it('does nothing without a wind, and defaults amplitude to 0.04', () => {
     const { rs, world, uploads } = setup()
     const layer = new SpriteLayer()

@@ -107,6 +107,20 @@ export interface SpriteLayerWind {
   speed?: number
   /** Phase change per world pixel along x, so neighbours do not sway in lockstep (radians). Default 0.01. */
   frequency?: number
+  /**
+   * Whole-pixel sway for pixel art: the offset is quantised to this step in world
+   * pixels (`true` = 1) and the canopy moves rigidly, so texels stay on the pixel
+   * grid. The quad is grown sideways by the maximum sway and the fragment shader
+   * shifts the texels, so atlas frames must have transparent room only if you use
+   * `sampling: 'linear'`. Sprites should have a positive width.
+   */
+  snap?: number | boolean
+  /**
+   * Fraction of the sprite height, measured from the base, that stays fixed
+   * (0..0.99). Above it the sprite bends. Default 0 (smooth) or 0.5 (`snap`),
+   * so a tree trunk stays put while only the canopy moves.
+   */
+  fromY?: number
 }
 
 export interface SpriteLayerOptions extends LayerAtlas {

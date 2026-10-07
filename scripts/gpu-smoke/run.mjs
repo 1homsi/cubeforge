@@ -232,7 +232,15 @@ try {
       swayTopMoves: 'ok',
       swayBaseStays: 'ok',
       unflaggedStays: 'ok',
+      snapRest: 'ok',
+      snapStep: 'ok',
+      snapBaseFixed: 'ok',
+      snapPeak: 'ok',
+      snapPeakBase: 'ok',
+      smoothFromYBase: 'ok',
+      smoothFromYTop: 'ok',
       glError: 0,
+      glError2: 0,
     })
     console.log('gpu-smoke: GPU vertex sway bends flagged sprites from a time uniform (base fixed)')
   }
