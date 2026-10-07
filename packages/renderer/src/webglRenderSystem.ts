@@ -985,14 +985,22 @@ export class RenderSystem implements System {
     )
   }
 
+  /** Count an upload of a new or re-specified texture. */
   private _statTex(tex: WebGLTexture, w: number, h: number): void {
+    this._statTexSize(tex, w, h)
+    this.stats.textureUploads++
+    this.stats.textureUploadBytes += w * h * 4
+  }
+
+  /** Update the live-memory counters for `tex` at `w` x `h` (no upload counting). Handles resizes. */
+  private _statTexSize(tex: WebGLTexture, w: number, h: number): void {
     const b = w * h * 4
     const s = this.stats
     s.textureBytes += b - (this._texBytes.get(tex) ?? 0)
     this._texBytes.set(tex, b)
+    const st = this._texSampling.get(tex)
+    if (st) st.mipBytes = false // re-specified: the mip chain (and its bytes) is gone
     s.textureCount = this._texBytes.size + (this._tileLayers?.stats.textureCount ?? 0)
-    s.textureUploads++
-    s.textureUploadBytes += b
   }
 
   private _statTexFree(tex: WebGLTexture | null): void {
@@ -1042,7 +1050,7 @@ export class RenderSystem implements System {
   private _gradientTex = new Map<GradientComponent, { key: string; tex: WebGLTexture }>()
   private _textWarned = false
   private readonly _sortTextLayers: TextLayer[] = []
-  private _texSampling = new WeakMap<WebGLTexture, { min: string; mag: string; mips: boolean }>()
+  private _texSampling = new WeakMap<WebGLTexture, { min: string; mag: string; mips: boolean; mipBytes: boolean }>()
   private readonly _tints = new Map<string, TintSlot>()
   /** Active (strength > 0) tints drawn after all sprites, before text. */
   private readonly _flatTints: TintSlot[] = []
@@ -1384,6 +1392,7 @@ export class RenderSystem implements System {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c)
       entry.texW = c.width
       entry.texH = c.height
+      this._statTexSize(entry.tex, c.width, c.height)
       return
     }
     const x0 = Math.max(0, Math.floor(entry.x0))
@@ -2033,11 +2042,19 @@ export class RenderSystem implements System {
     const { gl } = this
     const { min, mag } = resolveSampling(spriteSampling, this._defaultSampling)
     let st = this._texSampling.get(tex)
-    if (!st) this._texSampling.set(tex, (st = { min: '', mag: '', mips: false }))
+    if (!st) this._texSampling.set(tex, (st = { min: '', mag: '', mips: false, mipBytes: false }))
     // Mip chains are built once per texture content; parameters are set only when they change.
     if (needsMipmap(min) && !st.mips) {
       gl.generateMipmap(gl.TEXTURE_2D)
       st.mips = true
+      // A full mip chain adds about a third on top of level 0.
+      const base = this._texBytes.get(tex)
+      if (base !== undefined && !st.mipBytes) {
+        const extra = Math.floor(base / 3)
+        this._texBytes.set(tex, base + extra)
+        this.stats.textureBytes += extra
+        st.mipBytes = true
+      }
     }
     if (st.min !== min) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, toGLMinFilter(gl, min))
@@ -2559,6 +2576,7 @@ export class RenderSystem implements System {
         else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, img)
         this.stats.textureUploads++
         this.stats.textureUploadBytes += iw * ih * 4
+        this._statTexSize(t.tex, iw, ih)
         t.ver = ver
         t.w = iw
         t.h = ih
