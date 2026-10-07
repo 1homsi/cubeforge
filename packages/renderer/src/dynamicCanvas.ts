@@ -14,6 +14,19 @@ export interface DynamicCanvasOptions {
   height: number
   /** Paint on your own canvas instead of a new one (its size is taken as is). */
   canvas?: DynamicCanvasSource
+  /**
+   * Free the 2D canvas' pixel memory (set it to 0 x 0) right after its first upload, so a
+   * write-once atlas lives only on the GPU instead of twice (a 4800 x 2400 canvas is 46 MB of CPU
+   * backing). Paint, `markDirty()`, and the canvas is released after the upload. To change the
+   * pixels later call `acquireBacking()`, repaint everything you need and `markDirty()` again
+   * (the old pixels are not kept). Default false.
+   */
+  releaseAfterUpload?: boolean
+  /**
+   * Called after a lost WebGL context was restored while the backing is released, so the app can
+   * `acquireBacking()`, repaint and `markDirty()`. Without it the texture is blank after a restore.
+   */
+  onRestore?: () => void
   /** Called after create / resize / dispose / markDirty (the engine wires it to wake an on-demand loop). */
   onChange?: () => void
 }
@@ -29,6 +42,8 @@ export interface DynamicCanvasHost {
   registerDynamicCanvas(id: string, canvas: DynamicCanvasSource): void
   markDynamicCanvasDirty(id: string, x?: number, y?: number, w?: number, h?: number): void
   unregisterDynamicCanvas(id: string): void
+  /** Optional: enable releasing the CPU backing after each upload. */
+  setDynamicCanvasRelease?(id: string, release: boolean, onRestore?: () => void): void
 }
 
 /** Same shape the `useDynamicCanvas` hook returns (id, canvas, ctx, markDirty). */
@@ -53,6 +68,13 @@ export interface ManagedDynamicCanvas extends DynamicCanvasHandleBase {
    * `preserve: false`. Free of charge when the size is unchanged.
    */
   resize(width: number, height: number, options?: ResizeDynamicCanvasOptions): void
+  /**
+   * Give the canvas its pixel memory back at the texture's size (blank), to repaint a canvas
+   * created with `releaseAfterUpload`. Call `markDirty()` after painting.
+   */
+  acquireBacking(): void
+  /** True while the canvas' pixel memory is released (it is 0 x 0). */
+  readonly backingReleased: boolean
   /** Free the GPU texture and forget the id. Safe to call twice. */
   dispose(): void
 }
@@ -76,6 +98,10 @@ export function createDynamicCanvasHandle(host: DynamicCanvasHost, opts: Dynamic
   const notify = opts.onChange
   let disposed = false
   host.registerDynamicCanvas(id, canvas)
+  if (opts.releaseAfterUpload) host.setDynamicCanvasRelease?.(id, true, opts.onRestore)
+  else if (opts.onRestore) host.setDynamicCanvasRelease?.(id, false, opts.onRestore)
+  let texW = canvas.width
+  let texH = canvas.height
   notify?.()
   const c = canvas
   return {
@@ -91,8 +117,20 @@ export function createDynamicCanvasHandle(host: DynamicCanvasHost, opts: Dynamic
     get disposed() {
       return disposed
     },
+    get backingReleased() {
+      return c.width === 0 && texW > 0
+    },
+    acquireBacking() {
+      if (disposed || c.width > 0) return
+      c.width = texW
+      c.height = texH
+    },
     markDirty(x, y, w, h) {
       if (disposed) return
+      if (c.width > 0) {
+        texW = c.width
+        texH = c.height
+      }
       host.markDynamicCanvasDirty(id, x, y, w, h)
       notify?.()
     },
@@ -108,6 +146,8 @@ export function createDynamicCanvasHandle(host: DynamicCanvasHost, opts: Dynamic
         backup.height = c.height
         backup.getContext('2d')!.drawImage(c, 0, 0)
       }
+      texW = w
+      texH = h
       c.width = w
       c.height = h // clears the canvas and resets ctx state
       if (backup) ctx.drawImage(backup, 0, 0)

@@ -66,3 +66,51 @@ describe('texture memory stats', () => {
     )
   })
 })
+
+describe('releaseAfterUpload (CPU backing of write-once atlases)', () => {
+  it('frees the 2D canvas after the upload; the texture stays and counts', () => {
+    const rs = new RenderSystem(createRecordingCanvas(200, 100), new Map())
+    const world = new ECSWorld()
+    rs.update(world, 1 / 60)
+    const base = rs.stats.textureBytes
+    const h = rs.createDynamicCanvas({ id: 'atlas', width: 64, height: 32, releaseAfterUpload: true })
+    expect(h.backingReleased).toBe(false)
+    h.markDirty()
+    rs.update(world, 1 / 60)
+    expect(h.canvas.width).toBe(0)
+    expect(h.backingReleased).toBe(true)
+    expect(rs.stats.textureBytes).toBe(base + 64 * 32 * 4) // the GPU copy is still counted
+    // marking dirty while released is a harmless no-op
+    h.markDirty()
+    rs.update(world, 1 / 60)
+    expect(rs.stats.textureUploads).toBe(0)
+    // acquire, repaint, upload, released again
+    h.acquireBacking()
+    expect([h.canvas.width, h.canvas.height]).toEqual([64, 32])
+    h.markDirty()
+    rs.update(world, 1 / 60)
+    expect(rs.stats.textureUploads).toBe(1)
+    expect(h.canvas.width).toBe(0)
+  })
+
+  it('does not release when the option is off, and asks the app to repaint after a context restore', () => {
+    const rs = new RenderSystem(createRecordingCanvas(200, 100), new Map())
+    const world = new ECSWorld()
+    const keep = rs.createDynamicCanvas({ id: 'keep', width: 8, height: 8 })
+    keep.markDirty()
+    let restored = 0
+    const h = rs.createDynamicCanvas({
+      id: 'a',
+      width: 16,
+      height: 16,
+      releaseAfterUpload: true,
+      onRestore: () => restored++,
+    })
+    h.markDirty()
+    rs.update(world, 1 / 60)
+    expect(keep.canvas.width).toBe(8)
+    expect(h.canvas.width).toBe(0)
+    ;(rs as unknown as { onContextRestored(): void }).onContextRestored()
+    expect(restored).toBe(1)
+  })
+})
