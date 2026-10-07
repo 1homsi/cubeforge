@@ -36,6 +36,8 @@ export type { CameraPanZoomOptions } from './hooks/useCameraPanZoom'
 export type { ScreenTintControls, ScreenTintMode, ScreenTintOptions } from './hooks/useScreenTint'
 export type { LayerBlendMode } from '@cubeforge/renderer'
 export { useCoordinates } from './hooks/useCoordinates'
+export { useCaptureFrame } from './hooks/useCaptureFrame'
+export type { CaptureFrame, CaptureFrameOptions, CaptureType } from '@cubeforge/context'
 export { useEngineStats } from './hooks/useProfiler'
 export {
   SpriteLayer,

@@ -252,6 +252,27 @@ try {
       `gpu-smoke: stats layers, tile textures and GPU timer (supported: ${out.gpuTimerSupported}) are consistent`,
     )
   }
+  {
+    const out = await runPage('capture.ts')
+    check('capture', out, {
+      captureSize: '256x256',
+      captureNotBlack: true,
+      captureEqualsScreen: true,
+      captureTile: '255,255,255,255',
+      blobType: 'image/png',
+      blobEqualsScreen: true,
+      bitmapEqualsScreen: true,
+      smallSize: '64x64',
+      smallTile: '255,255,255,255',
+      bigSize: '512x512',
+      bigEdge: '0,0,255,255|255,255,255,255',
+      scaledEdgeIsBlurred: true,
+      canvasRestored: '256x256',
+      stillRenders: true,
+      glErrorCapture: 0,
+    })
+    console.log('gpu-smoke: captureFrame matches the on-screen frame in every result type, at any size')
+  }
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

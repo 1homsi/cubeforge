@@ -23,6 +23,7 @@ import {
 import type { RenderStats } from '@cubeforge/core'
 import type { PhysicsSystem } from '@cubeforge/physics'
 import { EngineContext, type EngineState } from '../context'
+import type { CaptureFrame } from '@cubeforge/context'
 import type { DevToolsHandle } from '@cubeforge/devtools'
 
 /** Wraps a System to record execution time into a shared timings map. */
@@ -369,6 +370,11 @@ export function Game({
             loop.markDirty()
           },
         }),
+      // Loaded on first use so the encoder glue stays out of the main bundle.
+      captureFrame: (async (opts) => {
+        const { captureFrame } = await import('../utils/capture')
+        return captureFrame({ canvas, render: () => renderSystem.update(ecs, 0) }, opts)
+      }) as CaptureFrame,
       requestGpuTiming: () => {
         if (gpuUsers++ === 0) void renderSystem.setGpuTiming(true)
         let released = false

@@ -123,6 +123,8 @@ export type { DynamicCanvasOptions, ManagedDynamicCanvas, ResizeDynamicCanvasOpt
 export { useSpriteLayer } from './hooks/useSpriteLayer'
 export { useTextLayer } from './hooks/useTextLayer'
 export { useScreenTint } from './hooks/useScreenTint'
+export { useCaptureFrame } from './hooks/useCaptureFrame'
+export type { CaptureFrame, CaptureFrameOptions, CaptureType } from '@cubeforge/context'
 export { useCameraPanZoom } from './hooks/useCameraPanZoom'
 export type { CameraPanZoomOptions } from './hooks/useCameraPanZoom'
 export type { ScreenTintControls, ScreenTintMode, ScreenTintOptions } from './hooks/useScreenTint'

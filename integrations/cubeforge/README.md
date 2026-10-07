@@ -488,6 +488,37 @@ frame skip render every frame, and `useSpriteLayer` keeps an `onDemand` loop tic
 - `useCamera().zoomAt(screenX, screenY, zoom)` and `useCoordinates()` work in canvas CSS pixels at
   any devicePixelRatio.
 
+## Saving a picture of the world: `captureFrame`
+
+A WebGL canvas that is not preserving its drawing buffer reads back black unless the
+copy happens in the same task as the render. `engine.captureFrame()` renders the world
+now and copies it right away, so the image is the frame on screen:
+
+```tsx
+const capture = useCaptureFrame() // or: const engine = useGame(); engine.captureFrame!()
+
+const blob = await capture() // PNG Blob at the canvas' pixel size
+const thumb = await capture({ width: 256 }) // downscaled, aspect ratio kept
+const card = await capture({ width: 1200, height: 630, mimeType: 'image/jpeg', quality: 0.9 })
+const sharp = await capture({ width: 2048, renderAtSize: true }) // re-rendered, not stretched
+const bitmap = await capture({ type: 'bitmap' }) // ImageBitmap, e.g. for drawImage
+const copy = await capture({ type: 'canvas' }) // a detached HTMLCanvasElement
+```
+
+| Option         | Meaning                                                                                   |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| `type`         | `'blob'` (default), `'bitmap'` or `'canvas'`; the result type follows it                   |
+| `mimeType`     | `'image/png'` (default), `'image/jpeg'` or `'image/webp'`, for `type: 'blob'`             |
+| `quality`      | 0-1 for jpeg and webp (default 0.92)                                                      |
+| `width/height` | Output size in pixels. One keeps the aspect ratio, both stretch                           |
+| `renderAtSize` | With a size, render again at that resolution so upscales stay sharp (needs a laid-out canvas) |
+| `smoothing`    | Smooth the scaling (default: smooth when shrinking, nearest when growing)                 |
+| `render`       | Render a fresh frame first (default `true`)                                               |
+
+It captures the game canvas only, not the debug overlay or HTML on top, and rejects if the
+WebGL context is lost. `captureFrame` is loaded on first use and does not count toward the
+initial bundle. `exportToBlob(engine.canvas)` still works for a canvas you just rendered.
+
 ## Stats and profiling
 
 `<StatsOverlay />` (inside `<Game>`) shows frame timings, draw calls, textures, tile layer uploads,
