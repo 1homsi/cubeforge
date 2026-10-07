@@ -489,6 +489,65 @@ function textEntities(n: number): ScenarioDef {
   }
 }
 
+/**
+ * Retained-instance shapes (Human Box crowd): `frac` of the sprites move each frame, the app
+ * reports them with touchRange (or touch() when `legacyTouch`), sorted by y or not.
+ */
+function movingLayer(
+  n: number,
+  frac: number,
+  label: string,
+  opts: { sorted?: boolean; legacyTouch?: boolean } = {},
+): ScenarioDef {
+  return {
+    name: `spritelayer-${label}-${n}`,
+    description: `${n} sprites, ${Math.round(frac * 100)}% move per frame (${opts.legacyTouch ? 'touch()' : 'touchRange'})${opts.sorted ? ', y-sorted' : ''}`,
+    setup(ctx) {
+      const r = rng(7)
+      const layer = new SpriteLayer({
+        image: ctx.atlas,
+        frameWidth: FRAME,
+        frameHeight: FRAME,
+        frameColumns: ATLAS / FRAME,
+        sortByKey: opts.sorted ?? false,
+        capacity: n,
+      })
+      const vx = new Float32Array(n)
+      const vy = new Float32Array(n)
+      const movers = Math.round(n * frac)
+      let phase = 0
+      const sc = base(ctx, this.name, this.description, { x: W / 2, y: H / 2 }, () => {
+        if (movers === 0) return
+        // a contiguous block of sprites moves (rotating window), like one chunk of a crowd
+        const i0 = (phase * movers) % n
+        phase++
+        const i1 = Math.min(n, i0 + movers)
+        const X = layer.x
+        const Y = layer.y
+        for (let i = i0; i < i1; i++) {
+          const x = X[i] + vx[i]
+          const y = Y[i] + vy[i]
+          if (x < 0 || x > W) vx[i] = -vx[i]
+          if (y < 0 || y > H) vy[i] = -vy[i]
+          X[i] = x
+          Y[i] = y
+          if (opts.sorted) layer.sortKey[i] = y
+        }
+        if (opts.legacyTouch || !('touchRange' in layer)) layer.touch()
+        else (layer as unknown as { touchRange(a: number, b: number): void }).touchRange(i0, i1)
+      })
+      for (let i = 0; i < n; i++) {
+        const k = layer.add(r() * W, r() * H, FRAME, FRAME, (r() * 256) | 0)
+        layer.sortKey[k] = layer.y[k]
+        vx[i] = (r() - 0.5) * 4
+        vy[i] = (r() - 0.5) * 4
+      }
+      sc.renderer.addSpriteLayer(layer)
+      return sc
+    },
+  }
+}
+
 /** The same tile world as one TileLayer, with 10 tile edits per frame. */
 function tileLayer(cols: number, rows: number): ScenarioDef {
   return {
@@ -557,6 +616,11 @@ export const SCENARIOS: ScenarioDef[] = [
   spriteLayer(10000),
   depthLayer(3000),
   atlasLayer(3000),
+  movingLayer(3000, 0, 'static'),
+  movingLayer(3000, 0.05, 'moving5'),
+  movingLayer(3000, 0.05, 'moving5touch', { legacyTouch: true }),
+  movingLayer(3000, 1, 'moving100'),
+  movingLayer(3000, 0.05, 'moving5sorted', { sorted: true }),
   rebuildLayer(3000),
   textLayer(1000),
   textEntities(1000),

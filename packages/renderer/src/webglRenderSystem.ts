@@ -1303,6 +1303,7 @@ export class RenderSystem implements System {
   removeSpriteLayer(layer: SpriteLayer): void {
     const i = this._spriteLayers.indexOf(layer)
     if (i >= 0) this._spriteLayers.splice(i, 1)
+    this._spriteLayerRenderer?.release(layer)
     this._overlayRevision++
   }
 

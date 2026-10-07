@@ -64,7 +64,11 @@ describe('per-layer stats and TileLayer textures', () => {
     rs.update(world, 1 / 60)
     expect(rs.stats.layers[0]).toBe(t)
     expect(rs.stats.layers[0].uploadBytes).toBe(0)
-    expect(rs.stats.layers[1].uploadBytes).toBe(3 * 84)
+    expect(rs.stats.layers[1].uploadBytes).toBe(0) // instances are retained between frames
+    crowd.x[1] += 1
+    crowd.touchRange(1)
+    rs.update(world, 1 / 60)
+    expect(rs.stats.layers[1].uploadBytes).toBe(84) // only the changed instance is uploaded
   })
 
   it('names unnamed tile layers by draw order', () => {
