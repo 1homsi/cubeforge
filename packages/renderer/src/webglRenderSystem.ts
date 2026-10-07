@@ -542,6 +542,9 @@ interface DynamicCanvasEntry {
   y0: number
   x1: number
   y1: number
+  /** Free the canvas' pixels after each upload (the GPU texture is the only copy). */
+  release?: boolean
+  onRestore?: () => void
 }
 
 type SpriteWithInfo = SpriteComponent & { _rinfo?: SpriteTexInfo }
@@ -1330,6 +1333,13 @@ export class RenderSystem implements System {
     this._overlayRevision++
   }
 
+  setDynamicCanvasRelease(id: string, release: boolean, onRestore?: () => void): void {
+    const entry = this._dynamicCanvases.get(id)
+    if (!entry) return
+    entry.release = release
+    entry.onRestore = onRestore
+  }
+
   registerDynamicCanvas(id: string, canvas: HTMLCanvasElement | OffscreenCanvas): void {
     const { gl } = this
     const tex = gl.createTexture()!
@@ -1658,20 +1668,28 @@ export class RenderSystem implements System {
     this._idleFBOW = this._idleFBOH = 0
     this._prevSceneHash = -1
     const { gl } = this
+    const restoreCallbacks: (() => void)[] = []
     for (const [id, entry] of this._dynamicCanvases) {
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, entry.canvas)
+      if (entry.canvas.width === 0 && entry.texW > 0) {
+        // Released backing: the pixels are gone with the context; start blank and ask the app to repaint.
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, entry.texW, entry.texH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+        if (entry.onRestore) restoreCallbacks.push(entry.onRestore)
+      } else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, entry.canvas)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
       entry.tex = tex
-      entry.texW = entry.canvas.width
-      entry.texH = entry.canvas.height
+      if (entry.canvas.width > 0) {
+        entry.texW = entry.canvas.width
+        entry.texH = entry.canvas.height
+      }
       entry.dirty = false
       this.textures.set(id, tex)
     }
+    for (const cb of restoreCallbacks) cb()
     this._tileLayers?.contextRestored()
     this._spriteLayerRenderer?.contextRestored()
     this._textLayerRenderer?.contextRestored()
@@ -2946,7 +2964,17 @@ export class RenderSystem implements System {
     // ── Dynamic canvas re-uploads (texSubImage2D) ────────────────────────────
     // Only re-uploads canvases that have been marked dirty since the last frame.
     for (const entry of this._dynamicCanvases.values()) {
-      if (entry.dirty) this.uploadDynamicCanvas(entry)
+      if (!entry.dirty) continue
+      // Released backing (0 x 0): nothing to upload until the app acquires and repaints it.
+      if (entry.canvas.width === 0 || entry.canvas.height === 0) {
+        entry.dirty = false
+        continue
+      }
+      this.uploadDynamicCanvas(entry)
+      if (entry.release) {
+        entry.canvas.width = 0
+        entry.canvas.height = 0
+      }
     }
 
     if (!this._tileLayers) {
