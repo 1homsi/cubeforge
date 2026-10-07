@@ -33,6 +33,13 @@ export interface TextLayerOptions extends GlyphStyleOptions {
   blend?: LayerBlendMode
   /** Share glyphs with other layers by passing the same atlas. Default: the process-wide atlas. */
   atlas?: GlyphAtlas
+  /**
+   * Re-rasterise glyphs at a higher density when the camera zooms in (zoom x device
+   * pixel ratio above the atlas `resolution`), so labels stay crisp. Steps 1x, 2x, 4x
+   * of the atlas resolution with hysteresis; sizes already built stay cached until the
+   * atlas fills. Default true; never goes below the atlas `resolution`.
+   */
+  zoomAware?: boolean
 }
 
 export interface TextRunOptions {
@@ -65,6 +72,8 @@ export interface RunLayout {
   align: number
   lh: number
   gen: number
+  /** The atlas style (incl. raster density) the layout was built for. */
+  ref: AtlasStyle | null
   glyphs: Float32Array
   /** Number of glyph quads in `glyphs`. */
   n: number
@@ -135,6 +144,9 @@ export class TextLayer {
   private readonly _layouts: (RunLayout | undefined)[] = []
   private readonly _atlasStyles: (AtlasStyle | undefined)[] = []
   private _atlasGen = -1
+  /** Raster density multiplier chosen from the camera zoom (1, 2 or 4). */
+  private _k = 1
+  readonly zoomAware: boolean
   private _order = new Int32Array(0)
   private _orderCount = -1
   private _structure = 0
@@ -142,7 +154,9 @@ export class TextLayer {
 
   constructor(options: TextLayerOptions = {}) {
     registerTextLayerRenderer((gl) => new TextLayerRenderer(gl))
-    const { capacity, layer, zIndex, visible, opacity, atlas, sortByKey, tintColor, blend, ...style } = options
+    const { capacity, layer, zIndex, visible, opacity, atlas, sortByKey, tintColor, blend, zoomAware, ...style } =
+      options
+    this.zoomAware = zoomAware ?? true
     this.atlas = atlas ?? GlyphAtlas.shared
     this.styles = [style]
     this.layer = layer ?? 'default'
@@ -213,7 +227,29 @@ export class TextLayer {
   /** The atlas style a run's glyphs come from. */
   atlasStyle(id: number): AtlasStyle {
     if (this._atlasGen !== this.atlas.generation) this._atlasGen = this.atlas.generation
-    return (this._atlasStyles[id] ??= this.atlas.style(this.styles[id] ?? this.styles[0]))
+    return (this._atlasStyles[id] ??= this.atlas.style(this.styles[id] ?? this.styles[0], this._k))
+  }
+
+  /** Current raster density multiplier over the atlas resolution. */
+  get rasterScale(): number {
+    return this._k
+  }
+
+  /**
+   * Choose the raster density for a camera density (zoom x device pixel ratio).
+   * Goes up as soon as the current one would blur, and only comes down well below
+   * it (hysteresis), so a zoom animation does not thrash the atlas. Free when stable.
+   */
+  updateDensity(density: number): void {
+    if (!this.zoomAware) return
+    const need = density / this.atlas.resolution
+    let k = this._k
+    if (need > k) k = need > 2 ? 4 : 2
+    else if (need < k * 0.35) k = need < 0.7 ? 1 : 2
+    if (k !== this._k) {
+      this._k = k
+      this._atlasStyles.length = 0
+    }
   }
 
   add(text: string, x: number, y: number, o: TextRunOptions = {}): number {
@@ -356,11 +392,13 @@ export class TextLayer {
       cur.wrapW === wrapW &&
       cur.align === align &&
       cur.lh === lh &&
-      cur.gen === atlas.generation
+      cur.gen === atlas.generation &&
+      cur.ref === s
     )
       return cur
     const out = layoutText(atlas, s, text, wrapW, align, lh, cur)
     out.style = styleId
+    out.ref = s
     out.text = text
     this._layouts[i] = out
     return out
@@ -520,6 +558,7 @@ function place(
     align,
     lh,
     gen: atlas.generation,
+    ref: s,
     glyphs,
     n: count,
     width: blockW,

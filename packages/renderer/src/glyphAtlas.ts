@@ -127,8 +127,8 @@ export class GlyphAtlas {
   }
 
   /** Intern a style (font + baked fill/outline/shadow). Cheap to call every frame. */
-  style(o: GlyphStyleOptions = {}): AtlasStyle {
-    const res = this.resolution
+  style(o: GlyphStyleOptions = {}, k = 1): AtlasStyle {
+    const res = this.resolution * k
     const family = o.fontFamily ?? 'sans-serif'
     const size = o.fontSize ?? 16
     const weight = o.weight ?? 'normal'
@@ -144,6 +144,7 @@ export class GlyphAtlas {
       o.shadowOffsetX ?? 0,
       o.shadowOffsetY ?? 0,
       o.shadowBlur ?? 0,
+      k,
     ].join('|')
     let s = this.styles.get(key)
     if (s) return s

@@ -104,6 +104,8 @@ export interface LayerCamera {
   viewB: number
   /** Seconds since the render system started: drives GPU sway. */
   time?: number
+  /** Device pixels per CSS pixel. */
+  dpr?: number
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {

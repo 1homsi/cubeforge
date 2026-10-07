@@ -375,6 +375,8 @@ Per run you can set `size`, `color` (0xRRGGBBAA or a CSS colour; multiplies the 
 `anchorX/anchorY`, `align`, `maxWidth`/`wordWrap`, `lineHeight`, `rotation` and `style`. The arrays
 (`x`, `y`, `size`, `color`, `alpha`, `flags`...) can be written directly, then call `touch()`.
 
+Zoom: by default a text layer re-rasterises its glyphs at 2x or 4x the atlas `resolution` when the camera zoom x device pixel ratio exceeds it (hysteresis on the way down, earlier sizes stay cached, no work while the zoom is stable), so labels stay crisp when zoomed in. `zoomAware: false` keeps one fixed density. Measured edge width at 4x zoom: 1.2 px aware vs 2.4 px fixed.
+
 Limits: glyphs are laid out one code point at a time (no kerning, no shaping), so right-to-left and
 complex scripts (Arabic, Devanagari) belong in `<Text>`. Pass the same `atlas: new GlyphAtlas(...)` to
 several layers to share glyphs, or tune `pageSize` / `maxPages` / `resolution` (raster pixels per

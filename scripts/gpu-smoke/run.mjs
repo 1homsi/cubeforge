@@ -273,6 +273,12 @@ try {
     })
     console.log('gpu-smoke: captureFrame matches the on-screen frame in every result type, at any size')
   }
+  {
+    const out = await runPage('sharp.ts')
+    console.log('sharpness metrics:', JSON.stringify(out))
+    check('sharp', out, { crispAt1x: 'ok', crispAt4x: 'ok', fixedBlursAt4x: 'ok', hasEdges: 'ok', gl1: 0, gl4: 0 })
+    console.log('gpu-smoke: zoom-aware glyph atlas keeps labels crisp at 1x and 4x zoom')
+  }
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

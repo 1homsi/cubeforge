@@ -86,7 +86,7 @@ class Batcher implements EntityTextBatcher {
   private frame = 0
 
   constructor() {
-    this.tail = new TextLayer({ atlas: this.atlas, sortByKey: true })
+    this.tail = new TextLayer({ atlas: this.atlas, sortByKey: true, zoomAware: false })
     const tail: Group = { key: '', layer: this.tail, owners: [], styles: new Map() }
     this.groups.set('', tail)
     this.groupList.push(tail)
@@ -96,7 +96,7 @@ class Batcher implements EntityTextBatcher {
     const key = t.layer ? `${t.layer}\u0000${t.zIndex}` : ''
     let g = this.groups.get(key)
     if (!g) {
-      const layer = new TextLayer({ atlas: this.atlas, layer: t.layer, zIndex: t.zIndex })
+      const layer = new TextLayer({ atlas: this.atlas, layer: t.layer, zIndex: t.zIndex, zoomAware: false })
       g = { key, layer, owners: [], styles: new Map() }
       this.groups.set(key, g)
       this.groupList.push(g)
