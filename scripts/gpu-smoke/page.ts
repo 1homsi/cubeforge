@@ -326,6 +326,30 @@ try {
   out.colorAddRed = px(40, 40)
   out.additiveOnWhite = px(80, 40)
   out.glError8 = gl.getError()
+
+  // retained instances on real GL: partial uploads must land on the right instance
+  world.getComponent<{ type: 'Camera2D'; zoom: number }>(cam, 'Camera2D')!.zoom = 1
+  const ret = new SpriteLayer({ atlases: [{}], zIndex: 80 })
+  const colors = [0xff0000ff, 0x00ff00ff, 0x0000ffff]
+  for (let k = 0; k < 3; k++) {
+    const i = ret.add(40 + k * 40, 180, 16, 16)
+    ret.flags[i] |= 1 << 3 // untextured
+    ret.color[i] = colors[k]
+  }
+  rs.addSpriteLayer(ret)
+  rs.update(world, 1 / 60)
+  rs.update(world, 1 / 60) // second frame: nothing uploaded, still drawn
+  out.retStatic = [px(40, 180), px(80, 180), px(120, 180)].join('|')
+  ret.x[1] = 200
+  ret.y[1] = 150
+  ret.touchRange(1)
+  rs.update(world, 1 / 60)
+  out.retMoved = [px(40, 180), px(80, 180), px(200, 150), px(120, 180)].join('|')
+  ret.color[2] = 0xffff00ff
+  ret.touch()
+  rs.update(world, 1 / 60)
+  out.retTouched = [px(120, 180), px(40, 180)].join('|')
+  out.glError9 = gl.getError()
 } catch (e) {
   out.error = String((e as Error).stack ?? e)
 }
