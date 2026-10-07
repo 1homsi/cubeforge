@@ -125,6 +125,8 @@ export interface SpriteLayerOptions extends LayerAtlas {
   /** Render layer name and z-index, sorted together with regular sprites. */
   layer?: string
   zIndex?: number
+  /** Label shown in the per-layer stats (`stats.layers`). Defaults to `layer`. */
+  name?: string
   sampling?: Sampling
   anchorX?: number
   anchorY?: number
@@ -179,6 +181,8 @@ export class SpriteLayer {
   sortByKey: boolean
   layer: string
   zIndex: number
+  /** Label in the per-layer stats. */
+  name: string
   sampling: Sampling | undefined
   anchorX: number
   anchorY: number
@@ -252,6 +256,7 @@ export class SpriteLayer {
     this.sortByKey = options.sortByKey ?? false
     this.layer = options.layer ?? 'default'
     this.zIndex = options.zIndex ?? 0
+    this.name = options.name ?? this.layer
     this.sampling = options.sampling
     this.anchorX = options.anchorX ?? 0.5
     this.anchorY = options.anchorY ?? 0.5

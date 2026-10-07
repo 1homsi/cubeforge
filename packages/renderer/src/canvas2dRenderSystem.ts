@@ -54,6 +54,20 @@ export function createCanvas2DStats(): RenderStats {
     textureCacheHits: 0,
     textureCacheMisses: 0,
     frames: 0,
+    gpuMs: null,
+    gpuMsAvg: null,
+    gpuTimerSupported: null,
+    layers: [],
+    tile: {
+      indexUploads: 0,
+      uploadedTexels: 0,
+      lutUploads: 0,
+      drawCalls: 0,
+      textureUploads: 0,
+      textureUploadBytes: 0,
+      textureCount: 0,
+      textureBytes: 0,
+    },
   }
 }
 
@@ -101,6 +115,11 @@ interface SpriteSource {
  * the WebGL one (`setScreenTint`, `addSpriteLayer`, dynamic canvases, stats).
  */
 export class Canvas2DRenderSystem implements System {
+  /** GPU timing needs a GL timer query; the Canvas2D renderer has none, so asking for it is a no-op that reports unsupported. */
+  setGpuTiming(_enabled: boolean): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+
   /** Default background used when no Camera2D component exists */
   defaultBackground = '#1a1a2e'
   readonly layers: RenderLayerManager = createRenderLayerManager()

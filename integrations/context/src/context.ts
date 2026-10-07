@@ -34,7 +34,7 @@ export interface EngineState {
    * Live engine stats for the last frame, mutated in place (no per-frame
    * allocation). Copy with `copyEngineStats` if you need to keep a sample.
    */
-  stats?: EngineStats
+  stats: EngineStats
   /**
    * Create a dynamic canvas by id at runtime (no React hook): resizable and
    * disposable, so texture atlases can be created and grown. Wakes an on-demand
@@ -43,7 +43,13 @@ export interface EngineState {
    */
   createDynamicCanvas?(options: DynamicCanvasOptions): ManagedDynamicCanvas
   /** Returns the live {@link stats} object. */
-  getStats?(): EngineStats
+  getStats(): EngineStats
+  /**
+   * Ask the renderer to measure GPU frame time (`stats.gpuMs`, `stats.gpuMsAvg`).
+   * Reference counted and off by default (no cost until requested); call the
+   * returned function to release. `useEngineStats` and `<StatsOverlay>` do this for you.
+   */
+  requestGpuTiming?(): () => void
   /**
    * Render a frame now and read it back as an image (PNG blob by default;
    * `bitmap`/`canvas` and a target size are options). Works with the browser

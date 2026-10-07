@@ -1,5 +1,4 @@
-import type { ECSWorld } from '@cubeforge/core'
-import type { TileLayerRenderStats } from './tileLayerGL'
+import type { ECSWorld, RenderStats, TileLayerRenderStats } from '@cubeforge/core'
 import type { SpriteLayerRenderer } from './spriteLayerGL'
 import type { TileLayerData } from './tileLayer'
 import type { TextLayerRenderer } from './textLayerGL'
@@ -10,6 +9,12 @@ export interface TileRenderer {
   readonly stats: TileLayerRenderStats
   /** Layers with a `renderLayer`, drawn interleaved with sprites through {@link drawSorted}. */
   readonly sorted: readonly TileLayerData[]
+  /**
+   * Folds this frame's texture, upload and per-layer counters into the render stats.
+   * `own` is the RenderSystem's own texture count; `first` is the call right after `prepare`,
+   * later calls (after drawing) only add what was uploaded since.
+   */
+  fold(s: RenderStats, own: number, first: boolean): void
   prepare(world: ECSWorld, dt: number): boolean
   render(
     camX: number,
@@ -28,20 +33,21 @@ export interface TileRenderer {
 }
 
 type Factory<T> = (gl: WebGL2RenderingContext) => T
+type TileFactory = (gl: WebGL2RenderingContext, stats: TileLayerRenderStats) => TileRenderer
 
 // Layer GL code is registered by the layer data classes, so games that never
 // create a tile or sprite layer don't bundle their renderers.
-let tileFactory: Factory<TileRenderer> | null = null
+let tileFactory: TileFactory | null = null
 let spriteFactory: Factory<SpriteLayerRenderer> | null = null
 let textFactory: Factory<TextLayerRenderer> | null = null
 
-export function registerTileRenderer(f: Factory<TileRenderer>): void {
+export function registerTileRenderer(f: TileFactory): void {
   tileFactory ??= f
 }
 export function registerSpriteLayerRenderer(f: Factory<SpriteLayerRenderer>): void {
   spriteFactory ??= f
 }
-export function tileRendererFactory(): Factory<TileRenderer> | null {
+export function tileRendererFactory(): TileFactory | null {
   return tileFactory
 }
 export function spriteLayerRendererFactory(): Factory<SpriteLayerRenderer> | null {
