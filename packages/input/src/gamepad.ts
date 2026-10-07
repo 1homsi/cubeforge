@@ -123,8 +123,42 @@ export class GamepadInput {
   private pads: PadState[] = [createPadState(), createPadState(), createPadState(), createPadState()]
   private deadZone = 0.15
 
-  attach(): void {}
-  detach(): void {}
+  /**
+   * Once attached, polling is gated: `getGamepads()` is only called after a `gamepadconnected`
+   * event, when a pad is already present at attach time, or after `enablePolling()`. An idle game
+   * with no pad therefore costs nothing per frame. Never attached (tests, headless): always polls.
+   */
+  private gated = false
+  private active = false
+  private forced = false
+  private target: EventTarget | null = null
+
+  private onConnect = (): void => {
+    this.active = true
+  }
+
+  attach(): void {
+    if (this.target || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
+    this.target = window
+    this.gated = true
+    window.addEventListener('gamepadconnected', this.onConnect)
+    // A pad that was connected before the page loaded is visible straight away.
+    if (typeof navigator !== 'undefined' && navigator.getGamepads) {
+      for (const p of navigator.getGamepads()) if (p) this.active = true
+    }
+  }
+
+  detach(): void {
+    this.target?.removeEventListener('gamepadconnected', this.onConnect)
+    this.target = null
+    this.gated = false
+    this.active = false
+  }
+
+  /** Keep polling even before a `gamepadconnected` event (for code that reads pads without the event). */
+  enablePolling(enabled = true): void {
+    this.forced = enabled
+  }
 
   /**
    * Poll all connected gamepads and update edge state.
@@ -132,7 +166,9 @@ export class GamepadInput {
    */
   flush(): void {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return
+    if (this.gated && !this.active && !this.forced) return
     const pads = navigator.getGamepads()
+    let any = false
     for (let i = 0; i < this.pads.length; i++) {
       const state = this.pads[i]
       state.justPressed.clear()
@@ -147,6 +183,7 @@ export class GamepadInput {
         continue
       }
       state.connected = true
+      any = true
       for (let b = 0; b < gp.buttons.length && b < 17; b++) {
         const pressed = gp.buttons[b].pressed
         if (pressed && !state.held.has(b)) state.justPressed.add(b)
@@ -176,6 +213,8 @@ export class GamepadInput {
       if (gp.buttons.length > 6) state.triggers[0] = gp.buttons[6].value
       if (gp.buttons.length > 7) state.triggers[1] = gp.buttons[7].value
     }
+    // Every pad is gone and its state cleared: sleep until the next gamepadconnected.
+    if (!any) this.active = false
   }
 
   /** Whether a pad is connected at this player index. */
