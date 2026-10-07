@@ -465,6 +465,8 @@ const trees = useSpriteLayer({
 trees.flags[i] |= SPRITE_SWAY        // opt a sprite in
 trees.ensureSwayScale()[i] = 0.3     // optional per-sprite multiplier (stiff oak 0.3, tall grass 1.5)
 trees.wind = null                    // calm
+// Pixel art: whole-pixel steps, trunk fixed, only the canopy shifts (no separate canopy layer needed)
+trees.wind = { amplitude: 0.06, speed: 0.4, snap: 1, fromY: 0.55 }
 ```
 
 The vertex shader moves the top of each flagged quad sideways from a time uniform (the base stays put),

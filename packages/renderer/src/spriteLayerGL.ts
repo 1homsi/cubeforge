@@ -29,6 +29,7 @@ layout(location = 9) in float i_atlas;
 layout(location = 10) in vec2 i_sway;
 uniform float u_time;
 uniform vec2 u_wind;
+uniform vec2 u_windShape; // (snap step in world px or 0, fromY)
 layout(location = 11) in float i_add;
 uniform vec2 u_camPos;
 uniform float u_zoom;
@@ -38,24 +39,47 @@ out vec2 v_uv;
 out vec4 v_color;
 flat out int v_atlas;
 flat out vec3 v_add;
+out float v_h;
+flat out vec4 v_rect;
+flat out vec2 v_shift;
 void main() {
   vec2 local = (a_quadPos - (i_anchor - 0.5)) * i_size;
+  float top = 0.5 - a_quadPos.y;
+  if (i_flip.y > 0.5) top = 1.0 - top;
+  v_h = top;
+  v_shift = vec2(0.0, -1.0);
+  vec2 uvq = a_uv;
+  float wave = 0.0;
+  if (i_sway.x != 0.0) {
+    wave = sin(6.2831853 * u_wind.x * u_time + u_wind.y * i_pos.x + i_sway.y);
+    if (u_windShape.x > 0.0) {
+      // Whole-pixel sway: the quad grows sideways and the fragment shader shifts the
+      // canopy texels by a snapped step, so pixel art stays on the pixel grid.
+      float step_ = u_windShape.x;
+      float dx = floor(i_sway.x * abs(i_size.y) * wave / step_ + 0.5) * step_;
+      float pad = abs(i_sway.x) * abs(i_size.y) + step_;
+      float sgn = a_quadPos.x > 0.0 ? 1.0 : -1.0;
+      local.x += sgn * pad;
+      uvq.x += sgn * pad / abs(i_size.x);
+      v_shift = vec2(dx / abs(i_size.x) * i_uvRect.z * (i_flip.x > 0.5 ? -1.0 : 1.0), u_windShape.y);
+    }
+  }
   if (i_flip.x > 0.5) local.x = -local.x;
   if (i_flip.y > 0.5) local.y = -local.y;
   float c = cos(i_rot);
   float s = sin(i_rot);
   vec2 world = i_pos + vec2(c * local.x - s * local.y, s * local.x + c * local.y);
-  if (i_sway.x != 0.0) {
-    // 1 at the top of the quad, 0 at the base; squared so the trunk stays stiff.
-    float top = 0.5 - a_quadPos.y;
-    world.x += i_sway.x * abs(i_size.y) * top * top
-      * sin(6.2831853 * u_wind.x * u_time + u_wind.y * i_pos.x + i_sway.y);
+  if (i_sway.x != 0.0 && u_windShape.x <= 0.0) {
+    // Smooth sway: 1 at the top of the quad, 0 at and below fromY; squared so the trunk stays stiff.
+    float ramp = clamp((top - u_windShape.y) / (1.0 - u_windShape.y), 0.0, 1.0);
+    world.x += i_sway.x * abs(i_size.y) * ramp * ramp * wave;
   }
   gl_Position = vec4(
     2.0 * u_zoom / u_canvasSize.x * (world.x - u_camPos.x) + 2.0 * u_shake.x / u_canvasSize.x,
     -2.0 * u_zoom / u_canvasSize.y * (world.y - u_camPos.y) - 2.0 * u_shake.y / u_canvasSize.y,
     0.0, 1.0);
-  v_uv = i_uvRect.xy + a_uv * i_uvRect.zw;
+  v_uv = i_uvRect.xy + uvq * i_uvRect.zw;
+  v_rect = i_uvRect;
   v_color = i_color;
   v_atlas = i_atlas < -0.5 ? -1 : int(i_atlas + 0.5);
   float ap = i_add + 0.5;
@@ -69,13 +93,21 @@ in vec2 v_uv;
 in vec4 v_color;
 flat in int v_atlas;
 flat in vec3 v_add;
+in float v_h;
+flat in vec4 v_rect;
+flat in vec2 v_shift;
 uniform sampler2D u_tex[${ATLASES_PER_DRAW}];
 uniform vec4 u_layerTint;
 out vec4 fragColor;
 void main() {
   vec4 t = vec4(1.0);
+  vec2 uv = v_uv;
+  if (v_shift.y >= 0.0) {
+    if (v_h >= v_shift.y) uv.x -= v_shift.x;
+    if (uv.x < v_rect.x || uv.x > v_rect.x + v_rect.z) discard;
+  }
   switch (v_atlas) {
-${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture(u_tex[${i}], v_uv); break;`).join('\n')}
+${Array.from({ length: ATLASES_PER_DRAW }, (_, i) => `    case ${i}: t = texture(u_tex[${i}], uv); break;`).join('\n')}
     default: break;
   }
   fragColor = t * v_color * u_layerTint;
@@ -125,6 +157,7 @@ export class SpriteLayerRenderer {
   private uShake: WebGLUniformLocation | null = null
   private uTime: WebGLUniformLocation | null = null
   private uWind: WebGLUniformLocation | null = null
+  private uWindShape: WebGLUniformLocation | null = null
   private uTint: WebGLUniformLocation | null = null
   private readonly tintScratch = new Float32Array(4)
   private readonly data = new Float32Array(MAX_BATCH * FLOATS)
@@ -164,6 +197,7 @@ export class SpriteLayerRenderer {
     this.uShake = gl.getUniformLocation(p, 'u_shake')
     this.uTime = gl.getUniformLocation(p, 'u_time')
     this.uWind = gl.getUniformLocation(p, 'u_wind')
+    this.uWindShape = gl.getUniformLocation(p, 'u_windShape')
     this.uTint = gl.getUniformLocation(p, 'u_layerTint')
     gl.useProgram(p)
     for (let i = 0; i < ATLASES_PER_DRAW; i++) gl.uniform1i(gl.getUniformLocation(p, `u_tex[${i}]`), i)
@@ -262,6 +296,10 @@ export class SpriteLayerRenderer {
     const swayAmp = wind ? (wind.amplitude ?? 0.04) : 0
     gl.uniform1f(this.uTime, cam.time ?? 0)
     gl.uniform2f(this.uWind, wind?.speed ?? 0.5, wind?.frequency ?? 0.01)
+    const snap = wind ? (wind.snap === true ? 1 : wind.snap || 0) : 0
+    // Rigid whole-pixel sway needs a fixed base: default the fixed fraction to 0.5 there.
+    const fromY = Math.min(0.99, Math.max(0, wind?.fromY ?? (snap > 0 ? 0.5 : 0)))
+    gl.uniform2f(this.uWindShape, snap, fromY)
     const swayScale = layer.swayScale
     const tc = this.tintScratch
     unpackRGBA(layer.tintColor, tc)
