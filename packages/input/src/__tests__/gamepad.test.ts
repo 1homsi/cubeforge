@@ -210,3 +210,67 @@ describe('Stick direction edge detection', () => {
     expect(input.isDown('gamepad:LX+')).toBe(false)
   })
 })
+
+describe('GamepadInput idle polling', () => {
+  let calls = 0
+  let win: EventTarget
+  beforeEach(() => {
+    calls = 0
+    win = new EventTarget()
+    ;(globalThis as Record<string, unknown>).window = win
+    ;(globalThis as Record<string, unknown>).navigator = {
+      getGamepads: () => {
+        calls++
+        return mockPads as unknown as (Gamepad | null)[]
+      },
+    }
+  })
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).window
+  })
+
+  it('does not touch navigator.getGamepads while no pad was ever connected', () => {
+    const gp = new GamepadInput()
+    gp.attach()
+    const afterAttach = calls
+    for (let i = 0; i < 60; i++) gp.flush()
+    expect(calls).toBe(afterAttach)
+    gp.detach()
+  })
+
+  it('starts polling on gamepadconnected and sleeps again after the pad is gone', () => {
+    const gp = new GamepadInput()
+    gp.attach()
+    mockPads[0] = makePad()
+    mockPads[0]!.buttons[0].pressed = true
+    win.dispatchEvent(new Event('gamepadconnected'))
+    const before = calls
+    gp.flush()
+    expect(calls).toBe(before + 1)
+    expect(gp.isPressed(GamepadButton.A)).toBe(true)
+    mockPads[0] = null
+    gp.flush() // notices the disconnect and clears held state
+    expect(gp.isConnected()).toBe(false)
+    const slept = calls
+    gp.flush()
+    gp.flush()
+    expect(calls).toBe(slept)
+  })
+
+  it('polls straight away when a pad is already connected at attach, or when forced', () => {
+    mockPads[0] = makePad()
+    const a = new GamepadInput()
+    a.attach()
+    a.flush()
+    expect(a.isConnected()).toBe(true)
+    a.detach()
+    mockPads[0] = null
+    const b = new GamepadInput()
+    b.attach()
+    b.enablePolling()
+    mockPads[0] = makePad()
+    b.flush()
+    expect(b.isConnected()).toBe(true)
+    b.detach()
+  })
+})
