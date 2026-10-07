@@ -166,6 +166,11 @@ export class SpriteLayer {
   count = 0
   capacity = 0
   version = 0
+  /** @internal retained-buffer dirty tracking, consumed by the renderer. */
+  _dAll = true
+  _dLo = 0x7fffffff
+  _dHi = -1
+  _repack = false
   x!: Float32Array
   y!: Float32Array
   w!: Float32Array
@@ -289,11 +294,13 @@ export class SpriteLayer {
   }
   set wind(v: SpriteLayerWind | null) {
     this._wind = v
+    this._dAll = true
     this.changed()
   }
 
   /** Allocate (filled with 1) and return the per-sprite sway multiplier array. */
   ensureSwayScale(): Float32Array {
+    this._dAll = true
     if (!this.swayScale || this.swayScale.length < this.capacity) {
       const next = new Float32Array(this.capacity).fill(1)
       if (this.swayScale) next.set(this.swayScale.subarray(0, this.count))
@@ -426,6 +433,7 @@ export class SpriteLayer {
   resize(n: number): void {
     this.reserve(n)
     for (let i = this.count; i < n; i++) this.reset(i, i)
+    this.markSlots(Math.min(this.count, n), Math.max(this.count, n))
     this.count = n
     this.changed()
   }
@@ -450,6 +458,7 @@ export class SpriteLayer {
     const i = this.count
     this.reserve(i + 1)
     this.count = i + 1
+    this.markSlots(i, i)
     this.reset(i, typeof id === 'string' ? this.intern(id) : (id ?? i))
     this.x[i] = x
     this.y[i] = y
@@ -464,12 +473,14 @@ export class SpriteLayer {
     this.x[i] = x
     this.y[i] = y
     if (frame !== undefined) this.frame[i] = frame
+    this.markSlots(i, i)
     this.changed()
   }
 
   /** Swap-remove: the last sprite moves into slot `i`. */
   removeAt(i: number): void {
     const last = --this.count
+    this.markSlots(i, i)
     if (i !== last) {
       this.x[i] = this.x[last]
       this.y[i] = this.y[last]
@@ -496,9 +507,30 @@ export class SpriteLayer {
     this.changed()
   }
 
-  /** Call after writing the arrays directly so idle-frame skipping redraws. */
+  /**
+   * Call after writing the arrays directly: marks EVERY sprite possibly changed. The renderer keeps
+   * the packed instances of unchanged sprites between frames, so it re-checks all of them (cheap
+   * compare, repack only what differs). Prefer {@link touchRange} when you know which slots you wrote.
+   */
   touch(): void {
+    this._dAll = true
     this.changed()
+  }
+
+  /**
+   * Call after writing sprites `i0 .. i1` (inclusive) directly. Only those slots are re-checked and
+   * repacked and only their bytes are uploaded; everything else is reused from the last frame.
+   * Several calls between frames merge. Sort keys, hidden flags, atlas/frame/colour are all covered.
+   */
+  touchRange(i0: number, i1: number = i0): void {
+    this.markSlots(i0, i1)
+    this.changed()
+  }
+
+  /** @internal */
+  markSlots(lo: number, hi: number): void {
+    if (lo < this._dLo) this._dLo = lo
+    if (hi > this._dHi) this._dHi = hi
   }
 
   /**
@@ -509,6 +541,7 @@ export class SpriteLayer {
     const a = this.atlases[i]
     if (!a) return
     a.imageVersion = (a.imageVersion ?? 0) + 1
+    this._repack = true
     this.changed()
   }
 
@@ -619,6 +652,7 @@ export class SpriteLayer {
 
   /** Allocate the additive colour array (zeros = no change). Write 0xRRGGBB, then `touch()`. */
   enableColorAdd(): Uint32Array {
+    this._dAll = true
     if (!this.colorAdd) this.colorAdd = new Uint32Array(this.capacity)
     return this.colorAdd
   }
@@ -627,6 +661,7 @@ export class SpriteLayer {
 
   /** Allocate the per-sprite anchor override (all unset). */
   enableAnchors(): Float32Array {
+    this._dAll = true
     if (!this.anchor) this.anchor = new Float32Array(this.capacity * 2).fill(NaN)
     return this.anchor
   }
@@ -639,6 +674,7 @@ export class SpriteLayer {
       a[i * 2] = ax
       a[i * 2 + 1] = ay ?? ax
     }
+    this.markSlots(i, i)
     this.changed()
   }
 

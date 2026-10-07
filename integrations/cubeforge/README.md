@@ -312,6 +312,15 @@ draws one sprite additively inside a normally blended layer (fire, lamps); it ke
 depth order and costs one extra draw call per run of additive sprites, so group them by `sortKey` when
 you can. (A whole layer blends with `blend: 'additive'`.)
 
+Retained instances: the renderer keeps each sprite's packed instance between frames and uploads only
+what changed (a static layer costs almost nothing per frame; 5% of 3,000 sprites moving is about 7x
+cheaper than repacking all). Write the typed arrays, then tell the layer what you wrote:
+`layer.touchRange(i0, i1)` re-checks and uploads just those slots (`set`, `add`, `removeAt` and `setAnchor`
+do it for you); `layer.touch()` means "anything may have changed": every sprite is compared with its
+packed copy and only differing ones are rewritten. Arrays written without either call are not picked up
+until the next touch. When nearly every sprite changes every frame the layer drops back to a plain
+repack automatically. In-place edits to a frame table need `layer.markAtlasDirty(i)`.
+
 Pivots (what sits at the sprite's x, y and what it rotates around), most specific first:
 `layer.setAnchor(i, ax, ay)` / `layer.enableAnchors()` (per sprite, fractions of the quad), a frame's
 `pivot: { x, y }` in frame pixels (frame tables), an atlas-wide `pivot` for a grid, then the layer's

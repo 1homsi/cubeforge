@@ -103,15 +103,18 @@ describe('SpriteLayer GPU sway', () => {
   })
 
   it('a wind keeps the scene hash changing so idle-frame skip does not freeze it', () => {
-    const { rs, world, uploads } = setup()
+    const { rs, world, uniforms } = setup()
     rs.setIdleFrameSkip(true)
     const layer = new SpriteLayer({ wind: {} })
     layer.flags[layer.add(10, 10, 8, 16)] |= SPRITE_SWAY
     rs.addSpriteLayer(layer)
     rs.update(world, 1 / 60)
-    const n = uploads.length
+    const t0 = uniforms.u_time[0]
     rs.update(world, 1 / 60)
+    const t1 = uniforms.u_time[0]
     rs.update(world, 1 / 60)
-    expect(uploads.length).toBe(n + 2)
+    // the layer is redrawn every frame (time advances); its instances are retained, not re-uploaded
+    expect(t1).toBeGreaterThan(t0)
+    expect(uniforms.u_time[0]).toBeGreaterThan(t1)
   })
 })
