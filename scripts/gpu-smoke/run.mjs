@@ -66,14 +66,21 @@ async function runPage(entry, { extraArgs = [], hash = '' } = {}) {
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 },
     )
-  let dom
-  try {
-    dom = run()
-  } catch (e) {
-    dom = e && typeof e.stdout === 'string' ? e.stdout : ''
+  // Headless Chrome on a busy runner occasionally dumps the DOM before the page wrote its result
+  // (and sometimes crashes). The page is deterministic, so a missing result is retried; a page
+  // that reports a wrong result is still a failure.
+  let m = null
+  for (let attempt = 1; attempt <= 3 && !m; attempt++) {
+    let dom
+    try {
+      dom = run()
+    } catch (e) {
+      dom = e && typeof e.stdout === 'string' ? e.stdout : ''
+    }
+    m = /data-out="([^"]*)"/.exec(dom)
+    if (!m && attempt < 3) console.warn(`gpu-smoke: ${entry} produced no output (attempt ${attempt}), retrying`)
   }
-  const m = /data-out="([^"]*)"/.exec(dom)
-  if (!m) throw new Error(`gpu-smoke: ${entry} produced no output`)
+  if (!m) throw new Error(`gpu-smoke: ${entry} produced no output after 3 attempts`)
   return JSON.parse(m[1].replace(/&quot;/g, '"'))
 }
 
