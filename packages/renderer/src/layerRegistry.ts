@@ -1,4 +1,4 @@
-import type { ECSWorld, RenderStats, TileLayerRenderStats } from '@cubeforge/core'
+import type { ECSWorld, RenderStats, TileLayerRenderStats } from '@xip/core'
 import type { SpriteLayerRenderer } from './spriteLayerGL'
 import type { TileLayerData } from './tileLayer'
 import type { TextLayerRenderer } from './textLayerGL'

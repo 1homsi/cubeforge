@@ -1,4 +1,4 @@
-import type { ECSWorld, WorldSnapshot } from '@cubeforge/core'
+import type { ECSWorld, WorldSnapshot } from '@xip/core'
 
 export interface PredictionConfig {
   /** ECS world instance. */

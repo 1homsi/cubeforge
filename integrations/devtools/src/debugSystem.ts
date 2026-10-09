@@ -1,6 +1,6 @@
-import type { System, ECSWorld } from '@cubeforge/core'
-import type { TransformComponent } from '@cubeforge/core'
-import type { DebugOverlayRenderer } from '@cubeforge/renderer'
+import type { System, ECSWorld } from '@xip/core'
+import type { TransformComponent } from '@xip/core'
+import type { DebugOverlayRenderer } from '@xip/renderer'
 
 export class DebugSystem implements System {
   private frameCount = 0

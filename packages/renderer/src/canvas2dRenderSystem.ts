@@ -8,7 +8,7 @@
 // ║  main bundle. Unsupported: post-process effects, idle frame skip.        ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-import type { System, ECSWorld, EntityId, NavGrid, RenderStats, TransformComponent } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, NavGrid, RenderStats, TransformComponent } from '@xip/core'
 import type { PostProcessOptions } from './webglRenderSystem'
 import type { SpriteComponent, BlendMode } from './components/sprite'
 import type { SquashStretchComponent } from './components/squashStretch'
@@ -200,7 +200,7 @@ export class Canvas2DRenderSystem implements System {
     const on = Object.values(opts).some((o) => o && (o as { enabled?: boolean }).enabled)
     if (on && !this.warnedPostProcess) {
       this.warnedPostProcess = true
-      console.warn('[Cubeforge] Post-process effects are not supported by the Canvas2D renderer and are ignored.')
+      console.warn('[Xip] Post-process effects are not supported by the Canvas2D renderer and are ignored.')
     }
   }
 

@@ -6,7 +6,7 @@
  * these primitives via the `useHMR` hook.
  */
 
-const HMR_STORE_KEY = '__CUBEFORGE_HMR_STORE__'
+const HMR_STORE_KEY = '__XIP_HMR_STORE__'
 
 interface HMRStore {
   states: Map<string, unknown>

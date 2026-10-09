@@ -1,4 +1,4 @@
-import type { ECSWorld, EntityId, TransformComponent } from '@cubeforge/core'
+import type { ECSWorld, EntityId, TransformComponent } from '@xip/core'
 import type { TextComponent } from './components/text'
 import { GlyphAtlas } from './glyphAtlas'
 import { TextLayer, TEXT_HIDDEN, TEXT_WORD_WRAP, type RunLayout } from './textLayer'

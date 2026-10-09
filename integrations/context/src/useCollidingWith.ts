@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef } from 'react'
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 import { EngineContext, EntityContext } from './context'
 
 interface ContactEvent {

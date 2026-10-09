@@ -1,6 +1,6 @@
 import { useContext, useCallback } from 'react'
-import type { RigidBodyComponent } from '@cubeforge/physics'
-import { EngineContext, EntityContext } from '@cubeforge/context'
+import type { RigidBodyComponent } from '@xip/physics'
+import { EngineContext, EntityContext } from '@xip/context'
 
 export function useDropThrough(frames = 8): { dropThrough(): void } {
   const engine = useContext(EngineContext)!

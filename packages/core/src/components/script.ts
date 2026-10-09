@@ -2,7 +2,7 @@ import type { Component, EntityId, ECSWorld } from '../ecs/world'
 
 /**
  * Structural shape of the input object passed to scripts. Satisfied by
- * `InputManager` from `@cubeforge/input`; declaring it here keeps the core
+ * `InputManager` from `@xip/input`; declaring it here keeps the core
  * dependency-free while giving raw-core users real autocomplete.
  */
 export interface ScriptInput {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cubeforge stress benchmark.
+ * Xip stress benchmark.
  *
  *   node benchmarks/run.mjs                    # all scenarios, headless, table output
  *   node benchmarks/run.mjs --scenario sprites-3000 --frames 600
@@ -27,10 +27,10 @@ const flag = (n) => argv.includes(`--${n}`)
 const opt = (n, d) => (argv.includes(`--${n}`) ? argv[argv.indexOf(`--${n}`) + 1] : d)
 
 const alias = {
-  '@cubeforge/core': join(root, 'packages/core/src/index.ts'),
-  '@cubeforge/renderer': join(root, 'packages/renderer/src/index.ts'),
-  '@cubeforge/physics': join(root, 'packages/physics/src/index.ts'),
-  '@cubeforge/input': join(root, 'packages/input/src/index.ts'),
+  '@xip/core': join(root, 'packages/core/src/index.ts'),
+  '@xip/renderer': join(root, 'packages/renderer/src/index.ts'),
+  '@xip/physics': join(root, 'packages/physics/src/index.ts'),
+  '@xip/input': join(root, 'packages/input/src/index.ts'),
 }
 
 if (flag('browser')) {

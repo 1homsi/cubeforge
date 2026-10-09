@@ -2,7 +2,7 @@ import { ECSWorld } from '../../packages/core/src/index.ts'
 import { RenderSystem } from '../../packages/renderer/src/webglRenderSystem.ts'
 import { createCamera2D } from '../../packages/renderer/src/components/camera2d.ts'
 import { TileLayerData, createTileLayerComponent } from '../../packages/renderer/src/tileLayer.ts'
-import { captureFrame } from '../../integrations/cubeforge/src/utils/capture.ts'
+import { captureFrame } from '../../integrations/xip/src/utils/capture.ts'
 
 const out: Record<string, unknown> = {}
 async function main(): Promise<void> {

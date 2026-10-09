@@ -1,7 +1,7 @@
 import { useContext, useCallback } from 'react'
-import type { RigidBodyComponent } from '@cubeforge/physics'
-import type { TransformComponent } from '@cubeforge/core'
-import { EngineContext, EntityContext } from '@cubeforge/context'
+import type { RigidBodyComponent } from '@xip/physics'
+import type { TransformComponent } from '@xip/core'
+import { EngineContext, EntityContext } from '@xip/context'
 
 export interface KinematicBodyControls {
   moveAndCollide(dx: number, dy: number): { dx: number; dy: number }

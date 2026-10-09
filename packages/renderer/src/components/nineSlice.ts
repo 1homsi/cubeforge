@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 
 export interface NineSliceComponent extends Component {
   readonly type: 'NineSlice'

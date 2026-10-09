@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 import type { EntityInfo } from '../hooks/useEditorState'
 
 const panelStyle: CSSProperties = {

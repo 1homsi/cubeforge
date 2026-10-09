@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { ECSWorld } from '@cubeforge/core'
-import { EventBus } from '@cubeforge/core'
-import { createTransform } from '@cubeforge/core'
+import { ECSWorld } from '@xip/core'
+import { EventBus } from '@xip/core'
+import { createTransform } from '@xip/core'
 import { PhysicsSystem } from '../physicsSystem'
 import { createRigidBody } from '../components/rigidbody'
 import { createBoxCollider } from '../components/boxCollider'

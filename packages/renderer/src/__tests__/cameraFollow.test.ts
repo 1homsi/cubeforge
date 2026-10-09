@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ECSWorld, createTransform } from '@cubeforge/core'
+import { ECSWorld, createTransform } from '@xip/core'
 import { RenderSystem } from '../webglRenderSystem'
 import { createCamera2D, type Camera2DComponent } from '../components/camera2d'
 import { SpriteLayer, SPRITE_HIDDEN } from '../spriteLayer'

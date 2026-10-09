@@ -6,8 +6,8 @@
  * replay and save/load.
  */
 
-import type { ECSWorld, EntityId } from '@cubeforge/core'
-import type { TransformComponent } from '@cubeforge/core'
+import type { ECSWorld, EntityId } from '@xip/core'
+import type { TransformComponent } from '@xip/core'
 import type { RigidBodyComponent } from './components/rigidbody'
 import type { JointComponent } from './components/joint'
 

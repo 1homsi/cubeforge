@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ECSWorld, createTransform } from '@cubeforge/core'
+import { ECSWorld, createTransform } from '@xip/core'
 import { RenderSystem } from '../webglRenderSystem'
 import { createRecordingCanvas, installHeadlessCanvasDOM } from '../testing/recordingGL'
 import { createText } from '../components/text'

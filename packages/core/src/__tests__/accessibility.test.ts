@@ -12,7 +12,7 @@ describe('Accessibility', () => {
       reduceMotion: false,
     })
     // Clean up aria-live region if present
-    const region = document.getElementById('cubeforge-aria-live')
+    const region = document.getElementById('xip-aria-live')
     if (region) region.remove()
   })
 
@@ -48,7 +48,7 @@ describe('Accessibility', () => {
   describe('announceToScreenReader', () => {
     it('creates an aria-live region in the document', () => {
       announceToScreenReader('Game started')
-      const region = document.getElementById('cubeforge-aria-live')
+      const region = document.getElementById('xip-aria-live')
       expect(region).not.toBeNull()
       expect(region!.getAttribute('aria-live')).toBe('polite')
       expect(region!.getAttribute('role')).toBe('status')
@@ -58,14 +58,14 @@ describe('Accessibility', () => {
     it('reuses existing aria-live region', () => {
       announceToScreenReader('First')
       announceToScreenReader('Second')
-      const regions = document.querySelectorAll('#cubeforge-aria-live')
+      const regions = document.querySelectorAll('#xip-aria-live')
       expect(regions).toHaveLength(1)
       expect(regions[0].textContent).toBe('Second')
     })
 
     it('respects assertive priority', () => {
       announceToScreenReader('Alert!', 'assertive')
-      const region = document.getElementById('cubeforge-aria-live')
+      const region = document.getElementById('xip-aria-live')
       expect(region!.getAttribute('aria-live')).toBe('assertive')
     })
   })

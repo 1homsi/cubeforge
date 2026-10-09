@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 
 export interface SquashStretchComponent extends Component {
   readonly type: 'SquashStretch'

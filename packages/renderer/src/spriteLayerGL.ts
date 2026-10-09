@@ -10,7 +10,7 @@ import {
 } from './spriteLayerFlags'
 import type { SpriteLayer, AtlasFrame } from './spriteLayer'
 import { setBlendFunc, unpackRGBA } from './blendModes'
-import type { LayerStats } from '@cubeforge/core'
+import type { LayerStats } from '@xip/core'
 
 const FLOATS = 21
 

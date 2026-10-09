@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ECSWorld, createTransform, findByTag, createTag } from '@cubeforge/core'
+import { ECSWorld, createTransform, findByTag, createTag } from '@xip/core'
 import { createBoxCollider } from '../components/boxCollider'
 import { overlapBox, raycast, raycastAll, overlapCircle, sweepBox } from '../queries'
 

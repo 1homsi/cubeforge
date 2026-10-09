@@ -2,10 +2,10 @@
 // ║  DEBUG OVERLAY RENDERER — NOT THE GAME RENDERER                         ║
 // ║                                                                          ║
 // ║  This file provides a minimal Canvas2D context used exclusively by the  ║
-// ║  @cubeforge/devtools debug overlay (wireframes, FPS, physics shapes).    ║
+// ║  @xip/devtools debug overlay (wireframes, FPS, physics shapes).    ║
 // ║                                                                          ║
 // ║  The production renderer is WebGL2: packages/renderer/src/              ║
-// ║  webglRenderSystem.ts — exported as RenderSystem from @cubeforge/        ║
+// ║  webglRenderSystem.ts — exported as RenderSystem from @xip/        ║
 // ║  renderer. Its Canvas2D fallback for <Game> is canvas2dRenderSystem.ts.  ║
 // ║                                                                          ║
 // ║  DO NOT add game features here. Any rendering code that end users can    ║
@@ -16,7 +16,7 @@
  * Thin wrapper around a `CanvasRenderingContext2D` used solely for the
  * debug overlay drawn on top of the WebGL canvas in development mode.
  *
- * @internal — consumed by `@cubeforge/devtools`. Not part of the game rendering
+ * @internal — consumed by `@xip/devtools`. Not part of the game rendering
  * pipeline. Do not use for game features.
  */
 export class DebugOverlayRenderer {

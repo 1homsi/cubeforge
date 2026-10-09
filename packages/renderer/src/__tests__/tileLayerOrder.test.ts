@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ECSWorld, createTransform } from '@cubeforge/core'
+import { ECSWorld, createTransform } from '@xip/core'
 import { RenderSystem } from '../webglRenderSystem'
 import { createSprite } from '../components/sprite'
 import { TileLayerData, createTileLayerComponent } from '../tileLayer'

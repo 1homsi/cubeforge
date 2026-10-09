@@ -5,7 +5,7 @@ import {
   type LayerStats,
   type RenderStats,
   type TileLayerRenderStats,
-} from '@cubeforge/core'
+} from '@xip/core'
 import { buildTileMips } from './tileMips'
 import { isTilesetReady, visibleTileRange, type TileLayerData, type TileLayerComponent } from './tileLayer'
 

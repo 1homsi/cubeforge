@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
-import { createNavGrid, setWalkable, findPath } from '@cubeforge/core'
-import type { NavGrid, Vec2Like } from '@cubeforge/core'
+import { createNavGrid, setWalkable, findPath } from '@xip/core'
+import type { NavGrid, Vec2Like } from '@xip/core'
 
 export interface PathfindingControls {
   createGrid(cols: number, rows: number, cellSize: number): NavGrid

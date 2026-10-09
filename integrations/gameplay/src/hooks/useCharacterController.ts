@@ -1,7 +1,7 @@
 import { useContext, useMemo } from 'react'
-import { CharacterController } from '@cubeforge/physics'
-import type { CharacterControllerConfig, MoveResult } from '@cubeforge/physics'
-import { EngineContext, EntityContext } from '@cubeforge/context'
+import { CharacterController } from '@xip/physics'
+import type { CharacterControllerConfig, MoveResult } from '@xip/physics'
+import { EngineContext, EntityContext } from '@xip/context'
 
 export interface CharacterControls {
   /** Move the character by desired translation. Returns actual movement + grounded state. */

@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
 import { renderHook, act } from '@testing-library/react'
-import { ECSWorld, EventBus, AssetManager, createTag } from '@cubeforge/core'
-import { createBoxCollider } from '@cubeforge/physics'
+import { ECSWorld, EventBus, AssetManager, createTag } from '@xip/core'
+import { createBoxCollider } from '@xip/physics'
 import { EngineContext, EntityContext } from '../context'
 import type { EngineState } from '../context'
 import {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { Room } from './room'
 
-/** Minimal InputManager interface — matches @cubeforge/input without a hard dep. */
+/** Minimal InputManager interface — matches @xip/input without a hard dep. */
 interface InputManagerLike {
   isDown(key: string): boolean
 }

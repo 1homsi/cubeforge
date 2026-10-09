@@ -4,7 +4,7 @@ import { SweepAndPrune, type BroadPhaseAABB } from '../broadPhase'
 import { IslandDetector } from '../islandDetector'
 import { computeTOI, type TOIBody } from '../toi'
 import { deterministicAtan2, deterministicSqrt, KahanSum } from '../determinism'
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 import type { ContactManifold } from '../contactManifold'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

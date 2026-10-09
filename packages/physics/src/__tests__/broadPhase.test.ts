@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { SweepAndPrune } from '../broadPhase'
 import type { BroadPhaseAABB, BroadPhasePair } from '../broadPhase'
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 
 function aabb(entityId: number, minX: number, maxX: number, minY: number, maxY: number): BroadPhaseAABB {
   return { entityId: entityId as EntityId, minX, maxX, minY, maxY }

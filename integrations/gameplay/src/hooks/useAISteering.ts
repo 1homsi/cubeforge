@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
-import { seek, flee, arrive, patrol, wander, pursuit, evade, separation, cohesion, alignment } from '@cubeforge/core'
-import type { Vec2Like } from '@cubeforge/core'
+import { seek, flee, arrive, patrol, wander, pursuit, evade, separation, cohesion, alignment } from '@xip/core'
+import type { Vec2Like } from '@xip/core'
 
 export interface AISteering {
   seek(pos: Vec2Like, target: Vec2Like, speed: number): Vec2Like

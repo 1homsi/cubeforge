@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 import type { CombineRule } from '../combineRules'
 import { registerPhysics } from '../provide'
 

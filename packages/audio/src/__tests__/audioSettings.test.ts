@@ -62,16 +62,16 @@ describe('Audio settings persistence', () => {
     setGroupVolume('music', 0.3)
     saveAudioSettings()
 
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('cubeforge:audio', expect.any(String))
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('xip:audio', expect.any(String))
 
-    const saved = JSON.parse(store['cubeforge:audio'])
+    const saved = JSON.parse(store['xip:audio'])
     expect(saved.master).toBeCloseTo(0.7)
     expect(saved.sfx).toBeCloseTo(0.5)
     expect(saved.music).toBeCloseTo(0.3)
   })
 
   it('loadAudioSettings restores previously saved volumes', async () => {
-    store['cubeforge:audio'] = JSON.stringify({ master: 0.4, sfx: 0.6 })
+    store['xip:audio'] = JSON.stringify({ master: 0.4, sfx: 0.6 })
     const { loadAudioSettings, getMasterVolume, getGroupVolume } = await import('../audioContext')
 
     loadAudioSettings()
@@ -88,7 +88,7 @@ describe('Audio settings persistence', () => {
   })
 
   it('loadAudioSettings ignores corrupt JSON without throwing', async () => {
-    store['cubeforge:audio'] = '{broken json'
+    store['xip:audio'] = '{broken json'
     const { loadAudioSettings } = await import('../audioContext')
 
     expect(() => loadAudioSettings()).not.toThrow()
@@ -105,7 +105,7 @@ describe('Audio settings persistence', () => {
   })
 
   it('loadAudioSettings skips non-numeric values', async () => {
-    store['cubeforge:audio'] = JSON.stringify({ master: 'loud', sfx: 0.5 })
+    store['xip:audio'] = JSON.stringify({ master: 'loud', sfx: 0.5 })
     const { loadAudioSettings, getMasterVolume, getGroupVolume } = await import('../audioContext')
 
     loadAudioSettings()

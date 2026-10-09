@@ -2,7 +2,7 @@
 // (`import('./gpuTimer')`) only when a consumer asks for GPU time, so games
 // that never read it pay no bundle or per-frame cost.
 
-import type { RenderStats } from '@cubeforge/core'
+import type { RenderStats } from '@xip/core'
 
 interface TimerExt {
   readonly TIME_ELAPSED_EXT: number

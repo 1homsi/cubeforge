@@ -18,7 +18,7 @@ interface StoredSlot<T> {
   data: T
 }
 
-const DB_NAME = 'cubeforge-saves'
+const DB_NAME = 'xip-saves'
 const STORE_NAME = 'saves'
 
 function openDB(): Promise<IDBDatabase> {

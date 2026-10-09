@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useContext } from 'react'
-import { createScript } from '@cubeforge/core'
-import { EngineContext } from '@cubeforge/context'
+import { createScript } from '@xip/core'
+import { EngineContext } from '@xip/context'
 
 export interface GameState {
   onEnter?(): void

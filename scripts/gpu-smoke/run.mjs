@@ -29,7 +29,7 @@ if (!chrome) {
   process.exit(process.env.CI ? 1 : 0)
 }
 
-const dir = mkdtempSync(path.join(tmpdir(), 'cubeforge-gpu-'))
+const dir = mkdtempSync(path.join(tmpdir(), 'xip-gpu-'))
 
 /** Bundle `entry`, run it in headless Chrome and return the JSON it leaves in `data-out`. */
 async function runPage(entry, { extraArgs = [], hash = '' } = {}) {

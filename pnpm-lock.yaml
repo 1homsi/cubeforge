@@ -54,23 +54,23 @@ importers:
 
   integrations/context:
     dependencies:
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@cubeforge/input':
+      '@xip/input':
         specifier: workspace:*
         version: link:../../packages/input
-      '@cubeforge/physics':
+      '@xip/physics':
         specifier: workspace:*
         version: link:../../packages/physics
-      '@cubeforge/renderer':
+      '@xip/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
       react:
         specifier: ^19.2.6
         version: 19.2.6
 
-  integrations/cubeforge:
+  integrations/xip:
     dependencies:
       react:
         specifier: ^19.2.6
@@ -79,34 +79,34 @@ importers:
         specifier: ^19.2.6
         version: 19.2.6(react@19.2.6)
     devDependencies:
-      '@cubeforge/audio':
+      '@xip/audio':
         specifier: workspace:*
         version: link:../../packages/audio
-      '@cubeforge/context':
+      '@xip/context':
         specifier: workspace:*
         version: link:../context
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@cubeforge/devtools':
+      '@xip/devtools':
         specifier: workspace:*
         version: link:../devtools
-      '@cubeforge/editor':
+      '@xip/editor':
         specifier: workspace:*
         version: link:../editor
-      '@cubeforge/gameplay':
+      '@xip/gameplay':
         specifier: workspace:*
         version: link:../gameplay
-      '@cubeforge/input':
+      '@xip/input':
         specifier: workspace:*
         version: link:../../packages/input
-      '@cubeforge/net':
+      '@xip/net':
         specifier: workspace:*
         version: link:../../packages/net
-      '@cubeforge/physics':
+      '@xip/physics':
         specifier: workspace:*
         version: link:../../packages/physics
-      '@cubeforge/renderer':
+      '@xip/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
       tsup:
@@ -115,19 +115,19 @@ importers:
 
   integrations/devtools:
     dependencies:
-      '@cubeforge/audio':
+      '@xip/audio':
         specifier: workspace:*
         version: link:../../packages/audio
-      '@cubeforge/context':
+      '@xip/context':
         specifier: workspace:*
         version: link:../context
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@cubeforge/input':
+      '@xip/input':
         specifier: workspace:*
         version: link:../../packages/input
-      '@cubeforge/renderer':
+      '@xip/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
       react:
@@ -143,10 +143,10 @@ importers:
 
   integrations/editor:
     dependencies:
-      '@cubeforge/context':
+      '@xip/context':
         specifier: workspace:*
         version: link:../context
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../../packages/core
       react:
@@ -162,19 +162,19 @@ importers:
 
   integrations/gameplay:
     dependencies:
-      '@cubeforge/context':
+      '@xip/context':
         specifier: workspace:*
         version: link:../context
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@cubeforge/input':
+      '@xip/input':
         specifier: workspace:*
         version: link:../../packages/input
-      '@cubeforge/physics':
+      '@xip/physics':
         specifier: workspace:*
         version: link:../../packages/physics
-      '@cubeforge/renderer':
+      '@xip/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
       react:
@@ -197,17 +197,17 @@ importers:
 
   packages/core: {}
 
-  packages/create-cubeforge-game: {}
+  packages/create-xip-game: {}
 
   packages/input:
     dependencies:
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../core
 
   packages/net:
     dependencies:
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../core
       react:
@@ -216,13 +216,13 @@ importers:
 
   packages/physics:
     dependencies:
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../core
 
   packages/renderer:
     dependencies:
-      '@cubeforge/core':
+      '@xip/core':
         specifier: workspace:*
         version: link:../core
 

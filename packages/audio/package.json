@@ -1,7 +1,7 @@
 {
-  "name": "@cubeforge/audio",
+  "name": "@xip/audio",
   "version": "0.0.1",
-  "description": "Web Audio API layer for Cubeforge — group mixing, fades, ducking",
+  "description": "Web Audio API layer for Xip — group mixing, fades, ducking",
   "main": "./dist/index.mjs",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,12 +20,12 @@
     "game-engine",
     "audio",
     "web-audio",
-    "cubeforge"
+    "xip"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/1homsi/cubeforge"
+    "url": "https://github.com/1homsi/xip"
   },
   "private": true,
   "module": "./dist/index.mjs",

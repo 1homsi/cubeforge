@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ECSWorld, createTransform } from '@cubeforge/core'
+import { ECSWorld, createTransform } from '@xip/core'
 import { RenderSystem } from '../webglRenderSystem'
 import { SpriteLayer } from '../spriteLayer'
 import { createSprite } from '../components/sprite'

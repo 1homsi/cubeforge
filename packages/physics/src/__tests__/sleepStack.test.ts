@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ECSWorld, createTransform } from '@cubeforge/core'
+import { ECSWorld, createTransform } from '@xip/core'
 import { PhysicsSystem } from '../physicsSystem'
 import { createRigidBody, type RigidBodyComponent } from '../components/rigidbody'
 import { createBoxCollider } from '../components/boxCollider'

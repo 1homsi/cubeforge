@@ -1,4 +1,4 @@
-# Cubeforge
+# Xip
 
 **Build browser games with React.**
 
@@ -13,7 +13,7 @@
 </Game>
 ```
 
-**[Documentation](https://cubeforge.dev)** · **[Examples](https://github.com/1homsi/cubeforge-examples)**
+**[Documentation](https://xipjs.dev)** · **[Examples](https://github.com/1homsi/xip-examples)**
 
 ---
 
@@ -21,16 +21,16 @@
 
 ```bash
 # npm
-npx create-cubeforge-game my-game
+npx create-xip-game my-game
 
 # pnpm
-pnpm create cubeforge-game my-game
+pnpm create xip-game my-game
 
 # yarn
-yarn create cubeforge-game my-game
+yarn create xip-game my-game
 
 # bun
-bunx create-cubeforge-game my-game
+bunx create-xip-game my-game
 ```
 
 ```bash
@@ -42,7 +42,7 @@ npm run dev
 Or add to an existing React project:
 
 ```bash
-npm install cubeforge react react-dom
+npm install xipjs react react-dom
 ```
 
 ---
@@ -50,8 +50,8 @@ npm install cubeforge react react-dom
 ## Example
 
 ```tsx
-import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from 'cubeforge'
-import type { ECSWorld, EntityId, RigidBodyComponent, InputManager } from 'cubeforge'
+import { Game, World, Entity, Transform, Sprite, RigidBody, BoxCollider, Script } from 'xipjs'
+import type { ECSWorld, EntityId, RigidBodyComponent, InputManager } from 'xipjs'
 
 function update(id: EntityId, world: ECSWorld, input: InputManager) {
   const rb = world.getComponent<RigidBodyComponent>(id, 'RigidBody')!
@@ -88,19 +88,19 @@ export default function MyGame() {
 
 ## Examples
 
-18+ playable games in [**cubeforge-examples**](https://github.com/1homsi/cubeforge-examples):
+18+ playable games in [**xip-examples**](https://github.com/1homsi/xip-examples):
 
 | | | | |
 |:---:|:---:|:---:|:---:|
-| [Platformer](https://github.com/1homsi/cubeforge-examples/tree/main/platformer) | [Roguelike](https://github.com/1homsi/cubeforge-examples/tree/main/roguelike) | [Tower Defense](https://github.com/1homsi/cubeforge-examples/tree/main/tower-defense) | [Mario Clone](https://github.com/1homsi/cubeforge-examples/tree/main/mario-clone) |
+| [Platformer](https://github.com/1homsi/xip-examples/tree/main/platformer) | [Roguelike](https://github.com/1homsi/xip-examples/tree/main/roguelike) | [Tower Defense](https://github.com/1homsi/xip-examples/tree/main/tower-defense) | [Mario Clone](https://github.com/1homsi/xip-examples/tree/main/mario-clone) |
 
-Platformers, arcade, puzzles, top-down RPGs, strategy, multiplayer, and more — **[browse all examples](https://github.com/1homsi/cubeforge-examples)**
+Platformers, arcade, puzzles, top-down RPGs, strategy, multiplayer, and more — **[browse all examples](https://github.com/1homsi/xip-examples)**
 
 ---
 
-## Why Cubeforge
+## Why Xip
 
-Most browser game engines are imperative — you create objects, call methods, and manage loops manually. Cubeforge flips that: your game is a React component tree. Mount a component → entity exists. Unmount it → entity is gone.
+Most browser game engines are imperative — you create objects, call methods, and manage loops manually. Xip flips that: your game is a React component tree. Mount a component → entity exists. Unmount it → entity is gone.
 
 - **Declarative** — describe your world, not your frame loop
 - **Composable** — `<Player />`, `<Enemy />`, `<MovingPlatform />` are just React components
@@ -111,7 +111,7 @@ Most browser game engines are imperative — you create objects, call methods, a
 - **Time-travel DevTools** — `<Game devtools>` adds a frame scrubber and entity inspector
 - **Deterministic** — `<Game deterministic seed={n}>` for reproducible physics and replays
 - **WebGL2 renderer** — instanced GPU rendering out of the box, with an automatic Canvas2D fallback
-- **Multiplayer** — `@cubeforge/net` provides Room, syncEntity, and ClientPrediction rollback
+- **Multiplayer** — `@xip/net` provides Room, syncEntity, and ClientPrediction rollback
 
 ---
 
@@ -128,11 +128,11 @@ Most browser game engines are imperative — you create objects, call methods, a
 
 ## vs other tools
 
-**vs Phaser** — Phaser is imperative: `this.physics.add.sprite()`, scene lifecycles, manual wiring. Cubeforge is JSX — your game tree, React state, same composition model as your UI.
+**vs Phaser** — Phaser is imperative: `this.physics.add.sprite()`, scene lifecycles, manual wiring. Xip is JSX — your game tree, React state, same composition model as your UI.
 
-**vs Three.js** — Three.js is a 3D rendering library with no physics, input, or entity system. Cubeforge is a complete 2D game runtime with all of that included.
+**vs Three.js** — Three.js is a 3D rendering library with no physics, input, or entity system. Xip is a complete 2D game runtime with all of that included.
 
-**vs Unity WebGL** — Unity requires a separate build pipeline and ships a large runtime. Cubeforge is an npm package — add it to any React app, ship with your normal build, loads instantly.
+**vs Unity WebGL** — Unity requires a separate build pipeline and ships a large runtime. Xip is an npm package — add it to any React app, ship with your normal build, loads instantly.
 
 ---
 
@@ -162,22 +162,22 @@ The loop auto-pauses when the tab is hidden and resumes when it's visible again;
 
 | Package | Description |
 |---|---|
-| `cubeforge` | Components and hooks — the main public API |
-| `@cubeforge/core` | ECS, game loop, events, assets, tween, pathfinding, steering, deterministic RNG |
-| `@cubeforge/input` | Keyboard, mouse, touch, gamepad (analog sticks, haptics), input contexts, player input, recording/playback |
-| `@cubeforge/renderer` | Camera, sprites, animations, particles, trails, parallax |
-| `@cubeforge/physics` | AABB collision, rigid bodies, kinematic mode, one-way platforms, fixed 60 Hz, spatial broadphase |
-| `@cubeforge/audio` | Web Audio API — useSound, volume groups, fade, duck, crossfade |
-| `@cubeforge/net` | Multiplayer — Room, syncEntity, useNetworkInput, ClientPrediction |
-| `create-cubeforge-game` | CLI scaffolder |
+| `xipjs` | Components and hooks — the main public API |
+| `@xip/core` | ECS, game loop, events, assets, tween, pathfinding, steering, deterministic RNG |
+| `@xip/input` | Keyboard, mouse, touch, gamepad (analog sticks, haptics), input contexts, player input, recording/playback |
+| `@xip/renderer` | Camera, sprites, animations, particles, trails, parallax |
+| `@xip/physics` | AABB collision, rigid bodies, kinematic mode, one-way platforms, fixed 60 Hz, spatial broadphase |
+| `@xip/audio` | Web Audio API — useSound, volume groups, fade, duck, crossfade |
+| `@xip/net` | Multiplayer — Room, syncEntity, useNetworkInput, ClientPrediction |
+| `create-xip-game` | CLI scaffolder |
 
 ---
 
 ## Local Development
 
 ```bash
-git clone https://github.com/1homsi/cubeforge
-cd cubeforge
+git clone https://github.com/1homsi/xip
+cd xip
 pnpm install
 pnpm run typecheck
 pnpm test

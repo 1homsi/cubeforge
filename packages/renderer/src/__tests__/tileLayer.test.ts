@@ -55,7 +55,7 @@ function worldWith(...layers: TileLayerData[]) {
     comps,
     query: () => [...comps.keys()],
     getComponent: (id: number) => comps.get(id),
-  } as unknown as import('@cubeforge/core').ECSWorld & { comps: typeof comps }
+  } as unknown as import('@xip/core').ECSWorld & { comps: typeof comps }
 }
 
 describe('TileLayerData', () => {
@@ -397,7 +397,7 @@ describe('RenderSystem integration', () => {
       query: (...names: string[]) => [...comps.keys()].filter((id) => names.every((n) => n in comps.get(id)!)),
       queryOne: (n: string) => [...comps.keys()].find((id) => n in comps.get(id)!),
       getComponent: (id: number, n: string) => comps.get(id)?.[n],
-    } as unknown as import('@cubeforge/core').ECSWorld
+    } as unknown as import('@xip/core').ECSWorld
     rs.update(world, 1 / 60)
     expect(rs.tileLayerStats.drawCalls).toBe(1)
     expect(rs.tileLayerStats.indexUploads).toBe(1)

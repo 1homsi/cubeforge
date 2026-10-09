@@ -1,5 +1,5 @@
 import { type CSSProperties } from 'react'
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 import type { EntityInfo } from '../hooks/useEditorState'
 import { NumberField, TextField, BoolField, ColorField, Vec2Field } from './PropertyField'
 

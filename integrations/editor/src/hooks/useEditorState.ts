@@ -1,7 +1,7 @@
 import { useState, useCallback, useContext, useEffect, useRef } from 'react'
-import type { EntityId, Component } from '@cubeforge/core'
-import type { EngineState } from '@cubeforge/context'
-import { EngineContext } from '@cubeforge/context'
+import type { EntityId, Component } from '@xip/core'
+import type { EngineState } from '@xip/context'
+import { EngineContext } from '@xip/context'
 
 export interface EntityInfo {
   id: EntityId

@@ -1,7 +1,7 @@
 {
-  "name": "@cubeforge/physics",
+  "name": "@xip/physics",
   "version": "0.0.1",
-  "description": "AABB physics with fixed timestep and spatial broadphase for Cubeforge",
+  "description": "AABB physics with fixed timestep and spatial broadphase for Xip",
   "main": "./dist/index.mjs",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -11,18 +11,18 @@
     "dist"
   ],
   "dependencies": {
-    "@cubeforge/core": "workspace:*"
+    "@xip/core": "workspace:*"
   },
   "keywords": [
     "game-engine",
     "physics",
     "aabb",
-    "cubeforge"
+    "xip"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/1homsi/cubeforge"
+    "url": "https://github.com/1homsi/xip"
   },
   "private": true,
   "module": "./dist/index.mjs",

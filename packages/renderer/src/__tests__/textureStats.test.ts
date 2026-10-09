@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ECSWorld } from '@cubeforge/core'
+import { ECSWorld } from '@xip/core'
 import { RenderSystem } from '../webglRenderSystem'
 import { SpriteLayer } from '../spriteLayer'
 import { createRecordingCanvas, installHeadlessCanvasDOM } from '../testing/recordingGL'

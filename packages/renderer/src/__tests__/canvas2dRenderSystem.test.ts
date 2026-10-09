@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ECSWorld, createTransform } from '@cubeforge/core'
-import { createRenderStats } from '@cubeforge/core'
+import { ECSWorld, createTransform } from '@xip/core'
+import { createRenderStats } from '@xip/core'
 import { Canvas2DRenderSystem, createCanvas2DStats } from '../canvas2dRenderSystem'
 import { createSprite } from '../components/sprite'
 import { createText } from '../components/text'

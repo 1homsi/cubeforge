@@ -121,7 +121,7 @@ describe('createWebRTCTransport', () => {
     const transport = createWebRTCTransport()
     const offer = await transport.createOffer()
 
-    expect(mockPC.createDataChannel).toHaveBeenCalledWith('cubeforge', expect.any(Object))
+    expect(mockPC.createDataChannel).toHaveBeenCalledWith('xip', expect.any(Object))
     expect(mockPC.setLocalDescription).toHaveBeenCalled()
     expect(offer).toMatchObject({ type: 'offer' })
   })
@@ -228,7 +228,7 @@ describe('createWebRTCTransport', () => {
     )
     const transport2 = createWebRTCTransport({ ordered: false, maxRetransmits: 0 })
     transport2.createOffer()
-    expect(pc.createDataChannel).toHaveBeenCalledWith('cubeforge', { ordered: false, maxRetransmits: 0 })
+    expect(pc.createDataChannel).toHaveBeenCalledWith('xip', { ordered: false, maxRetransmits: 0 })
   })
 
   it('uses ordered channel when ordered:true', async () => {
@@ -239,7 +239,7 @@ describe('createWebRTCTransport', () => {
     )
     const transport = createWebRTCTransport({ ordered: true })
     await transport.createOffer()
-    expect(pc.createDataChannel).toHaveBeenCalledWith('cubeforge', { ordered: true })
+    expect(pc.createDataChannel).toHaveBeenCalledWith('xip', { ordered: true })
   })
 
   it('fires onDisconnect when the connection state becomes "failed" (ICE failure)', () => {

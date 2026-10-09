@@ -1,4 +1,4 @@
-import { providePhysics } from '@cubeforge/core'
+import { providePhysics } from '@xip/core'
 import { PhysicsSystem } from './physicsSystem'
 
 export function registerPhysics(): void {

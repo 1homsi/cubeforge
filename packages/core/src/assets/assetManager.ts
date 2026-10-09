@@ -85,7 +85,7 @@ export class AssetManager {
           img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
         })
       } catch (err) {
-        console.warn(`[Cubeforge] Failed to load image: ${resolved}`)
+        console.warn(`[Xip] Failed to load image: ${resolved}`)
         this._errors.push({ src: resolved, kind: 'image', error: err })
         throw err
       } finally {
@@ -129,7 +129,7 @@ export class AssetManager {
         this.audio.set(resolved, audioBuffer)
         return audioBuffer
       } catch (err) {
-        console.warn(`[Cubeforge] Failed to load audio: ${resolved}`)
+        console.warn(`[Xip] Failed to load audio: ${resolved}`)
         this._errors.push({ src: resolved, kind: 'audio', error: err })
         throw err
       } finally {

@@ -1,5 +1,5 @@
 /**
- * Cubeforge performance benchmark — old (reference) vs new implementation,
+ * Xip performance benchmark — old (reference) vs new implementation,
  * measured in the same process, best-of-3 runs each.
  *
  * Run: npx tsx scripts/bench.mts

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ECSWorld, copyEngineStats, createEngineStats } from '@cubeforge/core'
+import { ECSWorld, copyEngineStats, createEngineStats } from '@xip/core'
 import { RenderSystem } from '../webglRenderSystem'
 import { SpriteLayer } from '../spriteLayer'
 import { TileLayerData, createTileLayerComponent } from '../tileLayer'

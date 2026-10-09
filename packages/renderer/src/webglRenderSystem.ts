@@ -5,12 +5,12 @@
 // ║  (sprites, text, particles, post-processing, etc.) belong here or in    ║
 // ║  shaders.ts.                                                             ║
 // ║                                                                          ║
-// ║  Exported as `RenderSystem` from @cubeforge/renderer.                   ║
+// ║  Exported as `RenderSystem` from @xip/renderer.                   ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
-import type { TransformComponent, LayerStats } from '@cubeforge/core'
-import { createRenderStats, resetRenderFrameStats, type RenderStats } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, NavGrid } from '@xip/core'
+import type { TransformComponent, LayerStats } from '@xip/core'
+import { createRenderStats, resetRenderFrameStats, type RenderStats } from '@xip/core'
 import {
   VERT_SRC,
   FRAG_SRC,
@@ -56,7 +56,7 @@ import {
   type CameraFollowPointProvider,
   type CameraFollowSprite,
 } from './cameraFollow'
-import type { TileLayerRenderStats } from '@cubeforge/core'
+import type { TileLayerRenderStats } from '@xip/core'
 import type { TileLayerData } from './tileLayer'
 import type { GpuTiming } from './gpuTimer'
 
@@ -2713,13 +2713,13 @@ export class RenderSystem implements System {
     if (this.gl.isContextLost()) {
       if (!this._contextLostWarned) {
         this._contextLostWarned = true
-        console.error('[Cubeforge] WebGL context lost. Rendering suspended until the context is restored.')
+        console.error('[Xip] WebGL context lost. Rendering suspended until the context is restored.')
       }
       return
     }
     if (this._contextLostWarned) {
       this._contextLostWarned = false
-      console.info('[Cubeforge] WebGL context restored — resuming rendering.')
+      console.info('[Xip] WebGL context restored — resuming rendering.')
       this._tileLayers?.contextRestored()
       this._gpu?.contextRestored()
     }
@@ -3361,7 +3361,7 @@ export class RenderSystem implements System {
     const textEntities: EntityId[] = entityText ? entityText.fallback : []
     if (!entityText && !this._textWarned && world.query('Transform', 'Text').length > 0) {
       this._textWarned = true
-      console.warn('[Cubeforge] Text entities need createText() (or the <Text> component) to be drawn.')
+      console.warn('[Xip] Text entities need createText() (or the <Text> component) to be drawn.')
     }
     const textScale = this._textRasterScale(zoom * (W / Wl))
 

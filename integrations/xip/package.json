@@ -1,0 +1,68 @@
+{
+  "name": "xipjs",
+  "version": "0.8.3",
+  "description": "React-first 2D browser game engine",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./advanced": {
+      "types": "./dist/advanced.d.ts",
+      "import": "./dist/advanced.js",
+      "default": "./dist/advanced.js"
+    },
+    "./render": {
+      "types": "./dist/render.d.ts",
+      "import": "./dist/render.js",
+      "default": "./dist/render.js"
+    },
+    "./test": {
+      "types": "./dist/test.d.ts",
+      "import": "./dist/test.js",
+      "default": "./dist/test.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs && tsup"
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@xip/audio": "workspace:*",
+    "@xip/context": "workspace:*",
+    "@xip/core": "workspace:*",
+    "@xip/devtools": "workspace:*",
+    "@xip/editor": "workspace:*",
+    "@xip/gameplay": "workspace:*",
+    "@xip/input": "workspace:*",
+    "@xip/net": "workspace:*",
+    "@xip/physics": "workspace:*",
+    "@xip/renderer": "workspace:*",
+    "tsup": "^8.0.0"
+  },
+  "keywords": [
+    "game-engine",
+    "react",
+    "2d",
+    "browser-game",
+    "xip"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/xip"
+  }
+}

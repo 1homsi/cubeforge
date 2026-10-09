@@ -1,6 +1,6 @@
 import { useRef, useEffect, useContext, useCallback } from 'react'
-import { EngineContext, EntityContext } from '@cubeforge/context'
-import { createTimer } from '@cubeforge/core'
+import { EngineContext, EntityContext } from '@xip/context'
+import { createTimer } from '@xip/core'
 
 export interface HealthOptions {
   iFrames?: number

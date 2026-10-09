@@ -1,6 +1,6 @@
 packages:
   - 'packages/*'
-  - 'packages/create-cubeforge-game'
+  - 'packages/create-xip-game'
   - 'integrations/*'
 overrides:
   react: ^19.2.6

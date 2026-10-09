@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useContext } from 'react'
-import { createScript } from '@cubeforge/core'
-import { EngineContext } from '@cubeforge/context'
+import { createScript } from '@xip/core'
+import { EngineContext } from '@xip/context'
 
 export type CutsceneStep =
   | { type: 'wait'; duration: number }

@@ -1,7 +1,7 @@
 {
-  "name": "@cubeforge/devtools",
+  "name": "@xip/devtools",
   "version": "0.0.1",
-  "description": "Developer tools for Cubeforge (internal)",
+  "description": "Developer tools for Xip (internal)",
   "main": "./dist/index.mjs",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -11,11 +11,11 @@
     "dist"
   ],
   "dependencies": {
-    "@cubeforge/audio": "workspace:*",
-    "@cubeforge/context": "workspace:*",
-    "@cubeforge/core": "workspace:*",
-    "@cubeforge/input": "workspace:*",
-    "@cubeforge/renderer": "workspace:*"
+    "@xip/audio": "workspace:*",
+    "@xip/context": "workspace:*",
+    "@xip/core": "workspace:*",
+    "@xip/input": "workspace:*",
+    "@xip/renderer": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/1homsi/cubeforge"
+    "url": "https://github.com/1homsi/xip"
   },
   "private": true,
   "module": "./dist/index.mjs",

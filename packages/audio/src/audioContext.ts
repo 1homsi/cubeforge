@@ -36,7 +36,7 @@ export interface AudioState {
   fading: Set<MusicTrack>
 }
 
-const STATE_KEY = Symbol.for('cubeforge.audio.state')
+const STATE_KEY = Symbol.for('xip.audio.state')
 
 /** @internal */
 export function getAudioState(): AudioState {
@@ -284,7 +284,7 @@ export function setGroupVolumeFaded(group: AudioGroup | 'master', volume: number
 
 // ─── Settings persistence ────────────────────────────────────────────────────
 
-const AUDIO_STORAGE_KEY = 'cubeforge:audio'
+const AUDIO_STORAGE_KEY = 'xip:audio'
 
 /**
  * Persist the current master volume and all group volumes to `localStorage`.
