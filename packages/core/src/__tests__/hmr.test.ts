@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { hmrSaveState, hmrLoadState, hmrClearState, hmrGetVersion } from '../hmr'
 
-const HMR_STORE_KEY = '__CUBEFORGE_HMR_STORE__'
+const HMR_STORE_KEY = '__XIP_HMR_STORE__'
 
 describe('hmr', () => {
   beforeEach(() => {

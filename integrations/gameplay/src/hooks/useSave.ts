@@ -30,7 +30,7 @@ export function useSave<T>(key: string, defaultValue: T, opts: SaveOptions<T> = 
       try {
         localStorage.setItem(key, JSON.stringify(slot))
       } catch (err) {
-        console.warn('[Cubeforge] useSave: failed to write to localStorage', err)
+        console.warn('[Xip] useSave: failed to write to localStorage', err)
       }
     },
     [key, version],

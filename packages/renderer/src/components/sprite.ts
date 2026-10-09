@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 import type { Sampling } from '../textureFilter'
 
 export type BlendMode = 'normal' | 'additive' | 'multiply' | 'screen'
@@ -18,7 +18,7 @@ export interface SpriteComponent extends Component {
   /**
    * ID of a dynamic canvas registered via `registerDynamicCanvas()`.
    * When set the renderer samples from that canvas texture instead of
-   * a static image. Use with `useDynamicCanvas` from 'cubeforge'.
+   * a static image. Use with `useDynamicCanvas` from 'xipjs'.
    */
   dynamicSrc?: string
   /** Horizontal draw offset from anchor point */

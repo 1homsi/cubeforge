@@ -17,7 +17,7 @@
  *   frames instead of reallocated.
  */
 
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 
 // ── Public types ──────────────────────────────────────────────────────────
 

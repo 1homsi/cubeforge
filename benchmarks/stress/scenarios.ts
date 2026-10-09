@@ -4,8 +4,8 @@
  * which advances the simulation and renders one frame through the same system
  * order as <Game>: sim (external data / scripts) -> physics -> render.
  */
-import { ECSWorld, EventBus, createEngineStats, createTransform } from '@cubeforge/core'
-import type { EngineStats, EntityId, TransformComponent } from '@cubeforge/core'
+import { ECSWorld, EventBus, createEngineStats, createTransform } from '@xip/core'
+import type { EngineStats, EntityId, TransformComponent } from '@xip/core'
 import {
   RenderSystem,
   SpriteLayer,
@@ -16,8 +16,8 @@ import {
   createText,
   createCamera2D,
   createTileLayerComponent,
-} from '@cubeforge/renderer'
-import { PhysicsSystem } from '@cubeforge/physics'
+} from '@xip/renderer'
+import { PhysicsSystem } from '@xip/physics'
 
 export interface ScenarioContext {
   canvas: HTMLCanvasElement

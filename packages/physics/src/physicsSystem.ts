@@ -19,9 +19,9 @@
  * Reference: Rapier (src/dynamics/solver), Box2D (b2ContactSolver)
  */
 
-import type { System, ECSWorld, EntityId } from '@cubeforge/core'
-import type { TransformComponent } from '@cubeforge/core'
-import type { EventBus } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId } from '@xip/core'
+import type { TransformComponent } from '@xip/core'
+import type { EventBus } from '@xip/core'
 import type { RigidBodyComponent } from './components/rigidbody'
 import type { BoxColliderComponent } from './components/boxCollider'
 import type { CircleColliderComponent } from './components/circleCollider'

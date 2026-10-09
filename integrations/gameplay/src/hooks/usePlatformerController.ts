@@ -1,10 +1,10 @@
 import { useContext, useEffect } from 'react'
-import { createScript } from '@cubeforge/core'
-import type { EntityId, ECSWorld } from '@cubeforge/core'
-import type { InputManager } from '@cubeforge/input'
-import type { RigidBodyComponent } from '@cubeforge/physics'
-import type { SpriteComponent } from '@cubeforge/renderer'
-import { EngineContext } from '@cubeforge/context'
+import { createScript } from '@xip/core'
+import type { EntityId, ECSWorld } from '@xip/core'
+import type { InputManager } from '@xip/input'
+import type { RigidBodyComponent } from '@xip/physics'
+import type { SpriteComponent } from '@xip/renderer'
+import { EngineContext } from '@xip/context'
 
 export interface PlatformerControllerOptions {
   speed?: number

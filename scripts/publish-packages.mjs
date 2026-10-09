@@ -10,16 +10,16 @@ const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const nodeBin = process.execPath
 
 // Packages actually published to npm. The monorepo also contains
-// @cubeforge/* scoped workspace packages, but no npm scope/org is
-// configured for them — `cubeforge` compiles their sources into its dist
-// (integrations/cubeforge/build.mjs), so consumers never need them as runtime
+// @xip/* scoped workspace packages, but no npm scope/org is
+// configured for them — `xipjs` compiles their sources into its dist
+// (integrations/xip/build.mjs), so consumers never need them as runtime
 // deps. Extend this list only after creating the npm org + trusted publisher
 // for the scope.
 //
 // Versioning: all published packages ship the same version, taken from the
 // release tag (VERSION env, set by .github/workflows/publish.yml). Versions in
 // the repo's package.json files are not the source of truth.
-export const publishPackagePaths = ['integrations/cubeforge', 'packages/create-cubeforge-game']
+export const publishPackagePaths = ['integrations/xip', 'packages/create-xip-game']
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, 'utf8'))
@@ -38,7 +38,7 @@ function getVersion({ required = false } = {}) {
   }
   const version = raw
     ? raw.replace(/^v/, '')
-    : readJson(path.join(repoRoot, 'integrations/cubeforge/package.json')).version
+    : readJson(path.join(repoRoot, 'integrations/xip/package.json')).version
   if (!SEMVER.test(version)) throw new Error(`Invalid release version "${raw ?? version}"; expected semver like 1.2.3`)
   return version
 }
@@ -59,7 +59,7 @@ export function assertConsistentManifests(pkgs, version, published = publishedNa
         if (typeof range === 'string' && range.startsWith('workspace:')) {
           problems.push(`${pkg.name}: ${section}.${name} still uses ${range}`)
         }
-        if (name.startsWith('@cubeforge/')) problems.push(`${pkg.name}: ${section}.${name} is not published to npm`)
+        if (name.startsWith('@xip/')) problems.push(`${pkg.name}: ${section}.${name} is not published to npm`)
         if (published.has(name) && range !== version) {
           problems.push(`${pkg.name}: ${section}.${name} is ${range}, expected ${version}`)
         }
@@ -79,14 +79,14 @@ export function preparePackageJson(pkg, version, published = publishedNames()) {
     delete prepared.publishConfig
   }
 
-  // @cubeforge/* packages are compiled into the published dist; listing them
+  // @xip/* packages are compiled into the published dist; listing them
   // as runtime deps would 404 on npm. Other published packages are pinned to
   // the release version.
   for (const section of DEP_SECTIONS) {
     const deps = prepared[section]
     if (!deps) continue
     for (const name of Object.keys(deps)) {
-      if (name.startsWith('@cubeforge/')) delete deps[name]
+      if (name.startsWith('@xip/')) delete deps[name]
       else if (published.has(name)) deps[name] = version
     }
     if (Object.keys(deps).length === 0) delete prepared[section]
@@ -142,9 +142,9 @@ function assertNoUnpublishedImports(files) {
   const bad = files.filter(
     (file) =>
       /\.(m?js|d\.m?ts)$/.test(file) &&
-      /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"]@cubeforge\//.test(readFileSync(file, 'utf8')),
+      /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"]@xip\//.test(readFileSync(file, 'utf8')),
   )
-  if (bad.length) throw new Error(`Published files import unpublished @cubeforge/* packages:\n${bad.join('\n')}`)
+  if (bad.length) throw new Error(`Published files import unpublished @xip/* packages:\n${bad.join('\n')}`)
 }
 
 function exportTargets(exp) {
@@ -196,7 +196,7 @@ function packPackage(stageDir, tarballsDir) {
 }
 
 async function smoke(version = getVersion()) {
-  const workDir = mkdtempSync(path.join(tmpdir(), 'cubeforge-publish-'))
+  const workDir = mkdtempSync(path.join(tmpdir(), 'xip-publish-'))
   const stageRoot = path.join(workDir, 'stage')
   const tarballsDir = path.join(workDir, 'tarballs')
   const consumerDir = path.join(workDir, 'consumer')
@@ -218,7 +218,7 @@ async function smoke(version = getVersion()) {
 
     const rootPkg = readJson(path.join(repoRoot, 'package.json'))
     const consumerPkg = {
-      name: 'cubeforge-packed-smoke',
+      name: 'xip-packed-smoke',
       private: true,
       type: 'module',
       dependencies: Object.fromEntries(packed.map(({ name, tarball }) => [name, `file:${tarball}`])),
@@ -246,13 +246,13 @@ async function smoke(version = getVersion()) {
     writeFileSync(
       path.join(consumerDir, 'index.ts'),
       [
-        "import { CharacterController, Game, RenderSystem, Room, createInputMap, overlapBox, useCollisionEnter, useSound } from 'cubeforge'",
-        "import type { ContactData, ECSWorld, NetTransport, RaycastHit, RenderLayer, SoundControls } from 'cubeforge'",
-        "import { Game as RenderGame, World, Entity, Camera2D, Transform, Sprite, useEntity, useGame, useDynamicCanvas, useCamera, useGestures } from 'cubeforge/render'",
-        "import type { EngineState } from 'cubeforge/render'",
-        "import { gjk } from 'cubeforge/advanced'",
-        "import { mountGame, createTestEngine, cleanup, EngineContext, RecordingGL } from 'cubeforge/test'",
-        "import type { MountedGame } from 'cubeforge/test'",
+        "import { CharacterController, Game, RenderSystem, Room, createInputMap, overlapBox, useCollisionEnter, useSound } from 'xipjs'",
+        "import type { ContactData, ECSWorld, NetTransport, RaycastHit, RenderLayer, SoundControls } from 'xipjs'",
+        "import { Game as RenderGame, World, Entity, Camera2D, Transform, Sprite, useEntity, useGame, useDynamicCanvas, useCamera, useGestures } from 'xipjs/render'",
+        "import type { EngineState } from 'xipjs/render'",
+        "import { gjk } from 'xipjs/advanced'",
+        "import { mountGame, createTestEngine, cleanup, EngineContext, RecordingGL } from 'xipjs/test'",
+        "import type { MountedGame } from 'xipjs/test'",
         '',
         'type IsAny<T> = 0 extends 1 & T ? true : false',
         'const engineTyped: IsAny<EngineState> = false',
@@ -281,23 +281,23 @@ async function smoke(version = getVersion()) {
         stdio: 'inherit',
       },
     )
-    console.log('Importing cubeforge at runtime from clean consumer')
+    console.log('Importing xip at runtime from clean consumer')
     execFileSync(
       nodeBin,
       [
         '--input-type=module',
         '-e',
         [
-          "const m = await import('cubeforge'); for (const key of ['Game','Room','RenderSystem']) { if (!m[key]) throw new Error(`missing ${key}`) }",
-          "const r = await import('cubeforge/render'); for (const key of ['Game','World','Entity','Camera2D','Transform','Sprite','useEntity','useGame','useDynamicCanvas','useCamera','useGestures']) { if (!r[key]) throw new Error(`cubeforge/render missing ${key}`) }",
-          "const a = await import('cubeforge/advanced'); if (!a.gjk) throw new Error('cubeforge/advanced missing gjk')",
-          "const t = await import('cubeforge/test'); for (const key of ['mountGame','createTestEngine','cleanup','EngineContext','RecordingGL']) { if (!t[key]) throw new Error(`cubeforge/test missing ${key}`) }",
+          "const m = await import('xipjs'); for (const key of ['Game','Room','RenderSystem']) { if (!m[key]) throw new Error(`missing ${key}`) }",
+          "const r = await import('xipjs/render'); for (const key of ['Game','World','Entity','Camera2D','Transform','Sprite','useEntity','useGame','useDynamicCanvas','useCamera','useGestures']) { if (!r[key]) throw new Error(`xipjs/render missing ${key}`) }",
+          "const a = await import('xipjs/advanced'); if (!a.gjk) throw new Error('xipjs/advanced missing gjk')",
+          "const t = await import('xipjs/test'); for (const key of ['mountGame','createTestEngine','cleanup','EngineContext','RecordingGL']) { if (!t[key]) throw new Error(`xipjs/test missing ${key}`) }",
         ].join('\n'),
       ],
       { cwd: consumerDir, stdio: 'inherit' },
     )
   } finally {
-    if (!process.env.KEEP_CUBEFORGE_PUBLISH_SMOKE) rmSync(workDir, { recursive: true, force: true })
+    if (!process.env.KEEP_XIP_PUBLISH_SMOKE) rmSync(workDir, { recursive: true, force: true })
   }
 }
 

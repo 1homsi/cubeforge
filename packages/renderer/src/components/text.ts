@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 import { registerTextEntityRenderer } from '../layerRegistry'
 import { createEntityTextBatcher } from '../textEntities'
 

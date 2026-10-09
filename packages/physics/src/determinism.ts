@@ -7,7 +7,7 @@
  * - Deterministic math approximations
  */
 
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 
 // ── Deterministic Ordering ────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ClientPrediction } from '../clientPrediction'
-import type { WorldSnapshot } from '@cubeforge/core'
+import type { WorldSnapshot } from '@xip/core'
 
 describe('ClientPrediction', () => {
   let snapshotCounter: number

@@ -1,5 +1,5 @@
 {
-  "name": "cubeforge-monorepo",
+  "name": "xip-monorepo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,8 +13,8 @@
     "bench:ci": "node benchmarks/run.mjs --ci",
     "gpu:smoke": "node scripts/gpu-smoke/run.mjs",
     "pack:smoke": "pnpm build && node scripts/publish-packages.mjs smoke",
-    "size": "node scripts/bundle-size.mjs && node scripts/bundle-size.mjs --entry cubeforge/render",
-    "size:check": "node scripts/bundle-size.mjs --entry cubeforge/render --check 37000 --forbid _pkg/physics/,_pkg/audio/,_pkg/net/,_pkg/editor/,_pkg/devtools/,_pkg/gameplay/,_pkg/renderer/testing/,dist/test.js,dist/test/ && node scripts/bundle-size.mjs --check 37000 --forbid _pkg/physics/,_pkg/devtools/,_pkg/net/,_pkg/editor/,_pkg/gameplay/,_pkg/renderer/testing/,dist/test.js,dist/test/"
+    "size": "node scripts/bundle-size.mjs && node scripts/bundle-size.mjs --entry xipjs/render",
+    "size:check": "node scripts/bundle-size.mjs --entry xipjs/render --check 37000 --forbid _pkg/physics/,_pkg/audio/,_pkg/net/,_pkg/editor/,_pkg/devtools/,_pkg/gameplay/,_pkg/renderer/testing/,dist/test.js,dist/test/ && node scripts/bundle-size.mjs --check 37000 --forbid _pkg/physics/,_pkg/devtools/,_pkg/net/,_pkg/editor/,_pkg/gameplay/,_pkg/renderer/testing/,dist/test.js,dist/test/"
   },
   "devDependencies": {
     "react": "^19.2.6",

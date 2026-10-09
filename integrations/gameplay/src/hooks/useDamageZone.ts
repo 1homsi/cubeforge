@@ -1,6 +1,6 @@
 import { useContext } from 'react'
-import { EngineContext, useTriggerEnter } from '@cubeforge/context'
-import type { EntityId } from '@cubeforge/core'
+import { EngineContext, useTriggerEnter } from '@xip/context'
+import type { EntityId } from '@xip/core'
 
 interface DamageZoneOpts {
   tag?: string

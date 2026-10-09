@@ -1,5 +1,5 @@
 import type { LayerBlendMode } from './blendModes'
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 import { registerTileRenderer } from './layerRegistry'
 import { TileLayerRenderer } from './tileLayerGL'
 

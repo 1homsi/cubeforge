@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { ECSWorld, EventBus, createTransform, createTag } from '@cubeforge/core'
+import { ECSWorld, EventBus, createTransform, createTag } from '@xip/core'
 import { PhysicsSystem } from '../physicsSystem'
 import { createRigidBody } from '../components/rigidbody'
 import { createBoxCollider } from '../components/boxCollider'

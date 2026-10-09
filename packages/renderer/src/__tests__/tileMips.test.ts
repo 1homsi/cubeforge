@@ -137,7 +137,7 @@ function renderOnce(opts: { minFilter?: 'nearest' | 'mipmap'; farZoomPx?: number
   const world = {
     query: () => [1],
     getComponent: () => createTileLayerComponent(layer),
-  } as unknown as import('@cubeforge/core').ECSWorld
+  } as unknown as import('@xip/core').ECSWorld
   const { gl, calls } = fakeGL()
   const r = new TileLayerRenderer(gl)
   r.prepare(world, 0)

@@ -1,0 +1,29 @@
+{
+  "name": "create-xip-game",
+  "version": "0.5.1",
+  "description": "Scaffold a new Xip game project",
+  "bin": {
+    "create-xip-game": "./bin/index.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "esbuild bin/index.ts --bundle --platform=node --target=node18 --outfile=bin/index.js"
+  },
+  "publishConfig": {
+    "bin": {
+      "create-xip-game": "./bin/index.js"
+    }
+  },
+  "files": [
+    "bin/index.js",
+    "templates/default",
+    "templates/editor",
+    "templates/puzzle",
+    "templates/turn-based"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1homsi/xip"
+  }
+}

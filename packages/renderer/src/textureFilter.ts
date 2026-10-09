@@ -3,7 +3,7 @@
  *
  * @example
  * ```tsx
- * import { TextureFilter } from 'cubeforge'
+ * import { TextureFilter } from 'xipjs'
  *
  * // Pixel-art crisp scaling
  * <Sprite sampling={TextureFilter.NEAREST} />

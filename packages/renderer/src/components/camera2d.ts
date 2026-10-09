@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 import type { CameraFollowPointProvider, CameraFollowSprite } from '../cameraFollow'
 
 export interface Camera2DComponent extends Component {

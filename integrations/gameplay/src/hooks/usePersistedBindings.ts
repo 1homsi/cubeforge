@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useContext } from 'react'
-import type { ActionBindings } from '@cubeforge/input'
-import { EngineContext } from '@cubeforge/context'
+import type { ActionBindings } from '@xip/input'
+import { EngineContext } from '@xip/context'
 
 export interface BindingControls {
   readonly bindings: ActionBindings

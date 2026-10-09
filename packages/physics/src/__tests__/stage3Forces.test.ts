@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { ECSWorld } from '@cubeforge/core'
-import { createTransform } from '@cubeforge/core'
+import { ECSWorld } from '@xip/core'
+import { createTransform } from '@xip/core'
 import { createRigidBody } from '../components/rigidbody'
 import { createBoxCollider } from '../components/boxCollider'
 import { createCircleCollider } from '../components/circleCollider'
@@ -25,7 +25,7 @@ import {
   DEFAULT_ACTIVE_COLLISION_TYPES,
 } from '../forceApi'
 import type { RigidBodyComponent } from '../components/rigidbody'
-import type { TransformComponent } from '@cubeforge/core'
+import type { TransformComponent } from '@xip/core'
 
 function makeWorld(gravity = 0) {
   const world = new ECSWorld()

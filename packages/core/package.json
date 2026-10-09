@@ -1,7 +1,7 @@
 {
-  "name": "@cubeforge/core",
+  "name": "@xip/core",
   "version": "0.0.1",
-  "description": "ECS, game loop, events, assets, and tween - core runtime for Cubeforge",
+  "description": "ECS, game loop, events, assets, and tween - core runtime for Xip",
   "main": "./dist/index.mjs",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -13,12 +13,12 @@
   "keywords": [
     "game-engine",
     "ecs",
-    "cubeforge"
+    "xip"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/1homsi/cubeforge"
+    "url": "https://github.com/1homsi/xip"
   },
   "private": true,
   "module": "./dist/index.mjs",

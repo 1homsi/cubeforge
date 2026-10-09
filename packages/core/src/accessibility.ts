@@ -45,10 +45,10 @@ export function applyColorFilter(color: string, mode: AccessibilityOptions['colo
  */
 export function announceToScreenReader(text: string, priority: 'polite' | 'assertive' = 'polite'): void {
   if (typeof document === 'undefined') return
-  let region = document.getElementById('cubeforge-aria-live')
+  let region = document.getElementById('xip-aria-live')
   if (!region) {
     region = document.createElement('div')
-    region.id = 'cubeforge-aria-live'
+    region.id = 'xip-aria-live'
     region.setAttribute('aria-live', priority)
     region.setAttribute('role', 'status')
     region.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)'

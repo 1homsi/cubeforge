@@ -1,23 +1,23 @@
 import { defineConfig } from 'vitest/config'
 
 const sourceAliases = {
-  '@cubeforge/audio': new URL('./packages/audio/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/context': new URL('./integrations/context/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/core': new URL('./packages/core/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/devtools': new URL('./integrations/devtools/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/editor': new URL('./integrations/editor/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/gameplay': new URL('./integrations/gameplay/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/input': new URL('./packages/input/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/net': new URL('./packages/net/src/index.ts', import.meta.url).pathname,
-  '@cubeforge/physics': new URL('./packages/physics/src/index.ts', import.meta.url).pathname,
+  '@xip/audio': new URL('./packages/audio/src/index.ts', import.meta.url).pathname,
+  '@xip/context': new URL('./integrations/context/src/index.ts', import.meta.url).pathname,
+  '@xip/core': new URL('./packages/core/src/index.ts', import.meta.url).pathname,
+  '@xip/devtools': new URL('./integrations/devtools/src/index.ts', import.meta.url).pathname,
+  '@xip/editor': new URL('./integrations/editor/src/index.ts', import.meta.url).pathname,
+  '@xip/gameplay': new URL('./integrations/gameplay/src/index.ts', import.meta.url).pathname,
+  '@xip/input': new URL('./packages/input/src/index.ts', import.meta.url).pathname,
+  '@xip/net': new URL('./packages/net/src/index.ts', import.meta.url).pathname,
+  '@xip/physics': new URL('./packages/physics/src/index.ts', import.meta.url).pathname,
   // Subpath first: Vite matches aliases by prefix, in order.
-  '@cubeforge/renderer/canvas2d': new URL('./packages/renderer/src/canvas2dRenderSystem.ts', import.meta.url).pathname,
-  '@cubeforge/renderer': new URL('./packages/renderer/src/index.ts', import.meta.url).pathname,
+  '@xip/renderer/canvas2d': new URL('./packages/renderer/src/canvas2dRenderSystem.ts', import.meta.url).pathname,
+  '@xip/renderer': new URL('./packages/renderer/src/index.ts', import.meta.url).pathname,
   // Subpaths before the bare name: Vite matches aliases by prefix, in order.
-  'cubeforge/advanced': new URL('./integrations/cubeforge/src/advanced.ts', import.meta.url).pathname,
-  'cubeforge/render': new URL('./integrations/cubeforge/src/render.ts', import.meta.url).pathname,
-  'cubeforge/test': new URL('./integrations/cubeforge/src/test.ts', import.meta.url).pathname,
-  cubeforge: new URL('./integrations/cubeforge/src/index.ts', import.meta.url).pathname,
+  'xipjs/advanced': new URL('./integrations/xip/src/advanced.ts', import.meta.url).pathname,
+  'xipjs/render': new URL('./integrations/xip/src/render.ts', import.meta.url).pathname,
+  'xipjs/test': new URL('./integrations/xip/src/test.ts', import.meta.url).pathname,
+  xipjs: new URL('./integrations/xip/src/index.ts', import.meta.url).pathname,
 }
 
 export default defineConfig({
@@ -29,7 +29,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     include: [
       'packages/*/src/**/__tests__/**/*.test.{ts,tsx}',
-      'packages/create-cubeforge-game/templates/__tests__/**/*.test.{ts,tsx}',
+      'packages/create-xip-game/templates/__tests__/**/*.test.{ts,tsx}',
       'integrations/*/src/**/__tests__/**/*.test.{ts,tsx}',
     ],
   },

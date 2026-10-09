@@ -3,7 +3,7 @@
 // system. They mirror the passes in webglRenderSystem.ts, which still carries
 // its own copy; the two should be unified once that file settles.
 
-import type { ECSWorld, EntityId, TransformComponent } from '@cubeforge/core'
+import type { ECSWorld, EntityId, TransformComponent } from '@xip/core'
 import { clampCameraToBounds, type Camera2DComponent } from './components/camera2d'
 import { hasPointOrSpriteFollow, resolveCameraFollowTarget, type CameraFollowPoint } from './cameraFollow'
 import type { AnimationStateComponent } from './components/animationState'

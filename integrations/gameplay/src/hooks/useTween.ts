@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react'
-import { Ease } from '@cubeforge/core'
+import { Ease } from '@xip/core'
 
 export interface TweenControls {
   start(): void

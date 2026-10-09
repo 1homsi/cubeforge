@@ -1,4 +1,4 @@
-import type { ECSWorld } from '@cubeforge/core'
+import type { ECSWorld } from '@xip/core'
 import type { Room, NetMessage } from './room'
 
 export interface SyncConfig {

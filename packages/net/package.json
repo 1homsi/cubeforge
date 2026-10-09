@@ -1,10 +1,10 @@
 {
-  "name": "@cubeforge/net",
+  "name": "@xip/net",
   "version": "0.0.6",
-  "description": "Multiplayer helpers for Cubeforge",
+  "description": "Multiplayer helpers for Xip",
   "main": "./dist/index.mjs",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --external react --external cubeforge --clean --outDir dist",
+    "build": "tsup src/index.ts --format esm --dts --external react --external xipjs --clean --outDir dist",
     "typecheck": "tsc --noEmit"
   },
   "files": [
@@ -24,6 +24,6 @@
     }
   },
   "dependencies": {
-    "@cubeforge/core": "workspace:*"
+    "@xip/core": "workspace:*"
   }
 }

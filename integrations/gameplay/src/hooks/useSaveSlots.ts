@@ -109,10 +109,10 @@ export function useSaveSlots<T>(namespace: string, opts: SaveSlotsOptions<T> = {
   const version = opts.version ?? 1
 
   // Index key stores an array of all slot ids for this namespace
-  const indexKey = `cubeforge-saves:${namespace}:__index`
+  const indexKey = `xip-saves:${namespace}:__index`
 
   function slotKey(id: string): string {
-    return `cubeforge-saves:${namespace}:${id}`
+    return `xip-saves:${namespace}:${id}`
   }
 
   function readIndex(): string[] {
@@ -158,7 +158,7 @@ export function useSaveSlots<T>(namespace: string, opts: SaveSlotsOptions<T> = {
     try {
       localStorage.setItem(slotKey(id), JSON.stringify(entry))
     } catch {
-      console.warn('[CubeForge] useSaveSlots: failed to write slot', id)
+      console.warn('[Xip] useSaveSlots: failed to write slot', id)
     }
   }
 

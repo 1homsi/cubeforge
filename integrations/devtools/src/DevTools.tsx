@@ -1,11 +1,11 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { WorldSnapshot } from '@cubeforge/core'
-import type { ECSWorld, GameLoop } from '@cubeforge/core'
-import type { EngineState } from '@cubeforge/context'
-import { globalInputContext } from '@cubeforge/input'
-import { _getBufferCache } from '@cubeforge/audio'
+import type { WorldSnapshot } from '@xip/core'
+import type { ECSWorld, GameLoop } from '@xip/core'
+import type { EngineState } from '@xip/context'
+import { globalInputContext } from '@xip/input'
+import { _getBufferCache } from '@xip/audio'
 
 export const MAX_DEVTOOLS_FRAMES = 600 // 10s at 60fps
 

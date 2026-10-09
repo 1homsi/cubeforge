@@ -1,4 +1,4 @@
-import type { Component, EntityId } from '@cubeforge/core'
+import type { Component, EntityId } from '@xip/core'
 import { registerPhysics } from '../provide'
 
 export type JointType = 'distance' | 'spring' | 'revolute' | 'rope' | 'fixed' | 'prismatic' | 'weld' | 'generic'

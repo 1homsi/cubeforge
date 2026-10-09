@@ -48,7 +48,7 @@ const world = (l: TileLayerData) =>
   ({
     query: () => [1],
     getComponent: () => createTileLayerComponent(l),
-  }) as unknown as import('@cubeforge/core').ECSWorld
+  }) as unknown as import('@xip/core').ECSWorld
 
 describe('TileLayer additive bias', () => {
   it('is off until enabled; setBias writes rgb and dirties only its chunk', () => {

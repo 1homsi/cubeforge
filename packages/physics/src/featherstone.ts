@@ -12,7 +12,7 @@
  * - Rapier's multibody_joint module
  */
 
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 
 // ── 2D Spatial Algebra ────────────────────────────────────────────────────────
 //

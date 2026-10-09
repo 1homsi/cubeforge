@@ -23,7 +23,7 @@ export interface EditorShellProps {
 }
 
 /**
- * An all-in-one editor layout that wraps a CubeForge `<Game>` with a scene
+ * An all-in-one editor layout that wraps a Xip `<Game>` with a scene
  * hierarchy panel on the left and a component inspector on the right.
  *
  * Must be placed **inside** `<Game>` so it can read from `EngineContext`.

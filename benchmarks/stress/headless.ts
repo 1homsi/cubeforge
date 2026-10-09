@@ -6,7 +6,7 @@ import v8 from 'node:v8'
 import { Session } from 'node:inspector/promises'
 import { writeFileSync } from 'node:fs'
 import { PerformanceObserver, performance } from 'node:perf_hooks'
-import { createRecordingCanvas, installHeadlessCanvasDOM } from '@cubeforge/renderer'
+import { createRecordingCanvas, installHeadlessCanvasDOM } from '@xip/renderer'
 import { SCENARIOS, VIEWPORT, type ScenarioContext } from './scenarios'
 
 function arg(name: string, def: string): string {

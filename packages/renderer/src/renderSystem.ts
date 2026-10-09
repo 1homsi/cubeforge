@@ -7,8 +7,8 @@
 // ║  Production rendering lives in webglRenderSystem.ts (WebGL2).           ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-import type { System, ECSWorld, EntityId, NavGrid } from '@cubeforge/core'
-import type { TransformComponent } from '@cubeforge/core'
+import type { System, ECSWorld, EntityId, NavGrid } from '@xip/core'
+import type { TransformComponent } from '@xip/core'
 import type { SpriteComponent } from './components/sprite'
 import { clampCameraToBounds, type Camera2DComponent } from './components/camera2d'
 import type { AnimationStateComponent, AnimationClipDefinition } from './components/animationState'

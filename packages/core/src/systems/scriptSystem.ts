@@ -18,7 +18,7 @@ export class ScriptSystem implements System {
       try {
         script.update(id, world, this.input, dt)
       } catch (err) {
-        console.error(`[Cubeforge] Script update error on entity ${id}:`, err)
+        console.error(`[Xip] Script update error on entity ${id}:`, err)
       }
     }
   }

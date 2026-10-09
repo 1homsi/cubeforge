@@ -1,7 +1,7 @@
 // Measures what a consumer pays for importing a list of symbols from the
-// built cubeforge package (integrations/cubeforge/dist).
+// built xip package (integrations/xip/dist).
 //
-//   node scripts/bundle-size.mjs [--entry cubeforge/render] [--symbols A,B]
+//   node scripts/bundle-size.mjs [--entry xipjs/render] [--symbols A,B]
 //        [--check <gzipBytes>] [--forbid sub1,sub2] [--json] [--top N]
 import { build } from 'esbuild'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
-const pkgDir = path.join(repoRoot, 'integrations/cubeforge')
+const pkgDir = path.join(repoRoot, 'integrations/xip')
 
 export const HUMAN_BOX_SYMBOLS = [
   'Game',
@@ -28,7 +28,7 @@ export const HUMAN_BOX_SYMBOLS = [
 ]
 
 function parseArgs(argv) {
-  const opts = { entry: 'cubeforge', symbols: HUMAN_BOX_SYMBOLS, check: null, forbid: [], json: false, top: 0 }
+  const opts = { entry: 'xipjs', symbols: HUMAN_BOX_SYMBOLS, check: null, forbid: [], json: false, top: 0 }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     const next = () => argv[++i]
@@ -44,10 +44,10 @@ function parseArgs(argv) {
 }
 
 export async function measure(entry, symbols) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'cubeforge-size-'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'xip-size-'))
   try {
     mkdirSync(path.join(dir, 'node_modules'))
-    symlinkSync(pkgDir, path.join(dir, 'node_modules/cubeforge'), 'dir')
+    symlinkSync(pkgDir, path.join(dir, 'node_modules/xipjs'), 'dir')
     const src = path.join(dir, 'entry.js')
     writeFileSync(src, `export { ${symbols.join(', ')} } from '${entry}'\n`)
     // Code splitting like an app bundler: dynamic import() targets (e.g. devtools)
@@ -83,7 +83,7 @@ export async function measure(entry, symbols) {
     const code = Buffer.concat(parts.map((p) => Buffer.from(p)))
     const inputs = [...initial]
       .flatMap((k) => Object.entries(outputs[k].inputs))
-      .map(([file, info]) => ({ file: file.replace(/^.*?integrations\/cubeforge\//, ''), bytes: info.bytesInOutput }))
+      .map(([file, info]) => ({ file: file.replace(/^.*?integrations\/xip\//, ''), bytes: info.bytesInOutput }))
       .filter((i) => i.bytes > 0)
       .sort((a, b) => b.bytes - a.bytes)
     return { entry, symbols, minified: code.length, gzip: gzipSync(code, { level: 9 }).length, inputs }

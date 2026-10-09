@@ -2,9 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
 import { renderHook, act } from '@testing-library/react'
-import { ECSWorld, EventBus, AssetManager, createEngineStats } from '@cubeforge/core'
-import { EngineContext, EntityContext } from '@cubeforge/context'
-import type { EngineState } from '@cubeforge/context'
+import { ECSWorld, EventBus, AssetManager, createEngineStats } from '@xip/core'
+import { EngineContext, EntityContext } from '@xip/context'
+import type { EngineState } from '@xip/context'
 import { useHealth } from '../hooks/useHealth'
 
 function makeEngine(): EngineState {

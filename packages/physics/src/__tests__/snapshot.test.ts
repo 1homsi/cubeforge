@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { ECSWorld } from '@cubeforge/core'
-import { createTransform } from '@cubeforge/core'
+import { ECSWorld } from '@xip/core'
+import { createTransform } from '@xip/core'
 import { createRigidBody } from '../components/rigidbody'
 import { createJoint } from '../components/joint'
 import {

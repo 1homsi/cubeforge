@@ -5,6 +5,6 @@ node_modules
 *.yaml
 *.yml
 pnpm-lock.yaml
-packages/create-cubeforge-game/templates
+packages/create-xip-game/templates
 docs/.vitepress/cache
 docs/.vitepress/dist

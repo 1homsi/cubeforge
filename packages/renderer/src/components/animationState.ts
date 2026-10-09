@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 
 /** A single named animation clip definition. */
 export interface AnimationClipDefinition {

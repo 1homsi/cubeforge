@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 
 export interface ParallaxLayerComponent extends Component {
   readonly type: 'ParallaxLayer'

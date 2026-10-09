@@ -5,8 +5,8 @@
  * where you need contact manifolds but no velocity/position solving.
  */
 
-import type { ECSWorld, EntityId } from '@cubeforge/core'
-import type { TransformComponent } from '@cubeforge/core'
+import type { ECSWorld, EntityId } from '@xip/core'
+import type { TransformComponent } from '@xip/core'
 import type { BoxColliderComponent } from './components/boxCollider'
 import type { CircleColliderComponent } from './components/circleCollider'
 import type { CapsuleColliderComponent } from './components/capsuleCollider'

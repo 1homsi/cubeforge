@@ -1,0 +1,67 @@
+// `xipjs/render`: renderer, camera, sprite and core hooks for data-driven
+// games, without physics, audio, net, editor, devtools or gameplay modules.
+export { Game } from './components/Game'
+export type { GameControls, RendererBackend } from './components/Game'
+export { World } from './components/World'
+export { Entity } from './components/Entity'
+export { Transform } from './components/Transform'
+export { Sprite } from './components/Sprite'
+export { Camera2D } from './components/Camera2D'
+export type { Camera2DProps } from './components/Camera2D'
+export type { CameraFollowPoint, CameraFollowPointProvider, CameraFollowLayer, CameraFollowSprite } from '@xip/renderer'
+export { useGame } from './hooks/useGame'
+export { useEntity } from './hooks/useEntity'
+export { useCamera } from './hooks/useCamera'
+export type { CameraControls } from './hooks/useCamera'
+export { useDynamicCanvas } from './hooks/useDynamicCanvas'
+export type { DynamicCanvasHandle } from './hooks/useDynamicCanvas'
+export type { DynamicCanvasOptions, ManagedDynamicCanvas, ResizeDynamicCanvasOptions } from '@xip/renderer'
+export { useGestures } from './hooks/useGestures'
+export type { SwipeEvent, PinchEvent, GestureHandlers, GestureOptions } from './hooks/useGestures'
+export { EngineContext, EntityContext } from './context'
+export type { EngineState } from './context'
+export type { EntityId, ECSWorld, TransformComponent } from '@xip/core'
+export type { SpriteComponent } from '@xip/renderer'
+export { TileLayer, useTileLayer } from './components/TileLayer'
+export { useSpriteLayer } from './hooks/useSpriteLayer'
+export { useTextLayer } from './hooks/useTextLayer'
+export { useScreenTint } from './hooks/useScreenTint'
+export { useCameraPanZoom } from './hooks/useCameraPanZoom'
+export type { CameraPanZoomOptions } from './hooks/useCameraPanZoom'
+export type { ScreenTintControls, ScreenTintMode, ScreenTintOptions } from './hooks/useScreenTint'
+export type { LayerBlendMode } from '@xip/renderer'
+export { useCoordinates } from './hooks/useCoordinates'
+export { useCaptureFrame } from './hooks/useCaptureFrame'
+export type { CaptureFrame, CaptureFrameOptions, CaptureType } from '@xip/context'
+export { useEngineStats } from './hooks/useProfiler'
+export {
+  SpriteLayer,
+  TextLayer,
+  GlyphAtlas,
+  TEXT_HIDDEN,
+  TEXT_WORD_WRAP,
+  SPRITE_FLIP_X,
+  SPRITE_FLIP_Y,
+  SPRITE_HIDDEN,
+  SPRITE_UNTEXTURED,
+  SPRITE_ADDITIVE,
+  NO_SPRITE,
+  SPRITE_SWAY,
+  TileLayerData,
+  tileHash,
+} from '@xip/renderer'
+export type { TextLayerOptions, TextRunOptions, GlyphStyleOptions } from '@xip/renderer'
+export type {
+  SpriteLayerOptions,
+  SpriteLayerWind,
+  LayerAtlas,
+  AtlasFrame,
+  PickOptions,
+  FrameHit,
+  TileLayerOptions,
+  TileMinFilter,
+  Tileset,
+  TileAnimation,
+} from '@xip/renderer'
+export { StatsOverlay } from './components/StatsOverlay'
+export { Script } from './components/Script'

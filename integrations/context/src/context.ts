@@ -1,9 +1,9 @@
 import { createContext } from 'react'
-import type { ECSWorld, EventBus, AssetManager, EntityId, System, EngineStats } from '@cubeforge/core'
-import type { InputManager } from '@cubeforge/input'
-import type { PhysicsSystem } from '@cubeforge/physics'
-import type { GameLoop } from '@cubeforge/core'
-import type { PostProcessStack, DynamicCanvasOptions, ManagedDynamicCanvas } from '@cubeforge/renderer'
+import type { ECSWorld, EventBus, AssetManager, EntityId, System, EngineStats } from '@xip/core'
+import type { InputManager } from '@xip/input'
+import type { PhysicsSystem } from '@xip/physics'
+import type { GameLoop } from '@xip/core'
+import type { PostProcessStack, DynamicCanvasOptions, ManagedDynamicCanvas } from '@xip/renderer'
 import type { CaptureFrame } from './capture'
 
 export interface EngineState {

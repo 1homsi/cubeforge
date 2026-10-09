@@ -181,7 +181,7 @@ const manager: AudioManager = {
  *
  * @example
  * // app-level soundtrack: survives <Game> unmount/remount
- * import { getAudioManager } from 'cubeforge'
+ * import { getAudioManager } from 'xipjs'
  * const audio = getAudioManager()
  * audio.setVolume(0.6)
  * void audio.playMusic('/music/theme.ogg') // starts on first gesture

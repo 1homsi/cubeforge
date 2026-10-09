@@ -1,4 +1,4 @@
-import type { Component } from '@cubeforge/core'
+import type { Component } from '@xip/core'
 import { registerShapeRenderer } from '../layerRegistry'
 import { ShapeRenderer } from '../shapeGL'
 

@@ -10,7 +10,7 @@
  * giving amortized O(α(n)) per merge — effectively constant time.
  */
 
-import type { EntityId } from '@cubeforge/core'
+import type { EntityId } from '@xip/core'
 import type { ContactManifold } from './contactManifold'
 
 // ── Public types ──────────────────────────────────────────────────────────────

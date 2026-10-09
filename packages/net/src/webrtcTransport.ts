@@ -186,7 +186,7 @@ export function createWebRTCTransport(config: WebRTCTransportConfig = {}): WebRT
 
     async createOffer(): Promise<RTCSessionDescriptionInit> {
       // The initiating peer creates the data channel.
-      const ch = pc.createDataChannel('cubeforge', channelConfig)
+      const ch = pc.createDataChannel('xip', channelConfig)
       setupChannel(ch)
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)

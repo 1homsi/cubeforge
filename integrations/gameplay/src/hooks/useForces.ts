@@ -1,5 +1,5 @@
 import { useContext, useMemo } from 'react'
-import type { RigidBodyComponent } from '@cubeforge/physics'
+import type { RigidBodyComponent } from '@xip/physics'
 import {
   addForce as _addForce,
   addTorque as _addTorque,
@@ -11,9 +11,9 @@ import {
   resetTorques as _resetTorques,
   setNextKinematicPosition as _setNextKinematicPosition,
   setNextKinematicRotation as _setNextKinematicRotation,
-} from '@cubeforge/physics'
-import type { TransformComponent } from '@cubeforge/core'
-import { EngineContext, EntityContext } from '@cubeforge/context'
+} from '@xip/physics'
+import type { TransformComponent } from '@xip/core'
+import { EngineContext, EntityContext } from '@xip/context'
 
 export interface ForceControls {
   /** Add a force (continuous — call every frame). Accumulated until next step. */

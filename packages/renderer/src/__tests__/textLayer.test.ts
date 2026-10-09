@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ECSWorld } from '@cubeforge/core'
+import { ECSWorld } from '@xip/core'
 import { RenderSystem } from '../webglRenderSystem'
 import { createRecordingCanvas, installHeadlessCanvasDOM } from '../testing/recordingGL'
 import { createFakeGlyphCanvas } from '../testing/fakeGlyphCanvas'
